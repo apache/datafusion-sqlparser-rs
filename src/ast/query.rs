@@ -2497,11 +2497,19 @@ impl fmt::Display for TableFactor {
                         display_comma_separated(namespaces)
                     )?;
                 }
-                write!(
-                    f,
-                    "{row_expression}{passing} COLUMNS {columns})",
-                    columns = display_comma_separated(columns)
-                )?;
+                if !passing.arguments.is_empty() {
+                    write!(
+                        f,
+                        "{row_expression} {passing} COLUMNS {columns})",
+                        columns = display_comma_separated(columns)
+                    )?;
+                } else {
+                    write!(
+                        f,
+                        "{row_expression} COLUMNS {columns})",
+                        columns = display_comma_separated(columns)
+                    )?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }
@@ -4338,11 +4346,15 @@ pub struct XmlPassingArgument {
     pub alias: Option<Ident>,
     /// `true` if `BY VALUE` is specified for the argument.
     pub by_value: bool,
+    /// `true` if `BY REF` is specified for the argument.
+    pub by_ref: bool,
 }
 
 impl fmt::Display for XmlPassingArgument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.by_value {
+        if self.by_ref {
+            write!(f, "BY REF ")?;
+        } else if self.by_value {
             write!(f, "BY VALUE ")?;
         }
         write!(f, "{}", self.expr)?;
@@ -4366,7 +4378,7 @@ pub struct XmlPassingClause {
 impl fmt::Display for XmlPassingClause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.arguments.is_empty() {
-            write!(f, " PASSING {}", display_comma_separated(&self.arguments))?;
+            write!(f, "PASSING {}", display_comma_separated(&self.arguments))?;
         }
         Ok(())
     }

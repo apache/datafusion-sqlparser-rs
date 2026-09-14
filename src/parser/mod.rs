@@ -2546,6 +2546,102 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse the argument list of `XMLELEMENT(NAME name [, XMLATTRIBUTES(...) ] [, content [, ...]])`
+    /// or `XMLPI(NAME name [, content ])`.
+    fn parse_xmlelement_or_xmlpi_argument_list(
+        &mut self,
+    ) -> Result<FunctionArgumentList, ParserError> {
+        let name_kw = self.parse_identifier()?;
+        let name_val = self.parse_identifier()?;
+        let mut args = vec![FunctionArg::Named {
+            name: name_kw,
+            arg: FunctionArgExpr::Expr(Expr::Identifier(name_val)),
+            operator: FunctionArgOperator::Space,
+        }];
+        if self.consume_token(&Token::Comma) {
+            args.extend(self.parse_comma_separated(Parser::parse_function_args)?);
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(FunctionArgumentList {
+            duplicate_treatment: None,
+            args,
+            clauses: vec![],
+        })
+    }
+
+    /// Parse the argument list of `XMLROOT(xml, VERSION {text | NO VALUE} [, STANDALONE {YES | NO | NO VALUE} ])`.
+    fn parse_xmlroot_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+        let xml_expr = self.parse_expr()?;
+        let mut args = vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(xml_expr))];
+        self.expect_token(&Token::Comma)?;
+        let version_kw = self.parse_identifier()?;
+        let version_val = if self.parse_keywords(&[Keyword::NO, Keyword::VALUE]) {
+            Expr::Identifier(Ident::new("NO VALUE"))
+        } else {
+            self.parse_expr()?
+        };
+        args.push(FunctionArg::Named {
+            name: version_kw,
+            arg: FunctionArgExpr::Expr(version_val),
+            operator: FunctionArgOperator::Space,
+        });
+        if self.consume_token(&Token::Comma) {
+            let standalone_kw = self.parse_identifier()?;
+            let standalone_val = if self.parse_keywords(&[Keyword::NO, Keyword::VALUE]) {
+                Expr::Identifier(Ident::new("NO VALUE"))
+            } else {
+                Expr::Identifier(self.parse_identifier()?)
+            };
+            args.push(FunctionArg::Named {
+                name: standalone_kw,
+                arg: FunctionArgExpr::Expr(standalone_val),
+                operator: FunctionArgOperator::Space,
+            });
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(FunctionArgumentList {
+            duplicate_treatment: None,
+            args,
+            clauses: vec![],
+        })
+    }
+
+    /// Parse the argument list of `XMLSERIALIZE({ DOCUMENT | CONTENT } value AS type [ [ NO ] INDENT ])`.
+    fn parse_xmlserialize_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+        let mode = self.parse_identifier()?;
+        let value = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let data_type = self.parse_data_type()?;
+        let mut clauses = vec![FunctionArgumentClause::As(data_type)];
+        if self.parse_keywords(&[Keyword::NO, Keyword::INDENT]) {
+            clauses.push(FunctionArgumentClause::NoIndent);
+        } else if self.parse_keyword(Keyword::INDENT) {
+            clauses.push(FunctionArgumentClause::Indent);
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(FunctionArgumentList {
+            duplicate_treatment: None,
+            args: vec![FunctionArg::Named {
+                name: mode,
+                arg: FunctionArgExpr::Expr(value),
+                operator: FunctionArgOperator::Space,
+            }],
+            clauses,
+        })
+    }
+
+    /// Parse the argument list of `XMLEXISTS(text PASSING [BY {REF|VALUE}] xml [BY {REF|VALUE}])`.
+    fn parse_xmlexists_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+        let xpath_expr = self.parse_expr()?;
+        let passing = self.parse_xml_passing_clause()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(FunctionArgumentList {
+            duplicate_treatment: None,
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(xpath_expr))],
+            clauses: vec![FunctionArgumentClause::Passing(passing)],
+        })
+    }
+
     /// Parse a function call expression named by `name` and return it as an `Expr`.
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.parse_function_call(name).map(Expr::Function)
@@ -2571,10 +2667,22 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let mut args = if self.dialect.supports_xml_expressions()
-            && Self::is_simple_unquoted_object_name(&name, "xmlparse")
-        {
-            self.parse_xmlparse_argument_list()?
+        let mut args = if self.dialect.supports_xml_expressions() {
+            if Self::is_simple_unquoted_object_name(&name, "xmlparse") {
+                self.parse_xmlparse_argument_list()?
+            } else if Self::is_simple_unquoted_object_name(&name, "xmlelement")
+                || Self::is_simple_unquoted_object_name(&name, "xmlpi")
+            {
+                self.parse_xmlelement_or_xmlpi_argument_list()?
+            } else if Self::is_simple_unquoted_object_name(&name, "xmlroot") {
+                self.parse_xmlroot_argument_list()?
+            } else if Self::is_simple_unquoted_object_name(&name, "xmlserialize") {
+                self.parse_xmlserialize_argument_list()?
+            } else if Self::is_simple_unquoted_object_name(&name, "xmlexists") {
+                self.parse_xmlexists_argument_list()?
+            } else {
+                self.parse_function_argument_list()?
+            }
         } else {
             self.parse_function_argument_list()?
         };
@@ -17088,18 +17196,33 @@ impl<'a> Parser<'a> {
         let mut arguments = vec![];
         if self.parse_keyword(Keyword::PASSING) {
             loop {
-                let by_value =
-                    self.parse_keyword(Keyword::BY) && self.expect_keyword(Keyword::VALUE).is_ok();
+                let mut by_ref = false;
+                let mut by_value = false;
+                if self.parse_keyword(Keyword::BY) {
+                    if self.parse_keyword(Keyword::REF) {
+                        by_ref = true;
+                    } else if self.parse_keyword(Keyword::VALUE) {
+                        by_value = true;
+                    }
+                }
                 let expr = self.parse_expr()?;
                 let alias = if self.parse_keyword(Keyword::AS) {
                     Some(self.parse_identifier()?)
                 } else {
                     None
                 };
+                if self.parse_keyword(Keyword::BY) {
+                    if self.parse_keyword(Keyword::REF) {
+                        by_ref = true;
+                    } else if self.parse_keyword(Keyword::VALUE) {
+                        by_value = true;
+                    }
+                }
                 arguments.push(XmlPassingArgument {
                     expr,
                     alias,
                     by_value,
+                    by_ref,
                 });
                 if !self.consume_token(&Token::Comma) {
                     break;

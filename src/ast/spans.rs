@@ -1821,6 +1821,9 @@ impl Spanned for FunctionArgumentClause {
             FunctionArgumentClause::Separator(value) => value.span(),
             FunctionArgumentClause::JsonNullClause(_) => Span::empty(),
             FunctionArgumentClause::JsonReturningClause(_) => Span::empty(),
+            FunctionArgumentClause::Passing(_) => Span::empty(),
+            FunctionArgumentClause::As(_) => Span::empty(),
+            FunctionArgumentClause::Indent | FunctionArgumentClause::NoIndent => Span::empty(),
         }
     }
 }

@@ -4159,6 +4159,67 @@ fn parse_xmlparse() {
 }
 
 #[test]
+fn parse_xmlelement() {
+    let statements = [
+        "SELECT XMLELEMENT(NAME foo, 'bar')",
+        "SELECT XMLELEMENT(NAME foo, 'bar'), * FROM customers",
+        "SELECT XMLELEMENT(NAME foo, XMLATTRIBUTES('v' AS attr), 'bar')",
+        r#"SELECT XMLELEMENT(NAME "foo$bar", XMLATTRIBUTES('xyz' AS "a&b"))"#,
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_xmlpi() {
+    let statements = [
+        "SELECT XMLPI(NAME php, 'echo \"hello world\";')",
+        "SELECT XMLPI(NAME php)",
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_xmlroot() {
+    let statements = [
+        "SELECT XMLROOT('<a/>'::xml, VERSION '1.0')",
+        "SELECT XMLROOT('<a/>'::xml, VERSION '1.0', STANDALONE YES)",
+        "SELECT XMLROOT('<a/>'::xml, VERSION NO VALUE, STANDALONE NO VALUE)",
+        "SELECT XMLROOT('<a/>'::xml, VERSION NO VALUE)",
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_xmlserialize() {
+    let statements = [
+        "SELECT XMLSERIALIZE(DOCUMENT '<a/>'::xml AS TEXT)",
+        "SELECT XMLSERIALIZE(CONTENT '<a/>'::xml AS VARCHAR(100) INDENT)",
+        "SELECT XMLSERIALIZE(DOCUMENT '<a/>'::xml AS TEXT NO INDENT)",
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_xmlexists() {
+    let statements = [
+        "SELECT XMLEXISTS('/a' PASSING BY REF '<a/>')",
+        "SELECT XMLEXISTS('/a' PASSING '<a/>')",
+        "SELECT XMLEXISTS('/a' PASSING BY VALUE '<a/>')",
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_xml_typed_string() {
     // xml '...' should parse as a TypedString on PostgreSQL and Generic
     let sql = "SELECT xml '<foo/>'";

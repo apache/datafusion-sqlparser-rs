@@ -4912,6 +4912,7 @@ fn test_select_dollar_column_from_stage() {
     // With table function args, without alias
     snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }
+
 #[test]
 fn test_structured_object_type() {
     snowflake_and_generic().verified_stmt(
@@ -4934,8 +4935,6 @@ fn test_structured_object_type() {
     assert_eq!(fields[1].options.len(), 1);
     assert_eq!(fields[1].options[0].option, ColumnOption::NotNull);
 
-    snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)");
-
     for sql in [
         "CREATE TABLE t (o OBJECT(VARCHAR))",
         "CREATE TABLE t (o OBJECT(city VARCHAR NULL))",
@@ -4943,4 +4942,18 @@ fn test_structured_object_type() {
     ] {
         assert!(snowflake().parse_sql_statements(sql).is_err(), "{sql}");
     }
+}
+
+#[test]
+fn test_plain_object_type() {
+    let Statement::CreateTable(CreateTable { columns, .. }) =
+        snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)")
+    else {
+        unreachable!();
+    };
+
+    assert_eq!(
+        columns[0].data_type,
+        DataType::Custom(ObjectName::from(vec![Ident::new("OBJECT")]), vec![])
+    );
 }

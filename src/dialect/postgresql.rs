@@ -58,8 +58,20 @@ pub struct PostgreSqlDialect {}
 /// [keywords::RESERVED_FOR_COLUMN_ALIAS]) to be used as a bare (`AS`-less)
 /// column alias.
 /// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>
-const ADDITIONALLY_ALLOWED_BARE_COLUMN_ALIASES: &[Keyword] =
-    &[Keyword::SELECT, Keyword::ANALYZE, Keyword::LATERAL];
+const ADDITIONALLY_ALLOWED_BARE_COLUMN_ALIASES: &[Keyword] = &[
+    Keyword::SELECT,
+    Keyword::ANALYZE,
+    Keyword::LATERAL,
+    Keyword::AND,
+    Keyword::OR,
+    Keyword::COLLATE,
+    Keyword::CLUSTER,
+    Keyword::END,
+    Keyword::EXCLUDE,
+    Keyword::EXPLAIN,
+    Keyword::VALUES,
+    Keyword::VIEW,
+];
 
 const PERIOD_PREC: u8 = 200;
 const DOUBLE_COLON_PREC: u8 = 140;

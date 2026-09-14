@@ -7192,6 +7192,29 @@ fn test_unicode_string_literal() {
     }
 }
 
+#[test]
+fn test_unicode_string_literal_uescape() {
+    // Custom escape character via UESCAPE, see the postgres docs example
+    pg_and_generic().expr_parses_to(r#"U&'d!0061t!+000061' UESCAPE '!'"#, "U&'data'");
+}
+
+#[test]
+fn test_unicode_quoted_identifier() {
+    // U&"..." identifiers decode to a plain quoted identifier
+    pg_and_generic().one_statement_parses_to(
+        r#"SELECT * FROM U&"c\0075stomers""#,
+        r#"SELECT * FROM "customers""#,
+    );
+    // Custom escape character via UESCAPE
+    pg_and_generic().one_statement_parses_to(
+        r#"SELECT * FROM U&"c!0075stomers" UESCAPE '!'"#,
+        r#"SELECT * FROM "customers""#,
+    );
+    // U&"..." can also be used as a column alias
+    pg_and_generic()
+        .one_statement_parses_to(r#"SELECT 1 AS U&"d\0061ta""#, r#"SELECT 1 AS "data""#);
+}
+
 fn check_arrow_precedence(sql: &str, arrow_operator: BinaryOperator) {
     assert_eq!(
         pg().verified_expr(sql),

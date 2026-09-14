@@ -1206,17 +1206,26 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                 }
-                // Unicode string literals like U&'first \000A second' are supported in some dialects, including PostgreSQL
+                // Unicode string/identifier literals like U&'first \000A second' or
+                // U&"first \000A second" are supported in some dialects, including PostgreSQL
                 x @ 'u' | x @ 'U' if self.dialect.supports_unicode_string_literal() => {
                     chars.next(); // consume, to check the next char
                     if chars.peek() == Some(&'&') {
                         // we cannot advance the iterator here, as we need to consume the '&' later if the 'u' was an identifier
                         let mut chars_clone = chars.peekable.clone();
                         chars_clone.next(); // consume the '&' in the clone
-                        if chars_clone.peek() == Some(&'\'') {
-                            chars.next(); // consume the '&' in the original iterator
-                            let s = unescape_unicode_single_quoted_string(chars)?;
-                            return Ok(Some(Token::UnicodeStringLiteral(s)));
+                        match chars_clone.peek() {
+                            Some('\'') => {
+                                chars.next(); // consume the '&' in the original iterator
+                                let s = self.tokenize_unicode_single_quoted_string(chars)?;
+                                return Ok(Some(Token::UnicodeStringLiteral(s)));
+                            }
+                            Some('"') => {
+                                chars.next(); // consume the '&' in the original iterator
+                                let s = self.tokenize_unicode_quoted_identifier(chars)?;
+                                return Ok(Some(Token::make_word_owned(s, Some('"'))));
+                            }
+                            _ => {}
                         }
                     }
                     // regular identifier starting with an "U" or "u"
@@ -2091,6 +2100,33 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
+    /// Reads a Unicode string literal body introduced by the `U&` prefix, e.g. the
+    /// `\0061\0062\0063` in `U&'\0061\0062\0063'`, honoring a trailing `UESCAPE '<char>'`
+    /// clause if present.
+    /// See <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE>
+    fn tokenize_unicode_single_quoted_string(
+        &self,
+        chars: &mut State,
+    ) -> Result<String, TokenizerError> {
+        let error_loc = chars.location();
+        let raw = self.tokenize_single_quoted_string(chars, '\'', false)?;
+        let escape_char = take_uescape_char(chars)?;
+        decode_unicode_escapes(&raw, escape_char, error_loc)
+    }
+
+    /// Reads a Unicode quoted identifier introduced by the `U&` prefix, e.g. `U&"d\0061ta"`,
+    /// honoring a trailing `UESCAPE '<char>'` clause if present.
+    /// See <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS>
+    fn tokenize_unicode_quoted_identifier(
+        &self,
+        chars: &mut State,
+    ) -> Result<String, TokenizerError> {
+        let error_loc = chars.location();
+        let raw = self.tokenize_quoted_identifier('"', chars)?;
+        let escape_char = take_uescape_char(chars)?;
+        decode_unicode_escapes(&raw, escape_char, error_loc)
+    }
+
     /// Read a single quoted string, starting with the opening quote.
     fn tokenize_escaped_single_quoted_string(
         &self,
@@ -2576,61 +2612,109 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
     }
 }
 
-fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String, TokenizerError> {
-    let mut unescaped = String::new();
-    chars.next(); // consume the opening quote
-    while let Some(c) = chars.next() {
-        match c {
-            '\'' => {
-                if chars.peek() == Some(&'\'') {
-                    chars.next();
-                    unescaped.push('\'');
-                } else {
-                    return Ok(unescaped);
-                }
-            }
-            '\\' => match chars.peek() {
-                Some('\\') => {
-                    chars.next();
-                    unescaped.push('\\');
-                }
-                Some('+') => {
-                    chars.next();
-                    unescaped.push(take_char_from_hex_digits(chars, 6)?);
-                }
-                _ => unescaped.push(take_char_from_hex_digits(chars, 4)?),
-            },
-            _ => {
-                unescaped.push(c);
-            }
+/// Consumes an optional `UESCAPE '<char>'` clause immediately following a Unicode string or
+/// quoted identifier literal, returning the escape character to use for decoding (`\` if no
+/// clause is present). The escape character cannot be a hex digit, `+`, a quote character, or
+/// whitespace.
+/// See <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE>
+fn take_uescape_char(chars: &mut State<'_>) -> Result<char, TokenizerError> {
+    let mut lookahead = State {
+        peekable: chars.peekable.clone(),
+        line: chars.line,
+        col: chars.col,
+    };
+
+    while matches!(lookahead.peek(), Some(c) if c.is_whitespace()) {
+        lookahead.next();
+    }
+    for expected in "UESCAPE".chars() {
+        match lookahead.next() {
+            Some(c) if c.eq_ignore_ascii_case(&expected) => {}
+            _ => return Ok('\\'),
         }
     }
-    Err(TokenizerError {
-        message: "Unterminated unicode encoded string literal".to_string(),
-        location: chars.location(),
-    })
+    // `UESCAPE` must be a standalone word, not a prefix of a longer identifier
+    if matches!(lookahead.peek(), Some(c) if c.is_alphanumeric() || *c == '_' || *c == '$') {
+        return Ok('\\');
+    }
+    while matches!(lookahead.peek(), Some(c) if c.is_whitespace()) {
+        lookahead.next();
+    }
+    if lookahead.peek() != Some(&'\'') {
+        return Ok('\\');
+    }
+
+    let error_loc = lookahead.location();
+    lookahead.next(); // consume the opening quote
+    let escape_char = lookahead
+        .next()
+        .filter(|c| !c.is_ascii_hexdigit() && !matches!(*c, '+' | '\'' | '"') && !c.is_whitespace())
+        .ok_or_else(|| TokenizerError {
+            message: "Invalid UESCAPE character".to_string(),
+            location: error_loc,
+        })?;
+    if lookahead.next() != Some('\'') {
+        return Err(TokenizerError {
+            message: "Unterminated UESCAPE clause".to_string(),
+            location: error_loc,
+        });
+    }
+
+    *chars = lookahead;
+    Ok(escape_char)
+}
+
+/// Decodes `\XXXX` (4 hex digits) and `\+XXXXXX` (6 hex digits) escape sequences in a Unicode
+/// string/identifier literal body, where `\` may be replaced by a custom escape character
+/// specified via `UESCAPE`.
+fn decode_unicode_escapes(
+    raw: &str,
+    escape_char: char,
+    location: Location,
+) -> Result<String, TokenizerError> {
+    let mut unescaped = String::new();
+    let mut chars = raw.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != escape_char {
+            unescaped.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some(&next) if next == escape_char => {
+                chars.next();
+                unescaped.push(escape_char);
+            }
+            Some(&'+') => {
+                chars.next();
+                unescaped.push(take_char_from_hex_digits(&mut chars, 6, location)?);
+            }
+            _ => unescaped.push(take_char_from_hex_digits(&mut chars, 4, location)?),
+        }
+    }
+    Ok(unescaped)
 }
 
 fn take_char_from_hex_digits(
-    chars: &mut State<'_>,
+    chars: &mut Peekable<Chars<'_>>,
     max_digits: usize,
+    location: Location,
 ) -> Result<char, TokenizerError> {
     let mut result = 0u32;
     for _ in 0..max_digits {
         let next_char = chars.next().ok_or_else(|| TokenizerError {
             message: "Unexpected EOF while parsing hex digit in escaped unicode string."
                 .to_string(),
-            location: chars.location(),
+            location,
         })?;
         let digit = next_char.to_digit(16).ok_or_else(|| TokenizerError {
             message: format!("Invalid hex digit in escaped unicode string: {next_char}"),
-            location: chars.location(),
+            location,
         })?;
         result = result * 16 + digit;
     }
     char::from_u32(result).ok_or_else(|| TokenizerError {
         message: format!("Invalid unicode character: {result:x}"),
-        location: chars.location(),
+        location,
     })
 }
 

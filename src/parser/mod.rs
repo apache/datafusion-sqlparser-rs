@@ -1635,6 +1635,18 @@ impl<'a> Parser<'a> {
             Keyword::MAP if *self.peek_token_ref() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
                 Ok(Some(self.parse_duckdb_map_literal()?))
             }
+            Keyword::APPROXIMATE
+                if self.dialect.supports_approximate_percentile_disc()
+                    && self.peek_keyword(Keyword::PERCENTILE_DISC) =>
+            {
+                self.maybe_parse(|parser| {
+                    let function_name = parser.parse_object_name(false)?;
+                    parser.parse_function(function_name).map(|function| Expr::Prefixed {
+                        prefix: w.to_ident(w_span),
+                        value: Box::new(function),
+                    })
+                })
+            }
             Keyword::LAMBDA if self.dialect.supports_lambda_functions() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
@@ -4190,6 +4202,13 @@ impl<'a> Parser<'a> {
                         self.expected_ref("OF after MEMBER", self.peek_token_ref())
                     }
                 }
+                // Reached when the dialect assigns `COLLATE` a lower precedence than `::`, e.g.
+                // Postgres's `expr::type COLLATE collation`.
+                // See <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE>
+                Keyword::COLLATE => Ok(Expr::Collate {
+                    expr: Box::new(expr),
+                    collation: self.parse_object_name(false)?,
+                }),
                 // Can only happen if `get_next_precedence` got out of sync with this function
                 _ => parser_err!(
                     format!("No infix parser for token {:?}", tok.token),

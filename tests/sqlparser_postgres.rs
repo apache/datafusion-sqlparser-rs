@@ -519,6 +519,19 @@ fn parse_cast_in_default_expr() {
     pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT NOT NULL)");
 }
 
+/// `::` binds tighter than `COLLATE`, so `expr::type COLLATE collation` collates the cast result.
+/// See <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE>
+#[test]
+fn parse_collate_after_cast() {
+    match pg().verified_expr(r#"contact_name::TEXT COLLATE "POSIX""#) {
+        Expr::Collate { expr, collation } => {
+            assert!(matches!(*expr, Expr::Cast { .. }));
+            assert_eq!(collation.to_string(), "\"POSIX\"");
+        }
+        other => panic!("Expected Expr::Collate, got: {other:?}"),
+    }
+}
+
 #[test]
 fn parse_create_table_from_pg_dump() {
     let sql = "CREATE TABLE public.customer (

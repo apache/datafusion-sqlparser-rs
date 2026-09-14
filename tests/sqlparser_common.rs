@@ -19837,6 +19837,18 @@ fn parse_xmlparse() {
         .is_err());
 }
 
+#[test]
+fn parse_xml_is_document_predicate() {
+    let dialects = all_dialects_where(|d| d.supports_xml_expressions());
+    dialects.one_statement_parses_to("SELECT '<a/>' IS document", "SELECT '<a/>' IS DOCUMENT");
+    dialects.verified_stmt("SELECT '<a/>' IS NOT DOCUMENT");
+
+    let others = all_dialects_except(|d| d.supports_xml_expressions());
+    assert!(others
+        .parse_sql_statements("SELECT '<a/>' IS DOCUMENT")
+        .is_err());
+}
+
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
 /// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
 /// main thread asserts that it reports back within a generous timeout. Post-fix

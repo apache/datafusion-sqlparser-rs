@@ -4942,10 +4942,7 @@ fn test_structured_object_type() {
     ] {
         assert!(snowflake().parse_sql_statements(sql).is_err(), "{sql}");
     }
-}
 
-#[test]
-fn test_plain_object_type() {
     let Statement::CreateTable(CreateTable { columns, .. }) =
         snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)")
     else {

@@ -550,6 +550,8 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports `SET VARIABLE name = expression`.
+    ///
+    /// [DuckDB](https://duckdb.org/docs/current/sql/statements/set_variable#set-variable)
     fn supports_set_variable_statement(&self) -> bool {
         false
     }

@@ -3282,6 +3282,8 @@ pub enum Set {
     /// ```sql
     /// SET VARIABLE variable_name = expression
     /// ```
+    ///
+    /// [DuckDB](https://duckdb.org/docs/current/sql/statements/set_variable#set-variable)
     SetVariable {
         /// Variable name to assign.
         variable: ObjectName,

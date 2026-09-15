@@ -4848,8 +4848,10 @@ fn parse_create_table_as_table() {
     let expected_query1 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
+            only: false,
             table_name: Some("old_table".to_string()),
             schema_name: None,
+            with_asterisk: false,
         }))),
         order_by: None,
         limit_clause: None,
@@ -4874,8 +4876,10 @@ fn parse_create_table_as_table() {
     let expected_query2 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
+            only: false,
             table_name: Some("old_table".to_string()),
             schema_name: Some("schema_name".to_string()),
+            with_asterisk: false,
         }))),
         order_by: None,
         limit_clause: None,

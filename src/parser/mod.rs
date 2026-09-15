@@ -641,7 +641,11 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_raise_stmt().map(Into::into)
                 }
-                Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
+                Keyword::SELECT
+                | Keyword::TABLE
+                | Keyword::WITH
+                | Keyword::VALUES
+                | Keyword::FROM => {
                     self.prev_token();
                     self.parse_query().map(Into::into)
                 }
@@ -14496,7 +14500,15 @@ impl<'a> Parser<'a> {
             }
         }
 
-        match self.maybe_parse(|parser| parser.parse_statement())? {
+        let statement = if self.dialect.describe_requires_table_keyword()
+            && self.peek_keyword(Keyword::TABLE)
+        {
+            None
+        } else {
+            self.maybe_parse(|parser| parser.parse_statement())?
+        };
+
+        match statement {
             Some(Statement::Explain { .. }) | Some(Statement::ExplainTable { .. }) => Err(
                 ParserError::ParserError("Explain must be root of the plan".to_string()),
             ),
@@ -15625,13 +15637,12 @@ impl<'a> Parser<'a> {
 
     /// Parse `CREATE TABLE x AS TABLE y`
     pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
+        let only = self.parse_keyword(Keyword::ONLY);
         let token1 = self.next_token();
-        let token2 = self.next_token();
-        let token3 = self.next_token();
 
         let table_name;
         let schema_name;
-        if token2 == Token::Period {
+        if self.consume_token(&Token::Period) {
             match token1.token {
                 Token::Word(w) => {
                     schema_name = w.value;
@@ -15640,17 +15651,20 @@ impl<'a> Parser<'a> {
                     return self.expected("Schema name", token1);
                 }
             }
-            match token3.token {
+            let token2 = self.next_token();
+            match token2.token {
                 Token::Word(w) => {
                     table_name = w.value;
                 }
                 _ => {
-                    return self.expected("Table name", token3);
+                    return self.expected("Table name", token2);
                 }
             }
             Ok(Table {
+                only,
                 table_name: Some(table_name),
                 schema_name: Some(schema_name),
+                with_asterisk: self.consume_token(&Token::Mul),
             })
         } else {
             match token1.token {
@@ -15662,8 +15676,10 @@ impl<'a> Parser<'a> {
                 }
             }
             Ok(Table {
+                only,
                 table_name: Some(table_name),
                 schema_name: None,
+                with_asterisk: self.consume_token(&Token::Mul),
             })
         }
     }

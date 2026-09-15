@@ -770,6 +770,8 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports standalone `SORTED BY` expressions in `CREATE TABLE`.
+    ///
+    /// [DuckDB syntax introduction](https://github.com/duckdb/duckdb/pull/20431)
     fn supports_create_table_sorted_by(&self) -> bool {
         false
     }

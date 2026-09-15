@@ -2992,7 +2992,8 @@ pub struct CreateTable {
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
     /// DuckDB: Table sorting expressions.
-    /// <https://github.com/duckdb/duckdb/pull/20431>
+    ///
+    /// [DuckDB syntax introduction](https://github.com/duckdb/duckdb/pull/20431)
     pub sorted_by: Option<Vec<Expr>>,
     /// Postgres `INHERITs` clause, which contains the list of tables from which
     /// the new table inherits.

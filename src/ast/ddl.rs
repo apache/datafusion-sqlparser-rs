@@ -2992,6 +2992,9 @@ pub struct CreateTable {
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
     /// DuckDB partition expressions, distinct from Hive partition columns.
+    ///
+    /// [DuckDB syntax example (Iceberg catalog)](https://duckdb.org/docs/current/core_extensions/iceberg/writing#partitioning)
+    /// [DuckDB syntax introduction](https://github.com/duckdb/duckdb/pull/20431)
     pub partitioned_by: Option<Vec<Expr>>,
     /// Postgres `INHERITs` clause, which contains the list of tables from which
     /// the new table inherits.

@@ -770,6 +770,9 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Uses expressions rather than column declarations in `PARTITIONED BY`.
+    ///
+    /// [DuckDB syntax example (Iceberg catalog)](https://duckdb.org/docs/current/core_extensions/iceberg/writing#partitioning)
+    /// [DuckDB syntax introduction](https://github.com/duckdb/duckdb/pull/20431)
     fn supports_create_table_partitioned_by_expressions(&self) -> bool {
         false
     }

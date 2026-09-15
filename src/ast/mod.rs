@@ -2430,6 +2430,10 @@ impl fmt::Display for WindowFrameUnits {
 }
 
 /// Rows excluded from a window frame.
+///
+/// [DuckDB](https://duckdb.org/docs/current/sql/functions/window_functions#exclude-clause)
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS)
+/// [SQLite](https://www.sqlite.org/windowfunctions.html#the_exclude_clause)
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

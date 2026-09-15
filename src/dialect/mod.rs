@@ -350,6 +350,10 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports `EXCLUDE` in window frames.
+    ///
+    /// [DuckDB](https://duckdb.org/docs/current/sql/functions/window_functions#exclude-clause)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS)
+    /// [SQLite](https://www.sqlite.org/windowfunctions.html#the_exclude_clause)
     fn supports_window_frame_exclusion(&self) -> bool {
         false
     }

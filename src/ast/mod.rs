@@ -2356,6 +2356,9 @@ impl fmt::Display for WindowSpec {
             } else {
                 write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
             }
+            if let Some(exclusion) = &window_frame.exclusion {
+                write!(f, " {exclusion}")?;
+            }
         }
         Ok(())
     }
@@ -2378,7 +2381,8 @@ pub struct WindowFrame {
     /// indicates the shorthand form (e.g. `ROWS 1 PRECEDING`), which must
     /// behave the same as `end_bound = WindowFrameBound::CurrentRow`.
     pub end_bound: Option<WindowFrameBound>,
-    // TBD: EXCLUDE
+    /// The optional exclusion clause for the window frame.
+    pub exclusion: Option<WindowFrameExclusion>,
 }
 
 impl Default for WindowFrame {
@@ -2390,6 +2394,7 @@ impl Default for WindowFrame {
             units: WindowFrameUnits::Range,
             start_bound: WindowFrameBound::Preceding(None),
             end_bound: None,
+            exclusion: None,
         }
     }
 }
@@ -2462,6 +2467,32 @@ impl fmt::Display for WindowFrameBound {
             WindowFrameBound::Preceding(Some(n)) => write!(f, "{n} PRECEDING"),
             WindowFrameBound::Following(Some(n)) => write!(f, "{n} FOLLOWING"),
         }
+    }
+}
+
+/// Specifies rows to exclude from a window frame.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WindowFrameExclusion {
+    /// `EXCLUDE CURRENT ROW`
+    CurrentRow,
+    /// `EXCLUDE GROUP`
+    Group,
+    /// `EXCLUDE TIES`
+    Ties,
+    /// `EXCLUDE NO OTHERS`
+    NoOthers,
+}
+
+impl fmt::Display for WindowFrameExclusion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            WindowFrameExclusion::CurrentRow => "EXCLUDE CURRENT ROW",
+            WindowFrameExclusion::Group => "EXCLUDE GROUP",
+            WindowFrameExclusion::Ties => "EXCLUDE TIES",
+            WindowFrameExclusion::NoOthers => "EXCLUDE NO OTHERS",
+        })
     }
 }
 

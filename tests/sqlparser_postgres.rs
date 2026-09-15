@@ -9953,3 +9953,31 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 }
+
+#[test]
+fn parse_window_frame_exclusion() {
+    let dialects = pg_and_generic();
+    for sql in [
+        "SELECT sum(1) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE TIES)",
+        "SELECT sum(1) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW)",
+        "SELECT sum(1) OVER (ROWS CURRENT ROW EXCLUDE GROUP)",
+        "SELECT sum(1) OVER (ROWS CURRENT ROW EXCLUDE NO OTHERS)",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    let invalid = "SELECT sum(1) OVER (ROWS CURRENT ROW EXCLUDE ALL)";
+    assert_eq!(
+        pg().parse_sql_statements(invalid).unwrap_err(),
+        ParserError::ParserError(
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: ALL".to_string()
+        )
+    );
+
+    let unsupported = all_dialects_where(|d| !d.supports_window_frame_exclusion());
+    let sql = "SELECT sum(1) OVER (ROWS CURRENT ROW EXCLUDE TIES)";
+    for dialect in unsupported.dialects {
+        let parser = TestedDialects::new(vec![dialect]);
+        assert!(parser.parse_sql_statements(sql).is_err());
+    }
+}

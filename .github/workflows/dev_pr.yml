@@ -26,13 +26,13 @@ on:
   issue_comment:
     types: [created]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
   label-dialects:
     name: Label dialects
+    # Bot edits and comments arrive in bursts and never carry a dialect.
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      (github.event_name != 'issue_comment' || contains(github.event.comment.body, 'dialect'))
     runs-on: ubuntu-latest
     permissions:
       contents: read

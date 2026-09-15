@@ -103,7 +103,7 @@ async function run({ github, context }) {
   } else {
     const resolved = resolve(issue);
     labels = resolved.labels;
-    if (!resolved.answered && payload.pull_request) {
+    if (!resolved.answered && payload.pull_request && payload.action === "opened") {
       const files = await github.paginate(github.rest.pulls.listFiles, {
         owner,
         repo,

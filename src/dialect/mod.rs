@@ -1420,7 +1420,8 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if this dialect supports the E'...' syntax for string literals
     ///
-    /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE)
+    /// [DuckDB](https://duckdb.org/docs/current/sql/data_types/literal_types#escape-string-literals)
     fn supports_string_escape_constant(&self) -> bool {
         false
     }

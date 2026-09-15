@@ -298,19 +298,30 @@ impl fmt::Display for SetQuantifier {
 /// A [`TABLE` command](https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Table {
+    /// `ONLY` modifier before the table name.
+    pub only: bool,
     /// Optional table name (absent for e.g. `TABLE` command without argument).
     pub table_name: Option<Ident>,
     /// Optional schema/catalog name qualifying the table.
     pub schema_name: Option<Ident>,
+    /// Trailing `*` modifier after the table name.
+    pub with_asterisk: bool,
 }
 
 impl fmt::Display for Table {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(ref table_name) = self.table_name {
+            write!(f, "TABLE ")?;
+            if self.only {
+                write!(f, "ONLY ")?;
+            }
             if let Some(ref schema_name) = self.schema_name {
-                write!(f, "TABLE {}.{}", schema_name, table_name,)?;
+                write!(f, "{}.{}", schema_name, table_name,)?;
             } else {
-                write!(f, "TABLE {}", table_name)?;
+                write!(f, "{}", table_name)?;
+            }
+            if self.with_asterisk {
+                write!(f, " *")?;
             }
         } else {
             write!(f, "TABLE")?;

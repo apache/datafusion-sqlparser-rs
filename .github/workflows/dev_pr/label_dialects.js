@@ -134,6 +134,3 @@ async function run({ github, context }) {
 }
 
 module.exports = run;
-module.exports.resolve = resolve;
-module.exports.declaredDialects = declaredDialects;
-module.exports.touchedDialects = touchedDialects;

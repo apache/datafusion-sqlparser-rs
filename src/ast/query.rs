@@ -3125,6 +3125,8 @@ pub enum LimitClause {
         limit: Expr,
     },
     /// Percentage limit syntax: `LIMIT <limit>% [OFFSET <offset>]`.
+    ///
+    /// [DuckDB](https://duckdb.org/docs/current/sql/query_syntax/limit#examples)
     Percent {
         /// Percentage quantity.
         limit: Expr,

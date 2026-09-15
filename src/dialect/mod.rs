@@ -615,6 +615,8 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Supports `LIMIT <expression>%`.
+    ///
+    /// [DuckDB](https://duckdb.org/docs/current/sql/query_syntax/limit#examples)
     fn supports_limit_percent(&self) -> bool {
         false
     }

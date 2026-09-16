@@ -5361,6 +5361,8 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
+            // `or_replace` cannot reach here today, since the arm above catches it.
+            // It stays so that reordering the arms cannot make it fall through.
             if or_replace
                 || or_alter
                 || temporary

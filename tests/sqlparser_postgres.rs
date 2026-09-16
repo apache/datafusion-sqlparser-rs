@@ -9641,18 +9641,18 @@ fn parse_lock_table() {
 
 #[test]
 fn parse_create_foreign_table() {
-    let sql = "CREATE FOREIGN TABLE ft1 (id INTEGER, name TEXT) SERVER myserver";
-    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
-        unreachable!()
-    };
-    assert_eq!(stmt.columns.len(), 2);
-    assert!(stmt.options.is_none());
-
-    let sql = "CREATE FOREIGN TABLE IF NOT EXISTS ft2 (col INTEGER) SERVER remoteserver";
-    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
-        unreachable!()
-    };
-    assert!(stmt.if_not_exists);
+    // Each of these round-trips through Display, so verified_stmt already pins
+    // the name, columns, server and IF NOT EXISTS. Only the parsed shape that
+    // Display cannot show is asserted below.
+    for sql in [
+        "CREATE FOREIGN TABLE ft1 (id INTEGER, name TEXT) SERVER myserver",
+        "CREATE FOREIGN TABLE IF NOT EXISTS ft2 (col INTEGER) SERVER remoteserver",
+    ] {
+        assert!(matches!(
+            pg_and_generic().verified_stmt(sql),
+            Statement::CreateForeignTable(_)
+        ));
+    }
 
     let sql =
         "CREATE FOREIGN TABLE ft3 (col INTEGER) SERVER remoteserver OPTIONS (schema_name 'public')";

@@ -20433,7 +20433,7 @@ impl<'a> Parser<'a> {
         self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
         let foreign_data_wrapper = self.parse_object_name(false)?;
 
-        let options = self.parse_generic_options_clause()?;
+        let options = self.parse_pg_options_clause()?;
 
         Ok(Statement::CreateServer(CreateServerStatement {
             name,
@@ -20445,11 +20445,8 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    /// Parse an optional `OPTIONS ( key value [, ...] )` clause shared by
-    /// `CREATE SERVER` and `CREATE FOREIGN DATA WRAPPER`.
-    fn parse_generic_options_clause(
-        &mut self,
-    ) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
+    /// Parse an optional Postgres `OPTIONS ( key value [, ...] )` clause.
+    fn parse_pg_options_clause(&mut self) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
         if !self.parse_keyword(Keyword::OPTIONS) {
             return Ok(None);
         }
@@ -20463,25 +20460,6 @@ impl<'a> Parser<'a> {
         Ok(Some(options))
     }
 
-    /// Parse an optional `HANDLER f | NO HANDLER` / `VALIDATOR f | NO VALIDATOR`
-    /// clause on `CREATE FOREIGN DATA WRAPPER`. The caller passes the positive
-    /// keyword (`HANDLER` or `VALIDATOR`); the `NO <keyword>` form is also
-    /// recognized.
-    fn parse_foreign_data_wrapper_routine_clause(
-        &mut self,
-        keyword: Keyword,
-    ) -> Result<Option<ForeignDataWrapperRoutineClause>, ParserError> {
-        if self.parse_keyword(keyword) {
-            Ok(Some(ForeignDataWrapperRoutineClause::Function(
-                self.parse_object_name(false)?,
-            )))
-        } else if self.parse_keywords(&[Keyword::NO, keyword]) {
-            Ok(Some(ForeignDataWrapperRoutineClause::Absent))
-        } else {
-            Ok(None)
-        }
-    }
-
     /// Parse a `CREATE FOREIGN DATA WRAPPER` statement.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html>
@@ -20489,9 +20467,37 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<CreateForeignDataWrapper, ParserError> {
         let name = self.parse_identifier()?;
-        let handler = self.parse_foreign_data_wrapper_routine_clause(Keyword::HANDLER)?;
-        let validator = self.parse_foreign_data_wrapper_routine_clause(Keyword::VALIDATOR)?;
-        let options = self.parse_generic_options_clause()?;
+
+        // PostgreSQL accepts HANDLER and VALIDATOR in either order, so they are
+        // consumed in a loop rather than positionally.
+        let mut handler = None;
+        let mut validator = None;
+        loop {
+            let loc = self.peek_token_ref().span.start;
+            let (slot, clause) = if self.parse_keyword(Keyword::HANDLER) {
+                (
+                    &mut handler,
+                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::HANDLER]) {
+                (&mut handler, ForeignDataWrapperRoutineClause::Absent)
+            } else if self.parse_keyword(Keyword::VALIDATOR) {
+                (
+                    &mut validator,
+                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::VALIDATOR]) {
+                (&mut validator, ForeignDataWrapperRoutineClause::Absent)
+            } else {
+                break;
+            };
+            if slot.is_some() {
+                return parser_err!("conflicting or redundant options", loc);
+            }
+            *slot = Some(clause);
+        }
+
+        let options = self.parse_pg_options_clause()?;
 
         Ok(CreateForeignDataWrapper {
             name,

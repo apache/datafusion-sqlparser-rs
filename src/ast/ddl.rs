@@ -6065,7 +6065,13 @@ impl Spanned for CreateForeignDataWrapper {
         Span::union_iter(
             core::iter::once(self.name.span)
                 .chain(routine_span(&self.handler))
-                .chain(routine_span(&self.validator)),
+                .chain(routine_span(&self.validator))
+                .chain(
+                    self.options
+                        .iter()
+                        .flatten()
+                        .flat_map(|option| [option.key.span, option.value.span]),
+                ),
         )
     }
 }

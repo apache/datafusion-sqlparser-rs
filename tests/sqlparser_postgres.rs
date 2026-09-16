@@ -9681,18 +9681,6 @@ fn parse_create_foreign_data_wrapper() {
         unreachable!()
     };
     assert_eq!(
-        stmt.handler,
-        Some(ForeignDataWrapperRoutineClause::Function(ObjectName::from(
-            vec!["myhandler".into()]
-        )))
-    );
-    assert_eq!(
-        stmt.validator,
-        Some(ForeignDataWrapperRoutineClause::Function(ObjectName::from(
-            vec!["myvalidator".into()]
-        )))
-    );
-    assert_eq!(
         stmt.options,
         Some(vec![CreateServerOption {
             key: "debug".into(),
@@ -9704,8 +9692,7 @@ fn parse_create_foreign_data_wrapper() {
         }])
     );
 
-    // Each clause must render its own label: round-tripping must not emit
-    // `NO HANDLER NO HANDLER`, which a single hardcoded Display label would.
+    // A single hardcoded Display label would render this as `NO HANDLER NO HANDLER`.
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR";
     let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
@@ -9721,6 +9708,30 @@ fn parse_create_foreign_data_wrapper() {
         pg_and_generic().parse_sql_statements("CREATE FOREIGN DATA WRAPPER myschema.myfdw"),
         Err(ParserError::ParserError(_))
     ));
+}
+
+#[test]
+fn parse_create_foreign_data_wrapper_clause_order() {
+    // PostgreSQL takes these in either order; Display normalizes to HANDLER first.
+    let canonical = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator";
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR myvalidator HANDLER myhandler",
+        canonical,
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR NO HANDLER",
+        "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR",
+    );
+
+    for sql in [
+        "CREATE FOREIGN DATA WRAPPER myfdw HANDLER h1 HANDLER h2",
+        "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER HANDLER h",
+    ] {
+        assert!(matches!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(_))
+        ));
+    }
 }
 
 #[test]

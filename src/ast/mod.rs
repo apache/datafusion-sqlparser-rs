@@ -2487,12 +2487,16 @@ pub enum WindowFrameExclusion {
 
 impl fmt::Display for WindowFrameExclusion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            WindowFrameExclusion::CurrentRow => "EXCLUDE CURRENT ROW",
-            WindowFrameExclusion::Group => "EXCLUDE GROUP",
-            WindowFrameExclusion::Ties => "EXCLUDE TIES",
-            WindowFrameExclusion::NoOthers => "EXCLUDE NO OTHERS",
-        })
+        write!(
+            f,
+            "EXCLUDE {}",
+            match self {
+                WindowFrameExclusion::CurrentRow => "CURRENT ROW",
+                WindowFrameExclusion::Group => "GROUP",
+                WindowFrameExclusion::Ties => "TIES",
+                WindowFrameExclusion::NoOthers => "NO OTHERS",
+            }
+        )
     }
 }
 

@@ -4898,6 +4898,62 @@ fn parse_create_table_as_table() {
         }
         _ => unreachable!(),
     }
+
+    let sql3 = "CREATE TABLE new_table AS TABLE ONLY old_table";
+
+    let expected_query3 = Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Table(Box::new(Table {
+            only: true,
+            table_name: Some(Ident::new("old_table")),
+            schema_name: None,
+            with_asterisk: false,
+        }))),
+        order_by: None,
+        limit_clause: None,
+        fetch: None,
+        locks: vec![],
+        for_clause: None,
+        settings: None,
+        format_clause: None,
+        pipe_operators: vec![],
+    });
+
+    match verified_stmt(sql3) {
+        Statement::CreateTable(CreateTable { query, name, .. }) => {
+            assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
+            assert_eq!(query.unwrap(), expected_query3);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql4 = "CREATE TABLE new_table AS TABLE old_table *";
+
+    let expected_query4 = Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Table(Box::new(Table {
+            only: false,
+            table_name: Some(Ident::new("old_table")),
+            schema_name: None,
+            with_asterisk: true,
+        }))),
+        order_by: None,
+        limit_clause: None,
+        fetch: None,
+        locks: vec![],
+        for_clause: None,
+        settings: None,
+        format_clause: None,
+        pipe_operators: vec![],
+    });
+
+    match verified_stmt(sql4) {
+        Statement::CreateTable(CreateTable { query, name, .. }) => {
+            assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
+            assert_eq!(query.unwrap(), expected_query4);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

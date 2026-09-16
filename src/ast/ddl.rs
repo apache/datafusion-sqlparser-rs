@@ -6011,7 +6011,8 @@ pub struct CreateForeignTable {
     /// Column definitions.
     pub columns: Vec<ColumnDef>,
     /// Table-level constraints (e.g. `CHECK (...)`, composite `FOREIGN KEY`).
-    /// PostgreSQL accepts these in `CREATE FOREIGN TABLE` column lists.
+    /// PostgreSQL's grammar accepts these here, but rejects primary key, unique,
+    /// foreign key and exclusion constraints on a foreign table at execution.
     pub constraints: Vec<TableConstraint>,
     /// The `SERVER server_name` clause.
     pub server_name: Ident,
@@ -6056,7 +6057,13 @@ impl Spanned for CreateForeignTable {
             core::iter::once(self.name.span())
                 .chain(self.columns.iter().map(|column| column.span()))
                 .chain(self.constraints.iter().map(|constraint| constraint.span()))
-                .chain(core::iter::once(self.server_name.span)),
+                .chain(core::iter::once(self.server_name.span))
+                .chain(
+                    self.options
+                        .iter()
+                        .flatten()
+                        .flat_map(|option| [option.key.span, option.value.span]),
+                ),
         )
     }
 }

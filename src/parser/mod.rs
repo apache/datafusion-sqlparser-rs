@@ -5257,6 +5257,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        let modifier_loc = self.peek_token_ref().span.start;
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
         let multiset = self.maybe_parse_multiset();
@@ -5360,10 +5361,18 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
-            if temporary || global.is_some() || transient || volatile {
+            if temporary
+                || global.is_some()
+                || transient
+                || volatile
+                || or_alter
+                || multiset.is_some()
+                || persistent
+                || create_view_params.is_some()
+            {
                 return parser_err!(
-                    "CREATE FOREIGN TABLE does not accept a persistence modifier",
-                    self.peek_token_ref().span.start
+                    "CREATE FOREIGN TABLE does not accept this modifier",
+                    modifier_loc
                 );
             }
             self.parse_create_foreign_table().map(Into::into)

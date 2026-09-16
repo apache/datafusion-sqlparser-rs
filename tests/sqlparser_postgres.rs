@@ -9645,6 +9645,7 @@ fn parse_create_foreign_table() {
     let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
+    assert!(!stmt.if_not_exists);
     assert_eq!(stmt.columns.len(), 2);
     assert!(stmt.options.is_none());
 
@@ -9679,20 +9680,30 @@ fn parse_create_foreign_table_requires_column_list() {
         pg_and_generic().parse_sql_statements("CREATE FOREIGN TABLE ft SERVER s"),
         Err(ParserError::ParserError(_))
     ));
+
+    // An empty list is still legal PostgreSQL.
+    pg_and_generic().verified_stmt("CREATE FOREIGN TABLE ft () SERVER s");
 }
 
 #[test]
-fn parse_create_foreign_table_rejects_persistence_modifier() {
-    // There is no temporary or unlogged foreign table in PostgreSQL, and the
-    // modifier has no field to round-trip through.
+fn parse_create_foreign_table_rejects_modifiers() {
+    // None of these has a field on CreateForeignTable, so accepting one would
+    // drop it silently on the way back out through Display.
     for sql in [
         "CREATE TEMPORARY FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE GLOBAL FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE TRANSIENT FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE VOLATILE FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE OR ALTER FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE MULTISET FOREIGN TABLE ft (a INT) SERVER s",
     ] {
-        assert!(matches!(
-            pg_and_generic().parse_sql_statements(sql),
-            Err(ParserError::ParserError(_))
-        ));
+        assert!(
+            matches!(
+                pg_and_generic().parse_sql_statements(sql),
+                Err(ParserError::ParserError(_))
+            ),
+            "should have been rejected: {sql}"
+        );
     }
 }
 

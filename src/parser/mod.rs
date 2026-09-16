@@ -4457,8 +4457,14 @@ impl<'a> Parser<'a> {
         Ok(in_op)
     }
 
-    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.
+    /// Parses `[ASYMMETRIC | SYMMETRIC] <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+        let symmetric = if self.parse_keyword(Keyword::SYMMETRIC) {
+            true
+        } else {
+            let _ = self.parse_keyword(Keyword::ASYMMETRIC);
+            false
+        };
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
         let low = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
@@ -4467,6 +4473,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Between {
             expr: Box::new(expr),
             negated,
+            symmetric,
             low: Box::new(low),
             high: Box::new(high),
         })

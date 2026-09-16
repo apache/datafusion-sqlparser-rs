@@ -9956,7 +9956,7 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
 
 #[test]
 fn parse_table_command() {
-    pg().verified_stmt("TABLE customers ORDER BY contact_name LIMIT 1");
-    pg().verified_stmt("TABLE ONLY customers");
-    pg().verified_stmt("TABLE customers *");
+    pg_and_generic().verified_stmt("TABLE customers ORDER BY contact_name LIMIT 1");
+    pg_and_generic().verified_stmt("TABLE ONLY customers");
+    pg_and_generic().verified_stmt("TABLE customers *");
 }

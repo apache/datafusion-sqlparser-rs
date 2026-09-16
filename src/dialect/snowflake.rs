@@ -1614,10 +1614,14 @@ fn parse_select_item_for_data_load(
         }
     }
 
-    // A trailing `::` means this is a cast expression (e.g.
-    // `$1:"col"::NUMBER(38,0)`), not a stage-load-select-item.
-    if matches!(parser.peek_token_ref().token, Token::DoubleColon) {
-        return parser.expected("stage load select item", parser.peek_token());
+    // More complex paths and casts must fall back to the standard expression
+    // parser so it can preserve the complete JsonAccess / Cast expression.
+    if matches!(
+        parser.peek_token_ref().token,
+        Token::Colon | Token::Period | Token::LBracket | Token::DoubleColon
+    ) {
+        let token = parser.next_token();
+        return parser.expected("end of simple staged field", token);
     }
 
     // as

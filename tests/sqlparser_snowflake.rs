@@ -2596,6 +2596,11 @@ fn test_copy_into_with_cast_transformation() {
             "COPY INTO my_company.emp_basic (a, b) FROM ",
             r#"(SELECT t.$1:plain AS plain, $1:"B"::TEXT FROM @stg AS t)"#,
         ),
+        // https://docs.snowflake.com/en/user-guide/tutorials/script-data-load-transform-parquet
+        concat!(
+            "COPY INTO my_company.emp_basic (a, b) FROM ",
+            "(SELECT $1:continent::VARCHAR, $1:country:name::VARCHAR FROM @stg)",
+        ),
     ];
     for sql in variants {
         snowflake().verified_stmt(sql);

@@ -5359,6 +5359,8 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
+            self.parse_create_foreign_table().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -20431,16 +20433,7 @@ impl<'a> Parser<'a> {
         self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
         let foreign_data_wrapper = self.parse_object_name(false)?;
 
-        let mut options = None;
-        if self.parse_keyword(Keyword::OPTIONS) {
-            self.expect_token(&Token::LParen)?;
-            options = Some(self.parse_comma_separated(|p| {
-                let key = p.parse_identifier()?;
-                let value = p.parse_identifier()?;
-                Ok(CreateServerOption { key, value })
-            })?);
-            self.expect_token(&Token::RParen)?;
-        }
+        let options = self.parse_generic_options_clause()?;
 
         Ok(Statement::CreateServer(CreateServerStatement {
             name,
@@ -20450,6 +20443,45 @@ impl<'a> Parser<'a> {
             foreign_data_wrapper,
             options,
         }))
+    }
+
+    /// Parse an optional `OPTIONS ( key value [, ...] )` clause shared by
+    /// `CREATE SERVER` and `CREATE FOREIGN TABLE`.
+    fn parse_generic_options_clause(
+        &mut self,
+    ) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
+        if !self.parse_keyword(Keyword::OPTIONS) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| {
+            let key = p.parse_identifier()?;
+            let value = p.parse_identifier()?;
+            Ok(CreateServerOption { key, value })
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Some(options))
+    }
+
+    /// Parse a `CREATE FOREIGN TABLE` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
+    pub fn parse_create_foreign_table(&mut self) -> Result<CreateForeignTable, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+        let (columns, constraints) = self.parse_columns()?;
+        self.expect_keyword_is(Keyword::SERVER)?;
+        let server_name = self.parse_identifier()?;
+        let options = self.parse_generic_options_clause()?;
+
+        Ok(CreateForeignTable {
+            name,
+            if_not_exists,
+            columns,
+            constraints,
+            server_name,
+            options,
+        })
     }
 
     /// The index of the first unprocessed token.

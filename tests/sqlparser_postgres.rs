@@ -9640,6 +9640,66 @@ fn parse_lock_table() {
 }
 
 #[test]
+fn parse_create_foreign_table() {
+    let sql = "CREATE FOREIGN TABLE ft1 (id INTEGER, name TEXT) SERVER myserver";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "ft1");
+    assert!(!stmt.if_not_exists);
+    assert_eq!(stmt.columns.len(), 2);
+    assert_eq!(stmt.columns[0].name.value, "id");
+    assert_eq!(stmt.columns[1].name.value, "name");
+    assert_eq!(stmt.server_name.value, "myserver");
+    assert!(stmt.options.is_none());
+
+    let sql = "CREATE FOREIGN TABLE IF NOT EXISTS ft2 (col INTEGER) SERVER remoteserver";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.if_not_exists);
+    assert_eq!(stmt.name.to_string(), "ft2");
+
+    let sql =
+        "CREATE FOREIGN TABLE ft3 (col INTEGER) SERVER remoteserver OPTIONS (schema_name 'public')";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.options,
+        Some(vec![CreateServerOption {
+            key: "schema_name".into(),
+            value: Ident {
+                value: "public".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            },
+        }])
+    );
+}
+
+#[test]
+fn parse_create_foreign_table_with_check_constraint() {
+    // PostgreSQL accepts table-level CHECK constraints in CREATE FOREIGN TABLE.
+    // The constraint must round-trip rather than being silently dropped.
+    let sql =
+        "CREATE FOREIGN TABLE ft (id INTEGER, CONSTRAINT id_positive CHECK (id > 0)) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.columns.len(), 1);
+    assert_eq!(stmt.constraints.len(), 1);
+
+    // Zero columns with only a table-level constraint must not emit `(, CONSTRAINT ...)`.
+    let sql = "CREATE FOREIGN TABLE ft (CONSTRAINT c CHECK (id > 0)) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.columns.len(), 0);
+    assert_eq!(stmt.constraints.len(), 1);
+}
+
+#[test]
 fn exclude_as_column_name() {
     // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
     // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not

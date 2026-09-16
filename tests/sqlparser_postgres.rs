@@ -25,8 +25,8 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
-use sqlparser::parser::ParserError;
-use sqlparser::tokenizer::Span;
+use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[test]
@@ -9629,6 +9629,19 @@ fn parse_create_aggregate_basic() {
         }
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
     }
+}
+
+#[test]
+fn parse_create_aggregate_span() {
+    let sql = "CREATE AGGREGATE myavg (NUMERIC) (SFUNC = numeric_avg_accum, STYPE = internal, FINALFUNC = numeric_avg, INITCOND = '0')";
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(sql)
+        .unwrap();
+    // From the aggregate name through the last spanned option value.
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(Location::new(1, 18), Location::new(1, 119))
+    );
 }
 
 #[test]

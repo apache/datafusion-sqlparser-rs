@@ -594,7 +594,8 @@ impl fmt::Display for Select {
                 SpaceOrNewline.fmt(f)?;
                 self.group_by.fmt(f)?;
             }
-            GroupByExpr::Expressions(exprs, _) => {
+            GroupByExpr::Expressions(exprs, _)
+            | GroupByExpr::ExpressionsWithModifier(_, exprs, _) => {
                 if !exprs.is_empty() {
                     SpaceOrNewline.fmt(f)?;
                     self.group_by.fmt(f)?;
@@ -3801,6 +3802,26 @@ impl fmt::Display for GroupByWithModifier {
     }
 }
 
+/// `ALL` or `DISTINCT` modifier for `GROUP BY` expressions.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GroupByModifier {
+    /// Preserve duplicate grouping sets.
+    All,
+    /// Remove duplicate grouping sets.
+    Distinct,
+}
+
+impl fmt::Display for GroupByModifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GroupByModifier::All => f.write_str("ALL"),
+            GroupByModifier::Distinct => f.write_str("DISTINCT"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3820,6 +3841,10 @@ pub enum GroupByExpr {
     All(Vec<GroupByWithModifier>),
     /// `GROUP BY <expressions>` with optional modifiers.
     Expressions(Vec<Expr>, Vec<GroupByWithModifier>),
+    /// `GROUP BY ALL | DISTINCT <expressions>` with optional modifiers.
+    ///
+    /// [PostgreSQL]: <https://www.postgresql.org/docs/current/sql-select.html#SQL-GROUPBY>
+    ExpressionsWithModifier(GroupByModifier, Vec<Expr>, Vec<GroupByWithModifier>),
 }
 
 impl fmt::Display for GroupByExpr {
@@ -3834,6 +3859,15 @@ impl fmt::Display for GroupByExpr {
             }
             GroupByExpr::Expressions(col_names, modifiers) => {
                 f.write_str("GROUP BY")?;
+                SpaceOrNewline.fmt(f)?;
+                Indent(display_comma_separated(col_names)).fmt(f)?;
+                if !modifiers.is_empty() {
+                    write!(f, " {}", display_separated(modifiers, " "))?;
+                }
+                Ok(())
+            }
+            GroupByExpr::ExpressionsWithModifier(modifier, col_names, modifiers) => {
+                write!(f, "GROUP BY {modifier}")?;
                 SpaceOrNewline.fmt(f)?;
                 Indent(display_comma_separated(col_names)).fmt(f)?;
                 if !modifiers.is_empty() {

@@ -3164,4 +3164,19 @@ WHERE id = 1
             Span::new(Location::new(2, 8), Location::new(4, 52))
         );
     }
+
+    #[test]
+    fn test_create_foreign_data_wrapper_span_covers_options() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler OPTIONS (debug 'true')";
+        let mut test = SpanTest::new(dialect, sql);
+
+        // Ends at the option key, not the statement: a quoted option value is an
+        // Ident with an empty span, so it contributes nothing to the union.
+        let stmt = test.0.parse_statement().unwrap();
+        assert_eq!(
+            test.get_source(stmt.span()),
+            "myfdw HANDLER myhandler OPTIONS (debug"
+        );
+    }
 }

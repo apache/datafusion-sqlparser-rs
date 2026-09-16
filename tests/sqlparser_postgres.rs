@@ -9723,14 +9723,18 @@ fn parse_create_foreign_data_wrapper_clause_order() {
         "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR",
     );
 
+    // Pinning the message keeps this from passing on the old positional parser,
+    // which also errored here but on the trailing tokens instead.
     for sql in [
         "CREATE FOREIGN DATA WRAPPER myfdw HANDLER h1 HANDLER h2",
         "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER HANDLER h",
+        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR v NO VALIDATOR",
     ] {
-        assert!(matches!(
-            pg_and_generic().parse_sql_statements(sql),
-            Err(ParserError::ParserError(_))
-        ));
+        let err = pg_and_generic().parse_sql_statements(sql).unwrap_err();
+        assert!(
+            err.to_string().contains("conflicting or redundant options"),
+            "unexpected error for {sql}: {err}"
+        );
     }
 }
 

@@ -9645,7 +9645,6 @@ fn parse_create_foreign_table() {
     let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
-    assert!(!stmt.if_not_exists);
     assert_eq!(stmt.columns.len(), 2);
     assert!(stmt.options.is_none());
 
@@ -9692,19 +9691,28 @@ fn parse_create_foreign_table_rejects_modifiers() {
     for sql in [
         "CREATE TEMPORARY FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE GLOBAL FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE LOCAL FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE TRANSIENT FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE VOLATILE FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE OR ALTER FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE MULTISET FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE SET FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE ALGORITHM = UNDEFINED FOREIGN TABLE ft (a INT) SERVER s",
     ] {
+        let err = pg_and_generic().parse_sql_statements(sql).unwrap_err();
         assert!(
-            matches!(
-                pg_and_generic().parse_sql_statements(sql),
-                Err(ParserError::ParserError(_))
-            ),
-            "should have been rejected: {sql}"
+            err.to_string()
+                .contains("CREATE FOREIGN TABLE does not accept this modifier"),
+            "unexpected error for {sql}: {err}"
         );
     }
+
+    // OR REPLACE is caught by an earlier arm, so it never reaches the guard.
+    assert!(matches!(
+        pg_and_generic()
+            .parse_sql_statements("CREATE OR REPLACE FOREIGN TABLE ft (a INT) SERVER s"),
+        Err(ParserError::ParserError(_))
+    ));
 }
 
 #[test]

@@ -5361,11 +5361,12 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
-            if temporary
+            if or_replace
+                || or_alter
+                || temporary
                 || global.is_some()
                 || transient
                 || volatile
-                || or_alter
                 || multiset.is_some()
                 || persistent
                 || create_view_params.is_some()

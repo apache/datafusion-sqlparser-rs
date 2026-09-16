@@ -3166,7 +3166,7 @@ WHERE id = 1
     }
 
     #[test]
-    fn test_create_foreign_table_span_covers_options() {
+    fn test_create_foreign_table_span_includes_option_keys() {
         let dialect = &crate::dialect::PostgreSqlDialect {};
         let sql = "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public')";
         let mut test = SpanTest::new(dialect, sql);

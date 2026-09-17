@@ -20263,3 +20263,46 @@ fn parse_placeholder_disallows_quoted_ident() {
         err
     );
 }
+
+#[test]
+fn parse_quoted_identifier_with_consecutive_delimiters() {
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('"'));
+    let select = dialects.verified_only_select(r#"SELECT "a""""b""#);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('"', r#"a""b"#)),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('`'));
+    let select = dialects.verified_only_select("SELECT `a````b`");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('`', "a``b")),
+        expr_from_projection(&select.projection[0]),
+    );
+}
+
+#[test]
+fn quoted_identifier_display_round_trips() {
+    // Every value of length 1..=4 over the delimiter, a backslash, an ASCII
+    // and a multi-byte character, serialized and parsed back.
+    for quote in ['"', '`'] {
+        let dialects = all_dialects_where(move |d| d.is_delimited_identifier_start(quote));
+        let mut values = vec![String::new()];
+        for _ in 0..4 {
+            values = values
+                .iter()
+                .flat_map(|v| [quote, '\\', 'a', 'é'].map(|c| format!("{v}{c}")))
+                .collect();
+            for value in &values {
+                let ident = Ident::with_quote(quote, value.as_str());
+                let sql = format!("SELECT {ident}");
+                let select = dialects.verified_only_select(&sql);
+                assert_eq!(
+                    &Expr::Identifier(ident),
+                    expr_from_projection(&select.projection[0]),
+                    "{sql} did not round trip",
+                );
+            }
+        }
+    }
+}

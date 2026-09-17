@@ -255,6 +255,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_rows_from_table_factor(&self) -> bool {
+        true
+    }
+
     /// See <https://www.postgresql.org/docs/current/functions-json.html>
     ///
     /// Required to support the colon in:

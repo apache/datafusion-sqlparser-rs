@@ -9953,3 +9953,23 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 }
+
+#[test]
+fn parse_rows_from_with_ordinality() {
+    pg_and_generic().verified_stmt(
+        "SELECT * FROM ROWS FROM(UNNEST(ARRAY[1, 2]) WITH ORDINALITY) AS r (val, ord)",
+    );
+
+    pg_and_generic().verified_stmt(
+        "SELECT * FROM ROWS FROM(UNNEST(ARRAY[1, 2])) WITH ORDINALITY AS r (val, ord)",
+    );
+
+    pg_and_generic().verified_stmt(
+        "SELECT * FROM ROWS FROM(UNNEST(ARRAY[1]), generate_series(1, 2)) AS r (a, b)",
+    );
+
+    let err = pg_and_generic()
+        .parse_sql_statements("SELECT * FROM ROWS FROM(foo)")
+        .unwrap_err();
+    assert_eq!("sql parser error: Expected: (, found: )", err.to_string());
+}

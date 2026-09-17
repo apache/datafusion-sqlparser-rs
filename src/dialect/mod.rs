@@ -756,6 +756,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports `ROWS FROM` in table functions.
+    ///
+    /// See <https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-TABLEFUNCTIONS>
+    fn supports_rows_from_table_factor(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
         false

@@ -10037,3 +10037,23 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_rows_from_with_ordinality() {
+    pg_and_generic().verified_stmt(
+        "SELECT * FROM ROWS FROM(UNNEST(ARRAY[1, 2]) WITH ORDINALITY) AS r (val, ord)",
+    );
+
+    pg_and_generic().verified_stmt(
+        "SELECT * FROM ROWS FROM(UNNEST(ARRAY[1, 2])) WITH ORDINALITY AS r (val, ord)",
+    );
+
+    pg_and_generic().verified_stmt(
+        "SELECT * FROM ROWS FROM(UNNEST(ARRAY[1]), generate_series(1, 2)) AS r (a, b)",
+    );
+
+    let err = pg_and_generic()
+        .parse_sql_statements("SELECT * FROM ROWS FROM(foo)")
+        .unwrap_err();
+    assert_eq!("sql parser error: Expected: (, found: )", err.to_string());
+}

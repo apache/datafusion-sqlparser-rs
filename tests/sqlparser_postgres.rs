@@ -9640,6 +9640,105 @@ fn parse_lock_table() {
 }
 
 #[test]
+fn parse_create_foreign_data_wrapper() {
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "myfdw");
+    assert!(stmt.handler.is_none());
+    assert!(stmt.validator.is_none());
+    assert!(stmt.options.is_none());
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.handler,
+        Some(ForeignDataWrapperRoutineClause::Function(ObjectName::from(
+            vec!["myhandler".into()]
+        )))
+    );
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.handler, Some(ForeignDataWrapperRoutineClause::Absent));
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.validator,
+        Some(ForeignDataWrapperRoutineClause::Absent)
+    );
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator OPTIONS (debug 'true')";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.options,
+        Some(vec![CreateServerOption {
+            key: "debug".into(),
+            value: Ident {
+                value: "true".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            },
+        }])
+    );
+
+    // A single hardcoded Display label would render this as `NO HANDLER NO HANDLER`.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.handler, Some(ForeignDataWrapperRoutineClause::Absent));
+    assert_eq!(
+        stmt.validator,
+        Some(ForeignDataWrapperRoutineClause::Absent)
+    );
+
+    // A schema-qualified name is not valid: FDW names are bare identifiers.
+    assert!(matches!(
+        pg_and_generic().parse_sql_statements("CREATE FOREIGN DATA WRAPPER myschema.myfdw"),
+        Err(ParserError::ParserError(_))
+    ));
+}
+
+#[test]
+fn parse_create_foreign_data_wrapper_clause_order() {
+    // PostgreSQL takes these in either order; Display normalizes to HANDLER first.
+    let canonical = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator";
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR myvalidator HANDLER myhandler",
+        canonical,
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR NO HANDLER",
+        "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR",
+    );
+
+    // Pinning the message keeps this from passing on the old positional parser,
+    // which also errored here but on the trailing tokens instead.
+    for sql in [
+        "CREATE FOREIGN DATA WRAPPER myfdw HANDLER h1 HANDLER h2",
+        "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER HANDLER h",
+        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR v NO VALIDATOR",
+    ] {
+        let err = pg_and_generic().parse_sql_statements(sql).unwrap_err();
+        assert!(
+            err.to_string().contains("conflicting or redundant options"),
+            "unexpected error for {sql}: {err}"
+        );
+    }
+}
+
+#[test]
 fn exclude_as_column_name() {
     // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
     // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not

@@ -5359,6 +5359,8 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
+            self.parse_create_foreign_data_wrapper().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -20431,16 +20433,7 @@ impl<'a> Parser<'a> {
         self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
         let foreign_data_wrapper = self.parse_object_name(false)?;
 
-        let mut options = None;
-        if self.parse_keyword(Keyword::OPTIONS) {
-            self.expect_token(&Token::LParen)?;
-            options = Some(self.parse_comma_separated(|p| {
-                let key = p.parse_identifier()?;
-                let value = p.parse_identifier()?;
-                Ok(CreateServerOption { key, value })
-            })?);
-            self.expect_token(&Token::RParen)?;
-        }
+        let options = self.parse_pg_options_clause()?;
 
         Ok(Statement::CreateServer(CreateServerStatement {
             name,
@@ -20450,6 +20443,68 @@ impl<'a> Parser<'a> {
             foreign_data_wrapper,
             options,
         }))
+    }
+
+    /// Parse an optional Postgres `OPTIONS ( key value [, ...] )` clause.
+    fn parse_pg_options_clause(&mut self) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
+        if !self.parse_keyword(Keyword::OPTIONS) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| {
+            let key = p.parse_identifier()?;
+            let value = p.parse_identifier()?;
+            Ok(CreateServerOption { key, value })
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Some(options))
+    }
+
+    /// Parse a `CREATE FOREIGN DATA WRAPPER` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html>
+    pub fn parse_create_foreign_data_wrapper(
+        &mut self,
+    ) -> Result<CreateForeignDataWrapper, ParserError> {
+        let name = self.parse_identifier()?;
+
+        // PostgreSQL accepts HANDLER and VALIDATOR in either order, so they are
+        // consumed in a loop rather than positionally.
+        let mut handler = None;
+        let mut validator = None;
+        loop {
+            let loc = self.peek_token_ref().span.start;
+            let (slot, clause) = if self.parse_keyword(Keyword::HANDLER) {
+                (
+                    &mut handler,
+                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::HANDLER]) {
+                (&mut handler, ForeignDataWrapperRoutineClause::Absent)
+            } else if self.parse_keyword(Keyword::VALIDATOR) {
+                (
+                    &mut validator,
+                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::VALIDATOR]) {
+                (&mut validator, ForeignDataWrapperRoutineClause::Absent)
+            } else {
+                break;
+            };
+            if slot.is_some() {
+                return parser_err!("conflicting or redundant options", loc);
+            }
+            *slot = Some(clause);
+        }
+
+        let options = self.parse_pg_options_clause()?;
+
+        Ok(CreateForeignDataWrapper {
+            name,
+            handler,
+            validator,
+            options,
+        })
     }
 
     /// The index of the first unprocessed token.

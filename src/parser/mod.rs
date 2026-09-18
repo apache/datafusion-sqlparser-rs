@@ -13135,6 +13135,9 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
+                Keyword::OBJECT if self.peek_token_ref().token == Token::LParen => {
+                    Ok(DataType::Object(self.parse_structured_object_type_def()?))
+                }
                 Keyword::STRUCT if dialect_is!(dialect is DuckDbDialect) => {
                     self.prev_token();
                     let field_defs = self.parse_duckdb_struct_type_def()?;
@@ -14350,6 +14353,29 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    fn parse_structured_object_type_def(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let fields = self.parse_comma_separated(|parser| {
+            let name = parser.parse_identifier()?;
+            let data_type = parser.parse_data_type()?;
+            let options = if parser.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+                vec![ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                }]
+            } else {
+                vec![]
+            };
+            Ok(ColumnDef {
+                name,
+                data_type,
+                options,
+            })
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(fields)
     }
 
     /// Parse a parenthesized sub data type

@@ -452,6 +452,10 @@ pub enum DataType {
     ///
     /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nested-data-structures/nested
     Nested(Vec<ColumnDef>),
+    /// Structured object type, see [Snowflake].
+    ///
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/data-types-structured#structured-object-types
+    Object(Vec<ColumnDef>),
     /// Enum type.
     Enum(Vec<EnumMember>, Option<u8>),
     /// Set type.
@@ -801,6 +805,9 @@ impl fmt::Display for DataType {
             }
             DataType::Nested(fields) => {
                 write!(f, "Nested({})", display_comma_separated(fields))
+            }
+            DataType::Object(fields) => {
+                write!(f, "OBJECT({})", display_comma_separated(fields))
             }
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),

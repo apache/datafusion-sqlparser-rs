@@ -382,8 +382,16 @@ impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
             Some(q) if q == '"' || q == '\'' || q == '`' => {
-                let escaped = value::escape_quoted_string(&self.value, q);
-                write!(f, "{q}{escaped}{q}")
+                // The value is the decoded identifier, so every delimiter
+                // inside it is literal and must be doubled.
+                write!(f, "{q}")?;
+                for (i, part) in self.value.split(q).enumerate() {
+                    if i > 0 {
+                        write!(f, "{q}{q}")?;
+                    }
+                    f.write_str(part)?;
+                }
+                write!(f, "{q}")
             }
             Some('[') => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),

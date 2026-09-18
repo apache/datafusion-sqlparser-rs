@@ -13502,7 +13502,20 @@ impl<'a> Parser<'a> {
     /// Parse an optional `GROUP BY` clause, returning `Some(GroupByExpr)` when present.
     pub fn parse_optional_group_by(&mut self) -> Result<Option<GroupByExpr>, ParserError> {
         if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            let expressions = if self.parse_keyword(Keyword::ALL) {
+            let modifier = if self.dialect.supports_group_by_modifier() {
+                if self.parse_keyword(Keyword::ALL) {
+                    Some(GroupByModifier::All)
+                } else if self.parse_keyword(Keyword::DISTINCT) {
+                    Some(GroupByModifier::Distinct)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            let expressions = if modifier.is_some() {
+                Some(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+            } else if self.parse_keyword(Keyword::ALL) {
                 None
             } else {
                 Some(self.parse_comma_separated(Parser::parse_group_by_expr)?)
@@ -13546,9 +13559,18 @@ impl<'a> Parser<'a> {
                     result,
                 )));
             };
-            let group_by = match expressions {
-                None => GroupByExpr::All(modifiers),
-                Some(exprs) => GroupByExpr::Expressions(exprs, modifiers),
+            let group_by = match (modifier, expressions) {
+                (None, None) => GroupByExpr::All(modifiers),
+                (Some(modifier), Some(exprs)) => {
+                    GroupByExpr::ExpressionsWithModifier(modifier, exprs, modifiers)
+                }
+                (None, Some(exprs)) => GroupByExpr::Expressions(exprs, modifiers),
+                (Some(_), None) => {
+                    return parser_err!(
+                        "BUG: GROUP BY modifier requires expressions",
+                        self.peek_token_ref().span.start
+                    )
+                }
             };
             Ok(Some(group_by))
         } else {

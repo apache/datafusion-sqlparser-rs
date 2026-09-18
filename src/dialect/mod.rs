@@ -383,6 +383,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `ALL` or `DISTINCT` before `GROUP BY` expressions.
+    fn supports_group_by_modifier(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports `GROUP BY` modifiers prefixed by a `WITH` keyword.
     /// Example: `GROUP BY value WITH ROLLUP`.
     fn supports_group_by_with_modifier(&self) -> bool {
@@ -2097,6 +2102,10 @@ mod tests {
 
             fn supports_group_by_expr(&self) -> bool {
                 self.0.supports_group_by_expr()
+            }
+
+            fn supports_group_by_modifier(&self) -> bool {
+                self.0.supports_group_by_modifier()
             }
 
             fn supports_in_empty_list(&self) -> bool {

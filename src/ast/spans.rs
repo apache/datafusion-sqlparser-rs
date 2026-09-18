@@ -1308,7 +1308,8 @@ impl Spanned for GroupByExpr {
     fn span(&self) -> Span {
         match self {
             GroupByExpr::All(_) => Span::empty(),
-            GroupByExpr::Expressions(exprs, _modifiers) => {
+            GroupByExpr::Expressions(exprs, _modifiers)
+            | GroupByExpr::ExpressionsWithModifier(_, exprs, _modifiers) => {
                 union_spans(exprs.iter().map(|i| i.span()))
             }
         }

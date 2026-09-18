@@ -9953,3 +9953,13 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 }
+
+#[test]
+fn parse_group_by_modifier() {
+    for modifier in ["ALL", "DISTINCT"] {
+        pg().verified_stmt(&format!("SELECT a FROM t GROUP BY {modifier} a"));
+        assert!(pg()
+            .parse_sql_statements(&format!("SELECT a FROM t GROUP BY {modifier}"))
+            .is_err());
+    }
+}

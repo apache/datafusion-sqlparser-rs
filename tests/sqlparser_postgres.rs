@@ -9953,3 +9953,10 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 }
+
+#[test]
+fn parse_table_command() {
+    pg_and_generic().verified_stmt("TABLE customers ORDER BY contact_name LIMIT 1");
+    pg_and_generic().verified_stmt("TABLE ONLY customers");
+    pg_and_generic().verified_stmt("TABLE customers *");
+}

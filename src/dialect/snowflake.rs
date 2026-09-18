@@ -240,6 +240,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/data-types-structured#label-structured-types-array)
+    fn supports_array_typedef_with_parentheses(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/from)
     fn supports_parens_around_table_factor(&self) -> bool {
         true

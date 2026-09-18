@@ -4091,6 +4091,15 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsUnknown(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {
                         Ok(Expr::IsNotUnknown(Box::new(expr)))
+                    } else if let Some(negated) = if dialect.supports_xml_expressions() {
+                        self.parse_is_document_predicate()
+                    } else {
+                        None
+                    } {
+                        Ok(Expr::IsDocument {
+                            expr: Box::new(expr),
+                            negated,
+                        })
                     } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
                         // The right operand binds no more loosely than `IS`
                         // itself, so that e.g. `a IS DISTINCT FROM b AND c`
@@ -4109,7 +4118,7 @@ impl<'a> Parser<'a> {
                         Ok(is_normalized)
                     } else {
                         self.expected_ref(
-                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS",
+                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] DOCUMENT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS",
                             self.peek_token_ref(),
                         )
                     }
@@ -4749,6 +4758,16 @@ impl<'a> Parser<'a> {
             true
         } else {
             false
+        }
+    }
+
+    fn parse_unquoted_word(&mut self, expected: &str) -> bool {
+        match &self.peek_token_ref().token {
+            Token::Word(w) if w.quote_style.is_none() && w.value.eq_ignore_ascii_case(expected) => {
+                self.advance_token();
+                true
+            }
+            _ => false,
         }
     }
 
@@ -12740,6 +12759,20 @@ impl<'a> Parser<'a> {
             unique_keys,
             negated,
         })
+    }
+
+    fn parse_is_document_predicate(&mut self) -> Option<bool> {
+        if self.parse_unquoted_word("document") {
+            return Some(false);
+        }
+
+        let start_index = self.index;
+        if self.parse_keyword(Keyword::NOT) && self.parse_unquoted_word("document") {
+            Some(true)
+        } else {
+            self.index = start_index;
+            None
+        }
     }
 
     /// Parse a literal unicode normalization clause

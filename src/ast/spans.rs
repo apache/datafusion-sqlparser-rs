@@ -1497,6 +1497,7 @@ impl Spanned for Expr {
             Expr::IsNotNull(expr) => expr.span(),
             Expr::IsUnknown(expr) => expr.span(),
             Expr::IsNotUnknown(expr) => expr.span(),
+            Expr::IsDocument { expr, negated: _ } => expr.span(),
             Expr::IsJson {
                 expr,
                 kind: _,

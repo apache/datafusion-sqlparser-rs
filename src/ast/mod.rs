@@ -944,6 +944,13 @@ pub enum Expr {
     IsUnknown(Box<Expr>),
     /// `IS NOT UNKNOWN` operator
     IsNotUnknown(Box<Expr>),
+    /// `<expr> IS [NOT] DOCUMENT`
+    IsDocument {
+        /// Expression being tested.
+        expr: Box<Expr>,
+        /// `true` when `NOT` is present.
+        negated: bool,
+    },
     /// `IS DISTINCT FROM` operator
     IsDistinctFrom(Box<Expr>, Box<Expr>),
     /// `IS NOT DISTINCT FROM` operator
@@ -1764,6 +1771,13 @@ impl fmt::Display for Expr {
             Expr::IsNotNull(ast) => write!(f, "{ast} IS NOT NULL"),
             Expr::IsUnknown(ast) => write!(f, "{ast} IS UNKNOWN"),
             Expr::IsNotUnknown(ast) => write!(f, "{ast} IS NOT UNKNOWN"),
+            Expr::IsDocument { expr, negated } => {
+                write!(f, "{expr} IS ")?;
+                if *negated {
+                    write!(f, "NOT ")?;
+                }
+                write!(f, "DOCUMENT")
+            }
             Expr::IsJson {
                 expr,
                 kind,

@@ -23,7 +23,7 @@ use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::*;
-use sqlparser::dialect::{DuckDbDialect, GenericDialect};
+use sqlparser::dialect::{AnsiDialect, DuckDbDialect, GenericDialect};
 use sqlparser::parser::ParserError;
 
 fn duckdb() -> TestedDialects {
@@ -909,4 +909,40 @@ fn test_duckdb_lambda_function() {
     // Test lambda in list_transform
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
+}
+
+#[test]
+fn test_escape_string_literal() {
+    duckdb().verified_stmt(r#"SELECT E'a\nb' AS value"#);
+
+    assert_eq!(
+        duckdb().verified_expr(r#"E'a\nb'"#),
+        Expr::Value((Value::EscapedStringLiteral("a\nb".to_string())).with_empty_span())
+    );
+    assert_eq!(
+        duckdb().verified_expr(r#"'a\nb'"#),
+        Expr::Value((Value::SingleQuotedString(r#"a\nb"#.to_string())).with_empty_span())
+    );
+    duckdb().one_statement_parses_to(
+        r#"COPY data TO E'out\n.csv'"#,
+        r#"COPY data TO 'out
+.csv'"#,
+    );
+
+    let err = duckdb()
+        .parse_sql_statements("SELECT E'unterminated")
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ParserError::TokenizerError(
+            "Unterminated encoded string literal at Line: 1, Column: 8".to_string()
+        )
+    );
+
+    let ansi = TestedDialects::new(vec![Box::new(AnsiDialect {})]);
+    assert_eq!(
+        ansi.parse_sql_statements(r#"SELECT E'a\nb' AS value"#)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: AS".to_string())
+    );
 }

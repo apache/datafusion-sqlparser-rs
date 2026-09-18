@@ -31,7 +31,7 @@ use sqlparser::ast::DataType::{Int, Text, Varbinary};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, MsSqlDialect};
+use sqlparser::dialect::{GenericDialect, MsSqlDialect, SQLiteDialect};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
 #[test]
@@ -935,6 +935,53 @@ fn parse_table_name_in_square_brackets() {
         &Expr::Identifier(Ident::with_quote('[', "a column")),
         expr_from_projection(&select.projection[0]),
     );
+}
+
+#[test]
+fn parse_bracket_identifier_with_escaped_closing_bracket() {
+    // A `]` inside a bracket-quoted identifier is escaped by doubling it, so
+    // `[a]]b]` denotes the identifier `a]b`.
+    let select = ms().verified_only_select("SELECT [a]]b]");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a]b")),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    // Consecutive `]` in the value are each escaped, so `a]]b` stays `a]]b`.
+    let select = ms().verified_only_select("SELECT [a]]]]b]");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a]]b")),
+        expr_from_projection(&select.projection[0]),
+    );
+}
+
+#[test]
+fn bracket_identifier_display_round_trips() {
+    // Serializing an identifier must produce SQL that parses back to the same
+    // identifier. Checked exhaustively over every value of length 1..=5 built
+    // from `]`, `"`, an ordinary character and a multi-byte one.
+    let mut values = vec![String::new()];
+    for _ in 0..5 {
+        values = values
+            .iter()
+            .flat_map(|v| [']', '"', 'a', 'é'].map(|c| format!("{v}{c}")))
+            .collect();
+        for value in &values {
+            // A value wrapped in `"` is Redshift's nested quoted identifier form,
+            // which is emitted verbatim, so a `]` in it cannot be escaped.
+            if value.starts_with('"') && value.ends_with('"') && value.contains(']') {
+                continue;
+            }
+            let ident = Ident::with_quote('[', value.as_str());
+            let sql = format!("SELECT {ident}");
+            let select = ms_and_sqlite().verified_only_select(&sql);
+            assert_eq!(
+                &Expr::Identifier(ident),
+                expr_from_projection(&select.projection[0]),
+                "{sql} did not round trip",
+            );
+        }
+    }
 }
 
 #[test]
@@ -2433,6 +2480,10 @@ fn parse_mssql_table_identifier_with_default_schema() {
 
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
+}
+
+fn ms_and_sqlite() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(SQLiteDialect {})])
 }
 
 // MS SQL dialect with support for optional semi-colon statement delimiters

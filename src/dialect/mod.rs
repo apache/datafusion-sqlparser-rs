@@ -341,6 +341,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `EXCLUDE` in window frames.
+    ///
+    /// [DuckDB](https://duckdb.org/docs/current/sql/functions/window_functions#exclude-clause)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS)
+    /// [SQLite](https://www.sqlite.org/windowfunctions.html#the_exclude_clause)
+    fn supports_window_frame_exclusion(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
     /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
     ///

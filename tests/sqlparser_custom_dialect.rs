@@ -156,6 +156,47 @@ fn test_map_syntax_not_support_default() -> Result<(), ParserError> {
     Ok(())
 }
 
+#[test]
+fn custom_dialect_supports_table_partitions() -> Result<(), ParserError> {
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn supports_table_partitions(&self) -> bool {
+            true
+        }
+    }
+
+    let sql = "SELECT * FROM employees PARTITION (p0, p1)";
+    let ast = Parser::parse_sql(&MyDialect {}, sql)?;
+    assert_eq!(sql, &format!("{}", ast[0]));
+
+    // A dialect that does not opt in still rejects the clause.
+    #[derive(Debug)]
+    struct WithoutPartitions {}
+
+    impl Dialect for WithoutPartitions {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+    }
+
+    assert!(Parser::parse_sql(&WithoutPartitions {}, sql).is_err());
+    Ok(())
+}
+
 fn is_identifier_start(ch: char) -> bool {
     ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
 }

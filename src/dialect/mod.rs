@@ -1764,6 +1764,19 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `PARTITION` clause on a table factor,
+    /// restricting a query to an explicit list of partitions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM employees PARTITION (p0, p1)
+    /// ```
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/partitioning-selection.html)
+    fn supports_table_partitions(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `FORMAT` clause in `SELECT` statements.
     ///
     /// Example:

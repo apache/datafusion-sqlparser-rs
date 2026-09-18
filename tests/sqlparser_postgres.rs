@@ -5745,7 +5745,7 @@ fn parse_truncate() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: false,
-        has_asterisk: false,
+        has_trailing_asterisk: false,
     }];
     assert_eq!(
         Statement::Truncate(Truncate {
@@ -5770,7 +5770,7 @@ fn parse_truncate_with_options() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: true,
-        has_asterisk: false,
+        has_trailing_asterisk: false,
     }];
 
     assert_eq!(
@@ -5800,12 +5800,12 @@ fn parse_truncate_with_table_list() {
         TruncateTableTarget {
             name: table_name_a.clone(),
             only: false,
-            has_asterisk: false,
+            has_trailing_asterisk: false,
         },
         TruncateTableTarget {
             name: table_name_b.clone(),
             only: false,
-            has_asterisk: false,
+            has_trailing_asterisk: false,
         },
     ];
 
@@ -5830,7 +5830,7 @@ fn parse_truncate_with_descendant() {
     let table_names = vec![TruncateTableTarget {
         name: ObjectName::from(vec![Ident::new("t")]),
         only: false,
-        has_asterisk: true,
+        has_trailing_asterisk: true,
     }];
 
     assert_eq!(
@@ -5853,17 +5853,17 @@ fn parse_truncate_with_descendant() {
         TruncateTableTarget {
             name: ObjectName::from(vec![Ident::new("parent")]),
             only: true,
-            has_asterisk: false,
+            has_trailing_asterisk: false,
         },
         TruncateTableTarget {
             name: ObjectName::from(vec![Ident::new("child")]),
             only: false,
-            has_asterisk: true,
+            has_trailing_asterisk: true,
         },
         TruncateTableTarget {
             name: ObjectName::from(vec![Ident::new("grandchild")]),
             only: false,
-            has_asterisk: false,
+            has_trailing_asterisk: false,
         },
     ];
 
@@ -9598,10 +9598,10 @@ fn parse_lock_table() {
             assert_eq!(lock.tables.len(), 2);
             assert_eq!(lock.tables[0].name.to_string(), "public.widgets");
             assert!(lock.tables[0].only);
-            assert!(!lock.tables[0].has_asterisk);
+            assert!(!lock.tables[0].has_trailing_asterisk);
             assert_eq!(lock.tables[1].name.to_string(), "analytics.events");
             assert!(!lock.tables[1].only);
-            assert!(lock.tables[1].has_asterisk);
+            assert!(lock.tables[1].has_trailing_asterisk);
             assert_eq!(lock.lock_mode, Some(LockTableMode::ShareRowExclusive));
             assert!(lock.nowait);
         }
@@ -9630,7 +9630,7 @@ fn parse_lock_table() {
                 assert_eq!(lock.tables.len(), 1);
                 assert_eq!(lock.tables[0].name.to_string(), "public.widgets");
                 assert!(!lock.tables[0].only);
-                assert!(!lock.tables[0].has_asterisk);
+                assert!(!lock.tables[0].has_trailing_asterisk);
                 assert_eq!(lock.lock_mode, Some(expected_mode));
                 assert!(!lock.nowait);
             }
@@ -9951,5 +9951,24 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
             assert!(!by_name);
         }
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
+    }
+}
+
+#[test]
+fn parse_from_table_with_trailing_asterisk() {
+    // `*` after a table name explicitly includes descendant tables.
+    // <https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM>
+    match pg().verified_stmt("SELECT * FROM tbl_name*") {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match &select.from[0].relation {
+                TableFactor::Table {
+                    has_trailing_asterisk,
+                    ..
+                } => assert!(*has_trailing_asterisk),
+                relation => panic!("Expected TableFactor::Table, got: {relation:?}"),
+            },
+            body => panic!("Expected SetExpr::Select, got: {body:?}"),
+        },
+        statement => panic!("Expected SELECT statement, got: {statement:?}"),
     }
 }

@@ -1188,12 +1188,16 @@ pub enum Expr {
     /// ```sql
     /// SUBSTRING(<expr>, <expr>, <expr>)
     /// ```
+    /// or
+    /// ```sql
+    /// SUBSTRING(<expr> SIMILAR <expr> ESCAPE <expr>)
+    /// ```
     Substring {
         /// Source expression.
         expr: Box<Expr>,
-        /// Optional `FROM` expression.
+        /// Optional `FROM`/`SIMILAR` expression.
         substring_from: Option<Box<Expr>>,
-        /// Optional `FOR` expression.
+        /// Optional `FOR`/`ESCAPE` expression.
         substring_for: Option<Box<Expr>>,
 
         /// false if the expression is represented using the `SUBSTRING(expr [FROM start] [FOR len])` syntax
@@ -1204,6 +1208,11 @@ pub enum Expr {
         /// true if the expression is represented using the `SUBSTR` shorthand
         /// This flag is used for formatting.
         shorthand: bool,
+
+        /// true if the expression uses the `SUBSTRING(expr SIMILAR pattern ESCAPE escape)` syntax,
+        /// in which case `substring_from` holds the pattern and `substring_for` holds the escape.
+        /// This flag is used for formatting.
+        similar: bool,
     },
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
@@ -2135,6 +2144,7 @@ impl fmt::Display for Expr {
                 substring_for,
                 special,
                 shorthand,
+                similar,
             } => {
                 f.write_str("SUBSTR")?;
                 if !*shorthand {
@@ -2144,6 +2154,8 @@ impl fmt::Display for Expr {
                 if let Some(from_part) = substring_from {
                     if *special {
                         write!(f, ", {from_part}")?;
+                    } else if *similar {
+                        write!(f, " SIMILAR {from_part}")?;
                     } else {
                         write!(f, " FROM {from_part}")?;
                     }
@@ -2151,6 +2163,8 @@ impl fmt::Display for Expr {
                 if let Some(for_part) = substring_for {
                     if *special {
                         write!(f, ", {for_part}")?;
+                    } else if *similar {
+                        write!(f, " ESCAPE {for_part}")?;
                     } else {
                         write!(f, " FOR {for_part}")?;
                     }

@@ -769,6 +769,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Uses expressions rather than column declarations in `PARTITIONED BY`.
+    ///
+    /// [DuckDB syntax example (Iceberg catalog)](https://duckdb.org/docs/current/core_extensions/iceberg/writing#partitioning)
+    /// [DuckDB syntax introduction](https://github.com/duckdb/duckdb/pull/20431)
+    fn supports_create_table_partitioned_by_expressions(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports MySQL-specific SELECT modifiers
     /// like `HIGH_PRIORITY`, `STRAIGHT_JOIN`, `SQL_SMALL_RESULT`, etc.
     ///

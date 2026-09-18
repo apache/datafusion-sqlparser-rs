@@ -764,6 +764,7 @@ fn test_duckdb_union_datatype() {
             partition_by: Default::default(),
             cluster_by: Default::default(),
             clustered_by: Default::default(),
+            partitioned_by: None,
             inherits: Default::default(),
             partition_of: Default::default(),
             for_values: Default::default(),
@@ -909,4 +910,174 @@ fn test_duckdb_lambda_function() {
     // Test lambda in list_transform
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
+}
+
+#[test]
+fn create_table_partitioned_by_expressions() {
+    for sql in [
+        "CREATE TABLE events (id INTEGER) PARTITIONED BY (id + 1)",
+        "CREATE TABLE events (id INTEGER) PARTITIONED BY (abs(id), id % 2)",
+        "CREATE TABLE events PARTITIONED BY (id + 1) AS SELECT 1 AS id",
+        "CREATE TABLE events (id INTEGER) PARTITIONED BY (id + 1) WITH (flag = true)",
+    ] {
+        let statement = duckdb().verified_stmt(sql);
+        assert_eq!(statement, duckdb().verified_stmt(&statement.to_string()));
+    }
+    duckdb().one_statement_parses_to(
+        "CREATE TABLE events (id INTEGER) PARTITIONED /* before BY */ BY (id + 1,);",
+        "CREATE TABLE events (id INTEGER) PARTITIONED BY (id + 1)",
+    );
+}
+
+#[test]
+fn create_table_partitioned_by_errors() {
+    for (sql, expected) in [
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY ()",
+            "Expected: an expression, found: )",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY id",
+            "Expected: (, found: id",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY (id",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY (id INTEGER)",
+            "Expected: ), found: INTEGER",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY (id) PARTITIONED BY (id)",
+            "Expected: end of statement, found: PARTITIONED",
+        ),
+        (
+            "CREATE TABLE events PARTITIONED BY (id)",
+            "Expected: AS query or a table schema, found: EOF",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY (id ASC)",
+            "Expected: ), found: ASC",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY (id DESC NULLS LAST)",
+            "Expected: ), found: DESC",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY (id AS alias)",
+            "Expected: ), found: AS",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER) WITH (flag = true) PARTITIONED BY (id)",
+            "Expected: end of statement, found: PARTITIONED",
+        ),
+    ] {
+        assert_eq!(
+            duckdb().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_owned()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn create_table_partitioned_by_ast_and_builder() {
+    let sql = "CREATE TABLE events (id INTEGER) PARTITIONED BY (id + 1)";
+    let Statement::CreateTable(table) = duckdb().verified_stmt(sql) else {
+        unreachable!()
+    };
+    let expressions = vec![Expr::BinaryOp {
+        left: Box::new(Expr::Identifier(Ident::new("id"))),
+        op: BinaryOperator::Plus,
+        right: Box::new(Expr::Value(
+            Value::Number("1".parse().unwrap(), false).into(),
+        )),
+    }];
+    assert_eq!(table.partitioned_by, Some(expressions.clone()));
+    assert_eq!(table.hive_distribution, HiveDistributionStyle::NONE);
+    assert!(table.partition_by.is_none());
+    let rebuilt = helpers::stmt_create_table::CreateTableBuilder::from(table.clone()).build();
+    assert_eq!(rebuilt, table);
+    let built = helpers::stmt_create_table::CreateTableBuilder::new(table.name.clone())
+        .columns(table.columns.clone())
+        .partitioned_by(Some(expressions.clone()))
+        .build();
+    assert_eq!(built.partitioned_by, Some(expressions));
+    assert_eq!(built.to_string(), sql);
+    let Statement::CreateTable(unpartitioned) =
+        duckdb().verified_stmt("CREATE TABLE events (id INTEGER)")
+    else {
+        unreachable!()
+    };
+    assert!(unpartitioned.partitioned_by.is_none());
+}
+
+#[test]
+fn create_table_partitioned_by_spans() {
+    use sqlparser::parser::Parser;
+    use sqlparser::tokenizer::Location;
+    let sql = "CREATE TABLE events (id INTEGER) PARTITIONED BY (id + 2)";
+    let Statement::CreateTable(table) =
+        Parser::parse_sql(&DuckDbDialect {}, sql).unwrap().remove(0)
+    else {
+        unreachable!()
+    };
+    let expression_start = sql.find("id + 2").unwrap() as u64 + 1;
+    let expression_end = sql.len() as u64;
+    assert_eq!(
+        table.partitioned_by.as_ref().unwrap()[0].span(),
+        Span::new(
+            Location::new(1, expression_start),
+            Location::new(1, expression_end)
+        )
+    );
+    assert_eq!(
+        table.span(),
+        Span::new(Location::new(1, 14), Location::new(1, expression_end))
+    );
+}
+
+#[test]
+#[cfg(feature = "json_example")]
+fn create_table_partitioned_by_serialization() {
+    let statement =
+        duckdb().verified_stmt("CREATE TABLE events (id INTEGER) PARTITIONED BY (id + 1)");
+    let json = serde_json::to_string(&statement).unwrap();
+    assert_eq!(statement, serde_json::from_str::<Statement>(&json).unwrap());
+    let mut table = serde_json::to_value(
+        helpers::stmt_create_table::CreateTableBuilder::new(Ident::new("events").into()).build(),
+    )
+    .unwrap();
+    table.as_object_mut().unwrap().remove("partitioned_by");
+    assert!(serde_json::from_value::<CreateTable>(table)
+        .unwrap()
+        .partitioned_by
+        .is_none());
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn create_table_partitioned_by_visitors() {
+    use core::ops::ControlFlow;
+    let mut statement =
+        duckdb().verified_stmt("CREATE TABLE events (id INTEGER) PARTITIONED BY (id + 2)");
+    let mut expressions = vec![];
+    let _ = visit_expressions(&statement, |expression| {
+        expressions.push(expression.to_string());
+        ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(expressions, ["id + 2", "id", "2"]);
+    let _ = visit_expressions_mut(&mut statement, |expression| {
+        if let Expr::Identifier(ident) = expression {
+            if ident.value == "id" {
+                ident.value = "value".to_owned();
+            }
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(
+        statement.to_string(),
+        "CREATE TABLE events (id INTEGER) PARTITIONED BY (value + 2)"
+    );
 }

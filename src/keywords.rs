@@ -1293,6 +1293,11 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::DISTRIBUTE,
     Keyword::RETURNING,
     Keyword::VALUES,
+    // These are also operators, so `SELECT <expr> alias` would otherwise be parsed
+    // as `SELECT <expr> <operator> <right-hand side>`:
+    Keyword::AND,
+    Keyword::OR,
+    Keyword::COLLATE,
     // Reserved only as a column alias in the `SELECT` clause
     Keyword::FROM,
     Keyword::INTO,

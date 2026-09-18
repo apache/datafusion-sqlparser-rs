@@ -3279,6 +3279,17 @@ impl Display for FromTable {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Variants for the `SET` family of statements.
 pub enum Set {
+    /// ```sql
+    /// SET VARIABLE variable_name = expression
+    /// ```
+    ///
+    /// [DuckDB](https://duckdb.org/docs/current/sql/statements/set_variable#set-variable)
+    SetVariable {
+        /// Variable name to assign.
+        variable: ObjectName,
+        /// Value assigned to the variable.
+        value: Expr,
+    },
     /// SQL Standard-style
     /// SET a = 1;
     /// `SET var = value` (standard SQL-style assignment).
@@ -3383,6 +3394,9 @@ pub enum Set {
 impl Display for Set {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::SetVariable { variable, value } => {
+                write!(f, "SET VARIABLE {variable} = {value}")
+            }
             Self::ParenthesizedAssignments { variables, values } => write!(
                 f,
                 "SET ({}) = ({})",

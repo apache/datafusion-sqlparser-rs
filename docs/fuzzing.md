@@ -27,4 +27,8 @@ cd fuzz
 cargo +nightly fuzz run fuzz_parse_sql -- -max_total_time=600
 ```
 
+ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
+`code-change` mode, a daily batch job grows the shared corpus stored on the
+`clusterfuzzlite` branch, and a daily prune compacts it.
+
 Crashes land in `artifacts/<target>/` and replay with `cargo fuzz run <target> <crash-file>`.

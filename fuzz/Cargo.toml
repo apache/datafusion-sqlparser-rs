@@ -38,3 +38,10 @@ path = "fuzz_targets/fuzz_parse_sql.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_parse_roundtrip"
+path = "fuzz_targets/fuzz_parse_roundtrip.rs"
+test = false
+doc = false
+bench = false

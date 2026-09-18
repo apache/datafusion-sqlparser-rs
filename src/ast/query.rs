@@ -2630,6 +2630,18 @@ pub enum TableVersion {
     /// Databricks supports this syntax.
     /// For example: `SELECT * FROM tbl VERSION AS OF 2`
     VersionAsOf(Expr),
+    /// When the table version is defined using `FOR TIMESTAMP AS OF`.
+    /// Trino reads Iceberg and Delta tables at a point in time this way.
+    /// For example: `SELECT * FROM tbl FOR TIMESTAMP AS OF TIMESTAMP '2026-01-01 00:00:00 UTC'`
+    ///
+    /// See <https://trino.io/docs/current/connector/iceberg.html#time-travel-queries>
+    ForTimestampAsOf(Expr),
+    /// When the table version is defined using `FOR VERSION AS OF`.
+    /// Trino accepts a snapshot id or, for Iceberg, a branch or tag name.
+    /// For example: `SELECT * FROM tbl FOR VERSION AS OF 8954597067493422955`
+    ///
+    /// See <https://trino.io/docs/current/connector/iceberg.html#time-travel-queries>
+    ForVersionAsOf(Expr),
     /// When the table version is defined using a function.
     /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
     Function(Expr),
@@ -2658,6 +2670,8 @@ impl Display for TableVersion {
             TableVersion::ForSystemTimeAsOf(e) => write!(f, "FOR SYSTEM_TIME AS OF {e}")?,
             TableVersion::TimestampAsOf(e) => write!(f, "TIMESTAMP AS OF {e}")?,
             TableVersion::VersionAsOf(e) => write!(f, "VERSION AS OF {e}")?,
+            TableVersion::ForTimestampAsOf(e) => write!(f, "FOR TIMESTAMP AS OF {e}")?,
+            TableVersion::ForVersionAsOf(e) => write!(f, "FOR VERSION AS OF {e}")?,
             TableVersion::Function(func) => write!(f, "{func}")?,
             TableVersion::Changes { changes, at, end } => {
                 write!(f, "{changes} {at}")?;

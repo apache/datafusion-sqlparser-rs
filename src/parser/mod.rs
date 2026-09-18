@@ -17410,6 +17410,22 @@ impl<'a> Parser<'a> {
             {
                 let expr = self.parse_expr()?;
                 return Ok(Some(TableVersion::ForSystemTimeAsOf(expr)));
+            } else if self.dialect.supports_for_table_version()
+                && self.parse_keywords(&[
+                    Keyword::FOR,
+                    Keyword::TIMESTAMP,
+                    Keyword::AS,
+                    Keyword::OF,
+                ])
+            {
+                let expr = self.parse_expr()?;
+                return Ok(Some(TableVersion::ForTimestampAsOf(expr)));
+            } else if self.dialect.supports_for_table_version()
+                && self.parse_keywords(&[Keyword::FOR, Keyword::VERSION, Keyword::AS, Keyword::OF])
+            {
+                // A snapshot id, or a branch/tag name on Iceberg.
+                let expr = self.parse_expr()?;
+                return Ok(Some(TableVersion::ForVersionAsOf(expr)));
             } else if self.peek_keyword(Keyword::CHANGES) {
                 return self.parse_table_version_changes().map(Some);
             } else if self.peek_keyword(Keyword::AT) || self.peek_keyword(Keyword::BEFORE) {

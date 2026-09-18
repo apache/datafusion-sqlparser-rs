@@ -19910,6 +19910,11 @@ impl<'a> Parser<'a> {
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly)
             } else if self.parse_keywords(&[Keyword::READ, Keyword::WRITE]) {
                 TransactionMode::AccessMode(TransactionAccessMode::ReadWrite)
+            } else if self.parse_keyword(Keyword::DEFERRABLE) {
+                TransactionMode::Deferrable(true)
+            } else if self.parse_keyword(Keyword::NOT) {
+                self.expect_keyword_is(Keyword::DEFERRABLE)?;
+                TransactionMode::Deferrable(false)
             } else if required {
                 self.expected_ref("transaction mode", self.peek_token_ref())?
             } else {

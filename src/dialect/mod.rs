@@ -1224,6 +1224,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports window frame exclusions, e.g.
+    /// `ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE TIES`.
+    /// See <https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS>.
+    fn supports_window_frame_exclusion(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LOAD DATA` statement
     fn supports_load_data(&self) -> bool {
         false

@@ -30,8 +30,8 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::{Span, Token};
 
 #[test]
 fn pragma_no_value() {
@@ -970,4 +970,82 @@ fn sqlite_and_generic() -> TestedDialects {
         Box::new(SQLiteDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+#[test]
+fn pragma_values() {
+    // signed-literal
+    let statement = sqlite_and_generic().verified_stmt("PRAGMA case_sensitive_like = true");
+    assert!(matches!(
+        statement,
+        Statement::Pragma {
+            value: Some(Expr::Value(ValueWithSpan {
+                value: Value::Boolean(true),
+                ..
+            })),
+            is_eq: true,
+            ..
+        }
+    ));
+
+    // name: kept verbatim as an identifier
+    for spelling in [
+        "ON", "OFF", "YES", "NO", "WAL", "DELETE", "NORMAL", "FULL", "MEMORY",
+    ] {
+        let sql = format!("PRAGMA case_sensitive_like = {spelling}");
+        let Statement::Pragma {
+            value: Some(Expr::Identifier(ident)),
+            is_eq: true,
+            ..
+        } = sqlite_and_generic().verified_stmt(&sql)
+        else {
+            panic!("expected identifier pragma value for {spelling}");
+        };
+        assert_eq!(spelling, ident.value);
+        assert_eq!(None, ident.quote_style);
+    }
+
+    // identifier value keeps its span
+    let statements =
+        Parser::parse_sql(&SQLiteDialect {}, "PRAGMA case_sensitive_like = oN").unwrap();
+    let [Statement::Pragma {
+        value: Some(Expr::Identifier(ident)),
+        is_eq: true,
+        ..
+    }] = statements.as_slice()
+    else {
+        panic!("Expected equality-form PRAGMA")
+    };
+    assert_eq!("oN", ident.value);
+    assert_eq!(Span::new((1, 30).into(), (1, 32).into()), ident.span);
+
+    // signed-number
+    let statement = sqlite_and_generic().verified_stmt("PRAGMA cache_size = -2000");
+    assert!(matches!(
+        statement,
+        Statement::Pragma {
+            value: Some(Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                ..
+            }),
+            is_eq: true,
+            ..
+        }
+    ));
+    sqlite_and_generic().verified_stmt("PRAGMA cache_size = +2000");
+
+    // hex integer tokenizes to a hex string literal
+    sqlite_and_generic()
+        .one_statement_parses_to("PRAGMA optimize = 0x10002", "PRAGMA optimize = X'10002'");
+
+    // function-call form with a name argument
+    let statement = sqlite_and_generic().verified_stmt("PRAGMA wal_checkpoint(TRUNCATE)");
+    assert!(matches!(
+        statement,
+        Statement::Pragma {
+            value: Some(Expr::Identifier(_)),
+            is_eq: false,
+            ..
+        }
+    ));
 }

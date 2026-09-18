@@ -1076,6 +1076,51 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `CREATE VIEW` accepts `COMMENT '<text>'` without an
+    /// equals sign.
+    fn supports_create_view_comment_without_equals(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports typed column definitions in
+    /// `CREATE VIEW`, followed by ordinary column options.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE MATERIALIZED VIEW v (id BIGINT COMMENT 'identifier') AS SELECT 1;
+    /// ```
+    fn supports_typed_view_columns(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `CREATE VIEW` accepts a `TBLPROPERTIES` clause.
+    fn supports_create_view_table_properties(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `CREATE OR REFRESH` for
+    /// materialized views and streaming tables.
+    fn supports_create_or_refresh(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `TABLE` queries accept names with more than two parts.
+    fn supports_multipart_table_query_name(&self) -> bool {
+        false
+    }
+
+    /// Returns true if views accept `WITH SCHEMA BINDING`, `WITH SCHEMA
+    /// COMPENSATION`, or `WITH SCHEMA EVOLUTION` before `AS`.
+    fn supports_create_view_schema_mode(&self) -> bool {
+        false
+    }
+
+    /// Returns true if a data type can carry a collation, including inside a
+    /// nested type such as `MAP<STRING COLLATE UTF8_BINARY, STRING>`.
+    fn supports_data_type_collation(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `ARRAY` type without
     /// specifying an element type.
     ///

@@ -56,6 +56,29 @@ use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewlin
 use crate::keywords::Keyword;
 use crate::tokenizer::{Span, Token};
 
+/// Databricks view schema adaptation mode.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ViewSchemaMode {
+    /// Reject queries whose schema no longer matches the view definition.
+    Binding,
+    /// Apply safe casts to preserve the view schema.
+    Compensation,
+    /// Adapt the view schema to changes in the query result.
+    Evolution,
+}
+
+impl fmt::Display for ViewSchemaMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Self::Binding => "BINDING",
+            Self::Compensation => "COMPENSATION",
+            Self::Evolution => "EVOLUTION",
+        })
+    }
+}
+
 /// Index column type.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4380,6 +4403,10 @@ pub struct CreateView {
     pub or_alter: bool,
     /// The `OR REPLACE` clause is used to re-create the view if it already exists.
     pub or_replace: bool,
+    /// Databricks `OR REFRESH` clause for materialized views.
+    pub or_refresh: bool,
+    /// Databricks view schema adaptation mode.
+    pub schema_mode: Option<ViewSchemaMode>,
     /// if true, has MATERIALIZED view modifier
     pub materialized: bool,
     /// Snowflake: SECURE view modifier
@@ -4434,6 +4461,9 @@ impl fmt::Display for CreateView {
             or_alter = if self.or_alter { "OR ALTER " } else { "" },
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
         )?;
+        if self.or_refresh {
+            f.write_str("OR REFRESH ")?;
+        }
         if let Some(ref params) = self.params {
             params.fmt(f)?;
         }
@@ -4473,6 +4503,12 @@ impl fmt::Display for CreateView {
         }
         if let Some(ref comment) = self.comment {
             write!(f, " COMMENT = '{}'", escape_single_quote_string(comment))?;
+        }
+        if matches!(self.options, CreateTableOptions::TableProperties(_)) {
+            write!(f, " {}", self.options)?;
+        }
+        if let Some(schema_mode) = &self.schema_mode {
+            write!(f, " WITH SCHEMA {schema_mode}")?;
         }
         if !self.cluster_by.is_empty() {
             write!(

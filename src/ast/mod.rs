@@ -8378,6 +8378,14 @@ pub enum FunctionArgumentClause {
     ///
     /// [`JSON_OBJECT`](https://www.postgresql.org/docs/current/functions-json.html#:~:text=json_object)
     JsonReturningClause(JsonReturningClause),
+    /// The `PASSING` clause, used e.g. in `XMLEXISTS`.
+    Passing(XmlPassingClause),
+    /// The `AS <data_type>` clause, used e.g. in `XMLSERIALIZE`.
+    As(DataType),
+    /// The `INDENT` clause in `XMLSERIALIZE`.
+    Indent,
+    /// The `NO INDENT` clause in `XMLSERIALIZE`.
+    NoIndent,
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -8398,6 +8406,10 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::JsonReturningClause(returning_clause) => {
                 write!(f, "{returning_clause}")
             }
+            FunctionArgumentClause::Passing(passing) => write!(f, "{passing}"),
+            FunctionArgumentClause::As(data_type) => write!(f, "AS {data_type}"),
+            FunctionArgumentClause::Indent => write!(f, "INDENT"),
+            FunctionArgumentClause::NoIndent => write!(f, "NO INDENT"),
         }
     }
 }

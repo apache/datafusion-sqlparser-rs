@@ -19837,6 +19837,36 @@ fn parse_xmlparse() {
         .is_err());
 }
 
+#[test]
+fn parse_xml_functions() {
+    let dialects = all_dialects_where(|d| d.supports_xml_expressions());
+
+    dialects.verified_stmt("SELECT XMLELEMENT(NAME foo, 'bar')");
+    dialects.verified_stmt("SELECT XMLELEMENT(NAME foo, 'bar'), * FROM customers");
+    dialects.verified_stmt("SELECT XMLELEMENT(NAME foo, XMLATTRIBUTES('v' AS attr), 'bar')");
+    dialects.verified_stmt(r#"SELECT XMLELEMENT(NAME "foo$bar", XMLATTRIBUTES('xyz' AS "a&b"))"#);
+    dialects.verified_stmt(r#"SELECT XMLPI(NAME php, 'echo "hello world";')"#);
+    dialects.verified_stmt("SELECT XMLPI(NAME php)");
+    dialects.verified_stmt("SELECT XMLROOT('<a/>'::xml, VERSION '1.0')");
+    dialects.verified_stmt("SELECT XMLROOT('<a/>'::xml, VERSION '1.0', STANDALONE YES)");
+    dialects.verified_stmt("SELECT XMLROOT('<a/>'::xml, VERSION NO VALUE, STANDALONE NO VALUE)");
+    dialects.verified_stmt("SELECT XMLSERIALIZE(DOCUMENT '<a/>'::xml AS TEXT)");
+    dialects.verified_stmt("SELECT XMLSERIALIZE(CONTENT '<a/>'::xml AS VARCHAR(100) INDENT)");
+    dialects.verified_stmt("SELECT XMLSERIALIZE(DOCUMENT '<a/>'::xml AS TEXT NO INDENT)");
+    dialects.verified_stmt("SELECT XMLEXISTS('/a' PASSING BY REF '<a/>')");
+    dialects.verified_stmt("SELECT XMLEXISTS('/a' PASSING '<a/>')");
+    dialects.verified_stmt("SELECT XMLEXISTS('/a' PASSING BY VALUE '<a/>')");
+
+    let others = all_dialects_except(|d| d.supports_xml_expressions());
+    others.verified_only_select("SELECT xmlelement(1)");
+    assert!(others
+        .parse_sql_statements("SELECT xmlelement(NAME foo, 'bar')")
+        .is_err());
+    assert!(others
+        .parse_sql_statements("SELECT xmlexists('/a' PASSING BY REF '<a/>')")
+        .is_err());
+}
+
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
 /// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
 /// main thread asserts that it reports back within a generous timeout. Post-fix

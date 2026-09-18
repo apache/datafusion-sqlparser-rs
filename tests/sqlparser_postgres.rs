@@ -9936,6 +9936,11 @@ fn parse_non_reserved_keywords_as_table_alias() {
 }
 
 #[test]
+fn parse_trim_from_without_characters() {
+    pg().one_statement_parses_to("SELECT TRIM(FROM ' x ')", "SELECT TRIM(' x ')");
+}
+
+#[test]
 fn parse_insert_by_name_keywords_as_table_and_alias() {
     // Without a table name, `BY NAME` is not an INSERT BY NAME clause. PostgreSQL
     // treats `BY` as the table name and `NAME` as its implicit table alias.

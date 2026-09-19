@@ -1966,7 +1966,8 @@ impl fmt::Display for Expr {
                         | UnaryOperator::DoubleAt
                         | UnaryOperator::QuestionDash
                         | UnaryOperator::QuestionPipe
-                ) {
+                ) || (op == &UnaryOperator::Minus && starts_with_operator_char(expr))
+                {
                     write!(f, "{op} {expr}")
                 } else {
                     write!(f, "{op}{expr}")
@@ -8081,6 +8082,26 @@ impl fmt::Display for FunctionArg {
             FunctionArg::Unnamed(unnamed_arg) => write!(f, "{unnamed_arg}"),
         }
     }
+}
+
+/// Whether `expr` renders with an operator character first. A prefix `-`
+/// must not abut one, since `--` starts a line comment and operator-run
+/// dialects fuse `-@`, `-~`, `-#`, `-!!` and `-||/` into single tokens.
+fn starts_with_operator_char(expr: &Expr) -> bool {
+    use fmt::Write;
+    struct FirstChar(Option<char>);
+    impl fmt::Write for FirstChar {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            if self.0.is_none() {
+                self.0 = s.chars().next();
+            }
+            Ok(())
+        }
+    }
+    let mut first = FirstChar(None);
+    let _ = write!(first, "{expr}");
+    const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
+    first.0.is_some_and(|c| OPERATOR_CHARS.contains(c))
 }
 
 /// `FunctionArgOperator::Space` has no token of its own, so the name and the

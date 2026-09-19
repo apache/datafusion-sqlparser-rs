@@ -27,6 +27,10 @@ cd fuzz
 cargo +nightly fuzz run fuzz_parse_sql -- -max_total_time=600
 ```
 
+There are two targets. `fuzz_parse_sql` parses the input with every dialect.
+`fuzz_parse_roundtrip` additionally re-parses the SQL rendered by `Display` and fails when a
+rendered statement no longer parses.
+
 ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
 `code-change` mode, a daily batch job grows the shared corpus stored on the
 `clusterfuzzlite` branch, and a daily prune compacts it.

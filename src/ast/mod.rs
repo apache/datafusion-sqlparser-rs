@@ -1983,7 +1983,9 @@ impl fmt::Display for Expr {
                 | UnaryOperator::DoubleAt
                 | UnaryOperator::PGAbs
                 | UnaryOperator::QuestionDash
-                | UnaryOperator::QuestionPipe => write!(f, "{op} {expr}"),
+                | UnaryOperator::QuestionPipe
+                | UnaryOperator::PGSquareRoot
+                | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
                 UnaryOperator::Minus => {
                     if starts_with_operator_char(expr) {
                         write!(f, "{op} {expr}")
@@ -1991,11 +1993,9 @@ impl fmt::Display for Expr {
                         write!(f, "{op}{expr}")
                     }
                 }
-                UnaryOperator::Plus
-                | UnaryOperator::BangNot
-                | UnaryOperator::PGPrefixFactorial
-                | UnaryOperator::PGSquareRoot
-                | UnaryOperator::PGCubeRoot => write!(f, "{op}{expr}"),
+                UnaryOperator::Plus | UnaryOperator::BangNot | UnaryOperator::PGPrefixFactorial => {
+                    write!(f, "{op}{expr}")
+                }
             },
             Expr::Convert {
                 is_try,

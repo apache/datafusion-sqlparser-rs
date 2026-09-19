@@ -3653,8 +3653,11 @@ pub enum Statement {
         options: Vec<CopyOption>,
         /// WITH options (before PostgreSQL version 9.0)
         legacy_options: Vec<CopyLegacyOption>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
+        /// The inline payload of `COPY ... FROM STDIN`, as written, without the
+        /// `\.` terminator. Interpreting it (field separators, escapes and the
+        /// `\N` null marker) is left to the caller. `None` when the statement
+        /// carries no inline payload.
+        payload: Option<String>,
     },
     /// ```sql
     /// COPY INTO <table> | <location>
@@ -5328,7 +5331,7 @@ impl fmt::Display for Statement {
                 target,
                 options,
                 legacy_options,
-                values,
+                payload,
             } => {
                 write!(f, "COPY")?;
                 match source {
@@ -5350,19 +5353,10 @@ impl fmt::Display for Statement {
                 if !legacy_options.is_empty() {
                     write!(f, " {}", display_separated(legacy_options, " "))?;
                 }
-                if !values.is_empty() {
-                    writeln!(f, ";")?;
-                    let mut delim = "";
-                    for v in values {
-                        write!(f, "{delim}")?;
-                        delim = "\t";
-                        if let Some(v) = v {
-                            write!(f, "{v}")?;
-                        } else {
-                            write!(f, "\\N")?;
-                        }
-                    }
-                    write!(f, "\n\\.")?;
+                if let Some(payload) = payload {
+                    // The payload starts on the line after the command and ends
+                    // at the `\.` terminator.
+                    write!(f, ";\n{payload}\\.")?;
                 }
                 Ok(())
             }

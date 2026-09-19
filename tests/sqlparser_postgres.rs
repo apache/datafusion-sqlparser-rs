@@ -9953,3 +9953,10 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 }
+
+#[test]
+fn parse_unary_minus_before_pg_prefix_operators() {
+    pg().verified_stmt("SELECT - ~1");
+    pg().verified_stmt("SELECT - @2");
+    pg().one_statement_parses_to("SELECT - #x", "SELECT - # x");
+}

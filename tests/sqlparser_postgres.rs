@@ -2623,13 +2623,13 @@ fn parse_ampersand_arobase() {
 #[test]
 fn parse_pg_unary_ops() {
     let pg_unary_ops = &[
-        ("|/", UnaryOperator::PGSquareRoot),
-        ("||/", UnaryOperator::PGCubeRoot),
-        ("!!", UnaryOperator::PGPrefixFactorial),
-        ("@", UnaryOperator::PGAbs),
+        ("SELECT |/a", UnaryOperator::PGSquareRoot),
+        ("SELECT ||/a", UnaryOperator::PGCubeRoot),
+        ("SELECT !!a", UnaryOperator::PGPrefixFactorial),
+        ("SELECT @ a", UnaryOperator::PGAbs),
     ];
-    for (str_op, op) in pg_unary_ops {
-        let select = pg().verified_only_select(&format!("SELECT {}a", str_op));
+    for (sql, op) in pg_unary_ops {
+        let select = pg().verified_only_select(sql);
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -9952,4 +9952,18 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         }
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
+}
+
+#[test]
+fn parse_pg_abs_space_before_negative_operand() {
+    // `@-` tokenizes as a geometric operator prefix, so displaying PGAbs
+    // without a space breaks re-parsing of a negative operand.
+    pg().verified_stmt("SELECT @ -2");
+    let err = pg().parse_sql_statements("SELECT @-2").unwrap_err();
+    assert_eq!(
+        ParserError::TokenizerError(
+            "Expected a valid binary operator after '@-' at Line: 1, Column: 10".to_string(),
+        ),
+        err
+    );
 }

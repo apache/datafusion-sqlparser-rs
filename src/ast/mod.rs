@@ -1964,6 +1964,7 @@ impl fmt::Display for Expr {
                         | UnaryOperator::Hash
                         | UnaryOperator::AtDashAt
                         | UnaryOperator::DoubleAt
+                        | UnaryOperator::PGAbs
                         | UnaryOperator::QuestionDash
                         | UnaryOperator::QuestionPipe
                 ) {

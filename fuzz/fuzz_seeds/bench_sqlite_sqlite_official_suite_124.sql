@@ -1,0 +1,1 @@
+INSERT INTO ttt VALUES('abc', '-1')

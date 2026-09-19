@@ -9959,6 +9959,7 @@ fn parse_pg_abs_space_before_negative_operand() {
     // `@-` tokenizes as a geometric operator prefix, so displaying PGAbs
     // without a space breaks re-parsing of a negative operand.
     pg().verified_stmt("SELECT @ -2");
+    pg().one_statement_parses_to("SELECT @a", "SELECT @ a");
     let err = pg().parse_sql_statements("SELECT @-2").unwrap_err();
     assert_eq!(
         ParserError::TokenizerError(

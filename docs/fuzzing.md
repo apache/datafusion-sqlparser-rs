@@ -24,7 +24,7 @@
 ```shell
 cargo install cargo-fuzz
 cd fuzz
-cargo +nightly fuzz run fuzz_parse_sql -- -max_total_time=600
+cargo +nightly fuzz run fuzz_parse_sql fuzz_seeds -- -max_total_time=600
 ```
 
 There are two targets. `fuzz_parse_sql` parses the input with every dialect.
@@ -34,5 +34,8 @@ rendered statement no longer parses.
 ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
 `code-change` mode, a daily batch job grows the shared corpus stored on the
 `clusterfuzzlite` branch, and a daily prune compacts it.
+
+`fuzz_seeds/` is a committed corpus of valid SQL that random mutation would never produce.
+The run command above uses it and `build.sh` packages it for ClusterFuzzLite.
 
 Crashes land in `artifacts/<target>/` and replay with `cargo fuzz run <target> <crash-file>`.

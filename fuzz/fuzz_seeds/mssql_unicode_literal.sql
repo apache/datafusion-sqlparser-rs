@@ -1,0 +1,1 @@
+SELECT N'unicode literal' AS n

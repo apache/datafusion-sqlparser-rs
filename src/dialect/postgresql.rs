@@ -184,6 +184,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_user_group_statements(&self) -> bool {
+        true
+    }
+
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
             Precedence::Period => PERIOD_PREC,

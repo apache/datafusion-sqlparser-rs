@@ -20072,3 +20072,11 @@ fn parse_bitwise_not_renders_apart_from_operand() {
     all_dialects().verified_stmt("SELECT ~ -1");
     all_dialects().verified_stmt("SELECT ~ ~ 1");
 }
+
+#[test]
+fn parse_unary_minus_never_renders_line_comment() {
+    all_dialects().verified_stmt("SELECT - -1");
+    all_dialects().verified_stmt("SELECT - - -1");
+    all_dialects().verified_stmt("SELECT -1");
+    all_dialects().verified_stmt("SELECT -x");
+}

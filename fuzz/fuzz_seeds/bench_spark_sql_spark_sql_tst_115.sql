@@ -1,0 +1,1 @@
+ALTER TABLE test_change CHANGE a TYPE STRING

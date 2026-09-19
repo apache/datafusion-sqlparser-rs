@@ -31,4 +31,6 @@ fi
 target_dir=fuzz/target/x86_64-unknown-linux-gnu/release
 for name in $targets; do
     cp "$target_dir/$name" "$OUT/"
+    # the runner unpacks <target>_seed_corpus.zip as the starting corpus
+    (cd fuzz/fuzz_seeds && zip -qr "$OUT/${name}_seed_corpus.zip" *)
 done

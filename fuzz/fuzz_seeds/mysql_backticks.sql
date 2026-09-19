@@ -1,0 +1,1 @@
+SELECT `a`, `odd name` FROM `t` LIMIT 10, 20

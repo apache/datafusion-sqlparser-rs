@@ -19469,11 +19469,7 @@ fn test_parse_alter_user() {
 
 #[test]
 fn parse_generic_unary_ops() {
-    let unary_ops = &[
-        ("~", UnaryOperator::BitwiseNot),
-        ("-", UnaryOperator::Minus),
-        ("+", UnaryOperator::Plus),
-    ];
+    let unary_ops = &[("-", UnaryOperator::Minus), ("+", UnaryOperator::Plus)];
     for (str_op, op) in unary_ops {
         let select = verified_only_select(&format!("SELECT {}expr", str_op));
         assert_eq!(
@@ -19484,6 +19480,16 @@ fn parse_generic_unary_ops() {
             select.projection[0]
         );
     }
+
+    let select = verified_only_select("SELECT ~ expr");
+    assert_eq!(
+        UnnamedExpr(UnaryOp {
+            op: UnaryOperator::BitwiseNot,
+            expr: Box::new(Identifier(Ident::new("expr"))),
+        }),
+        select.projection[0]
+    );
+    one_statement_parses_to("SELECT ~expr", "SELECT ~ expr");
 }
 
 #[test]
@@ -20059,4 +20065,10 @@ fn parse_insert_by_name() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_bitwise_not_renders_apart_from_operand() {
+    all_dialects().verified_stmt("SELECT ~ -1");
+    all_dialects().verified_stmt("SELECT ~ ~ 1");
 }

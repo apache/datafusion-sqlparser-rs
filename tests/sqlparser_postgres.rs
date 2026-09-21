@@ -9984,3 +9984,21 @@ fn parse_unary_minus_before_pg_prefix_operators() {
     pg().verified_stmt("SELECT - @ 2");
     pg().one_statement_parses_to("SELECT - #x", "SELECT - # x");
 }
+
+#[test]
+fn parse_postfix_factorial_spacing() {
+    pg().verified_stmt("SELECT a!");
+    pg().verified_stmt("SELECT 5!");
+    pg().verified_stmt("SELECT (a!)!");
+    pg().verified_stmt("SELECT a! !");
+    pg().verified_stmt("SELECT a! ! !");
+    pg().verified_stmt("SELECT a! ! % 2");
+    pg().one_statement_parses_to("SELECT a! !%2", "SELECT a! ! % 2");
+    pg().one_statement_parses_to("SELECT -a, +b, a! !%2, a", "SELECT -a, +b, a! ! % 2, a");
+
+    let err = pg().parse_sql_statements("SELECT a!!").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: !!".to_string()),
+        err
+    );
+}

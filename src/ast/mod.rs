@@ -1956,7 +1956,19 @@ impl fmt::Display for Expr {
                 )
             }
             Expr::UnaryOp { op, expr } => match op {
-                UnaryOperator::PGPostfixFactorial => write!(f, "{expr}{op}"),
+                UnaryOperator::PGPostfixFactorial => {
+                    if matches!(
+                        expr.as_ref(),
+                        Expr::UnaryOp {
+                            op: UnaryOperator::PGPostfixFactorial,
+                            ..
+                        }
+                    ) {
+                        write!(f, "{expr} {op}")
+                    } else {
+                        write!(f, "{expr}{op}")
+                    }
+                }
                 UnaryOperator::Not
                 | UnaryOperator::BitwiseNot
                 | UnaryOperator::Hash

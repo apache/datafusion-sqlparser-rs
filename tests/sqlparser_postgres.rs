@@ -10031,3 +10031,9 @@ fn parse_stage_table_factor_rejected() {
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
 }
+
+#[test]
+fn parse_bitstring_literal_escaping() {
+    pg_and_generic().verified_stmt("SELECT B''''");
+    pg_and_generic().verified_stmt("SELECT B'it''s'");
+}

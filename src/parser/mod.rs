@@ -12528,7 +12528,7 @@ impl<'a> Parser<'a> {
                 //    without any whitespace in between
                 let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
                 let ident = match next_token.token {
-                    Token::Word(w) => Ok(w.into_ident(next_token.span)),
+                    Token::Word(w) if w.quote_style.is_none() => Ok(w.into_ident(next_token.span)),
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
                     _ => self.expected("placeholder", next_token),
                 }?;

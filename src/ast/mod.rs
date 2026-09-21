@@ -1955,24 +1955,23 @@ impl fmt::Display for Expr {
                     if add_parens { ")" } else { "" },
                 )
             }
-            Expr::UnaryOp { op, expr } => {
-                if op == &UnaryOperator::PGPostfixFactorial {
-                    write!(f, "{expr}{op}")
-                } else if matches!(
-                    op,
-                    UnaryOperator::Not
-                        | UnaryOperator::Hash
-                        | UnaryOperator::AtDashAt
-                        | UnaryOperator::DoubleAt
-                        | UnaryOperator::PGAbs
-                        | UnaryOperator::QuestionDash
-                        | UnaryOperator::QuestionPipe
-                ) {
-                    write!(f, "{op} {expr}")
-                } else {
-                    write!(f, "{op}{expr}")
-                }
-            }
+            Expr::UnaryOp { op, expr } => match op {
+                UnaryOperator::PGPostfixFactorial => write!(f, "{expr}{op}"),
+                UnaryOperator::Not
+                | UnaryOperator::BitwiseNot
+                | UnaryOperator::Hash
+                | UnaryOperator::AtDashAt
+                | UnaryOperator::DoubleAt
+                | UnaryOperator::PGAbs
+                | UnaryOperator::QuestionDash
+                | UnaryOperator::QuestionPipe => write!(f, "{op} {expr}"),
+                UnaryOperator::Plus
+                | UnaryOperator::Minus
+                | UnaryOperator::BangNot
+                | UnaryOperator::PGPrefixFactorial
+                | UnaryOperator::PGSquareRoot
+                | UnaryOperator::PGCubeRoot => write!(f, "{op}{expr}"),
+            },
             Expr::Convert {
                 is_try,
                 expr,

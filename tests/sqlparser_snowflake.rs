@@ -4912,3 +4912,32 @@ fn test_select_dollar_column_from_stage() {
     // With table function args, without alias
     snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }
+
+#[test]
+fn test_describe_external_volume() {
+    match snowflake().verified_stmt("DESCRIBE EXTERNAL VOLUME my_vol") {
+        Statement::DescribeExternalVolume(DescribeExternalVolume {
+            describe_alias,
+            name,
+        }) => {
+            assert_eq!(DescribeAlias::Describe, describe_alias);
+            assert_eq!("my_vol", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_desc_external_volume() {
+    // The DESC spelling is preserved on round-trip.
+    match snowflake().verified_stmt("DESC EXTERNAL VOLUME my_vol") {
+        Statement::DescribeExternalVolume(DescribeExternalVolume {
+            describe_alias,
+            name,
+        }) => {
+            assert_eq!(DescribeAlias::Desc, describe_alias);
+            assert_eq!("my_vol", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}

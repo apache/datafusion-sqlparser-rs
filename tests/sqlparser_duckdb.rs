@@ -902,11 +902,8 @@ fn test_duckdb_lambda_function() {
     let sql_arrow = "SELECT list_filter([1, 2, 3], x -> x > 1)";
     duckdb().verified_stmt(sql_arrow);
 
-    // `->` is ambiguous in DuckDB: it is both the arrow lambda spelling and
-    // JSON member access, and DuckDB resolves it from the function signature
-    // at bind time. `DuckDbDialect` currently resolves it to a lambda. Both
-    // readings print identically, so round-tripping cannot tell them apart —
-    // assert the shape so any future change to that choice is visible here.
+    // Both readings of `->` print identically, so round-tripping cannot tell
+    // a lambda from JSON member access. Assert the shape instead.
     let select = duckdb().verified_only_select(sql_arrow);
     let Expr::Function(func) = expr_from_projection(only(&select.projection)) else {
         panic!("expected a function call");

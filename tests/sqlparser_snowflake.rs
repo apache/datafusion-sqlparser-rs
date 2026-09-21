@@ -4919,3 +4919,43 @@ fn test_snowflake_stage_name_with_escaped_quotes() {
     snowflake().one_statement_parses_to("RM @````", "REMOVE @````");
     snowflake().verified_stmt(r#"REMOVE @"stage""name""#);
 }
+
+#[test]
+fn test_stage_name_delimiters() {
+    snowflake().verified_stmt("SELECT * FROM @stage1, @stage2");
+    snowflake().verified_stmt("SELECT * FROM @stage, my_table");
+    snowflake().verified_stmt("SELECT * FROM my_table, @stage");
+    snowflake().verified_stmt("SELECT * FROM @namespace.stage_name, item");
+    snowflake().verified_stmt("SELECT * FROM @stage(file_format => 'myformat'), my_table");
+    snowflake().verified_stmt("SELECT * FROM @stage AS s, my_table");
+    snowflake().verified_stmt("SELECT * FROM @stage s, my_table");
+    let stmts = snowflake()
+        .parse_sql_statements("SELECT * FROM @stage; SELECT 1")
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: EOF".to_string()),
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @;")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: ;".to_string()),
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @, item")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: ,".to_string()),
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @.stage")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
+    );
+}

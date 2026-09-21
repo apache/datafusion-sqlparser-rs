@@ -10022,3 +10022,12 @@ fn parse_pg_roots_render_apart_from_operand() {
     pg().verified_stmt("SELECT ||/ -2");
     pg().verified_stmt("SELECT |/ ||/ 2");
 }
+
+#[test]
+fn parse_stage_table_factor_rejected() {
+    let sql = "SELECT * FROM @stage";
+    assert_eq!(
+        pg().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: @".to_string()),
+    );
+}

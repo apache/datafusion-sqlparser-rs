@@ -1736,7 +1736,7 @@ fn parse_snowflake_declare_cursor() {
         ),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1804,7 +1804,7 @@ fn parse_snowflake_declare_result_set() {
         ("DECLARE res RESULTSET", "res", None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1857,7 +1857,7 @@ fn parse_snowflake_declare_exception() {
         ("DECLARE ex EXCEPTION", "ex", None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1897,7 +1897,7 @@ fn parse_snowflake_declare_variable() {
         ("DECLARE profit", "profit", None, None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1947,7 +1947,7 @@ fn parse_snowflake_declare_multi_statements() {
         "ex EXCEPTION (-20003, 'ERROR: Could not create table.')"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::Declare { stmts } => {
+        Statement::Declare { stmts, .. } => {
             let actual = stmts
                 .iter()
                 .map(|stmt| (stmt.names[0].value.as_str(), stmt.declare_type.clone()))

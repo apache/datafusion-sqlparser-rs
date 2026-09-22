@@ -7901,6 +7901,7 @@ impl<'a> Parser<'a> {
                 hold,
                 for_query: query,
             }],
+            separator: DeclareSeparator::Semicolon,
         })
     }
 
@@ -7944,6 +7945,7 @@ impl<'a> Parser<'a> {
                 hold: None,
                 for_query: None,
             }],
+            separator: DeclareSeparator::Semicolon,
         })
     }
 
@@ -8060,7 +8062,10 @@ impl<'a> Parser<'a> {
             break;
         }
 
-        Ok(Statement::Declare { stmts })
+        Ok(Statement::Declare {
+            stmts,
+            separator: DeclareSeparator::Semicolon,
+        })
     }
 
     /// Parse a [MsSql] `DECLARE` statement.
@@ -8077,7 +8082,10 @@ impl<'a> Parser<'a> {
     pub fn parse_mssql_declare(&mut self) -> Result<Statement, ParserError> {
         let stmts = self.parse_comma_separated(Parser::parse_mssql_declare_stmt)?;
 
-        Ok(Statement::Declare { stmts })
+        Ok(Statement::Declare {
+            stmts,
+            separator: DeclareSeparator::Comma,
+        })
     }
 
     /// Parse the body of a [MsSql] `DECLARE`statement.

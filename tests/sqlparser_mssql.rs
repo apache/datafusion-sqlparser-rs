@@ -1467,7 +1467,8 @@ fn parse_mssql_declare() {
                     hold: None,
                     for_query: None
                 }
-            ]
+            ],
+            separator: DeclareSeparator::Comma,
         }],
         ast
     );
@@ -1487,7 +1488,8 @@ fn parse_mssql_declare() {
                     scroll: None,
                     hold: None,
                     for_query: None
-                }]
+                }],
+                separator: DeclareSeparator::Comma,
             },
             Statement::Set(Set::SingleAssignment {
                 scope: None,
@@ -2940,4 +2942,11 @@ fn parse_bracket_quoted_function_argument_name() {
             default_expr: None,
         }])
     );
+}
+
+#[test]
+fn parse_mssql_declare_comma_list_display() {
+    ms().verified_stmt("DECLARE @a INT, @b INT");
+    ms().verified_stmt("DECLARE @a INT = 1, @b TEXT = 'x'");
+    ms().verified_stmt("DECLARE @foo CURSOR, @bar INT");
 }

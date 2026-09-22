@@ -2174,7 +2174,7 @@ fn parse_big_query_declare() {
         ),
     ] {
         match bigquery().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,

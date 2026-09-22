@@ -29,6 +29,11 @@ on:
 permissions:
   contents: read
 
+# Only PR runs are disposable. Main, schedule and merge-queue runs keep their verdicts.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   codestyle:
     runs-on: ubuntu-latest

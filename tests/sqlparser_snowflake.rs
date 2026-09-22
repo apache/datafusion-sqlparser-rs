@@ -4912,3 +4912,10 @@ fn test_select_dollar_column_from_stage() {
     // With table function args, without alias
     snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }
+
+#[test]
+fn test_snowflake_stage_name_with_escaped_quotes() {
+    snowflake().verified_stmt("REMOVE @````");
+    snowflake().one_statement_parses_to("RM @````", "REMOVE @````");
+    snowflake().verified_stmt(r#"REMOVE @"stage""name""#);
+}

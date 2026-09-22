@@ -1956,6 +1956,32 @@ fn parse_alter_table_modify_order_by() {
     }
 }
 
+#[test]
+fn parse_object_type_parameter() {
+    for dialects in [
+        clickhouse(),
+        TestedDialects::new(vec![Box::new(GenericDialect {})]),
+    ] {
+        let statements = dialects
+            .parse_sql_statements("CREATE TABLE t (o Object('json'))")
+            .unwrap();
+        let [Statement::CreateTable(CreateTable { columns, .. })] = statements.as_slice() else {
+            unreachable!();
+        };
+
+        assert_eq!(
+            columns[0].data_type,
+            DataType::Custom(
+                ObjectName::from(vec![Ident::new("Object")]),
+                vec!["json".to_string()]
+            )
+        );
+    }
+
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT(city VARCHAR NOT NULL))");
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

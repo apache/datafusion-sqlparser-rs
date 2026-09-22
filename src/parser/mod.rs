@@ -13178,7 +13178,13 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
-                Keyword::OBJECT if self.peek_token_ref().token == Token::LParen => {
+                Keyword::OBJECT
+                    if self.peek_token_ref().token == Token::LParen
+                        && !matches!(
+                            self.peek_nth_token_ref(1).token,
+                            Token::SingleQuotedString(_)
+                        ) =>
+                {
                     Ok(DataType::Object(self.parse_structured_object_type_def()?))
                 }
                 Keyword::STRUCT if dialect_is!(dialect is DuckDbDialect) => {
@@ -14400,6 +14406,9 @@ impl<'a> Parser<'a> {
 
     fn parse_structured_object_type_def(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
         self.expect_token(&Token::LParen)?;
+        if self.consume_token(&Token::RParen) {
+            return Ok(vec![]);
+        }
         let fields = self.parse_comma_separated(|parser| {
             let name = parser.parse_identifier()?;
             let data_type = parser.parse_data_type()?;

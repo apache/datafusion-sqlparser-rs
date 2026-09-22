@@ -4955,6 +4955,51 @@ fn test_structured_array_type() {
 }
 
 #[test]
+fn test_structured_object_type() {
+    snowflake_and_generic().verified_stmt(
+        "SELECT payload::OBJECT(address OBJECT(city VARCHAR NOT NULL), zip NUMBER) FROM t",
+    );
+    snowflake()
+        .verified_stmt("SELECT payload::OBJECT(tags ARRAY, labels MAP(VARCHAR, VARCHAR)) FROM t");
+    snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
+
+    let select = snowflake().verified_only_select(
+        "SELECT CAST(payload AS OBJECT(city VARCHAR, zip NUMBER NOT NULL)) FROM t",
+    );
+    let Expr::Cast { data_type, .. } = expr_from_projection(only(&select.projection)) else {
+        unreachable!();
+    };
+    let DataType::Object(fields) = data_type else {
+        unreachable!();
+    };
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[0].name, Ident::new("city"));
+    assert!(fields[0].options.is_empty());
+    assert_eq!(fields[1].name, Ident::new("zip"));
+    assert_eq!(fields[1].options.len(), 1);
+    assert_eq!(fields[1].options[0].option, ColumnOption::NotNull);
+
+    for sql in [
+        "CREATE TABLE t (o OBJECT(VARCHAR))",
+        "CREATE TABLE t (o OBJECT(city VARCHAR NULL))",
+        "CREATE TABLE t (o OBJECT(city VARCHAR)",
+    ] {
+        assert!(snowflake().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+
+    let Statement::CreateTable(CreateTable { columns, .. }) =
+        snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)")
+    else {
+        unreachable!();
+    };
+
+    assert_eq!(
+        columns[0].data_type,
+        DataType::Custom(ObjectName::from(vec![Ident::new("OBJECT")]), vec![])
+    );
+}
+
+#[test]
 fn test_snowflake_stage_name_with_escaped_quotes() {
     snowflake().verified_stmt("REMOVE @````");
     snowflake().one_statement_parses_to("RM @````", "REMOVE @````");
@@ -4998,47 +5043,5 @@ fn test_stage_name_delimiters() {
             .parse_sql_statements("SELECT * FROM @.stage")
             .unwrap_err(),
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
-    );
-}
-
-#[test]
-fn test_structured_object_type() {
-    snowflake_and_generic().verified_stmt(
-        "SELECT payload::OBJECT(address OBJECT(city VARCHAR NOT NULL), zip NUMBER) FROM t",
-    );
-
-    let select = snowflake().verified_only_select(
-        "SELECT CAST(payload AS OBJECT(city VARCHAR, zip NUMBER NOT NULL)) FROM t",
-    );
-    let Expr::Cast { data_type, .. } = expr_from_projection(only(&select.projection)) else {
-        unreachable!();
-    };
-    let DataType::Object(fields) = data_type else {
-        unreachable!();
-    };
-    assert_eq!(fields.len(), 2);
-    assert_eq!(fields[0].name, Ident::new("city"));
-    assert!(fields[0].options.is_empty());
-    assert_eq!(fields[1].name, Ident::new("zip"));
-    assert_eq!(fields[1].options.len(), 1);
-    assert_eq!(fields[1].options[0].option, ColumnOption::NotNull);
-
-    for sql in [
-        "CREATE TABLE t (o OBJECT(VARCHAR))",
-        "CREATE TABLE t (o OBJECT(city VARCHAR NULL))",
-        "CREATE TABLE t (o OBJECT(city VARCHAR)",
-    ] {
-        assert!(snowflake().parse_sql_statements(sql).is_err(), "{sql}");
-    }
-
-    let Statement::CreateTable(CreateTable { columns, .. }) =
-        snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)")
-    else {
-        unreachable!();
-    };
-
-    assert_eq!(
-        columns[0].data_type,
-        DataType::Custom(ObjectName::from(vec![Ident::new("OBJECT")]), vec![])
     );
 }

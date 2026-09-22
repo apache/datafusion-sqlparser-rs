@@ -3142,6 +3142,22 @@ impl fmt::Display for DeclareType {
     }
 }
 
+/// Separator written between the declarations collected by one `DECLARE` keyword.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DeclareSeparator {
+    /// Each declaration ends with `;`, as in a Snowflake Scripting `DECLARE` section.
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare)
+    #[default]
+    Semicolon,
+    /// One comma-separated list, as in `DECLARE @a INT, @b INT`.
+    ///
+    /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql)
+    Comma,
+}
+
 /// A `DECLARE` statement.
 /// [PostgreSQL] [Snowflake] [BigQuery]
 ///
@@ -4086,6 +4102,8 @@ pub enum Statement {
     Declare {
         /// Cursor declaration statements collected by `DECLARE`.
         stmts: Vec<Declare>,
+        /// Separator between `stmts` in the rendered SQL.
+        separator: DeclareSeparator,
     },
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
@@ -5264,9 +5282,12 @@ impl fmt::Display for Statement {
                 write!(f, "{statement}")
             }
             Statement::Query(s) => s.fmt(f),
-            Statement::Declare { stmts } => {
-                write!(f, "DECLARE ")?;
-                write!(f, "{}", display_separated(stmts, "; "))
+            Statement::Declare { stmts, separator } => {
+                let sep = match separator {
+                    DeclareSeparator::Comma => ", ",
+                    DeclareSeparator::Semicolon => "; ",
+                };
+                write!(f, "DECLARE {}", display_separated(stmts, sep))
             }
             Statement::Fetch {
                 name,

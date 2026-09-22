@@ -1875,6 +1875,8 @@ fn parse_alter_table_column_position() {
     clickhouse().verified_stmt("ALTER TABLE t ADD COLUMN c UInt8 DEFAULT 0 AFTER a");
     clickhouse().verified_stmt("ALTER TABLE t ON CLUSTER cl ADD COLUMN c UInt8 AFTER a");
     clickhouse().verified_stmt("ALTER TABLE t MODIFY COLUMN c UInt16 FIRST");
+    clickhouse().verified_stmt("ALTER TABLE t ADD COLUMN c UInt8 AFTER `order`");
+    clickhouse().verified_stmt(r#"ALTER TABLE t ADD COLUMN c UInt8 AFTER "order""#);
 
     match clickhouse()
         .verified_stmt("ALTER TABLE t ADD COLUMN c UInt8 FIRST, ADD COLUMN d UInt8 AFTER c")

@@ -942,3 +942,10 @@ fn test_duckdb_nested_block_comments() {
         "{err}"
     );
 }
+
+#[test]
+fn parse_create_macro_without_arguments() {
+    duckdb().verified_stmt("CREATE MACRO four() AS 4");
+    duckdb().verified_stmt("CREATE OR REPLACE TEMPORARY MACRO nothing() AS TABLE SELECT 1");
+    duckdb().one_statement_parses_to("CREATE FUNCTION add() AS 1", "CREATE MACRO add() AS 1");
+}

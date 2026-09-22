@@ -757,3 +757,10 @@ fn parse_databricks_query_entry_points() {
     databricks()
         .verified_stmt("CREATE VIEW filtered AS FROM main.raw.source |> WHERE id > 0 |> SELECT id");
 }
+
+#[test]
+fn parse_databricks_collated_data_types() {
+    databricks().verified_stmt(
+        "CREATE TABLE t (name STRING COLLATE UTF8_BINARY, values ARRAY<STRING COLLATE UTF8_LCASE>, attrs MAP<STRING COLLATE UTF8_BINARY, STRING COLLATE UTF8_LCASE>)",
+    );
+}

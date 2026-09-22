@@ -4923,6 +4923,18 @@ fn test_structured_array_type() {
         "SELECT CAST(a AS ARRAY(NUMBER(10, 2))) FROM t",
         "SELECT CAST(a AS Array(NUMBER(10, 2))) FROM t",
     );
+    snowflake().verified_stmt("CREATE TABLE t (a ARRAY(VARCHAR NOT NULL))");
+    let select =
+        snowflake().verified_only_select("SELECT CAST(a AS ARRAY(VARCHAR NOT NULL)) FROM t");
+    let Expr::Cast { data_type, .. } = expr_from_projection(only(&select.projection)) else {
+        unreachable!();
+    };
+    assert_eq!(
+        data_type,
+        &DataType::Array(ArrayElemTypeDef::ParenthesisNotNull(Box::new(
+            DataType::Varchar(None)
+        )))
+    );
 }
 
 #[test]

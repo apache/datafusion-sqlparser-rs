@@ -780,6 +780,16 @@ fn parse_create_table_with_nested_data_types() {
 }
 
 #[test]
+fn reject_angle_bracket_array_type() {
+    assert_eq!(
+        clickhouse()
+            .parse_sql_statements("CREATE TABLE t (a ARRAY<INT>)")
+            .unwrap_err(),
+        ParserError("Expected: (, found: <".to_string())
+    );
+}
+
+#[test]
 fn parse_create_table_with_primary_key() {
     match clickhouse_and_generic().verified_stmt(concat!(
         r#"CREATE TABLE db.table (`i` INT, `k` INT)"#,

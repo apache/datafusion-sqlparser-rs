@@ -245,6 +245,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_array_element_not_null(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/from)
     fn supports_parens_around_table_factor(&self) -> bool {
         true

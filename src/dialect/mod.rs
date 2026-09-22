@@ -1123,6 +1123,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports `NOT NULL` on an element type in
+    /// an `ARRAY(element_type)` definition.
+    fn supports_array_element_not_null(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports extra parentheses around
     /// lone table names or derived tables in the `FROM` clause.
     ///

@@ -2623,8 +2623,6 @@ fn parse_ampersand_arobase() {
 #[test]
 fn parse_pg_unary_ops() {
     let pg_unary_ops = &[
-        ("SELECT |/a", UnaryOperator::PGSquareRoot),
-        ("SELECT ||/a", UnaryOperator::PGCubeRoot),
         ("SELECT !!a", UnaryOperator::PGPrefixFactorial),
         ("SELECT @ a", UnaryOperator::PGAbs),
     ];
@@ -2637,6 +2635,21 @@ fn parse_pg_unary_ops() {
             }),
             select.projection[0]
         );
+    }
+
+    for (str_op, op) in [
+        ("|/", UnaryOperator::PGSquareRoot),
+        ("||/", UnaryOperator::PGCubeRoot),
+    ] {
+        let select = pg().verified_only_select(&format!("SELECT {str_op} a"));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+        pg().one_statement_parses_to(&format!("SELECT {str_op}a"), &format!("SELECT {str_op} a"));
     }
 }
 
@@ -10001,4 +10014,11 @@ fn parse_postfix_factorial_spacing() {
         ParserError::ParserError("Expected: end of statement, found: !!".to_string()),
         err
     );
+}
+
+#[test]
+fn parse_pg_roots_render_apart_from_operand() {
+    pg().verified_stmt("SELECT |/ -2");
+    pg().verified_stmt("SELECT ||/ -2");
+    pg().verified_stmt("SELECT |/ ||/ 2");
 }

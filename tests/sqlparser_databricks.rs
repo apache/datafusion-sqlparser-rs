@@ -787,5 +787,34 @@ fn parse_databricks_collated_data_types() {
 
 #[test]
 fn parse_databricks_multipart_table_query() {
-    databricks().verified_stmt("CREATE VIEW copy AS TABLE main.raw.source");
+    let Statement::CreateView(view) =
+        databricks().verified_stmt("CREATE VIEW copy AS TABLE main.raw.source")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        *view.query.body,
+        SetExpr::Table(Box::new(Table {
+            name: Some(ObjectName::from(vec![
+                Ident::new("main"),
+                Ident::new("raw"),
+                Ident::new("source"),
+            ])),
+        }))
+    );
+
+    let Statement::CreateView(view) =
+        databricks().verified_stmt("CREATE VIEW copy AS TABLE `main.raw`.`source table`")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        *view.query.body,
+        SetExpr::Table(Box::new(Table {
+            name: Some(ObjectName::from(vec![
+                Ident::with_quote('`', "main.raw"),
+                Ident::with_quote('`', "source table"),
+            ])),
+        }))
+    );
 }

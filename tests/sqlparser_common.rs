@@ -4865,8 +4865,7 @@ fn parse_create_table_as_table() {
     let expected_query1 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some(Ident::new("old_table")),
-            schema_name: None,
+            name: Some(ObjectName::from(vec![Ident::new("old_table")])),
         }))),
         order_by: None,
         limit_clause: None,
@@ -4891,8 +4890,10 @@ fn parse_create_table_as_table() {
     let expected_query2 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some(Ident::new("old_table")),
-            schema_name: Some(Ident::new("schema_name")),
+            name: Some(ObjectName::from(vec![
+                Ident::new("schema_name"),
+                Ident::new("old_table"),
+            ])),
         }))),
         order_by: None,
         limit_clause: None,

@@ -925,3 +925,10 @@ fn test_duckdb_lambda_function() {
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
 }
+
+#[test]
+fn parse_create_macro_without_arguments() {
+    duckdb().verified_stmt("CREATE MACRO four() AS 4");
+    duckdb().verified_stmt("CREATE OR REPLACE TEMPORARY MACRO nothing() AS TABLE SELECT 1");
+    duckdb().one_statement_parses_to("CREATE FUNCTION add() AS 1", "CREATE MACRO add() AS 1");
+}

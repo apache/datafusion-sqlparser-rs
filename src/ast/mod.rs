@@ -5548,9 +5548,11 @@ impl fmt::Display for Statement {
                     temp = if *temporary { "TEMPORARY " } else { "" },
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
-                if let Some(args) = args {
-                    write!(f, "({})", display_comma_separated(args))?;
-                }
+                write!(
+                    f,
+                    "({})",
+                    display_comma_separated(args.as_deref().unwrap_or(&[]))
+                )?;
                 match definition {
                     MacroDefinition::Expr(expr) => write!(f, " AS {expr}")?,
                     MacroDefinition::Table(query) => write!(f, " AS TABLE {query}")?,

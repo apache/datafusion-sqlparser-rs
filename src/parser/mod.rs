@@ -15625,44 +15625,16 @@ impl<'a> Parser<'a> {
 
     /// Parse `CREATE TABLE x AS TABLE y`
     pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
-        let token1 = self.next_token();
-        let token2 = self.next_token();
-        let token3 = self.next_token();
-
-        let table_name;
-        let schema_name;
-        if token2 == Token::Period {
-            match token1.token {
-                Token::Word(w) => {
-                    schema_name = w.value;
-                }
-                _ => {
-                    return self.expected("Schema name", token1);
-                }
-            }
-            match token3.token {
-                Token::Word(w) => {
-                    table_name = w.value;
-                }
-                _ => {
-                    return self.expected("Table name", token3);
-                }
-            }
+        let first_name = self.parse_identifier()?;
+        if self.consume_token(&Token::Period) {
+            let second_name = self.parse_identifier()?;
             Ok(Table {
-                table_name: Some(table_name),
-                schema_name: Some(schema_name),
+                table_name: Some(second_name),
+                schema_name: Some(first_name),
             })
         } else {
-            match token1.token {
-                Token::Word(w) => {
-                    table_name = w.value;
-                }
-                _ => {
-                    return self.expected("Table name", token1);
-                }
-            }
             Ok(Table {
-                table_name: Some(table_name),
+                table_name: Some(first_name),
                 schema_name: None,
             })
         }

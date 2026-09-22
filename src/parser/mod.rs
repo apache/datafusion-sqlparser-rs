@@ -16714,7 +16714,7 @@ impl<'a> Parser<'a> {
             && self.peek_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
         {
             self.parse_semantic_view_table_factor()
-        } else if self.peek_token_ref().token == Token::AtSign {
+        } else if self.dialect.supports_stages() && self.peek_token_ref().token == Token::AtSign {
             // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {

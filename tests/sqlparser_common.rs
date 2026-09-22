@@ -20128,3 +20128,18 @@ fn parse_hex_string_literal_display_escaping() {
     all_dialects().verified_stmt("SELECT X'ab''cd'");
     all_dialects().one_statement_parses_to("SELECT x'''' N", "SELECT X'''' AS N");
 }
+
+#[test]
+fn parse_stage_table_factor() {
+    let supported = all_dialects_where(|d| d.supports_stages());
+    supported.verified_stmt("SELECT * FROM @stage");
+    supported.verified_stmt("SELECT * FROM @stage, my_table");
+
+    let unsupported = all_dialects_where(|d| !d.supports_stages() && !d.is_identifier_start('@'));
+    assert_eq!(
+        unsupported
+            .parse_sql_statements("SELECT * FROM @stage")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: @".to_string()),
+    );
+}

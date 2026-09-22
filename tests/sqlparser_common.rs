@@ -20121,3 +20121,10 @@ fn parse_table_preserves_quotes_and_trailing_tokens() {
         err
     );
 }
+
+#[test]
+fn parse_hex_string_literal_display_escaping() {
+    all_dialects().verified_stmt("SELECT X''''");
+    all_dialects().verified_stmt("SELECT X'ab''cd'");
+    all_dialects().one_statement_parses_to("SELECT x'''' N", "SELECT X'''' AS N");
+}

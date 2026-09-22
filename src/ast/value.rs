@@ -276,7 +276,7 @@ impl fmt::Display for Value {
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", escape_single_quote_string(v)),
             Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
             Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
-            Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
+            Value::HexStringLiteral(v) => write!(f, "X'{}'", escape_single_quote_string(v)),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
             Value::DoubleQuotedByteStringLiteral(v) => write!(f, "B\"{v}\""),
@@ -715,5 +715,17 @@ fn test_escape_quoted_string_with_multibyte_quote_char() {
     assert_eq!(
         format!("{}", escape_quoted_string("a🦀b🦀c", '🦀')),
         "a🦀🦀b🦀🦀c"
+    );
+}
+#[cfg(test)]
+#[test]
+fn test_hex_string_literal_display_escaping() {
+    assert_eq!(
+        Value::HexStringLiteral("'".to_string()).to_string(),
+        "X''''"
+    );
+    assert_eq!(
+        Value::HexStringLiteral("it's".to_string()).to_string(),
+        "X'it''s'"
     );
 }

@@ -489,6 +489,7 @@ impl Spanned for Statement {
             Statement::AlterPolicy { .. } => Span::empty(),
             Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
+            Statement::DropRule { .. } => Span::empty(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowCatalogs { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),

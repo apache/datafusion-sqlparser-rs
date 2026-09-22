@@ -15232,6 +15232,24 @@ fn test_alias_equal_expr() {
     let expected = r#"SELECT (a * b) AS some_alias FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);
 
+    let sql = r#"SELECT some_alias = "from" FROM some_table"#;
+    let expected = r#"SELECT "from" AS some_alias FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a = FROM")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression, found: FROM".to_string())
+    );
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a = FROM some_table")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression, found: FROM".to_string())
+    );
+
     let dialects = all_dialects_where(|d| !d.supports_eq_alias_assignment());
     let sql = r#"SELECT x = (a * b) FROM some_table"#;
     let expected = r#"SELECT x = (a * b) FROM some_table"#;

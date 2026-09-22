@@ -19170,6 +19170,12 @@ impl<'a> Parser<'a> {
             } if self.dialect.supports_eq_alias_assignment()
                 && matches!(left.as_ref(), Expr::Identifier(_)) =>
             {
+                if matches!(right.as_ref(), Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none()) {
+                    return parser_err!(
+                        format!("Expected an expression, found: {right}"),
+                        self.peek_token_ref().span.start
+                    );
+                }
                 let Expr::Identifier(alias) = *left else {
                     return parser_err!(
                         "BUG: expected identifier expression as alias",

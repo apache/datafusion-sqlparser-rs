@@ -20074,6 +20074,14 @@ fn parse_bitwise_not_renders_apart_from_operand() {
 }
 
 #[test]
+fn parse_unary_minus_never_renders_line_comment() {
+    all_dialects().verified_stmt("SELECT - -1");
+    all_dialects().verified_stmt("SELECT - - -1");
+    all_dialects().verified_stmt("SELECT -1");
+    all_dialects().verified_stmt("SELECT -x");
+}
+
+#[test]
 fn parse_alter_table_column_position() {
     let dialects = all_dialects_where(|d| d.supports_alter_column_position());
     match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT FIRST")) {

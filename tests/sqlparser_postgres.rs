@@ -9975,3 +9975,12 @@ fn parse_bitwise_not_before_pg_prefix_operators() {
     pg().verified_stmt("SELECT ~ @ 2");
     pg().one_statement_parses_to("SELECT ~ #x", "SELECT ~ # x");
 }
+
+#[test]
+fn parse_unary_minus_before_pg_prefix_operators() {
+    pg().one_statement_parses_to("SELECT - ~1", "SELECT - ~ 1");
+    pg().verified_stmt("SELECT - ~ 1");
+    pg().one_statement_parses_to("SELECT - @2", "SELECT - @ 2");
+    pg().verified_stmt("SELECT - @ 2");
+    pg().one_statement_parses_to("SELECT - #x", "SELECT - # x");
+}

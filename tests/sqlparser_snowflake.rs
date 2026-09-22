@@ -2601,6 +2601,18 @@ fn test_copy_into_with_cast_transformation() {
             "COPY INTO my_company.emp_basic (a, b) FROM ",
             "(SELECT $1:continent::VARCHAR, $1:country:name::VARCHAR FROM @stg)",
         ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1:country.name::VARCHAR FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1['country']['name']::VARCHAR FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT t.$1:country.name::VARCHAR AS country FROM @stg AS t)",
+        ),
     ];
     for sql in variants {
         snowflake().verified_stmt(sql);

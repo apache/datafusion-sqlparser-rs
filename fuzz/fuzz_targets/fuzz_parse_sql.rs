@@ -21,11 +21,11 @@ use libfuzzer_sys::fuzz_target;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, Dialect, DuckDbDialect,
     GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, OracleDialect, PostgreSqlDialect,
-    RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
+    RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect, SparkSqlDialect, TeradataDialect,
 };
 use sqlparser::parser::Parser;
 fuzz_target!(|sql: &str| {
-    let dialects: [&dyn Dialect; 14] = [
+    let dialects: [&dyn Dialect; 16] = [
         &AnsiDialect {},
         &BigQueryDialect {},
         &ClickHouseDialect {},
@@ -40,6 +40,8 @@ fuzz_target!(|sql: &str| {
         &RedshiftSqlDialect {},
         &SQLiteDialect {},
         &SnowflakeDialect {},
+        &SparkSqlDialect {},
+        &TeradataDialect {},
     ];
     for dialect in dialects {
         let _ = Parser::parse_sql(dialect, sql);

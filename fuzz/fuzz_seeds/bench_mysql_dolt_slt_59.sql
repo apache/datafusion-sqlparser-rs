@@ -1,0 +1,1 @@
+SELECT * FROM onecolumn AS a JOIN onecolumn as b USING(x) ORDER BY x

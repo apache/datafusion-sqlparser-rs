@@ -378,17 +378,24 @@ impl From<&str> for Ident {
     }
 }
 
+pub(crate) fn fmt_ident(
+    f: &mut fmt::Formatter,
+    value: &str,
+    quote_style: Option<char>,
+) -> fmt::Result {
+    match quote_style {
+        Some('[') => write!(f, "[{value}]"),
+        Some(q) => {
+            let escaped = value::escape_quoted_string(value, q);
+            write!(f, "{q}{escaped}{q}")
+        }
+        None => f.write_str(value),
+    }
+}
+
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.quote_style {
-            Some(q) if q == '"' || q == '\'' || q == '`' => {
-                let escaped = value::escape_quoted_string(&self.value, q);
-                write!(f, "{q}{escaped}{q}")
-            }
-            Some('[') => write!(f, "[{}]", self.value),
-            None => f.write_str(&self.value),
-            _ => panic!("unexpected quote style"),
-        }
+        fmt_ident(f, &self.value, self.quote_style)
     }
 }
 

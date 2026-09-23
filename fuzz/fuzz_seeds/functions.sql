@@ -1,0 +1,1 @@
+SELECT COUNT(*), SUM(a), MAX(b), MIN(b), AVG(a), COALESCE(a, 0), SUBSTR(s, 1, 3), UPPER(s), ABS(a) FROM t

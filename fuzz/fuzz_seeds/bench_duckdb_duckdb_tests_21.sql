@@ -1,0 +1,1 @@
+CREATE TABLE integers AS SELECT i%5 as even_groups, log(1 + i*i)::int as skewed_groups FROM range(10000) t(i)

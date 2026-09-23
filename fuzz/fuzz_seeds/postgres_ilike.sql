@@ -1,0 +1,1 @@
+SELECT a FROM t WHERE a ILIKE 'x%' AND b SIMILAR TO 'a+'

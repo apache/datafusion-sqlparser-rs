@@ -1,0 +1,1 @@
+INSERT INTO t1(rowid,xi,xr,xb,xn,xt) VALUES(2,'2','2','2','2','2')

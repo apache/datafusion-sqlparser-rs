@@ -18,11 +18,14 @@
 [package]
 name = "fuzz"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 publish = false
 
+[package.metadata]
+cargo-fuzz = true
+
 [dependencies]
-honggfuzz = "0.5.54"
+libfuzzer-sys = "0.4"
 sqlparser = { path = ".." }
 
 # Prevent this from interfering with workspaces
@@ -32,3 +35,13 @@ members = ["."]
 [[bin]]
 name = "fuzz_parse_sql"
 path = "fuzz_targets/fuzz_parse_sql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_parse_roundtrip"
+path = "fuzz_targets/fuzz_parse_roundtrip.rs"
+test = false
+doc = false
+bench = false

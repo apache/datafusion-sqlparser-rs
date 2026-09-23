@@ -1,0 +1,1 @@
+PRAGMA enable_verification

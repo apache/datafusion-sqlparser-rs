@@ -102,7 +102,33 @@ jobs:
       with:
         rust-version: ${{ matrix.rust }}
     - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
-    - name: Install Tarpaulin
-      run: cargo install cargo-tarpaulin
     - name: Test
       run: cargo test --all-features
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Rust Toolchain
+        uses: ./.github/actions/setup-builder
+      - run: rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        with:
+          tool: cargo-llvm-cov
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+      - run: cargo llvm-cov --all-features --no-report
+      - run: cargo llvm-cov report --codecov --output-path target/codecov.json
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: target/codecov.json
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - run: cargo llvm-cov report --summary-only --fail-under-lines 90
+      - name: Changed lines must be covered
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo llvm-cov report --lcov --output-path target/lcov.info
+          pipx run --spec diff-cover==10.6.0 diff-cover target/lcov.info \
+            --compare-branch ${{ github.event.pull_request.base.sha }} --fail-under 80

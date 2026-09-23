@@ -1,0 +1,1 @@
+INSERT INTO t (a, b, c) VALUES (1, 'x', NULL), (2, 'y', TRUE)

@@ -13940,11 +13940,10 @@ impl<'a> Parser<'a> {
                         }
                     }
 
-                    // If the last segment was a number, we must check that it's followed by whitespace,
-                    // otherwise foo-123a will be parsed as `foo-123` with the alias `a`.
+                    // A word or number butted onto a trailing number glues into it, as in `foo-123a`.
                     if requires_whitespace {
-                        let token = self.next_token();
-                        if !matches!(token.token, Token::EOF | Token::Whitespace(_)) {
+                        let token = self.peek_token_no_skip();
+                        if matches!(token.token, Token::Word(_) | Token::Number(_, false)) {
                             return self
                                 .expected("whitespace following hyphenated identifier", token);
                         }

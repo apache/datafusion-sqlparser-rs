@@ -20433,3 +20433,19 @@ fn parse_bang_not_renders_apart_from_operand() {
     dialects.verified_stmt("SET eaac_cion = ! !o");
     dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
 }
+
+#[test]
+fn parse_qualified_column_named_like_a_string_prefix() {
+    for (sql, canonical) in [
+        ("SELECT v.x'ff'", "SELECT v.x AS 'ff'"),
+        ("SELECT v.b'01'", "SELECT v.b AS '01'"),
+        ("SELECT v.n'nat'", "SELECT v.n AS 'nat'"),
+        ("SELECT v.r'raw'", "SELECT v.r AS 'raw'"),
+        ("SELECT v.e'es'", "SELECT v.e AS 'es'"),
+        ("SELECT v.u&'uni'", "SELECT v.u & 'uni'"),
+        ("SELECT v.q'[quoted]'", "SELECT v.q AS '[quoted]'"),
+    ] {
+        all_dialects().one_statement_parses_to(sql, canonical);
+    }
+    all_dialects().verified_stmt("SELECT v.x FROM v");
+}

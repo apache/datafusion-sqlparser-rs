@@ -799,6 +799,13 @@ impl fmt::Display for DataType {
                 MapBracketKind::Parentheses => {
                     write!(f, "Map({key_data_type}, {value_data_type})")
                 }
+                MapBracketKind::SnowflakeParentheses { value_not_null } => {
+                    write!(f, "MAP({key_data_type}, {value_data_type}")?;
+                    if *value_not_null {
+                        write!(f, " NOT NULL")?;
+                    }
+                    write!(f, ")")
+                }
                 MapBracketKind::AngleBrackets => {
                     write!(f, "MAP<{key_data_type}, {value_data_type}>")
                 }
@@ -929,6 +936,11 @@ pub enum StructBracketKind {
 pub enum MapBracketKind {
     /// Example: `Map(String, UInt16)`
     Parentheses,
+    /// Example: `MAP(VARCHAR, NUMBER NOT NULL)`
+    SnowflakeParentheses {
+        /// Whether map values must be non-null.
+        value_not_null: bool,
+    },
     /// Example: `MAP<STRING, INT>`
     AngleBrackets,
 }

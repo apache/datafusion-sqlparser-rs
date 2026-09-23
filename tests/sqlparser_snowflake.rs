@@ -4961,6 +4961,38 @@ fn test_structured_object_type() {
     );
     snowflake()
         .verified_stmt("SELECT payload::OBJECT(tags ARRAY, labels MAP(VARCHAR, VARCHAR)) FROM t");
+    let select = snowflake().verified_only_select(
+        "SELECT payload::OBJECT(items ARRAY(NUMBER NOT NULL), meta MAP(VARCHAR, OBJECT(k NUMBER) NOT NULL)) FROM t",
+    );
+    let Expr::Cast { data_type, .. } = expr_from_projection(only(&select.projection)) else {
+        unreachable!();
+    };
+    let DataType::Object(fields) = data_type else {
+        unreachable!();
+    };
+    assert!(matches!(
+        &fields[0].data_type,
+        DataType::Array(ArrayElemTypeDef::ParenthesisNotNull(_))
+    ));
+    let DataType::Map(
+        _,
+        value,
+        MapBracketKind::SnowflakeParentheses {
+            value_not_null: true,
+        },
+    ) = &fields[1].data_type
+    else {
+        unreachable!();
+    };
+    assert!(matches!(**value, DataType::Object(_)));
+
+    snowflake().one_statement_parses_to(
+        "SELECT payload::ARRAY(NUMBER) FROM t",
+        "SELECT payload::Array(NUMBER) FROM t",
+    );
+    snowflake().verified_stmt("SELECT payload::MAP(VARCHAR, OBJECT(k NUMBER)) FROM t");
+    snowflake().verified_stmt("SELECT payload::ARRAY(NUMBER NOT NULL) FROM t");
+    snowflake().verified_stmt("SELECT payload::MAP(VARCHAR, NUMBER NOT NULL) FROM t");
     snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
 
     let select = snowflake().verified_only_select(

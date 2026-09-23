@@ -4614,9 +4614,7 @@ impl<'a> Parser<'a> {
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
-        // Stop parsing subexpressions for <low> and <high> on tokens with
-        // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
-        let low = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
+        let low = self.parse_subexpr(self.dialect.between_low_bound_precedence())?;
         self.expect_keyword_is(Keyword::AND)?;
         let high = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
         Ok(Expr::Between {

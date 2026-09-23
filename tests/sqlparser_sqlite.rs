@@ -1518,6 +1518,38 @@ fn parse_on_conflict_target_predicate() {
     }
 }
 
+fn parse_between_low_bound_precedence() {
+    match sqlite().verified_expr("a BETWEEN b > 1 AND c") {
+        Expr::Between { low, .. } => assert!(
+            matches!(
+                *low,
+                Expr::BinaryOp {
+                    op: BinaryOperator::Gt,
+                    ..
+                }
+            ),
+            "{low:?}"
+        ),
+        other => panic!("expected BETWEEN, got {other:?}"),
+    }
+    sqlite().verified_expr("a BETWEEN b LIKE 'x' AND c");
+    sqlite().verified_expr("a BETWEEN b IS NOT NULL AND c");
+    sqlite().expr_parses_to("a BETWEEN b NOTNULL AND c", "a BETWEEN b IS NOT NULL AND c");
+    sqlite().verified_expr("a BETWEEN b BETWEEN 1 AND 2 AND c");
+
+    // Operators after the high bound apply to the whole BETWEEN.
+    sqlite().verified_expr("5 BETWEEN 1 AND NULL IS NULL");
+    sqlite().verified_expr("5 BETWEEN 1 AND 10 = 1");
+
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("SELECT a BETWEEN b > 1 AND c FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: AND, found: >".to_string()
+        ))
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

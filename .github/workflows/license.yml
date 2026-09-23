@@ -25,6 +25,11 @@ on:
   pull_request:
   merge_group:
 
+# Only PR runs are disposable. Main, schedule and merge-queue runs keep their verdicts.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
 
   rat:

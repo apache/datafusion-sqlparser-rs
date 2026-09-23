@@ -5059,3 +5059,68 @@ fn parse_bitstring_literal_escaping() {
     mysql_and_generic().verified_stmt("SELECT B''''");
     mysql_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_alter_table_column_position() {
+    // MySQL makes the COLUMN keyword optional for ADD, CHANGE and MODIFY.
+    match alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab ADD c INT AFTER b")) {
+        AlterTableOperation::AddColumn {
+            column_keyword,
+            column_position,
+            ..
+        } => {
+            assert!(!column_keyword);
+            assert_eq!(
+                column_position,
+                Some(MySQLColumnPosition::After(Ident::new("b")))
+            );
+        }
+        _ => unreachable!(),
+    }
+    mysql_and_generic().verified_stmt("ALTER TABLE tab ADD c INT FIRST");
+    mysql_and_generic().one_statement_parses_to(
+        "ALTER TABLE tab CHANGE a b INT FIRST",
+        "ALTER TABLE tab CHANGE COLUMN a b INT FIRST",
+    );
+    mysql_and_generic().one_statement_parses_to(
+        "ALTER TABLE tab MODIFY c INT AFTER b",
+        "ALTER TABLE tab MODIFY COLUMN c INT AFTER b",
+    );
+
+    // The position follows the full column definition, options included.
+    mysql_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD COLUMN c VARCHAR(255) NOT NULL DEFAULT 'x' COMMENT 'c' AFTER b",
+    );
+    mysql_and_generic().verified_stmt(
+        "ALTER TABLE tab MODIFY COLUMN c INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST",
+    );
+
+    // The AFTER target is an identifier, so it may be quoted.
+    match alter_table_op(
+        mysql_and_generic().verified_stmt("ALTER TABLE tab ADD COLUMN c INT AFTER `order`"),
+    ) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::with_quote('`', "order")))
+        ),
+        _ => unreachable!(),
+    }
+
+    mysql_and_generic().verified_stmt("ALTER TABLE tab ADD COLUMN a INT FIRST, CHANGE COLUMN b c INT AFTER a, MODIFY COLUMN d INT AFTER c");
+
+    // FIRST and AFTER are mutually exclusive, and AFTER needs a target.
+    for sql in [
+        "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
+        "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
+        "ALTER TABLE tab ADD COLUMN c INT AFTER",
+        "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
+        "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+    ] {
+        assert!(
+            mysql_and_generic().parse_sql_statements(sql).is_err(),
+            "{sql}"
+        );
+    }
+}

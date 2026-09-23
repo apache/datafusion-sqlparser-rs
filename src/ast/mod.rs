@@ -8112,11 +8112,7 @@ impl fmt::Display for FunctionArg {
 fn starts_with_operator_char(mut expr: &Expr) -> bool {
     loop {
         match expr {
-            Expr::UnaryOp { op, expr: inner } => match op {
-                UnaryOperator::PGPostfixFactorial => expr = inner,
-                UnaryOperator::Not => return false,
-                _ => return true,
-            },
+            Expr::UnaryOp { op, .. } => return !matches!(op, UnaryOperator::Not),
             Expr::BinaryOp { left, .. } => expr = left,
             _ => return false,
         }

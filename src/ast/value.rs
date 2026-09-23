@@ -276,14 +276,22 @@ impl fmt::Display for Value {
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", escape_single_quote_string(v)),
             Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
             Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
-            Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
+            Value::HexStringLiteral(v) => write!(f, "X'{}'", escape_single_quote_string(v)),
             Value::Boolean(v) => write!(f, "{v}"),
-            Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
-            Value::DoubleQuotedByteStringLiteral(v) => write!(f, "B\"{v}\""),
+            Value::SingleQuotedByteStringLiteral(v) => {
+                write!(f, "B'{}'", escape_single_quote_string(v))
+            }
+            Value::DoubleQuotedByteStringLiteral(v) => {
+                write!(f, "B\"{}\"", escape_double_quote_string(v))
+            }
             Value::TripleSingleQuotedByteStringLiteral(v) => write!(f, "B'''{v}'''"),
             Value::TripleDoubleQuotedByteStringLiteral(v) => write!(f, r#"B"""{v}""""#),
-            Value::SingleQuotedRawStringLiteral(v) => write!(f, "R'{v}'"),
-            Value::DoubleQuotedRawStringLiteral(v) => write!(f, "R\"{v}\""),
+            Value::SingleQuotedRawStringLiteral(v) => {
+                write!(f, "R'{}'", escape_single_quote_string(v))
+            }
+            Value::DoubleQuotedRawStringLiteral(v) => {
+                write!(f, "R\"{}\"", escape_double_quote_string(v))
+            }
             Value::TripleSingleQuotedRawStringLiteral(v) => write!(f, "R'''{v}'''"),
             Value::TripleDoubleQuotedRawStringLiteral(v) => write!(f, r#"R"""{v}""""#),
             Value::Null => write!(f, "NULL"),
@@ -715,5 +723,54 @@ fn test_escape_quoted_string_with_multibyte_quote_char() {
     assert_eq!(
         format!("{}", escape_quoted_string("a🦀b🦀c", '🦀')),
         "a🦀🦀b🦀🦀c"
+    );
+}
+#[cfg(test)]
+#[test]
+fn test_hex_string_literal_display_escaping() {
+    assert_eq!(
+        Value::HexStringLiteral("'".to_string()).to_string(),
+        "X''''"
+    );
+    assert_eq!(
+        Value::HexStringLiteral("it's".to_string()).to_string(),
+        "X'it''s'"
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn test_byte_and_raw_string_literal_display_escaping() {
+    assert_eq!(
+        Value::SingleQuotedByteStringLiteral("'".to_string()).to_string(),
+        "B''''"
+    );
+    assert_eq!(
+        Value::SingleQuotedByteStringLiteral("it's".to_string()).to_string(),
+        "B'it''s'"
+    );
+    assert_eq!(
+        Value::DoubleQuotedByteStringLiteral("\"".to_string()).to_string(),
+        "B\"\"\"\""
+    );
+    assert_eq!(
+        Value::DoubleQuotedByteStringLiteral("it\"s".to_string()).to_string(),
+        "B\"it\"\"s\""
+    );
+    assert_eq!(
+        Value::SingleQuotedRawStringLiteral("'".to_string()).to_string(),
+        "R''''"
+    );
+    assert_eq!(
+        Value::SingleQuotedRawStringLiteral("it's".to_string()).to_string(),
+        "R'it''s'"
+    );
+    assert_eq!(
+        Value::DoubleQuotedRawStringLiteral("\"".to_string()).to_string(),
+        "R\"\"\"\""
+    );
+    assert_eq!(
+        Value::DoubleQuotedRawStringLiteral("it\"s".to_string()).to_string(),
+        "R\"it\"\"s\""
     );
 }

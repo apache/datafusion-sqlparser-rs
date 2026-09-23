@@ -1,0 +1,1 @@
+DECLARE Name_Cursor CURSOR FOR SELECT LastName ,@@CURSOR_ROWS FROM Person.Person

@@ -1209,6 +1209,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows signed and decimal values in type modifiers.
+    /// e.g. `CHAR(+10)`, `CHAR(-1)`, `VARCHAR(2.5)`, `DECIMAL(99999999999999999999999,2)`
+    fn supports_signed_type_modifier(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports optimizer hints in multiline comments
     /// e.g. `/*!50110 KEY_BLOCK_SIZE = 1024*/`
     fn supports_multiline_comment_hints(&self) -> bool {

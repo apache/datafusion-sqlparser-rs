@@ -957,6 +957,35 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn test_signed_type_modifiers() {
+    // signed and decimal modifiers round-trip verbatim for any type name
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(+10))");
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(-1))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT(-1))");
+    sqlite().verified_stmt("CREATE TABLE t (a NUMERIC(10.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a FLOAT(2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a NVARCHAR(+5))");
+    sqlite().verified_stmt("CREATE TABLE t (a TIMESTAMP(-1))");
+    sqlite().verified_stmt("SELECT CAST(x AS REAL(1.5))");
+    // plain unsigned integer keeps the normal AST
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(10))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT(10))");
+    // Oversized precision renders with a space after the comma
+    sqlite().one_statement_parses_to(
+        "SELECT CAST(a AS DECIMAL(99999999999999999999999,2))",
+        "SELECT CAST(a AS DECIMAL(99999999999999999999999, 2))",
+    );
+    // other dialects must still reject these
+    assert!(sqlparser::parser::Parser::new(&GenericDialect {})
+        .try_with_sql("CREATE TABLE t (a CHAR(+10))")
+        .unwrap()
+        .parse_statements()
+        .is_err());
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

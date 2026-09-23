@@ -1298,6 +1298,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts an unterminated block comment at end of input
+    /// e.g. `SELECT 1 /* comment`
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_comment.html)
+    fn supports_unterminated_block_comments(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:

@@ -1879,3 +1879,11 @@ fn clickhouse_and_generic() -> TestedDialects {
         Box::new(GenericDialect {}),
     ])
 }
+
+#[test]
+fn parse_create_table_engine_name_quoting() {
+    clickhouse_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) ENGINE = "MergeTree""#);
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `MergeTree`");
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
+    clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
+}

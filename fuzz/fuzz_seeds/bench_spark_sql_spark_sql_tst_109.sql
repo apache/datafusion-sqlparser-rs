@@ -1,0 +1,1 @@
+SELECT COUNT(col1) as alias, SUM(col1) + alias FROM t1 GROUP BY ALL

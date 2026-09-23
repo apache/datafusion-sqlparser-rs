@@ -1,0 +1,1 @@
+SELECT a::int, b::text[], c->'key', c->>'key', d#>'{a,b}', e[1], ARRAY[1, 2, 3] FROM t

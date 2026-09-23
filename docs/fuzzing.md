@@ -19,39 +19,23 @@
 
 # Fuzzing
 
-## Installing `honggfuzz`
-
-```
-cargo install honggfuzz
-```
-
-Install [dependencies](https://github.com/rust-fuzz/honggfuzz-rs#dependencies) for your system.
-
-## Running the fuzzer
-
-Running the fuzzer is as easy as running in the `fuzz` directory.
-
-Choose a target:
-
-These are `[[bin]]` entries in `Cargo.toml`.
-List them with `cargo read-manifest | jq '.targets[].name'` from the `fuzz` directory.
-
-Run the fuzzer:
+`cargo-fuzz` needs the nightly toolchain. Install it with `rustup toolchain install nightly`, then:
 
 ```shell
+cargo install cargo-fuzz
 cd fuzz
-cargo hfuzz run <target>
+cargo +nightly fuzz run fuzz_parse_sql fuzz_seeds -- -max_total_time=600
 ```
 
-After a panic is found, get a stack trace with:
+There are two targets. `fuzz_parse_sql` parses the input with every dialect.
+`fuzz_parse_roundtrip` additionally re-parses the SQL rendered by `Display` and fails when a
+rendered statement no longer parses.
 
-```shell
-cargo hfuzz run-debug <target> hfuzz_workspace/<target>/*.fuzz
-```
+ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
+`code-change` mode, a daily batch job grows the shared corpus stored on the
+`clusterfuzzlite` branch, and a daily prune compacts it.
 
-For example, with the `fuzz_parse_sql` target:
+`fuzz_seeds/` is a committed corpus of valid SQL that random mutation would never produce.
+The run command above uses it and `build.sh` packages it for ClusterFuzzLite.
 
-```shell
-cargo hfuzz run fuzz_parse_sql
-cargo hfuzz run-debug fuzz_parse_sql hfuzz_workspace/fuzz_parse_sql/*.fuzz
-```
+Crashes land in `artifacts/<target>/` and replay with `cargo fuzz run <target> <crash-file>`.

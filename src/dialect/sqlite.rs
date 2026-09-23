@@ -142,4 +142,9 @@ impl Dialect for SQLiteDialect {
     fn supports_national_string_literal(&self) -> bool {
         false
     }
+
+    /// See <https://www.sqlite.org/lang_expr.html#binaryops>
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
 }

@@ -244,6 +244,11 @@ impl Dialect for SQLiteDialect {
     fn supports_bitwise_shift_operators(&self) -> bool {
         true
     }
+
+    /// Comparison and postfix operators bind within the BETWEEN low bound in SQLite (<https://www.sqlite.org/lang_expr.html>).
+    fn between_low_bound_precedence(&self) -> u8 {
+        self.prec_value(Precedence::And)
+    }
 }
 
 /// SQLite permits signed and decimal numeric type modifiers.

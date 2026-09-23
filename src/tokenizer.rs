@@ -1062,6 +1062,11 @@ impl<'a> Tokenizer<'a> {
         chars: &mut State,
         prev_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
+        if self.dialect.supports_sqlite_variable_syntax() {
+            if let Some(token) = self.tokenize_sqlite_variable(chars)? {
+                return Ok(Some(token));
+            }
+        }
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
@@ -1900,6 +1905,58 @@ impl<'a> Tokenizer<'a> {
                 format!("Expected a valid binary operator after '{prefix}'"),
             ),
         }
+    }
+
+    /// Scans a `$`, `@`, `:` or `#` variable with SQLite's tokenizer rules, returning `None`
+    /// without consuming input when no name follows the prefix.
+    fn tokenize_sqlite_variable(&self, chars: &mut State) -> Result<Option<Token>, TokenizerError> {
+        let mut lookahead = chars.peekable.clone();
+        let Some(prefix @ ('$' | '@' | ':' | '#')) = lookahead.next() else {
+            return Ok(None);
+        };
+        // `#` followed by a digit is a register reference SQLite only allows in nested parses
+        if prefix == '#' && lookahead.peek().is_some_and(char::is_ascii_digit) {
+            return Ok(None);
+        }
+        let is_name_char =
+            |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '$' || !c.is_ascii();
+        let mut len = 1;
+        let mut has_name = false;
+        loop {
+            match lookahead.next() {
+                Some(c) if is_name_char(c) => {
+                    has_name = true;
+                    len += 1;
+                }
+                Some(':') if lookahead.next_if_eq(&':').is_some() => len += 2,
+                Some('(') if has_name => {
+                    len += 1;
+                    loop {
+                        match lookahead.next() {
+                            Some(')') => {
+                                len += 1;
+                                break;
+                            }
+                            Some(c) if !c.is_ascii_whitespace() => len += 1,
+                            _ => {
+                                return self.tokenizer_error(
+                                    chars.location(),
+                                    "Unterminated SQLite variable subscript",
+                                )
+                            }
+                        }
+                    }
+                    break;
+                }
+                _ => break,
+            }
+        }
+        if !has_name {
+            return Ok(None);
+        }
+        Ok(Some(Token::Placeholder(
+            (0..len).filter_map(|_| chars.next()).collect(),
+        )))
     }
 
     /// Tokenize dollar preceded value (i.e: a string/placeholder)

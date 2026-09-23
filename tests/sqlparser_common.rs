@@ -10257,7 +10257,8 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON ALL EXTERNAL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON ALL FUNCTIONS IN SCHEMA db1.sc1 TO ROLE role1");
-    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
+    all_dialects_except(|d| d.supports_sqlite_variable_syntax())
+        .verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST COPY CURRENT GRANTS");
@@ -20135,7 +20136,9 @@ fn parse_stage_table_factor() {
     supported.verified_stmt("SELECT * FROM @stage");
     supported.verified_stmt("SELECT * FROM @stage, my_table");
 
-    let unsupported = all_dialects_where(|d| !d.supports_stages() && !d.is_identifier_start('@'));
+    let unsupported = all_dialects_where(|d| {
+        !d.supports_stages() && !d.is_identifier_start('@') && !d.supports_sqlite_variable_syntax()
+    });
     assert_eq!(
         unsupported
             .parse_sql_statements("SELECT * FROM @stage")

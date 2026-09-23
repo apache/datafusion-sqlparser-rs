@@ -129,4 +129,8 @@ impl Dialect for SQLiteDialect {
     fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }
+
+    fn supports_sqlite_variable_syntax(&self) -> bool {
+        true
+    }
 }

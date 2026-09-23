@@ -1,0 +1,1 @@
+insert into water(name,type,square_km) values ('Pacific Ocean','Ocean',155557000)

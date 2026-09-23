@@ -117,6 +117,11 @@ echo "---------------------------------------------------------"
 mkdir -p ${distdir}
 (cd "${SOURCE_TOP_DIR}" && git archive ${release_hash} --prefix ${release}/ | gzip > ${tarball})
 
+if tar -tf ${tarball} | grep -q 'fuzz/fuzz_seeds'; then
+    echo "Error: fuzz/fuzz_seeds found in release tarball ${tarball}"
+    exit 1
+fi
+
 echo "Running rat license checker on ${tarball}"
 ${SOURCE_DIR}/run-rat.sh ${tarball}
 

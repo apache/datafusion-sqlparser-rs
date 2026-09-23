@@ -1,0 +1,1 @@
+CREATE TABLE onecolumn (x INT)

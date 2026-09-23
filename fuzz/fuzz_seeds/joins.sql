@@ -1,0 +1,1 @@
+SELECT t.a, u.b FROM t INNER JOIN u ON t.id = u.id LEFT JOIN v ON t.id = v.id RIGHT OUTER JOIN w USING (id) FULL OUTER JOIN x ON 1 = 1 CROSS JOIN y

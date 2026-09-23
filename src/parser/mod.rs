@@ -4531,6 +4531,19 @@ impl<'a> Parser<'a> {
             let array_expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             InTarget::Unnest(Box::new(array_expr))
+        } else if !global
+            && self.dialect.supports_in_table_expression()
+            && matches!(self.peek_token_ref().token, Token::Word(_))
+        {
+            let name = self.parse_object_name(false)?;
+            let args = if self.consume_token(&Token::LParen) {
+                let args = self.parse_comma_separated0(Self::parse_function_args, Token::RParen)?;
+                self.expect_token(&Token::RParen)?;
+                Some(args)
+            } else {
+                None
+            };
+            InTarget::Table { name, args }
         } else if self.dialect.supports_in_unparenthesized_expr()
             && self.peek_token_ref().token != Token::LParen
         {

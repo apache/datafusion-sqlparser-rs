@@ -884,6 +884,14 @@ pub enum InTarget {
     /// `UNNEST(array_expression)`, see
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators)
     Unnest(Box<Expr>),
+    /// A table name or table-valued function, read as `(SELECT * FROM name)`, see
+    /// [SQLite](https://www.sqlite.org/lang_expr.html#in_op)
+    Table {
+        /// Table or table-valued function name.
+        name: ObjectName,
+        /// Table-valued function arguments, `None` for a plain table name.
+        args: Option<Vec<FunctionArg>>,
+    },
 }
 
 impl fmt::Display for InTarget {
@@ -892,6 +900,13 @@ impl fmt::Display for InTarget {
             InTarget::List(list) => write!(f, "({})", display_comma_separated(list)),
             InTarget::Subquery(subquery) => write!(f, "({subquery})"),
             InTarget::Unnest(array_expr) => write!(f, "UNNEST({array_expr})"),
+            InTarget::Table { name, args } => {
+                write!(f, "{name}")?;
+                if let Some(args) = args {
+                    write!(f, "({})", display_comma_separated(args))?;
+                }
+                Ok(())
+            }
         }
     }
 }

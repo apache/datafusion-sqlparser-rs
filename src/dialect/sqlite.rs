@@ -244,6 +244,10 @@ impl Dialect for SQLiteDialect {
     fn supports_bitwise_shift_operators(&self) -> bool {
         true
     }
+
+    fn supports_in_table_expression(&self) -> bool {
+        true
+    }
 }
 
 /// SQLite permits signed and decimal numeric type modifiers.

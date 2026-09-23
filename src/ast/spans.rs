@@ -1542,6 +1542,11 @@ impl Spanned for Expr {
                 ),
                 InTarget::Subquery(subquery) => expr.span().union(&subquery.span()),
                 InTarget::Unnest(array_expr) => expr.span().union(&array_expr.span()),
+                InTarget::Table { name, args } => union_spans(
+                    [expr.span(), name.span()]
+                        .into_iter()
+                        .chain(args.iter().flatten().map(|arg| arg.span())),
+                ),
             },
             Expr::Between {
                 expr,

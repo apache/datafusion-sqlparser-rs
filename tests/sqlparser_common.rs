@@ -2692,8 +2692,10 @@ fn parse_in_error() {
     // <expr> IN <expr> is no valid, except in dialects that accept an
     // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res =
-        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+    let res = all_dialects_except(|d| {
+        d.supports_in_unparenthesized_expr() || d.supports_in_table_expression()
+    })
+    .parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
@@ -21528,4 +21530,36 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
+}
+
+#[test]
+fn parse_in_table_expression() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for sql in [
+        "SELECT a IN t FROM t",
+        "SELECT a NOT IN t FROM t",
+        "SELECT a IN main.t FROM t",
+        "SELECT a IN f() FROM t",
+        "SELECT a NOT IN f(1, 2) FROM t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    match dialects.verified_expr("a IN main.f(1)") {
+        Expr::In {
+            target:
+                InTarget::Table {
+                    name,
+                    args: Some(args),
+                },
+            negated: false,
+            global: false,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "main.f");
+            assert_eq!(args.len(), 1);
+        }
+        other => panic!("expected an IN table target, got {other:?}"),
+    }
+    dialects.verified_stmt("SELECT a IN (1, 2) FROM t");
+    dialects.verified_stmt("SELECT a IN (SELECT b FROM u) FROM t");
 }

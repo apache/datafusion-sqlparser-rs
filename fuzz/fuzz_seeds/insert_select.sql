@@ -1,0 +1,1 @@
+INSERT INTO t (a, b) SELECT x, y FROM u WHERE x > 0

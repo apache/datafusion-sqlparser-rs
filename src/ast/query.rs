@@ -295,14 +295,13 @@ impl fmt::Display for SetQuantifier {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
+/// A [`TABLE` command](https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// A (possibly schema-qualified) table reference used in `FROM` clauses.
 pub struct Table {
     /// Optional table name (absent for e.g. `TABLE` command without argument).
-    pub table_name: Option<String>,
+    pub table_name: Option<Ident>,
     /// Optional schema/catalog name qualifying the table.
-    pub schema_name: Option<String>,
+    pub schema_name: Option<Ident>,
 }
 
 impl fmt::Display for Table {

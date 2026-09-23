@@ -4848,7 +4848,7 @@ fn parse_create_table_as_table() {
     let expected_query1 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
+            table_name: Some(Ident::new("old_table")),
             schema_name: None,
         }))),
         order_by: None,
@@ -4874,8 +4874,8 @@ fn parse_create_table_as_table() {
     let expected_query2 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
-            schema_name: Some("schema_name".to_string()),
+            table_name: Some(Ident::new("old_table")),
+            schema_name: Some(Ident::new("schema_name")),
         }))),
         order_by: None,
         limit_clause: None,
@@ -19469,11 +19469,7 @@ fn test_parse_alter_user() {
 
 #[test]
 fn parse_generic_unary_ops() {
-    let unary_ops = &[
-        ("~", UnaryOperator::BitwiseNot),
-        ("-", UnaryOperator::Minus),
-        ("+", UnaryOperator::Plus),
-    ];
+    let unary_ops = &[("-", UnaryOperator::Minus), ("+", UnaryOperator::Plus)];
     for (str_op, op) in unary_ops {
         let select = verified_only_select(&format!("SELECT {}expr", str_op));
         assert_eq!(
@@ -19484,6 +19480,16 @@ fn parse_generic_unary_ops() {
             select.projection[0]
         );
     }
+
+    let select = verified_only_select("SELECT ~ expr");
+    assert_eq!(
+        UnnamedExpr(UnaryOp {
+            op: UnaryOperator::BitwiseNot,
+            expr: Box::new(Identifier(Ident::new("expr"))),
+        }),
+        select.projection[0]
+    );
+    one_statement_parses_to("SELECT ~expr", "SELECT ~ expr");
 }
 
 #[test]
@@ -20089,4 +20095,81 @@ fn parse_insert_by_name() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_bitwise_not_renders_apart_from_operand() {
+    all_dialects().verified_stmt("SELECT ~ -1");
+    all_dialects().verified_stmt("SELECT ~ ~ 1");
+}
+
+#[test]
+fn parse_unary_minus_never_renders_line_comment() {
+    all_dialects().verified_stmt("SELECT - -1");
+    all_dialects().verified_stmt("SELECT - - -1");
+    all_dialects().verified_stmt("SELECT -1");
+    all_dialects().verified_stmt("SELECT -x");
+}
+
+#[test]
+fn parse_table_preserves_quotes_and_trailing_tokens() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(SnowflakeDialect {}),
+    ]);
+    dialects.verified_stmt(r#"CREATE TABLE new_table AS TABLE "old_table""#);
+    dialects.verified_stmt(r#"CREATE TABLE new_table AS TABLE "schema_name"."old_table""#);
+    dialects.verified_stmt("CREATE TABLE new_table AS TABLE old_table ORDER BY x");
+    dialects.verified_stmt("CREATE TABLE new_table AS TABLE old_table LIMIT 10");
+    dialects.verified_stmt("SELECT * FROM (TABLE old_table ORDER BY x)");
+
+    let backtick_dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(MySqlDialect {}),
+    ]);
+    backtick_dialects.verified_stmt("CREATE TABLE new_table AS TABLE `old_table`");
+    backtick_dialects.verified_stmt("CREATE TABLE new_table AS TABLE `%mpty`");
+    backtick_dialects.verified_stmt("INSERT INTO t TABLE `%mpty`");
+
+    let err = dialects
+        .parse_sql_statements("CREATE TABLE new_table AS TABLE %mpty")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: %".to_string()),
+        err
+    );
+
+    let err = backtick_dialects
+        .parse_sql_statements("CREATE TABLE new_table AS TABLE `x` ORE")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: ORE".to_string()),
+        err
+    );
+}
+
+#[test]
+fn parse_hex_string_literal_display_escaping() {
+    all_dialects().verified_stmt("SELECT X''''");
+    all_dialects().verified_stmt("SELECT X'ab''cd'");
+    all_dialects().one_statement_parses_to("SELECT x'''' N", "SELECT X'''' AS N");
+}
+
+#[test]
+fn parse_stage_table_factor() {
+    let supported = all_dialects_where(|d| d.supports_stages());
+    supported.verified_stmt("SELECT * FROM @stage");
+    supported.verified_stmt("SELECT * FROM @stage, my_table");
+
+    let unsupported = all_dialects_where(|d| !d.supports_stages() && !d.is_identifier_start('@'));
+    assert_eq!(
+        unsupported
+            .parse_sql_statements("SELECT * FROM @stage")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: @".to_string()),
+    );
 }

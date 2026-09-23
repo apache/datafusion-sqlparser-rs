@@ -1,0 +1,1 @@
+SELECT a FROM t SEMI JOIN u ON t.id = u.id

@@ -6944,7 +6944,7 @@ fn parse_text_type_modifier_double_colon_cast() {
             expr: Box::new(Expr::Identifier(Ident::new("ID"))),
             data_type: DataType::Custom(
                 ObjectName::from(vec![Ident::new("TEXT")]),
-                vec!["16777216".to_string()]
+                vec![TypeModifier::Number("16777216".to_string(), false)]
             ),
             format: None,
         }
@@ -20142,4 +20142,34 @@ fn parse_stage_table_factor() {
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
+}
+
+#[test]
+fn parse_custom_type_modifier_spellings() {
+    for sql in [
+        r#"CREATE TABLE t (c foo('a b'))"#,
+        r#"CREATE TABLE t (c foo(')'))"#,
+        r#"CREATE TABLE t (c foo('it''s'))"#,
+        "CREATE TABLE t (c foo(bar, 9))",
+    ] {
+        all_dialects().verified_stmt(sql);
+    }
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    generic.verified_stmt(r#"CREATE TABLE t (c foo("quoted"))"#);
+
+    let statements = generic
+        .parse_sql_statements("CREATE TABLE t (c foo(bar, 9, 'z'))")
+        .unwrap();
+    let Statement::CreateTable(create_table) = &statements[0] else {
+        panic!("expected CREATE TABLE")
+    };
+    let DataType::Custom(_, modifiers) = &create_table.columns[0].data_type else {
+        panic!("expected a custom type")
+    };
+    let expected = vec![
+        TypeModifier::Identifier(Ident::new("bar")),
+        TypeModifier::Number("9".to_string(), false),
+        TypeModifier::String("z".to_string()),
+    ];
+    assert_eq!(modifiers, &expected);
 }

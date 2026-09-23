@@ -14326,15 +14326,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse optional type modifiers appearing in parentheses e.g. `(UNSIGNED, ZEROFILL)`.
-    pub fn parse_optional_type_modifiers(&mut self) -> Result<Option<Vec<String>>, ParserError> {
+    pub fn parse_optional_type_modifiers(
+        &mut self,
+    ) -> Result<Option<Vec<TypeModifier>>, ParserError> {
         if self.consume_token(&Token::LParen) {
             let mut modifiers = Vec::new();
             loop {
                 let next_token = self.next_token();
                 match next_token.token {
-                    Token::Word(w) => modifiers.push(w.to_string()),
-                    Token::Number(n, _) => modifiers.push(n),
-                    Token::SingleQuotedString(s) => modifiers.push(s),
+                    Token::Word(w) => {
+                        modifiers.push(TypeModifier::Identifier(w.to_ident(next_token.span)))
+                    }
+                    Token::Number(n, negative) => modifiers.push(TypeModifier::Number(n, negative)),
+                    Token::SingleQuotedString(s) => modifiers.push(TypeModifier::String(s)),
 
                     Token::Comma => {
                         continue;
@@ -21338,7 +21342,8 @@ mod tests {
     #[cfg(test)]
     mod test_parse_data_type {
         use crate::ast::{
-            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
+            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, Ident, ObjectName,
+            TimezoneInfo, TypeModifier,
         };
         use crate::dialect::{AnsiDialect, GenericDialect, PostgreSqlDialect};
         use crate::test_utils::TestedDialects;
@@ -21529,7 +21534,7 @@ mod tests {
                 "GEOMETRY(POINT)",
                 DataType::Custom(
                     ObjectName::from(vec!["GEOMETRY".into()]),
-                    vec!["POINT".to_string()]
+                    vec![TypeModifier::Identifier(Ident::new("POINT"))]
                 )
             );
 
@@ -21538,7 +21543,10 @@ mod tests {
                 "GEOMETRY(POINT, 4326)",
                 DataType::Custom(
                     ObjectName::from(vec!["GEOMETRY".into()]),
-                    vec!["POINT".to_string(), "4326".to_string()]
+                    vec![
+                        TypeModifier::Identifier(Ident::new("POINT")),
+                        TypeModifier::Number("4326".to_string(), false),
+                    ]
                 )
             );
         }

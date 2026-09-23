@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, Expr, ObjectName, StructField, UnionField};
+use crate::ast::{display_comma_separated, Expr, Ident, ObjectName, StructField, UnionField};
 
 use super::{value::escape_single_quote_string, ColumnDef};
 
@@ -40,6 +40,29 @@ pub enum EnumMember {
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/data-types/enum)
     NamedValue(String, Expr),
+}
+
+/// One entry of a custom data type's parenthesized modifier list.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TypeModifier {
+    /// Identifier or keyword segment, quotes carried by `Ident`.
+    Identifier(Ident),
+    /// Numeric literal, the `bool` carries the `L` long suffix like `Value::Number`.
+    Number(String, bool),
+    /// Single quoted string literal.
+    String(String),
+}
+
+impl fmt::Display for TypeModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Identifier(id) => write!(f, "{id}"),
+            Self::Number(n, long) => write!(f, "{}{long}", n, long = if *long { "L" } else { "" }),
+            Self::String(s) => write!(f, "'{}'", escape_single_quote_string(s)),
+        }
+    }
 }
 
 /// SQL data types
@@ -435,8 +458,8 @@ pub enum DataType {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     VarBit(Option<u64>),
-    /// Custom types.
-    Custom(ObjectName, Vec<String>),
+    /// Custom type with a modifier list, e.g. `GEOMETRY(POINT, 4326)`.
+    Custom(ObjectName, Vec<TypeModifier>),
     /// Arrays.
     Array(ArrayElemTypeDef),
     /// Map, see [ClickHouse], [Hive].
@@ -727,7 +750,7 @@ impl fmt::Display for DataType {
                 if modifiers.is_empty() {
                     write!(f, "{ty}")
                 } else {
-                    write!(f, "{}({})", ty, modifiers.join(", "))
+                    write!(f, "{ty}({})", display_comma_separated(modifiers))
                 }
             }
             DataType::Enum(vals, bits) => {

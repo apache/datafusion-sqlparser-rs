@@ -1763,20 +1763,10 @@ impl fmt::Display for Expr {
                 let mut prev_is_number = is_number_expr(root);
                 for field in access_chain {
                     match field {
-                        AccessExpr::Dot(expr) => {
-                            let curr_is_number = is_number_expr(expr);
-                            if prev_is_number || curr_is_number {
-                                write!(f, " . {expr}")?;
-                            } else {
-                                write!(f, ".{expr}")?;
-                            }
-                            prev_is_number = curr_is_number;
-                        }
-                        AccessExpr::Subscript(subscript) => {
-                            write!(f, "[{subscript}]")?;
-                            prev_is_number = false;
-                        }
+                        AccessExpr::Dot(expr) if prev_is_number => write!(f, " . {expr}")?,
+                        _ => write!(f, "{field}")?,
                     }
+                    prev_is_number = matches!(field, AccessExpr::Dot(expr) if is_number_expr(expr));
                 }
                 Ok(())
             }

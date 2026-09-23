@@ -5054,6 +5054,12 @@ fn parse_is_distinct_from_json_arrow_precedence() {
 }
 
 #[test]
+fn parse_bitstring_literal_escaping() {
+    mysql_and_generic().verified_stmt("SELECT B''''");
+    mysql_and_generic().verified_stmt("SELECT B'it''s'");
+}
+
+#[test]
 fn parse_alter_table_column_position() {
     // MySQL makes the COLUMN keyword optional for ADD, CHANGE and MODIFY.
     match alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab ADD c INT AFTER b")) {

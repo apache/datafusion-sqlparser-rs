@@ -15,37 +15,36 @@
 # specific language governing permissions and limitations
 # under the License.
 
-name: license
+name: labeler
 
-# trigger for all PRs and changes to main
+# pull_request_target runs on the base branch, so the script below is never taken from the PR head.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-  merge_group:
-
-# Only PR runs are disposable. Main, schedule and merge-queue runs keep their verdicts.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  pull_request_target:
+    types: [opened, edited]
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
 
 jobs:
-
-  rat:
-    name: Release Audit Tool (RAT)
+  label-dialects:
+    name: Label dialects
+    # Bot edits and comments arrive in bursts and never carry a dialect.
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      (github.event_name != 'issue_comment' || contains(github.event.comment.body, 'dialect'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
         with:
-          python-version: 3.8
-      - name: Audit licenses
-        run: ./dev/release/run-rat.sh .
-      - name: Verify release tarball excludes fuzz seeds
-        run: |
-          if git archive HEAD | tar -tf - | grep -q 'fuzz/fuzz_seeds'; then
-            echo "Error: fuzz/fuzz_seeds found in git archive release tarball"
-            exit 1
-          fi
+          sparse-checkout: .github/workflows/labeler
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const label = require('./.github/workflows/labeler/label_dialects.js');
+            await label({ github, context });

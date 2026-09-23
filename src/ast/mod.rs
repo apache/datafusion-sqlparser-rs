@@ -378,17 +378,24 @@ impl From<&str> for Ident {
     }
 }
 
+pub(crate) fn fmt_ident(
+    f: &mut fmt::Formatter,
+    value: &str,
+    quote_style: Option<char>,
+) -> fmt::Result {
+    match quote_style {
+        Some('[') => write!(f, "[{value}]"),
+        Some(q) => {
+            let escaped = value::escape_quoted_string(value, q);
+            write!(f, "{q}{escaped}{q}")
+        }
+        None => f.write_str(value),
+    }
+}
+
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.quote_style {
-            Some(q) if q == '"' || q == '\'' || q == '`' => {
-                let escaped = value::escape_quoted_string(&self.value, q);
-                write!(f, "{q}{escaped}{q}")
-            }
-            Some('[') => write!(f, "[{}]", self.value),
-            None => f.write_str(&self.value),
-            _ => panic!("unexpected quote style"),
-        }
+        fmt_ident(f, &self.value, self.quote_style)
     }
 }
 
@@ -1955,23 +1962,41 @@ impl fmt::Display for Expr {
                     if add_parens { ")" } else { "" },
                 )
             }
-            Expr::UnaryOp { op, expr } => {
-                if op == &UnaryOperator::PGPostfixFactorial {
-                    write!(f, "{expr}{op}")
-                } else if matches!(
-                    op,
-                    UnaryOperator::Not
-                        | UnaryOperator::Hash
-                        | UnaryOperator::AtDashAt
-                        | UnaryOperator::DoubleAt
-                        | UnaryOperator::QuestionDash
-                        | UnaryOperator::QuestionPipe
-                ) {
-                    write!(f, "{op} {expr}")
-                } else {
+            Expr::UnaryOp { op, expr } => match op {
+                UnaryOperator::PGPostfixFactorial => {
+                    if matches!(
+                        expr.as_ref(),
+                        Expr::UnaryOp {
+                            op: UnaryOperator::PGPostfixFactorial,
+                            ..
+                        }
+                    ) {
+                        write!(f, "{expr} {op}")
+                    } else {
+                        write!(f, "{expr}{op}")
+                    }
+                }
+                UnaryOperator::Not
+                | UnaryOperator::BitwiseNot
+                | UnaryOperator::Hash
+                | UnaryOperator::AtDashAt
+                | UnaryOperator::DoubleAt
+                | UnaryOperator::PGAbs
+                | UnaryOperator::QuestionDash
+                | UnaryOperator::QuestionPipe
+                | UnaryOperator::PGSquareRoot
+                | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
+                UnaryOperator::Minus => {
+                    if starts_with_operator_char(expr) {
+                        write!(f, "{op} {expr}")
+                    } else {
+                        write!(f, "{op}{expr}")
+                    }
+                }
+                UnaryOperator::Plus | UnaryOperator::BangNot | UnaryOperator::PGPrefixFactorial => {
                     write!(f, "{op}{expr}")
                 }
-            }
+            },
             Expr::Convert {
                 is_try,
                 expr,
@@ -8083,6 +8108,26 @@ impl fmt::Display for FunctionArg {
     }
 }
 
+/// Whether `expr` renders with an operator character first. A prefix `-`
+/// must not abut one, since `--` starts a line comment and operator-run
+/// dialects fuse `-@`, `-~`, `-#`, `-!!` and `-||/` into single tokens.
+fn starts_with_operator_char(expr: &Expr) -> bool {
+    use fmt::Write;
+    struct FirstChar(Option<char>);
+    impl fmt::Write for FirstChar {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            if self.0.is_none() {
+                self.0 = s.chars().next();
+            }
+            Ok(())
+        }
+    }
+    let mut first = FirstChar(None);
+    let _ = write!(first, "{expr}");
+    const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
+    first.0.is_some_and(|c| OPERATOR_CHARS.contains(c))
+}
+
 /// `FunctionArgOperator::Space` has no token of its own, so the name and the
 /// value are separated by a single space instead.
 fn fmt_named_function_arg(
@@ -10653,10 +10698,7 @@ impl Display for MySQLColumnPosition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MySQLColumnPosition::First => write!(f, "FIRST"),
-            MySQLColumnPosition::After(ident) => {
-                let column_name = &ident.value;
-                write!(f, "AFTER {column_name}")
-            }
+            MySQLColumnPosition::After(ident) => write!(f, "AFTER {ident}"),
         }
     }
 }

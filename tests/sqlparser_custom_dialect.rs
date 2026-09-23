@@ -22,6 +22,7 @@ use sqlparser::{
     dialect::Dialect,
     keywords::Keyword,
     parser::{Parser, ParserError},
+    test_utils::{expr_from_projection, only},
     tokenizer::Token,
 };
 
@@ -166,4 +167,120 @@ fn is_identifier_part(ch: char) -> bool {
         || ch.is_ascii_digit()
         || ch == '$'
         || ch == '_'
+}
+
+#[test]
+fn custom_dialect_lambda_keyword_syntax_without_arrow() {
+    // A dialect that gives `->` its own meaning can still support lambdas
+    // through the `LAMBDA` keyword spelling.
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn supports_lambda_keyword_syntax(&self) -> bool {
+            true
+        }
+    }
+
+    let dialect = MyDialect {};
+
+    // The `LAMBDA` spelling parses.
+    let sql = "SELECT transform(xs, lambda x : x + 1)";
+    assert_eq!(
+        sql,
+        &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
+    );
+
+    // `->` keeps whatever meaning the dialect gives it, rather than
+    // introducing a lambda parameter.
+    let sql = "SELECT a -> 'b'";
+    let ast = Parser::parse_sql(&dialect, sql).unwrap();
+    match &ast[0] {
+        Statement::Query(query) => {
+            let Expr::BinaryOp { op, .. } =
+                expr_from_projection(only(&query.body.as_select().unwrap().projection))
+            else {
+                panic!("expected `->` to stay a binary operator");
+            };
+            assert_eq!(&BinaryOperator::Arrow, op);
+        }
+        stmt => panic!("unexpected statement {stmt}"),
+    }
+}
+
+#[test]
+fn custom_dialect_lambda_keyword_defaults_to_arrow_support() {
+    // Dialects that opt into the `->` spelling get the `LAMBDA` spelling too,
+    // so the new capability does not change any existing dialect.
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn supports_lambda_functions(&self) -> bool {
+            true
+        }
+    }
+
+    let dialect = MyDialect {};
+    assert!(dialect.supports_lambda_keyword_syntax());
+    for sql in [
+        "SELECT transform(xs, lambda x : x + 1)",
+        "SELECT transform(xs, x -> x + 1)",
+    ] {
+        assert_eq!(
+            sql,
+            &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
+        );
+    }
+}
+
+#[test]
+fn custom_dialect_lambda_arrow_syntax_without_keyword() {
+    // Arrow lambdas stay on while the `LAMBDA` keyword spelling is off,
+    // as in engines like Spark and Snowflake.
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn supports_lambda_functions(&self) -> bool {
+            true
+        }
+
+        fn supports_lambda_keyword_syntax(&self) -> bool {
+            false
+        }
+    }
+
+    let dialect = MyDialect {};
+
+    let sql = "SELECT transform(xs, x -> x + 1)";
+    assert_eq!(
+        sql,
+        &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
+    );
+    assert!(Parser::parse_sql(&dialect, "SELECT transform(xs, lambda x : x + 1)").is_err());
 }

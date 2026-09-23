@@ -18,11 +18,18 @@
 [package]
 name = "fuzz"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 publish = false
 
+[package.metadata]
+cargo-fuzz = true
+
 [dependencies]
-honggfuzz = "0.5.54"
+libfuzzer-sys = "0.4"
+libsqlite3-sys = { version = "0.38", features = ["bundled"] }
+pg_query = "6.2"
+libduckdb-sys = { version = "1.10505.0", features = ["bundled", "json"] }
+serde_json = "1"
 sqlparser = { path = ".." }
 
 # Prevent this from interfering with workspaces
@@ -32,3 +39,34 @@ members = ["."]
 [[bin]]
 name = "fuzz_parse_sql"
 path = "fuzz_targets/fuzz_parse_sql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_parse_roundtrip"
+path = "fuzz_targets/fuzz_parse_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_sqlite_accepts"
+path = "fuzz_targets/fuzz_sqlite_accepts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_postgres_accepts"
+path = "fuzz_targets/fuzz_postgres_accepts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_duckdb_accepts"
+path = "fuzz_targets/fuzz_duckdb_accepts.rs"
+test = false
+doc = false
+bench = false

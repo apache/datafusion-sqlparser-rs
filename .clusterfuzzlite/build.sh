@@ -20,6 +20,8 @@ set -eu
 
 cd "$SRC/datafusion-sqlparser-rs"
 # the base image's RUSTUP_TOOLCHAIN (nightly) overrides the rust-toolchain pin, so we name none
+# CXXFLAGS in the image carries -stdlib=libc++ while the cc crate defaults to stdc++, so override.
+export CXXSTDLIB=c++
 cargo fuzz build -O --fuzz-dir fuzz
 
 targets=$(cargo fuzz list --fuzz-dir fuzz)

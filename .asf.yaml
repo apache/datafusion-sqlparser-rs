@@ -49,6 +49,7 @@ github:
           - "test (stable)"
           - "test (beta)"
           - "test (nightly)"
+          - "coverage"
           - "Release Audit Tool (RAT)"
   pull_requests:
     # enable updating head branches of pull requests

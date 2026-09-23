@@ -1,0 +1,1 @@
+SELECT col1.field, field FROM VALUES(named_struct('field', 1))

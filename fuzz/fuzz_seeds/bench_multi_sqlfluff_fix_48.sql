@@ -1,0 +1,1 @@
+SELECT amount_of_honey :: FLOAT FROM bear_inventory

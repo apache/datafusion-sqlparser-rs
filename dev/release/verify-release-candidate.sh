@@ -124,6 +124,12 @@ test_source_distribution() {
   cargo build
   cargo test --all-features
 
+  # Ensure fuzz seed corpus is not packaged into the release tarball
+  if [ -d "fuzz/fuzz_seeds" ]; then
+    echo "fuzz/fuzz_seeds should not be included in the release tarball"
+    exit 1
+  fi
+
   if ( find . -iname 'Cargo.toml' | xargs grep SNAPSHOT ); then
     echo "Cargo.toml version should not contain SNAPSHOT for releases"
     exit 1

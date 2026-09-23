@@ -672,6 +672,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_stages(&self) -> bool {
+        true
+    }
+
     /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     fn supports_select_wildcard_replace(&self) -> bool {
         true
@@ -1314,12 +1318,8 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
     let mut ident = String::new();
     while let Some(next_token) = parser.next_token_no_skip() {
         match &next_token.token {
-            Token::Whitespace(_) | Token::SemiColon => break,
-            Token::Period => {
-                parser.prev_token();
-                break;
-            }
-            Token::LParen | Token::RParen => {
+            Token::Whitespace(_) => break,
+            Token::Period | Token::Comma | Token::SemiColon | Token::LParen | Token::RParen => {
                 parser.prev_token();
                 break;
             }
@@ -1335,6 +1335,9 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Word(w) => ident.push_str(&w.to_string()),
             _ => return parser.expected_ref("stage name identifier", parser.peek_token_ref()),
         }
+    }
+    if ident.is_empty() || ident == "@" {
+        return parser.expected_ref("stage name identifier", parser.peek_token_ref());
     }
     Ok(Ident::new(ident))
 }

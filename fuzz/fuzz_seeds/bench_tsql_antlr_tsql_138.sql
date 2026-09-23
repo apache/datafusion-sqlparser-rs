@@ -1,0 +1,1 @@
+FETCH NEXT FROM Name_Cursor

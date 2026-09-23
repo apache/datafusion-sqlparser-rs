@@ -33,7 +33,7 @@ use core::fmt::Debug;
 
 use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::{Token, Tokenizer};
+use crate::tokenizer::{Span, Token, Tokenizer};
 use crate::{ast::*, parser::ParserOptions};
 
 #[cfg(test)]
@@ -133,6 +133,18 @@ impl TestedDialects {
         })
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
+    }
+
+    /// Parses statements while preserving source locations.
+    pub fn parse_sql_statements_with_locations(
+        &self,
+        sql: &str,
+    ) -> Result<Vec<Statement>, ParserError> {
+        self.one_of_identical_results(|dialect| {
+            self.new_parser(dialect)
+                .try_with_sql(sql)?
+                .parse_statements()
+        })
     }
 
     /// Ensures that `sql` parses as a single [Statement] for all tested
@@ -368,6 +380,14 @@ pub fn number(n: &str) -> Value {
 /// Creates a [Value::SingleQuotedString]
 pub fn single_quoted_string(s: impl Into<String>) -> Value {
     Value::SingleQuotedString(s.into())
+}
+
+/// Creates a parser error without a source location.
+pub fn parser_error(message: impl Into<String>) -> ParserError {
+    ParserError::ParserError {
+        message: message.into(),
+        span: Span::empty(),
+    }
 }
 
 pub fn table_alias(explicit: bool, name: impl Into<String>) -> Option<TableAlias> {

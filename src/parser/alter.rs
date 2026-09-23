@@ -38,9 +38,10 @@ impl Parser<'_> {
             return self.parse_mssql_alter_role();
         }
 
-        Err(ParserError::ParserError(
-            "ALTER ROLE is only support for PostgreSqlDialect, MsSqlDialect".into(),
-        ))
+        parser_err!(
+            "ALTER ROLE is only support for PostgreSqlDialect, MsSqlDialect",
+            self.get_current_token().span
+        )
     }
 
     /// Parse ALTER POLICY statement

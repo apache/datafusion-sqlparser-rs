@@ -137,7 +137,7 @@ fuzz_target!(|sql: &str| {
         return;
     }
     match Parser::parse_sql(&SQLiteDialect {}, sql) {
-        Ok(_) | Err(ParserError::RecursionLimitExceeded) => {}
+        Ok(_) | Err(ParserError::RecursionLimitExceeded { .. }) => {}
         Err(err) => {
             // SAFETY: sqlite3_libversion returns a static NUL terminated string.
             let version = unsafe { CStr::from_ptr(ffi::sqlite3_libversion()) };

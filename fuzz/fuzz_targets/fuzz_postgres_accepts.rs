@@ -29,7 +29,7 @@ fuzz_target!(|sql: &str| {
         return;
     };
     match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
-        Ok(_) | Err(ParserError::RecursionLimitExceeded) => {}
+        Ok(_) | Err(ParserError::RecursionLimitExceeded { .. }) => {}
         Err(err) => panic!(
             "PostgreSQL {} accepts SQL the PostgreSQL dialect rejects\n  sql: {sql:?}\n  error: {err}",
             parsed.protobuf.version

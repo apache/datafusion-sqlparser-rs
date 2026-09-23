@@ -26,10 +26,9 @@ use sqlparser::{
         Statement, TableAliasWithoutColumns, TableObject, Value, ValueWithSpan,
     },
     dialect::OracleDialect,
-    parser::ParserError,
     tokenizer::Span,
 };
-use test_utils::{all_dialects_where, expr_from_projection, number, TestedDialects};
+use test_utils::{all_dialects_where, expr_from_projection, number, parser_error, TestedDialects};
 
 mod test_utils;
 
@@ -215,27 +214,30 @@ fn parse_invalid_quote_delimited_strings() {
     // invalid quote delimiter
     for q in [' ', '\t', '\r', '\n'] {
         assert_eq!(
-            dialect.parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual")),
-            Err(ParserError::TokenizerError(
-                "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
-            )),
+            dialect
+                .parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual"))
+                .unwrap_err()
+                .to_string(),
+            "sql parser error: Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10",
             "with quote char {q:?}"
         );
     }
     // invalid eof after quote
     assert_eq!(
-        dialect.parse_sql_statements("SELECT Q'"),
-        Err(ParserError::TokenizerError(
-            "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
-        )),
+        dialect
+            .parse_sql_statements("SELECT Q'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10",
         "with EOF quote char"
     );
     // unterminated string
     assert_eq!(
-        dialect.parse_sql_statements("SELECT Q'|asdfa...."),
-        Err(ParserError::TokenizerError(
-            "Unterminated string literal at Line: 1, Column: 9".into()
-        )),
+        dialect
+            .parse_sql_statements("SELECT Q'|asdfa....")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Unterminated string literal at Line: 1, Column: 9",
         "with EOF quote char"
     );
 }
@@ -497,8 +499,8 @@ fn test_insert_without_alias() {
     let sql = "INSERT INTO t default SELECT 'a' FROM dual";
     assert_eq!(
         oracle_dialect.parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: SELECT, VALUES, or a subquery in the query body, found: default".into()
+        Err(parser_error(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: default"
         ))
     );
 

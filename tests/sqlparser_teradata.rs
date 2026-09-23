@@ -18,9 +18,8 @@
 //! Test SQL syntax, specific to [sqlparser::dialect::TeradataDialect].
 
 use sqlparser::dialect::{Dialect, GenericDialect, TeradataDialect};
-use sqlparser::parser::ParserError;
 use sqlparser::test_utils::all_dialects_where;
-use test_utils::TestedDialects;
+use test_utils::{parser_error, TestedDialects};
 
 mod test_utils;
 
@@ -120,8 +119,6 @@ fn parse_leading_comma_before_table_options() {
         all_dialects_where(|d| !d.supports_leading_comma_before_table_options());
     assert_eq!(
         unsupported_dialects.parse_sql_statements("CREATE TABLE foo, FALLBACK (id INT)"),
-        Err(ParserError::ParserError(
-            "Expected: end of statement, found: ,".to_string()
-        ))
+        Err(parser_error("Expected: end of statement, found: ,"))
     );
 }

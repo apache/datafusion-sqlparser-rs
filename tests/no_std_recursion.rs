@@ -28,7 +28,10 @@ fn with_recursion_limit_applies_without_default_features() {
         .unwrap()
         .parse_statements();
 
-    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+    assert!(matches!(
+        result,
+        Err(ParserError::RecursionLimitExceeded { .. })
+    ));
 }
 
 #[test]
@@ -42,7 +45,10 @@ fn default_recursion_limit_applies_without_default_features() {
 
     let result = Parser::parse_sql(&dialect, &sql);
 
-    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+    assert!(matches!(
+        result,
+        Err(ParserError::RecursionLimitExceeded { .. })
+    ));
 }
 
 #[test]
@@ -55,10 +61,8 @@ fn deeply_nested_not_returns_error_without_default_features() {
     // Deep nesting errors with a generic "expected end of statement" error
     // rather than `RecursionLimitExceeded`, instead of overflowing the stack.
     assert_eq!(
-        result,
-        Err(ParserError::ParserError(
-            "Expected: end of statement, found: NOT at Line: 1, Column: 211".to_string()
-        ))
+        result.unwrap_err().to_string(),
+        "sql parser error: Expected: end of statement, found: NOT at Line: 1, Column: 211"
     );
 }
 
@@ -91,7 +95,10 @@ fn deeply_nested_intervals_hit_recursion_limit_without_default_features() {
 
     let result = Parser::parse_sql(&dialect, &sql);
 
-    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+    assert!(matches!(
+        result,
+        Err(ParserError::RecursionLimitExceeded { .. })
+    ));
 }
 
 #[test]
@@ -105,7 +112,10 @@ fn nested_queries_hit_recursion_limit_without_default_features() {
 
     let result = Parser::parse_sql(&dialect, &sql);
 
-    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+    assert!(matches!(
+        result,
+        Err(ParserError::RecursionLimitExceeded { .. })
+    ));
 }
 
 #[test]
@@ -115,5 +125,8 @@ fn nested_table_factors_hit_recursion_limit_without_default_features() {
 
     let result = Parser::parse_sql(&dialect, &sql);
 
-    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+    assert!(matches!(
+        result,
+        Err(ParserError::RecursionLimitExceeded { .. })
+    ));
 }

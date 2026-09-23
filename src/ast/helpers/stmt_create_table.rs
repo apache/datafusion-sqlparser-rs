@@ -33,6 +33,7 @@ use crate::ast::{
 };
 
 use crate::parser::ParserError;
+use crate::tokenizer::Span;
 
 /// Builder for create table statement variant ([1]).
 ///
@@ -667,9 +668,10 @@ impl TryFrom<Statement> for CreateTableBuilder {
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
             Statement::CreateTable(create_table) => Ok(create_table.into()),
-            _ => Err(ParserError::ParserError(format!(
-                "Expected create table statement, but received: {stmt}"
-            ))),
+            _ => Err(ParserError::ParserError {
+                message: format!("Expected create table statement, but received: {stmt}"),
+                span: Span::empty(),
+            }),
         }
     }
 }
@@ -758,6 +760,7 @@ mod tests {
     use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
     use crate::ast::{Ident, ObjectName, Statement};
     use crate::parser::ParserError;
+    use crate::tokenizer::Span;
 
     #[test]
     pub fn test_from_valid_statement() {
@@ -779,9 +782,10 @@ mod tests {
 
         assert_eq!(
             CreateTableBuilder::try_from(stmt).unwrap_err(),
-            ParserError::ParserError(
-                "Expected create table statement, but received: COMMIT".to_owned()
-            )
+            ParserError::ParserError {
+                message: "Expected create table statement, but received: COMMIT".to_owned(),
+                span: Span::empty(),
+            }
         );
     }
 }

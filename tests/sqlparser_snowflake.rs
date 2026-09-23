@@ -449,14 +449,14 @@ fn test_snowflake_create_global_table() {
 fn test_snowflake_create_invalid_local_global_table() {
     assert_eq!(
         snowflake().parse_sql_statements("CREATE LOCAL GLOBAL TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
+        Err(parser_error(
             "Expected: an SQL statement, found: LOCAL".to_string()
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE GLOBAL LOCAL TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
+        Err(parser_error(
             "Expected: an SQL statement, found: GLOBAL".to_string()
         ))
     );
@@ -466,14 +466,14 @@ fn test_snowflake_create_invalid_local_global_table() {
 fn test_snowflake_create_invalid_temporal_table() {
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TEMPORARY TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
+        Err(parser_error(
             "Expected: an object type after CREATE, found: TEMPORARY".to_string()
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TRANSIENT TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
+        Err(parser_error(
             "Expected: an object type after CREATE, found: TRANSIENT".to_string()
         ))
     );
@@ -483,7 +483,7 @@ fn test_snowflake_create_invalid_temporal_table() {
 fn test_snowflake_create_invalid_temporal_file_format() {
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMPORARY VOLATILE FILE FORMAT my_fmt"),
-        Err(ParserError::ParserError(
+        Err(parser_error(
             "Expected: an object type after CREATE, found: FILE".to_string()
         ))
     );
@@ -1031,7 +1031,7 @@ fn test_snowflake_create_iceberg_table() {
 fn test_snowflake_create_iceberg_table_without_location() {
     let res = snowflake().parse_sql_statements("CREATE ICEBERG TABLE my_table (a INT)");
     assert_eq!(
-        ParserError::ParserError("BASE_LOCATION is required for ICEBERG tables".to_string()),
+        parser_error("BASE_LOCATION is required for ICEBERG tables".to_string()),
         res.unwrap_err()
     );
 }
@@ -1068,9 +1068,7 @@ fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
     assert_eq!(
         snowflake_and_generic()
             .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT 'hello, world' AS SELECT 1"),
-        Err(ParserError::ParserError(
-            "Expected: =, found: 'hello, world'".to_string()
-        ))
+        Err(parser_error("Expected: =, found: 'hello, world'"))
     );
 }
 
@@ -1270,7 +1268,7 @@ fn test_single_table_in_parenthesis_with_alias() {
 
     let res = snowflake().parse_sql_statements("SELECT * FROM (a b) c");
     assert_eq!(
-        ParserError::ParserError("duplicate alias b".to_string()),
+        parser_error("duplicate alias b".to_string()),
         res.unwrap_err()
     );
 }
@@ -1778,13 +1776,13 @@ fn parse_snowflake_declare_cursor() {
 
     let error_sql = "DECLARE c1 CURSOR SELECT id FROM invoices";
     assert_eq!(
-        ParserError::ParserError("Expected: FOR, found: SELECT".to_owned()),
+        parser_error("Expected: FOR, found: SELECT".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE c1 CURSOR res";
     assert_eq!(
-        ParserError::ParserError("Expected: FOR, found: res".to_owned()),
+        parser_error("Expected: FOR, found: res".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1832,13 +1830,13 @@ fn parse_snowflake_declare_result_set() {
 
     let error_sql = "DECLARE res RESULTSET DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        parser_error("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE res RESULTSET :=";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        parser_error("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1924,19 +1922,19 @@ fn parse_snowflake_declare_variable() {
 
     let error_sql = "DECLARE profit INT 2";
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: 2".to_owned()),
+        parser_error("Expected: end of statement, found: 2".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE profit INT DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        parser_error("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE profit DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        parser_error("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1971,7 +1969,7 @@ fn parse_snowflake_declare_multi_statements() {
 
     let error_sql = "DECLARE profit DEFAULT 42 c1 CURSOR FOR res;";
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: c1".to_owned()),
+        parser_error("Expected: end of statement, found: c1".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2892,7 +2890,7 @@ fn test_snowflake_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        parser_error("Expected: ), found: 'a'".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -3376,7 +3374,7 @@ fn parse_use() {
     for sql in &invalid_cases {
         assert_eq!(
             snowflake().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            parser_error("Expected: identifier, found: EOF".to_string()),
         );
     }
 
@@ -3457,7 +3455,10 @@ fn test_parentheses_overflow() {
     let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
     let parsed =
         snowflake_with_recursion_limit(max_nesting_level).parse_sql_statements(sql.as_str());
-    assert_eq!(parsed.err(), Some(ParserError::RecursionLimitExceeded));
+    assert!(matches!(
+        parsed,
+        Err(ParserError::RecursionLimitExceeded { .. })
+    ));
 }
 
 #[test]
@@ -4108,7 +4109,7 @@ fn test_sql_keywords_as_select_item_ident() {
     ] {
         assert_eq!(
             snowflake().parse_sql_statements(&format!("SELECT 1, {kw}")),
-            Err(ParserError::ParserError(err.to_string()))
+            Err(parser_error(err.to_string()))
         );
     }
 }
@@ -4143,7 +4144,7 @@ fn test_sql_keywords_as_select_item_aliases() {
     ] {
         assert_eq!(
             snowflake().parse_sql_statements(&format!("SELECT 1 {kw}")),
-            Err(ParserError::ParserError(err.to_string()))
+            Err(parser_error(err.to_string()))
         );
     }
 
@@ -4240,7 +4241,7 @@ fn test_sql_keywords_as_table_aliases() {
     ] {
         assert_eq!(
             snowflake().parse_sql_statements(&format!("SELECT * FROM tbl {kw}")),
-            Err(ParserError::ParserError(err.to_string()))
+            Err(parser_error(err.to_string()))
         );
     }
 
@@ -4271,9 +4272,7 @@ fn test_sql_keywords_as_table_factor() {
     // ORDER is reserved
     assert_eq!(
         snowflake().parse_sql_statements("SELECT * FROM tbl, order"),
-        Err(ParserError::ParserError(
-            "Expected: end of statement, found: order".to_string()
-        ))
+        Err(parser_error("Expected: end of statement, found: order"))
     );
 }
 
@@ -4834,15 +4833,15 @@ fn test_snowflake_identifier_function() {
         snowflake().parse_sql_statements(
             "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
         ),
-        Err(ParserError::ParserError(
-            "Expected: column name or constraint definition, found: 'sc1'".to_string()
+        Err(parser_error(
+            "Expected: column name or constraint definition, found: 'sc1'"
         ))
     );
     assert_eq!(
         snowflake()
             .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)"),
-        Err(ParserError::ParserError(
-            "Expected: column name or constraint definition, found: 'tbl'".to_string()
+        Err(parser_error(
+            "Expected: column name or constraint definition, found: 'tbl'"
         ))
     );
 }
@@ -4888,9 +4887,7 @@ fn test_create_database() {
     for sql in ["CREATE DATABASE", "CREATE DATABASE my_db CLONE"] {
         assert_eq!(
             snowflake().parse_sql_statements(sql),
-            Err(ParserError::ParserError(
-                "Expected: identifier, found: EOF".to_string()
-            )),
+            Err(parser_error("Expected: identifier, found: EOF")),
             "{sql}"
         );
     }
@@ -5038,8 +5035,8 @@ fn test_structured_object_type() {
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TABLE t (o OBJECT(city VARCHAR)"),
-        Err(ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: EOF".to_string()
+        Err(parser_error(
+            "Expected: ',' or ')' after column definition, found: EOF"
         ))
     );
 
@@ -5080,24 +5077,35 @@ fn test_stage_name_delimiters() {
         snowflake()
             .parse_sql_statements("SELECT * FROM @")
             .unwrap_err(),
-        ParserError::ParserError("Expected: stage name identifier, found: EOF".to_string()),
+        parser_error("Expected: stage name identifier, found: EOF".to_string()),
     );
     assert_eq!(
         snowflake()
             .parse_sql_statements("SELECT * FROM @;")
             .unwrap_err(),
-        ParserError::ParserError("Expected: stage name identifier, found: ;".to_string()),
+        parser_error("Expected: stage name identifier, found: ;".to_string()),
     );
     assert_eq!(
         snowflake()
             .parse_sql_statements("SELECT * FROM @, item")
             .unwrap_err(),
-        ParserError::ParserError("Expected: stage name identifier, found: ,".to_string()),
+        parser_error("Expected: stage name identifier, found: ,".to_string()),
     );
     assert_eq!(
         snowflake()
             .parse_sql_statements("SELECT * FROM @.stage")
             .unwrap_err(),
-        ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
+        parser_error("Expected: stage name identifier, found: .".to_string()),
+    );
+}
+
+#[test]
+fn parse_iceberg_table_without_base_location_reports_location() {
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements_with_locations("CREATE ICEBERG TABLE t (a INT)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: BASE_LOCATION is required for ICEBERG tables at Line: 1, Column: 31"
     );
 }

@@ -30,7 +30,7 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{AnsiDialect, GenericDialect, SQLiteDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::parser::ParserOptions;
 use sqlparser::tokenizer::Token;
 
 #[test]
@@ -363,7 +363,7 @@ fn test_parse_create_table_on_conflict_col_err() {
         .unwrap_err();
     assert_eq!(
         err,
-        ParserError::ParserError(
+        parser_error(
             "Expected: one of ROLLBACK or ABORT or FAIL or IGNORE or REPLACE, found: BOH"
                 .to_string()
         )
@@ -625,9 +625,7 @@ fn test_regexp_operator() {
     for sql in ["SELECT 1 REGEXP", "SELECT 1 MATCH"] {
         assert_eq!(
             sqlite().parse_sql_statements(sql),
-            Err(ParserError::ParserError(
-                "Expected: an expression, found: EOF".to_string()
-            ))
+            Err(parser_error("Expected: an expression, found: EOF"))
         );
     }
 }
@@ -649,9 +647,7 @@ fn test_glob_operator() {
     // Should return an error, not panic
     assert_eq!(
         sqlite().parse_sql_statements("SELECT 1 GLOB"),
-        Err(ParserError::ParserError(
-            "Expected: an expression, found: EOF".to_string()
-        ))
+        Err(parser_error("Expected: an expression, found: EOF"))
     );
 }
 
@@ -990,7 +986,7 @@ fn parse_update_set_double_eq() {
     // `=` still works
     sqlite().verified_stmt("UPDATE t SET a = 1");
     // Other dialects reject `==` in SET
-    let res = ParserError::ParserError("Expected: =, found: ==".to_string());
+    let res = parser_error("Expected: =, found: ==");
     assert_eq!(
         all_dialects_except(|d| d.supports_double_eq_assignment())
             .parse_sql_statements("UPDATE t SET a == 1")
@@ -1007,18 +1003,16 @@ fn test_non_bmp_identifiers() {
     sqlite().verified_stmt("SELECT 𒀀");
     sqlite().verified_stmt("SELECT 𒀀𒀁");
     // U+DFFFE is not alphabetic, so GenericDialect rejects it as an identifier.
+    let err =
+        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "SELECT \u{DFFFE}").unwrap_err();
     assert_eq!(
-        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "SELECT \u{DFFFE}"),
-        Err(ParserError::ParserError(
-            "Expected: an expression, found: \u{DFFFE} at Line: 1, Column: 8".to_string()
-        ))
+        err.to_string(),
+        "sql parser error: Expected: an expression, found: \u{DFFFE} at Line: 1, Column: 8"
     );
     // SQLite rejects U+007F as an unrecognized token.
     assert_eq!(
         sqlite().parse_sql_statements("SELECT \u{007f}"),
-        Err(ParserError::ParserError(
-            "Expected: an expression, found: \u{7f}".to_string()
-        ))
+        Err(parser_error("Expected: an expression, found: \u{7f}"))
     );
 }
 
@@ -1030,12 +1024,11 @@ fn parse_create_table_string_column_names() {
         r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL, 'name' TEXT NOT NULL, 'zip' INT UNSIGNED NULL)"#,
     );
     // Generic dialect does not support this
+    let err = sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')")
+        .unwrap_err();
     assert_eq!(
-        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')"),
-        Err(ParserError::ParserError(
-            "Expected: column name or constraint definition, found: 'a' at Line: 1, Column: 17"
-                .to_string()
-        ))
+        err.to_string(),
+        "sql parser error: Expected: column name or constraint definition, found: 'a' at Line: 1, Column: 17"
     );
 }
 
@@ -1050,7 +1043,7 @@ fn test_cast_empty_type() {
         TestedDialects::new(vec![Box::new(GenericDialect {})])
             .parse_sql_statements("SELECT CAST(a AS)")
             .unwrap_err(),
-        ParserError::ParserError("Expected: a data type name, found: )".to_string())
+        parser_error("Expected: a data type name, found: )")
     );
 }
 
@@ -1136,9 +1129,7 @@ fn parse_parenthesized_table_factor() {
     assert_eq!(
         all_dialects_where(|d| !d.supports_parens_around_table_factor())
             .parse_sql_statements("SELECT * FROM (t)"),
-        Err(ParserError::ParserError(
-            "Expected: joined table, found: )".to_string()
-        ))
+        Err(parser_error("Expected: joined table, found: )"))
     );
 }
 

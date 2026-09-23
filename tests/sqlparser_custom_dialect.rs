@@ -152,11 +152,10 @@ fn test_map_syntax_not_support_default() -> Result<(), ParserError> {
 
     let dialect = MyDialect {};
     let sql = "SELECT MAP {1: 2}";
+    let err = Parser::parse_sql(&dialect, sql).unwrap_err();
     assert_eq!(
-        Parser::parse_sql(&dialect, sql),
-        Err(ParserError::ParserError(
-            "Expected: end of statement, found: { at Line: 1, Column: 12".to_string()
-        ))
+        err.to_string(),
+        "sql parser error: Expected: end of statement, found: { at Line: 1, Column: 12"
     );
     Ok(())
 }
@@ -198,11 +197,10 @@ fn custom_dialect_supports_table_partitions() -> Result<(), ParserError> {
         }
     }
 
+    let err = Parser::parse_sql(&WithoutPartitions {}, sql).unwrap_err();
     assert_eq!(
-        Parser::parse_sql(&WithoutPartitions {}, sql),
-        Err(ParserError::ParserError(
-            "Expected: end of statement, found: PARTITION at Line: 1, Column: 25".to_string()
-        ))
+        err.to_string(),
+        "sql parser error: Expected: end of statement, found: PARTITION at Line: 1, Column: 25"
     );
     Ok(())
 }
@@ -332,10 +330,9 @@ fn custom_dialect_lambda_arrow_syntax_without_keyword() {
         sql,
         &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
     );
+    let err = Parser::parse_sql(&dialect, "SELECT transform(xs, lambda x : x + 1)").unwrap_err();
     assert_eq!(
-        Parser::parse_sql(&dialect, "SELECT transform(xs, lambda x : x + 1)"),
-        Err(ParserError::ParserError(
-            "Expected: ), found: x at Line: 1, Column: 29".to_string()
-        ))
+        err.to_string(),
+        "sql parser error: Expected: ), found: x at Line: 1, Column: 29"
     );
 }

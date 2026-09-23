@@ -26,8 +26,8 @@ use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Span;
 use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[macro_use]
@@ -539,8 +539,8 @@ fn parse_show_extended_full() {
     ] {
         assert_eq!(
             mysql_and_generic().parse_sql_statements(sql),
-            Err(ParserError::ParserError(
-                "EXTENDED/FULL are not supported with this type of SHOW query".to_string()
+            Err(parser_error(
+                "EXTENDED/FULL are not supported with this type of SHOW query"
             ))
         );
     }
@@ -1365,7 +1365,7 @@ fn parse_create_table_both_options_and_as_query() {
         r"CREATE TABLE foo (id INT(11)) ENGINE = InnoDB AS SELECT 1 DEFAULT CHARSET = utf8mb3";
     assert!(matches!(
         mysql_and_generic().parse_sql_statements(sql),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::ParserError { .. })
     ));
 }
 
@@ -1665,17 +1665,19 @@ fn parse_unterminated_escape() {
     let sql = r"SELECT 'I\'m not fine\'";
     assert_eq!(
         mysql().parse_sql_statements(sql),
-        Err(ParserError::TokenizerError(
-            "Unterminated string literal at Line: 1, Column: 8".to_string()
-        ))
+        Err(ParserError::TokenizerError {
+            message: "Unterminated string literal".to_string(),
+            span: Span::new(Location::new(1, 8), Location::new(1, 8)),
+        })
     );
 
     let sql = r"SELECT 'I\\'m not fine'";
     assert_eq!(
         mysql().parse_sql_statements(sql),
-        Err(ParserError::TokenizerError(
-            "Unterminated string literal at Line: 1, Column: 23".to_string()
-        ))
+        Err(ParserError::TokenizerError {
+            message: "Unterminated string literal".to_string(),
+            span: Span::new(Location::new(1, 23), Location::new(1, 23)),
+        })
     );
 }
 
@@ -1948,15 +1950,15 @@ fn parse_zerofill() {
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT(10) UNSIGNED ZEROFILL)");
     assert_eq!(
         mysql_and_generic().parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)"),
-        Err(ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        Err(parser_error(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL"
         ))
     );
     assert_eq!(
         all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
             .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)"),
-        Err(ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        Err(parser_error(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL"
         ))
     );
 }
@@ -2250,7 +2252,7 @@ fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias` ()";
     assert!(matches!(
         mysql_and_generic().parse_sql_statements(sql),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::ParserError { .. })
     ));
 
     let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
@@ -3637,8 +3639,8 @@ fn parse_create_table_unallow_constraint_then_index() {
     let sql = "CREATE TABLE foo (bar INT, CONSTRAINT constr INDEX index (bar))";
     assert_eq!(
         mysql_and_generic().parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE, found: INDEX".to_string()
+        Err(parser_error(
+            "Expected: PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE, found: INDEX"
         ))
     );
 
@@ -3808,7 +3810,7 @@ fn parse_div_infix_propagates_parse_error() {
     let err = mysql()
         .parse_sql_statements("SELECT 5 DIV")
         .expect_err("expected an error");
-    assert_matches!(err, ParserError::ParserError(_));
+    assert_matches!(err, ParserError::ParserError { .. });
 }
 
 #[test]
@@ -4764,7 +4766,7 @@ fn parse_select_modifiers_errors() {
     ] {
         assert_eq!(
             mysql().parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_string()))
+            Err(parser_error(err))
         );
     }
 }
@@ -5029,7 +5031,7 @@ fn parse_create_database_with_charset_errors() {
     ] {
         assert_eq!(
             mysql_and_generic().parse_sql_statements(sql),
-            Err(ParserError::ParserError(missing.to_string()))
+            Err(parser_error(missing))
         );
     }
 }
@@ -5074,7 +5076,7 @@ fn parse_table_partition_selection() {
     let err = mysql_and_generic()
         .parse_sql_statements("SELECT * FROM employees PARTITION")
         .expect_err("expected an error");
-    assert_matches!(err, ParserError::ParserError(_));
+    assert_matches!(err, ParserError::ParserError { .. });
 }
 
 #[test]
@@ -5191,7 +5193,7 @@ fn parse_alter_table_column_position() {
     ] {
         assert_eq!(
             mysql_and_generic().parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_string())),
+            Err(parser_error(err)),
             "{sql}"
         );
     }
@@ -5201,4 +5203,15 @@ fn parse_alter_table_column_position() {
 fn parse_create_table_engine_name_quoting() {
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `InnoDB`");
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = InnoDB");
+}
+
+#[test]
+fn parse_alter_role_unsupported_reports_location() {
+    assert_eq!(
+        mysql()
+            .parse_sql_statements_with_locations("ALTER ROLE r")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: ALTER ROLE is only support for PostgreSqlDialect, MsSqlDialect at Line: 1, Column: 7"
+    );
 }

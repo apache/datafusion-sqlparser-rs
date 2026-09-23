@@ -306,7 +306,7 @@ fn parse_create_sequence() {
 
     assert!(matches!(
         pg().parse_sql_statements("CREATE SEQUENCE foo INCREMENT 1 NO MINVALUE NO"),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::ParserError { .. })
     ));
 }
 
@@ -662,7 +662,7 @@ fn parse_exclude_constraint() {
     ] {
         let result = dialects.parse_sql_statements(sql);
         assert_eq!(
-            ParserError::ParserError(expected_message.to_string()),
+            parser_error(expected_message.to_string()),
             result.unwrap_err()
         );
     }
@@ -672,8 +672,8 @@ fn parse_exclude_constraint() {
     assert_eq!(
         all_dialects_where(|d| !d.supports_exclude_constraint())
             .parse_sql_statements("CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))"),
-        Err(ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: gist".to_string()
+        Err(parser_error(
+            "Expected: ',' or ')' after column definition, found: gist"
         ))
     );
 }
@@ -1186,7 +1186,7 @@ fn parse_alter_table_alter_column_add_generated() {
         "ALTER TABLE t ALTER COLUMN id ADD GENERATED ( INCREMENT 1 MINVALUE 1 )",
     );
     assert_eq!(
-        ParserError::ParserError("Expected: AS, found: (".to_string()),
+        parser_error("Expected: AS, found: (".to_string()),
         res.unwrap_err()
     );
 
@@ -1194,14 +1194,14 @@ fn parse_alter_table_alter_column_add_generated() {
         "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( INCREMENT )",
     );
     assert_eq!(
-        ParserError::ParserError("Expected: a value, found: )".to_string()),
+        parser_error("Expected: a value, found: )".to_string()),
         res.unwrap_err()
     );
 
     let res =
         pg().parse_sql_statements("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY (");
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: EOF".to_string()),
+        parser_error("Expected: ), found: EOF".to_string()),
         res.unwrap_err()
     );
 }
@@ -1310,13 +1310,15 @@ fn parse_alter_table_owner_to() {
 
     let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO CREATE FOO");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: FOO".to_string()),
+        parser_error("Expected: end of statement, found: FOO".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO 4");
     assert_eq!(
-        ParserError::ParserError("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: 4".to_string()),
+        parser_error(
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO, found: 4"
+        ),
         res.unwrap_err()
     );
 }
@@ -1368,25 +1370,25 @@ fn parse_create_table_if_not_exists() {
 fn parse_bad_if_not_exists() {
     let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
+        parser_error("Expected: end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
+        parser_error("Expected: end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: uk_cities".to_string()),
+        parser_error("Expected: end of statement, found: uk_cities".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: NOT".to_string()),
+        parser_error("Expected: end of statement, found: NOT".to_string()),
         res.unwrap_err()
     );
 }
@@ -1678,7 +1680,7 @@ fn parse_copy_from() {
 fn parse_copy_from_error() {
     let res = pg().parse_sql_statements("COPY (SELECT 42 AS a, 'hello' AS b) FROM 'query.csv'");
     assert_eq!(
-        ParserError::ParserError("COPY ... FROM does not support query as a source".to_string()),
+        parser_error("COPY ... FROM does not support query as a source".to_string()),
         res.unwrap_err()
     );
 }
@@ -1999,21 +2001,19 @@ fn parse_set() {
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET"),
-        Err(ParserError::ParserError(
-            "Expected: identifier, found: EOF".to_string()
-        )),
+        Err(parser_error("Expected: identifier, found: EOF".to_string())),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a b"),
-        Err(ParserError::ParserError(
+        Err(parser_error(
             "Expected: equals sign or TO, found: b".to_string()
         )),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a ="),
-        Err(ParserError::ParserError(
+        Err(parser_error(
             "Expected: variable value, found: EOF".to_string()
         )),
     );
@@ -3377,7 +3377,7 @@ fn parse_create_table_with_inherits() {
 fn parse_create_table_with_empty_inherits_fails() {
     assert!(matches!(
         pg().parse_sql_statements("CREATE TABLE child_table (child_column INT) INHERITS ()"),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::ParserError { .. })
     ));
 }
 
@@ -4444,7 +4444,7 @@ fn parse_custom_operator() {
 fn parse_operator_empty_parens_rejected() {
     let result = pg_and_generic().parse_sql_statements("SELECT a OPERATOR() b");
     assert_eq!(
-        ParserError::ParserError("Expected: operator name, found: )".to_string()),
+        parser_error("Expected: operator name, found: )".to_string()),
         result.unwrap_err()
     );
 }
@@ -4539,7 +4539,7 @@ fn parse_create_role() {
         let sql = format!("CREATE ROLE abc {negatable_kw} NO{negatable_kw}");
         assert_eq!(
             pg().parse_sql_statements(&sql),
-            Err(ParserError::ParserError(format!(
+            Err(parser_error(format!(
                 "Found multiple {negatable_kw} or NO{negatable_kw}"
             )))
         );
@@ -5134,7 +5134,7 @@ $$"#;
     let incorrect_sql = "CREATE FUNCTION add(function(struct<a,b> int64), b INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
     assert_eq!(
         pg().parse_sql_statements(incorrect_sql).unwrap_err(),
-        ParserError::ParserError("Expected: type modifiers, found: <".to_string())
+        parser_error("Expected: type modifiers, found: <")
     );
 }
 
@@ -5273,9 +5273,7 @@ fn parse_incorrect_create_function_parallel() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";
     assert_eq!(
         pg().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError(
-            "Expected: one of UNSAFE | RESTRICTED | SAFE, found: BLAH".to_string()
-        )
+        parser_error("Expected: one of UNSAFE | RESTRICTED | SAFE, found: BLAH")
     );
 }
 
@@ -5576,13 +5574,13 @@ fn parse_drop_procedure() {
 
     let res = pg().parse_sql_statements("DROP PROCEDURE testproc DROP");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: DROP".to_string()),
+        parser_error("Expected: end of statement, found: DROP".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("DROP PROCEDURE testproc SET NULL");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: SET".to_string()),
+        parser_error("Expected: end of statement, found: SET".to_string()),
         res.unwrap_err()
     );
 }
@@ -5677,23 +5675,28 @@ fn parse_dollar_quoted_string() {
 
 #[test]
 fn parse_incorrect_dollar_quoted_string() {
-    for (sql, expected) in [
+    for (sql, expected, location) in [
         (
             "SELECT $x$hello$$",
-            "Unterminated dollar-quoted, expected $ at Line: 1, Column: 18",
+            "Unterminated dollar-quoted, expected $",
+            (1, 18),
         ),
         (
             "SELECT $hello$$",
-            "Unterminated dollar-quoted, expected $ at Line: 1, Column: 16",
+            "Unterminated dollar-quoted, expected $",
+            (1, 16),
         ),
-        (
-            "SELECT $$$",
-            "Unterminated dollar-quoted string at Line: 1, Column: 11",
-        ),
+        ("SELECT $$$", "Unterminated dollar-quoted string", (1, 11)),
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err(),
-            ParserError::TokenizerError(expected.to_string())
+            ParserError::TokenizerError {
+                message: expected.to_string(),
+                span: Span::new(
+                    Location::new(location.0, location.1),
+                    Location::new(location.0, location.1),
+                ),
+            }
         );
     }
 }
@@ -6061,7 +6064,7 @@ fn parse_create_unlogged_table() {
 
     let res = pg().parse_sql_statements("CREATE UNLOGGED VIEW v AS SELECT 1");
     assert_eq!(
-        ParserError::ParserError("Expected: an object type after CREATE, found: UNLOGGED".into()),
+        parser_error("Expected: an object type after CREATE, found: UNLOGGED"),
         res.unwrap_err()
     );
 }
@@ -7814,7 +7817,7 @@ fn parse_create_operator() {
         assert_eq!(
             pg().parse_sql_statements(&format!("CREATE OPERATOR + (FUNCTION = f, {field})"))
                 .unwrap_err(),
-            ParserError::ParserError(format!(
+            parser_error(format!(
                 "Duplicate or unexpected keyword {keyword} in CREATE OPERATOR"
             ))
         );
@@ -7824,29 +7827,23 @@ fn parse_create_operator() {
     assert_eq!(
         pg().parse_sql_statements("CREATE OPERATOR + (LEFTARG = INT4)")
             .unwrap_err(),
-        ParserError::ParserError("CREATE OPERATOR requires FUNCTION parameter".to_string())
+        parser_error("CREATE OPERATOR requires FUNCTION parameter")
     );
 
     // Test empty parameter list error
     assert_eq!(
         pg().parse_sql_statements("CREATE OPERATOR + ()").unwrap_err(),
-        ParserError::ParserError(
-            "Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: )".to_string()
-        )
+        parser_error("Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: )")
     );
 
     // Test nested empty parentheses error
     assert_eq!(
         pg().parse_sql_statements("CREATE OPERATOR > (()").unwrap_err(),
-        ParserError::ParserError(
-            "Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: (".to_string()
-        )
+        parser_error("Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: (")
     );
     assert_eq!(
         pg().parse_sql_statements("CREATE OPERATOR > ())").unwrap_err(),
-        ParserError::ParserError(
-            "Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: )".to_string()
-        )
+        parser_error("Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: )")
     );
 }
 
@@ -7939,14 +7936,14 @@ fn parse_drop_operator() {
     let sql = "DROP OPERATOR (INTEGER, INTEGER)";
     assert_eq!(
         pg().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: (, found: INTEGER".to_string())
+        parser_error("Expected: (, found: INTEGER")
     );
 
     // Test error: DROP OPERATOR IF EXISTS with no operators
     let sql = "DROP OPERATOR IF EXISTS (INTEGER, INTEGER)";
     assert_eq!(
         pg().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: (, found: INTEGER".to_string())
+        parser_error("Expected: (, found: INTEGER")
     );
 }
 
@@ -8357,7 +8354,7 @@ fn parse_alter_operator_family() {
         // OWNER TO with invalid owner
         (
             "ALTER OPERATOR FAMILY my_ops USING btree OWNER TO 123invalid",
-            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: 123"
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO, found: 123"
         ),
         // SET SCHEMA with invalid schema name
         ("ALTER OPERATOR FAMILY my_ops USING btree SET SCHEMA 123invalid", "Expected: identifier, found: 123"),
@@ -8398,7 +8395,7 @@ fn parse_alter_operator_family() {
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(expected.to_string())
+            parser_error(expected)
         );
     }
 
@@ -8408,7 +8405,7 @@ fn parse_alter_operator_family() {
             "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 () func"
         )
         .unwrap_err(),
-        ParserError::ParserError("Expected: identifier, found: )".to_string())
+        parser_error("Expected: identifier, found: )")
     );
 
     for (sql, expected) in [
@@ -8430,7 +8427,7 @@ fn parse_alter_operator_family() {
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(expected.to_string())
+            parser_error(expected)
         );
     }
 }
@@ -8521,7 +8518,7 @@ fn parse_alter_operator_class() {
         // Missing owner for OWNER TO
         (
             "ALTER OPERATOR CLASS int_ops USING btree OWNER TO",
-            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF"
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO, found: EOF"
         ),
         // Missing schema for SET SCHEMA
         ("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA", "Expected: identifier, found: EOF"),
@@ -8530,7 +8527,7 @@ fn parse_alter_operator_class() {
         // Invalid owner
         (
             "ALTER OPERATOR CLASS int_ops USING btree OWNER TO 123invalid",
-            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: 123"
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO, found: 123"
         ),
         // Invalid schema name
         ("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA 123invalid", "Expected: identifier, found: 123"),
@@ -8561,7 +8558,7 @@ fn parse_alter_operator_class() {
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(expected.to_string())
+            parser_error(expected)
         );
     }
 }
@@ -8792,7 +8789,7 @@ fn parse_alter_function_and_aggregate() {
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(expected.to_string())
+            parser_error(expected)
         );
     }
 }
@@ -8817,16 +8814,14 @@ fn parse_create_text_search() {
         pg()
             .parse_sql_statements(r#"CREATE TEXT SEARCH "DICTIONARY" d (template = simple)"#)
             .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: one of DICTIONARY or CONFIGURATION or TEMPLATE or PARSER, found: \"DICTIONARY\"".to_string()
-        )
+        parser_error("Expected: one of DICTIONARY or CONFIGURATION or TEMPLATE or PARSER, found: \"DICTIONARY\"")
     );
 
     // CREATE options are key-value pairs in PostgreSQL syntax.
     assert_eq!(
         pg().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
             .unwrap_err(),
-        ParserError::ParserError("Expected: =, found: )".to_string())
+        parser_error("Expected: =, found: )")
     );
 }
 
@@ -8915,14 +8910,14 @@ fn parse_drop_operator_family() {
     let sql = "DROP OPERATOR FAMILY USING btree";
     assert_eq!(
         pg_and_generic().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: USING, found: btree".to_string())
+        parser_error("Expected: USING, found: btree")
     );
 
     // Test error: DROP OPERATOR FAMILY IF EXISTS with no names
     let sql = "DROP OPERATOR FAMILY IF EXISTS USING btree";
     assert_eq!(
         pg_and_generic().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: USING, found: btree".to_string())
+        parser_error("Expected: USING, found: btree")
     );
 }
 
@@ -8984,14 +8979,14 @@ fn parse_drop_operator_class() {
     let sql = "DROP OPERATOR CLASS USING btree";
     assert_eq!(
         pg_and_generic().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: USING, found: btree".to_string())
+        parser_error("Expected: USING, found: btree")
     );
 
     // Test error: DROP OPERATOR CLASS IF EXISTS with no names
     let sql = "DROP OPERATOR CLASS IF EXISTS USING btree";
     assert_eq!(
         pg_and_generic().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: USING, found: btree".to_string())
+        parser_error("Expected: USING, found: btree")
     );
 }
 
@@ -9251,7 +9246,7 @@ fn parse_create_operator_class() {
             "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 cas_cmp(()"
         )
         .unwrap_err(),
-        ParserError::ParserError("Expected: a data type name, found: (".to_string())
+        parser_error("Expected: a data type name, found: (")
     );
 }
 
@@ -9485,7 +9480,7 @@ fn parse_create_table_partition_of_errors() {
     ] {
         assert_eq!(
             pg_and_generic().parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_string())),
+            Err(parser_error(err)),
             "{sql}"
         );
     }
@@ -9614,7 +9609,7 @@ fn parse_create_foreign_table_requires_column_list() {
     // Without the parens Display would invent a `()` the input never had.
     assert!(matches!(
         pg_and_generic().parse_sql_statements("CREATE FOREIGN TABLE ft SERVER s"),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::ParserError { .. })
     ));
 
     // An empty list is still legal PostgreSQL.
@@ -9648,7 +9643,7 @@ fn parse_create_foreign_table_rejects_modifiers() {
     assert!(matches!(
         pg_and_generic()
             .parse_sql_statements("CREATE OR REPLACE FOREIGN TABLE ft (a INT) SERVER s"),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::ParserError { .. })
     ));
 }
 
@@ -9928,9 +9923,7 @@ fn parse_merge_do_nothing() {
         pg_and_generic().parse_sql_statements(
             "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DO UPDATE"
         ),
-        Err(ParserError::ParserError(
-            "Expected: NOTHING, found: UPDATE".into()
-        ))
+        Err(parser_error("Expected: NOTHING, found: UPDATE"))
     );
 }
 
@@ -10046,7 +10039,7 @@ fn parse_insert_overriding() {
     ] {
         assert_eq!(
             pg_and_generic().parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_string())),
+            Err(parser_error(err)),
             "{sql}"
         );
     }
@@ -10079,10 +10072,8 @@ fn parse_pg_abs_space_before_negative_operand() {
     pg().one_statement_parses_to("SELECT @a", "SELECT @ a");
     let err = pg().parse_sql_statements("SELECT @-2").unwrap_err();
     assert_eq!(
-        ParserError::TokenizerError(
-            "Expected a valid binary operator after '@-' at Line: 1, Column: 10".to_string(),
-        ),
-        err
+        err.to_string(),
+        "sql parser error: Expected a valid binary operator after '@-' at Line: 1, Column: 10"
     );
 }
 
@@ -10115,7 +10106,7 @@ fn parse_postfix_factorial_spacing() {
 
     let err = pg().parse_sql_statements("SELECT a!!").unwrap_err();
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: !!".to_string()),
+        parser_error("Expected: end of statement, found: !!".to_string()),
         err
     );
 }
@@ -10132,7 +10123,7 @@ fn parse_stage_table_factor_rejected() {
     let sql = "SELECT * FROM @stage";
     assert_eq!(
         pg().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: identifier, found: @".to_string()),
+        parser_error("Expected: identifier, found: @".to_string()),
     );
 }
 
@@ -10196,9 +10187,22 @@ fn parse_string_literal_alias_rejected() {
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(expected.to_string()),
+            parser_error(expected.to_string()),
             "{sql}"
         );
     }
     pg().verified_stmt(r#"SELECT a AS "x" FROM t AS "y""#);
+}
+
+#[test]
+fn parse_create_function_repeated_clause_reports_location() {
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements_with_locations(
+                "CREATE FUNCTION f() RETURNS INT LANGUAGE sql LANGUAGE sql AS 'select 1'"
+            )
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: LANGUAGE specified more than once at Line: 1, Column: 46"
+    );
 }

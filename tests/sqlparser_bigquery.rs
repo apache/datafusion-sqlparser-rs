@@ -24,7 +24,7 @@ use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::keywords::Keyword;
-use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::parser::ParserOptions;
 use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Word};
 use test_utils::*;
 
@@ -295,13 +295,13 @@ fn parse_begin() {
         bigquery()
             .parse_sql_statements("BEGIN SELECT 1; SELECT 2 END")
             .unwrap_err(),
-        ParserError::ParserError("Expected: ;, found: END".to_string())
+        parser_error("Expected: ;, found: END".to_string())
     );
     assert_eq!(
         bigquery()
             .parse_sql_statements("BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2 END")
             .unwrap_err(),
-        ParserError::ParserError("Expected: ;, found: END".to_string())
+        parser_error("Expected: ;, found: END".to_string())
     );
 }
 
@@ -1579,7 +1579,7 @@ fn parse_table_identifiers() {
         let sql = format!("SELECT 1 FROM {ident}");
         assert_eq!(
             bigquery().parse_sql_statements(&sql),
-            Err(ParserError::ParserError(expected.to_string()))
+            Err(parser_error(expected.to_string()))
         );
     }
 
@@ -1776,8 +1776,8 @@ fn parse_table_time_travel() {
     let sql = "SELECT 1 FROM t1 FOR SYSTEM TIME AS OF 'some_timestamp'".to_string();
     assert_eq!(
         bigquery().parse_sql_statements(&sql),
-        Err(ParserError::ParserError(
-            "Expected: one of UPDATE or SHARE, found: SYSTEM".to_string()
+        Err(parser_error(
+            "Expected: one of UPDATE or SHARE, found: SYSTEM"
         ))
     );
 }
@@ -2084,10 +2084,7 @@ fn parse_merge_invalid_statements() {
         ),
     ] {
         let res = dialects.parse_sql_statements(sql);
-        assert_eq!(
-            ParserError::ParserError(err_msg.to_string()),
-            res.unwrap_err()
-        );
+        assert_eq!(parser_error(err_msg.to_string()), res.unwrap_err());
     }
 }
 
@@ -2209,13 +2206,13 @@ fn parse_big_query_declare() {
 
     let error_sql = "DECLARE x";
     assert_eq!(
-        ParserError::ParserError("Expected: a data type name, found: EOF".to_owned()),
+        parser_error("Expected: a data type name, found: EOF".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE x 42";
     assert_eq!(
-        ParserError::ParserError("Expected: a data type name, found: 42".to_owned()),
+        parser_error("Expected: a data type name, found: 42".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2446,7 +2443,7 @@ fn test_bigquery_create_function() {
     ];
     for (sql, error) in error_sqls {
         assert_eq!(
-            ParserError::ParserError(error.to_owned()),
+            parser_error(error.to_owned()),
             bigquery().parse_sql_statements(sql).unwrap_err()
         );
     }
@@ -2476,7 +2473,7 @@ fn test_bigquery_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        parser_error("Expected: ), found: 'a'".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2639,7 +2636,7 @@ fn test_struct_trailing_and_nested_bracket() {
 
     // Bad case with missing closing bracket
     assert_eq!(
-        ParserError::ParserError("Expected: >, found: )".to_owned()),
+        parser_error("Expected: >, found: )".to_owned()),
         bigquery()
             .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64)")
             .unwrap_err()
@@ -2647,9 +2644,7 @@ fn test_struct_trailing_and_nested_bracket() {
 
     // Bad case with redundant closing bracket
     assert_eq!(
-        ParserError::ParserError(
-            "unmatched > after parsing data type STRUCT<a STRING, b INT64>)".to_owned()
-        ),
+        parser_error("unmatched > after parsing data type STRUCT<a STRING, b INT64>".to_owned()),
         bigquery()
             .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64>>)")
             .unwrap_err()
@@ -2657,9 +2652,7 @@ fn test_struct_trailing_and_nested_bracket() {
 
     // Base case with redundant closing bracket in nested struct
     assert_eq!(
-        ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: >".to_owned()
-        ),
+        parser_error("Expected: ',' or ')' after column definition, found: >".to_owned()),
         bigquery()
             .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRUCT<b INT>>>, c INT64)")
             .unwrap_err()
@@ -2670,7 +2663,7 @@ fn test_struct_trailing_and_nested_bracket() {
         bigquery_and_generic()
             .parse_sql_statements(sql)
             .unwrap_err(),
-        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
+        parser_error("unmatched > in STRUCT literal".to_string())
     );
 
     let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
@@ -2678,7 +2671,7 @@ fn test_struct_trailing_and_nested_bracket() {
         bigquery_and_generic()
             .parse_sql_statements(sql)
             .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: >".to_string())
+        parser_error("Expected: (, found: >".to_string())
     );
 
     let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
@@ -2686,9 +2679,7 @@ fn test_struct_trailing_and_nested_bracket() {
         bigquery_and_generic()
             .parse_sql_statements(sql)
             .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: >".to_string()
-        )
+        parser_error("Expected: ',' or ')' after column definition, found: >".to_string())
     );
 }
 
@@ -2995,9 +2986,7 @@ fn test_byte_and_raw_string_quote_escaping() {
         .parse_sql_statements("SELECT B'unterminated")
         .unwrap_err();
     assert_eq!(
-        ParserError::TokenizerError(
-            "Unterminated string literal at Line: 1, Column: 9".to_string(),
-        ),
-        err
+        err.to_string(),
+        "sql parser error: Unterminated string literal at Line: 1, Column: 9"
     );
 }

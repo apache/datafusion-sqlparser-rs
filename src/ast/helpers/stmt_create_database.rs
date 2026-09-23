@@ -28,6 +28,7 @@ use crate::ast::{
     CatalogSyncNamespaceMode, ContactEntry, ObjectName, Statement, StorageSerializationPolicy, Tag,
 };
 use crate::parser::ParserError;
+use crate::tokenizer::Span;
 
 /// Builder for create database statement variant ([1]).
 ///
@@ -357,9 +358,10 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
                 with_tags,
                 with_contacts,
             }),
-            _ => Err(ParserError::ParserError(format!(
-                "Expected create database statement, but received: {stmt}"
-            ))),
+            _ => Err(ParserError::ParserError {
+                message: format!("Expected create database statement, but received: {stmt}"),
+                span: Span::empty(),
+            }),
         }
     }
 }
@@ -369,6 +371,7 @@ mod tests {
     use crate::ast::helpers::stmt_create_database::CreateDatabaseBuilder;
     use crate::ast::{Ident, ObjectName, Statement};
     use crate::parser::ParserError;
+    use crate::tokenizer::Span;
 
     #[test]
     pub fn test_from_valid_statement() {
@@ -389,9 +392,10 @@ mod tests {
 
         assert_eq!(
             CreateDatabaseBuilder::try_from(stmt).unwrap_err(),
-            ParserError::ParserError(
-                "Expected create database statement, but received: COMMIT".to_owned()
-            )
+            ParserError::ParserError {
+                message: "Expected create database statement, but received: COMMIT".to_owned(),
+                span: Span::empty(),
+            }
         );
     }
 }

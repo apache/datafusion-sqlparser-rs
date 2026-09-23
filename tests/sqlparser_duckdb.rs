@@ -19,12 +19,12 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::Span;
+use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{DuckDbDialect, GenericDialect};
-use sqlparser::parser::ParserError;
 
 fn duckdb() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DuckDbDialect {})])
@@ -880,7 +880,7 @@ fn test_duckdb_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        parser_error("Expected: ), found: 'a'".to_owned()),
         duckdb().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -934,9 +934,10 @@ fn test_duckdb_nested_block_comments() {
 
     assert_eq!(
         duckdb().parse_sql_statements("SELECT a /* outer /* inner */ FROM t"),
-        Err(ParserError::TokenizerError(
-            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 37".to_string()
-        ))
+        Err(ParserError::TokenizerError {
+            message: "Unexpected EOF while in a multi-line comment".to_string(),
+            span: Span::new(Location::new(1, 37), Location::new(1, 37)),
+        })
     );
 }
 

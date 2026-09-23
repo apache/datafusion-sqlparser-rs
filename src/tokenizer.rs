@@ -777,21 +777,14 @@ impl fmt::Display for TokenWithSpan {
 }
 
 /// An error reported by the tokenizer, with a human-readable `message` and a `location`.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{message}{location}")]
 pub struct TokenizerError {
     /// A descriptive error message.
     pub message: String,
     /// The `Location` where the error was detected.
     pub location: Location,
 }
-
-impl fmt::Display for TokenizerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.message, self.location,)
-    }
-}
-
-impl core::error::Error for TokenizerError {}
 
 struct State<'a> {
     peekable: Peekable<Chars<'a>>,

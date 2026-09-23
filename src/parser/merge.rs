@@ -123,8 +123,8 @@ impl Parser<'_> {
                         MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
                     ) {
                         return parser_err!(
-                            format_args!("UPDATE is not allowed in a {clause_kind} merge clause"),
-                            self.get_current_token().span.start
+                            format!("UPDATE is not allowed in a {clause_kind} merge clause"),
+                            self.get_current_token().span
                         );
                     }
 
@@ -159,8 +159,8 @@ impl Parser<'_> {
                         MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
                     ) {
                         return parser_err!(
-                            format_args!("DELETE is not allowed in a {clause_kind} merge clause"),
-                            self.get_current_token().span.start
+                            format!("DELETE is not allowed in a {clause_kind} merge clause"),
+                            self.get_current_token().span
                         );
                     };
 
@@ -175,8 +175,8 @@ impl Parser<'_> {
                         MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
                     ) {
                         return parser_err!(
-                            format_args!("INSERT is not allowed in a {clause_kind} merge clause"),
-                            self.get_current_token().span.start
+                            format!("INSERT is not allowed in a {clause_kind} merge clause"),
+                            self.get_current_token().span
                         );
                     };
 
@@ -222,7 +222,7 @@ impl Parser<'_> {
                 _ => {
                     return parser_err!(
                         "expected UPDATE, DELETE, INSERT or DO NOTHING in merge clause",
-                        self.peek_token_ref().span.start
+                        self.peek_token_ref().span
                     );
                 }
             };

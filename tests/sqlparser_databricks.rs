@@ -18,7 +18,6 @@
 use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{DatabricksDialect, GenericDialect};
-use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
@@ -86,7 +85,7 @@ fn test_databricks_exists() {
     let res = databricks().parse_sql_statements("SELECT EXISTS (");
     assert_eq!(
         // TODO: improve this error message...
-        ParserError::ParserError("Expected: an expression, found: EOF".to_string()),
+        parser_error("Expected: an expression, found: EOF".to_string()),
         res.unwrap_err(),
     );
 }
@@ -294,7 +293,7 @@ fn parse_use() {
     for sql in &invalid_cases {
         assert_eq!(
             databricks().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            parser_error("Expected: identifier, found: EOF".to_string()),
         );
     }
 }
@@ -455,17 +454,15 @@ fn parse_table_time_travel() {
 
     assert_eq!(
         databricks().parse_sql_statements("SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'"),
-        Err(ParserError::ParserError(
-            "Expected: one of UPDATE or SHARE, found: TIMESTAMP".to_string()
+        Err(parser_error(
+            "Expected: one of UPDATE or SHARE, found: TIMESTAMP"
         ))
     );
 
     assert_eq!(
         all_dialects_where(|d| d.supports_table_versioning())
             .parse_sql_statements("SELECT 1 FROM t1 VERSION AS OF 1 - 2"),
-        Err(ParserError::ParserError(
-            "Expected: end of statement, found: -".to_string()
-        ))
+        Err(parser_error("Expected: end of statement, found: -"))
     );
 }
 
@@ -528,13 +525,13 @@ fn parse_optimize_table() {
         databricks()
             .parse_sql_statements("OPTIMIZE my_table ZORDER BY")
             .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: EOF".to_string())
+        parser_error("Expected: (, found: EOF".to_string())
     );
     assert_eq!(
         databricks()
             .parse_sql_statements("OPTIMIZE my_table ZORDER BY ()")
             .unwrap_err(),
-        ParserError::ParserError("Expected: an expression, found: )".to_string())
+        parser_error("Expected: an expression, found: )".to_string())
     );
 }
 
@@ -743,9 +740,7 @@ fn parse_cte_without_as() {
     assert_eq!(
         all_dialects_where(|d| !d.supports_cte_without_as())
             .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte"),
-        Err(ParserError::ParserError(
-            "Expected: ), found: 1".to_string()
-        ))
+        Err(parser_error("Expected: ), found: 1"))
     );
 }
 
@@ -779,8 +774,6 @@ fn parse_databricks_collated_data_types() {
     assert_eq!(
         TestedDialects::new(vec![Box::new(GenericDialect {})])
             .parse_sql_statements("CREATE TABLE t (c ARRAY<STRING COLLATE UTF8_LCASE>)"),
-        Err(ParserError::ParserError(
-            "Expected: >, found: COLLATE".to_string()
-        ))
+        Err(parser_error("Expected: >, found: COLLATE"))
     );
 }

@@ -84,8 +84,8 @@ fn parse_table_time_travel() {
     let sql = "SELECT 1 FROM t1 FOR SYSTEM TIME AS OF 'some_timestamp'".to_string();
     assert_eq!(
         ms().parse_sql_statements(&sql),
-        Err(ParserError::ParserError(
-            "Expected: one of UPDATE or SHARE, found: SYSTEM".to_owned()
+        Err(parser_error(
+            "Expected: one of UPDATE or SHARE, found: SYSTEM"
         ))
     );
 }
@@ -398,7 +398,7 @@ fn parse_create_function() {
         END\
     ";
     assert_eq!(
-        ParserError::ParserError("Unparsable function body".to_owned()),
+        parser_error("Unparsable function body".to_owned()),
         ms().parse_sql_statements(create_multi_statement_tvf_without_table_definition)
             .unwrap_err()
     );
@@ -410,9 +410,7 @@ fn parse_create_function() {
         RETURN 'hi'\
     ";
     assert_eq!(
-        ParserError::ParserError(
-            "Expected a subquery (or bare SELECT statement) after RETURN".to_owned()
-        ),
+        parser_error("Expected a subquery (or bare SELECT statement) after RETURN".to_owned()),
         ms().parse_sql_statements(create_inline_tvf_without_subquery_or_bare_select)
             .unwrap_err()
     );
@@ -962,9 +960,10 @@ fn parse_for_clause() {
 fn dont_parse_trailing_for() {
     assert_eq!(
         ms().run_parser_method("SELECT * FROM foo FOR", |p| p.parse_query()),
-        Err(ParserError::ParserError(
-            "Expected: one of UPDATE or SHARE, found: EOF".to_owned()
-        ))
+        Err(ParserError::ParserError {
+            message: "Expected: one of UPDATE or SHARE, found: EOF".to_string(),
+            span: Span::new(Location::new(1, 22), Location::new(1, 22)),
+        })
     );
 }
 
@@ -1340,7 +1339,7 @@ fn parse_convert() {
 
     let error_sql = "SELECT CONVERT(INT, 'foo',) FROM T";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: )".to_owned()),
+        parser_error("Expected: an expression, found: )".to_owned()),
         ms().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1747,9 +1746,7 @@ fn test_parse_waitfor() {
     let res = ms_and_generic().parse_sql_statements("WAITFOR '00:00:05'");
     assert_eq!(
         res,
-        Err(ParserError::ParserError(
-            "Expected: DELAY or TIME, found: '00:00:05'".to_owned()
-        ))
+        Err(parser_error("Expected: DELAY or TIME, found: '00:00:05'"))
     );
 }
 
@@ -2663,7 +2660,7 @@ fn test_sql_keywords_as_table_aliases() {
     ] {
         assert_eq!(
             tsql().parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_owned()))
+            Err(parser_error(err.to_owned()))
         );
     }
 }
@@ -2691,7 +2688,7 @@ fn test_sql_keywords_as_column_aliases() {
     ] {
         assert_eq!(
             tsql().parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_owned()))
+            Err(parser_error(err.to_owned()))
         );
     }
 }
@@ -3003,4 +3000,16 @@ fn parse_create_proc() {
         .parse_sql_statements("CREATE PROC test AS BEGIN SELECT 1; END")
         .expect_err("PROC should remain MSSQL-specific");
     ms_and_generic().verified_stmt("SELECT proc FROM jobs");
+}
+
+#[test]
+fn parse_declare_without_at_sign_reports_location() {
+    let err = ms()
+        .parse_sql_statements_with_locations("DECLARE foo INT")
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Invalid MsSql variable declaration. at Line: 1, Column: 9"
+    );
+    assert!(matches!(err, ParserError::ParserError { .. }));
 }

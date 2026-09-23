@@ -18,7 +18,7 @@
 #[macro_use]
 mod test_utils;
 
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -390,9 +390,10 @@ fn test_parse_nested_quoted_identifier() {
     // invalid query
     assert_eq!(
         redshift().parse_sql_statements(r#"SELECT 1 AS ["1]"#),
-        Err(ParserError::TokenizerError(
-            "Expected close delimiter '\"' before EOF. at Line: 1, Column: 14".to_string()
-        ))
+        Err(ParserError::TokenizerError {
+            message: "Expected close delimiter '\"' before EOF.".to_string(),
+            span: Span::new(Location::new(1, 14), Location::new(1, 14)),
+        })
     );
 }
 

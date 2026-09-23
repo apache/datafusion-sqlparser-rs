@@ -197,7 +197,7 @@ fuzz_target!(|sql: &str| {
             return;
         }
         match Parser::parse_sql(&DuckDbDialect {}, sql) {
-            Ok(_) | Err(ParserError::RecursionLimitExceeded) => {}
+            Ok(_) | Err(ParserError::RecursionLimitExceeded { .. }) => {}
             Err(err) => {
                 // SAFETY: duckdb_library_version returns a static NUL-terminated string.
                 let version = unsafe { CStr::from_ptr(ffi::duckdb_library_version()) };

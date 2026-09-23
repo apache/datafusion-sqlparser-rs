@@ -32,7 +32,6 @@ use sqlparser::ast::Value::Boolean;
 use sqlparser::ast::*;
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::ParserError::ParserError;
 
 #[test]
 fn parse_map_access_expr() {
@@ -350,13 +349,13 @@ fn parse_alter_table_attach_and_detach_partition() {
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation} PARTITION").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression, found: EOF".to_string())
+            parser_error("Expected: an expression, found: EOF".to_string())
         );
         assert_eq!(
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation} PART").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression, found: EOF".to_string())
+            parser_error("Expected: an expression, found: EOF".to_string())
         );
     }
 }
@@ -419,19 +418,19 @@ fn parse_alter_table_add_projection() {
         clickhouse_and_generic()
             .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name")
             .unwrap_err(),
-        ParserError("Expected: (, found: EOF".to_string())
+        parser_error("Expected: (, found: EOF".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
             .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name ()")
             .unwrap_err(),
-        ParserError("Expected: SELECT, found: )".to_string())
+        parser_error("Expected: SELECT, found: )".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
             .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name (SELECT)")
             .unwrap_err(),
-        ParserError("Expected: an expression, found: )".to_string())
+        parser_error("Expected: an expression, found: )".to_string())
     );
 }
 
@@ -461,7 +460,7 @@ fn parse_alter_table_drop_projection() {
         clickhouse_and_generic()
             .parse_sql_statements("ALTER TABLE t0 DROP PROJECTION")
             .unwrap_err(),
-        ParserError("Expected: identifier, found: EOF".to_string())
+        parser_error("Expected: identifier, found: EOF".to_string())
     );
 }
 
@@ -508,7 +507,7 @@ fn parse_alter_table_clear_and_materialize_projection() {
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {keyword} PROJECTION",).as_str())
                 .unwrap_err(),
-            ParserError("Expected: identifier, found: EOF".to_string())
+            parser_error("Expected: identifier, found: EOF".to_string())
         );
 
         assert_eq!(
@@ -517,7 +516,7 @@ fn parse_alter_table_clear_and_materialize_projection() {
                     format!("ALTER TABLE t0 {keyword} PROJECTION my_name IN PARTITION",).as_str()
                 )
                 .unwrap_err(),
-            ParserError("Expected: identifier, found: EOF".to_string())
+            parser_error("Expected: identifier, found: EOF".to_string())
         );
 
         assert_eq!(
@@ -526,7 +525,7 @@ fn parse_alter_table_clear_and_materialize_projection() {
                     format!("ALTER TABLE t0 {keyword} PROJECTION my_name IN",).as_str()
                 )
                 .unwrap_err(),
-            ParserError("Expected: end of statement, found: IN".to_string())
+            parser_error("Expected: end of statement, found: IN".to_string())
         );
     }
 }
@@ -574,19 +573,19 @@ fn parse_optimize_table() {
         clickhouse_and_generic()
             .parse_sql_statements("OPTIMIZE TABLE t0 DEDUPLICATE BY")
             .unwrap_err(),
-        ParserError("Expected: an expression, found: EOF".to_string())
+        parser_error("Expected: an expression, found: EOF".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
             .parse_sql_statements("OPTIMIZE TABLE t0 PARTITION")
             .unwrap_err(),
-        ParserError("Expected: an expression, found: EOF".to_string())
+        parser_error("Expected: an expression, found: EOF".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
             .parse_sql_statements("OPTIMIZE TABLE t0 PARTITION ID")
             .unwrap_err(),
-        ParserError("Expected: identifier, found: EOF".to_string())
+        parser_error("Expected: identifier, found: EOF".to_string())
     );
 }
 
@@ -785,7 +784,7 @@ fn reject_angle_bracket_array_type() {
         clickhouse()
             .parse_sql_statements("CREATE TABLE t (a ARRAY<INT>)")
             .unwrap_err(),
-        ParserError("Expected: (, found: <".to_string())
+        parser_error("Expected: (, found: <")
     );
 }
 
@@ -1135,7 +1134,7 @@ fn parse_settings_in_query() {
             clickhouse_and_generic()
                 .parse_sql_statements(sql)
                 .unwrap_err(),
-            ParserError(error_msg.to_string())
+            parser_error(error_msg.to_string())
         );
     }
 }
@@ -1640,7 +1639,7 @@ fn parse_freeze_and_unfreeze_partition() {
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation_name} PARTITION").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression, found: EOF".to_string())
+            parser_error("Expected: an expression, found: EOF".to_string())
         );
         assert_eq!(
             clickhouse_and_generic()
@@ -1648,7 +1647,7 @@ fn parse_freeze_and_unfreeze_partition() {
                     format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH").as_str()
                 )
                 .unwrap_err(),
-            ParserError("Expected: NAME, found: EOF".to_string())
+            parser_error("Expected: NAME, found: EOF".to_string())
         );
         assert_eq!(
             clickhouse_and_generic()
@@ -1656,7 +1655,7 @@ fn parse_freeze_and_unfreeze_partition() {
                     format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH NAME").as_str()
                 )
                 .unwrap_err(),
-            ParserError("Expected: identifier, found: EOF".to_string())
+            parser_error("Expected: identifier, found: EOF".to_string())
         );
     }
 }
@@ -1914,7 +1913,7 @@ fn parse_alter_table_column_position() {
 
     assert_eq!(
         clickhouse().parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER"),
-        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+        Err(parser_error("Expected: identifier, found: EOF".to_string()))
     );
 }
 
@@ -1967,7 +1966,7 @@ fn parse_alter_table_modify_order_by() {
     ] {
         assert_eq!(
             clickhouse_and_generic().parse_sql_statements(sql),
-            Err(ParserError(err.to_string())),
+            Err(parser_error(err.to_string())),
             "{sql}"
         );
     }
@@ -2091,13 +2090,13 @@ fn parse_tuple_element_access() {
 
     assert_eq!(
         clickhouse().parse_sql_statements("SELECT t."),
-        Err(ParserError(
+        Err(parser_error(
             "Expected: an identifier or a '*' after '.', found: EOF".to_string()
         ))
     );
     assert_eq!(
         clickhouse().parse_sql_statements("SELECT t.1."),
-        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+        Err(parser_error("Expected: identifier, found: EOF".to_string()))
     );
 
     all_dialects_where(|d| !d.supports_tuple_element_access()).verified_stmt("SELECT (1, 'a') . 1");
@@ -2110,7 +2109,7 @@ fn parse_tuple_element_access() {
                 !d.supports_tuple_element_access() && d.supports_numeric_prefix() == numeric_prefix
             })
             .parse_sql_statements("SELECT t.1 FROM t"),
-            Err(ParserError(err.to_string()))
+            Err(parser_error(err.to_string()))
         );
     }
 }
@@ -2160,7 +2159,7 @@ fn parse_global_in() {
 
     assert_eq!(
         clickhouse().parse_sql_statements("SELECT * FROM t WHERE x GLOBAL y"),
-        Err(ParserError(
+        Err(parser_error(
             "Expected: end of statement, found: GLOBAL".to_string()
         ))
     );
@@ -2168,7 +2167,7 @@ fn parse_global_in() {
     assert_eq!(
         all_dialects_where(|d| !d.supports_global_in())
             .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL IN (1)"),
-        Err(ParserError(
+        Err(parser_error(
             "Expected: end of statement, found: GLOBAL".to_string()
         ))
     );
@@ -2294,14 +2293,14 @@ fn parse_delete_on_cluster_and_settings() {
             clickhouse_and_generic()
                 .parse_sql_statements(sql)
                 .unwrap_err(),
-            ParserError(err.to_string())
+            parser_error(err.to_string())
         );
     }
     assert_eq!(
         all_dialects_where(|d| !d.supports_settings())
             .parse_sql_statements("DELETE FROM hits WHERE x = 1 SETTINGS a = 1")
             .unwrap_err(),
-        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+        parser_error("Expected: end of statement, found: SETTINGS".to_string())
     );
 }
 
@@ -2355,14 +2354,14 @@ fn parse_update_on_cluster_and_settings() {
             clickhouse_and_generic()
                 .parse_sql_statements(sql)
                 .unwrap_err(),
-            ParserError(err.to_string())
+            parser_error(err.to_string())
         );
     }
     assert_eq!(
         all_dialects_where(|d| !d.supports_settings())
             .parse_sql_statements("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a = 1")
             .unwrap_err(),
-        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+        parser_error("Expected: end of statement, found: SETTINGS".to_string())
     );
 }
 

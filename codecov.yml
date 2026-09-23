@@ -15,9 +15,5 @@
 # specific language governing permissions and limitations
 # under the License.
 
-FROM gcr.io/oss-fuzz-base/base-builder-rust
-# pg_query's build script runs bindgen, which needs libclang at build time
-RUN apt-get update && apt-get install -y --no-install-recommends libclang-dev && rm -rf /var/lib/apt/lists/*
-COPY . $SRC/datafusion-sqlparser-rs
-WORKDIR $SRC/datafusion-sqlparser-rs
-COPY ./.clusterfuzzlite/build.sh $SRC/
+codecov:
+  branch: main

@@ -470,13 +470,7 @@ pub struct Word {
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.quote_style {
-            Some(s) if s == '"' || s == '[' || s == '`' => {
-                write!(f, "{}{}{}", s, self.value, Word::matching_end_quote(s))
-            }
-            None => f.write_str(&self.value),
-            _ => panic!("Unexpected quote_style!"),
-        }
+        crate::ast::fmt_ident(f, &self.value, self.quote_style)
     }
 }
 
@@ -4634,6 +4628,37 @@ mod tests {
                 Token::Plus,
                 Token::make_word("b", None),
             ],
+        );
+    }
+
+    #[test]
+    fn test_word_display_quote_escaping() {
+        assert_eq!(
+            Word {
+                value: "a\"b".to_string(),
+                quote_style: Some('"'),
+                keyword: Keyword::NoKeyword,
+            }
+            .to_string(),
+            "\"a\"\"b\""
+        );
+        assert_eq!(
+            Word {
+                value: "a`b".to_string(),
+                quote_style: Some('`'),
+                keyword: Keyword::NoKeyword,
+            }
+            .to_string(),
+            "`a``b`"
+        );
+        assert_eq!(
+            Word {
+                value: "a b".to_string(),
+                quote_style: Some('['),
+                keyword: Keyword::NoKeyword,
+            }
+            .to_string(),
+            "[a b]"
         );
     }
 }

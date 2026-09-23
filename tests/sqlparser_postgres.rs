@@ -2623,13 +2623,11 @@ fn parse_ampersand_arobase() {
 #[test]
 fn parse_pg_unary_ops() {
     let pg_unary_ops = &[
-        ("|/", UnaryOperator::PGSquareRoot),
-        ("||/", UnaryOperator::PGCubeRoot),
-        ("!!", UnaryOperator::PGPrefixFactorial),
-        ("@", UnaryOperator::PGAbs),
+        ("SELECT !!a", UnaryOperator::PGPrefixFactorial),
+        ("SELECT @ a", UnaryOperator::PGAbs),
     ];
-    for (str_op, op) in pg_unary_ops {
-        let select = pg().verified_only_select(&format!("SELECT {}a", str_op));
+    for (sql, op) in pg_unary_ops {
+        let select = pg().verified_only_select(sql);
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -2637,6 +2635,21 @@ fn parse_pg_unary_ops() {
             }),
             select.projection[0]
         );
+    }
+
+    for (str_op, op) in [
+        ("|/", UnaryOperator::PGSquareRoot),
+        ("||/", UnaryOperator::PGCubeRoot),
+    ] {
+        let select = pg().verified_only_select(&format!("SELECT {str_op} a"));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+        pg().one_statement_parses_to(&format!("SELECT {str_op}a"), &format!("SELECT {str_op} a"));
     }
 }
 
@@ -9975,4 +9988,75 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         }
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
+}
+
+#[test]
+fn parse_pg_abs_space_before_negative_operand() {
+    // `@-` tokenizes as a geometric operator prefix, so displaying PGAbs
+    // without a space breaks re-parsing of a negative operand.
+    pg().verified_stmt("SELECT @ -2");
+    pg().one_statement_parses_to("SELECT @a", "SELECT @ a");
+    let err = pg().parse_sql_statements("SELECT @-2").unwrap_err();
+    assert_eq!(
+        ParserError::TokenizerError(
+            "Expected a valid binary operator after '@-' at Line: 1, Column: 10".to_string(),
+        ),
+        err
+    );
+}
+
+#[test]
+fn parse_bitwise_not_before_pg_prefix_operators() {
+    pg().one_statement_parses_to("SELECT ~ @2", "SELECT ~ @ 2");
+    pg().verified_stmt("SELECT ~ @ 2");
+    pg().one_statement_parses_to("SELECT ~ #x", "SELECT ~ # x");
+}
+
+#[test]
+fn parse_unary_minus_before_pg_prefix_operators() {
+    pg().one_statement_parses_to("SELECT - ~1", "SELECT - ~ 1");
+    pg().verified_stmt("SELECT - ~ 1");
+    pg().one_statement_parses_to("SELECT - @2", "SELECT - @ 2");
+    pg().verified_stmt("SELECT - @ 2");
+    pg().one_statement_parses_to("SELECT - #x", "SELECT - # x");
+}
+
+#[test]
+fn parse_postfix_factorial_spacing() {
+    pg().verified_stmt("SELECT a!");
+    pg().verified_stmt("SELECT 5!");
+    pg().verified_stmt("SELECT (a!)!");
+    pg().verified_stmt("SELECT a! !");
+    pg().verified_stmt("SELECT a! ! !");
+    pg().verified_stmt("SELECT a! ! % 2");
+    pg().one_statement_parses_to("SELECT a! !%2", "SELECT a! ! % 2");
+    pg().one_statement_parses_to("SELECT -a, +b, a! !%2, a", "SELECT -a, +b, a! ! % 2, a");
+
+    let err = pg().parse_sql_statements("SELECT a!!").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: !!".to_string()),
+        err
+    );
+}
+
+#[test]
+fn parse_pg_roots_render_apart_from_operand() {
+    pg().verified_stmt("SELECT |/ -2");
+    pg().verified_stmt("SELECT ||/ -2");
+    pg().verified_stmt("SELECT |/ ||/ 2");
+}
+
+#[test]
+fn parse_stage_table_factor_rejected() {
+    let sql = "SELECT * FROM @stage";
+    assert_eq!(
+        pg().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: @".to_string()),
+    );
+}
+
+#[test]
+fn parse_bitstring_literal_escaping() {
+    pg_and_generic().verified_stmt("SELECT B''''");
+    pg_and_generic().verified_stmt("SELECT B'it''s'");
 }

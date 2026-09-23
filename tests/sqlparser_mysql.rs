@@ -5052,3 +5052,9 @@ fn parse_is_distinct_from_json_arrow_precedence() {
         mysql_and_generic().verified_expr("a IS NOT DISTINCT FROM b ->> 'k'")
     );
 }
+
+#[test]
+fn parse_bitstring_literal_escaping() {
+    mysql_and_generic().verified_stmt("SELECT B''''");
+    mysql_and_generic().verified_stmt("SELECT B'it''s'");
+}

@@ -957,6 +957,39 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn test_multiword_type_names() {
+    // A SQLite type name is one or more names or strings
+    sqlite().verified_stmt("CREATE TABLE t (a UNSIGNED BIG INT)");
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar baz)");
+    sqlite().verified_stmt("CREATE TABLE t (a 'text')");
+    sqlite().verified_stmt("SELECT CAST(a AS foo bar) FROM t");
+    sqlite().verified_stmt("ALTER TABLE t ADD b foo bar");
+    // Keywords without a dedicated parser arm also form multi-word type names
+    sqlite().verified_stmt("CREATE TABLE t (a NATIVE CHARACTER(70))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARYING CHARACTER(10))");
+    sqlite().verified_stmt("SELECT CAST(x AS VARYING CHARACTER) FROM t");
+    // Column constraints still terminate the type name
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar NOT NULL)");
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar DEFAULT 0)");
+    // Standard constraint keywords are not consumed as type words
+    sqlite().verified_stmt("CREATE TABLE t (a INT PRIMARY KEY)");
+    sqlite().verified_stmt("CREATE TABLE t (a TEXT COLLATE NOCASE)");
+    sqlite().verified_stmt("CREATE TABLE t (a INT GENERATED ALWAYS AS (1))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT AS (1))");
+    // PATH is a valid type word, not a terminator
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar PATH)");
+    sqlite().verified_stmt("CREATE TABLE t (a foo PATH bar)");
+}
+
+#[test]
+fn test_multiword_type_names_rejected_by_other_dialects() {
+    // GenericDialect does not support multi-word type names
+    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("CREATE TABLE t (a foo bar)")
+        .is_err());
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

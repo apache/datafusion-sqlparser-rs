@@ -13729,7 +13729,8 @@ fn test_xmltable() {
     );
 
     // Example from DB2 docs without explicit PASSING clause: https://www.ibm.com/docs/en/db2/12.1.0?topic=xquery-simple-column-name-passing-xmlexists-xmlquery-xmltable
-    all_dialects().verified_only_select(
+    // Multi-word type names would read `PATH` as part of the column type
+    all_dialects_where(|d| !d.supports_multiword_type_names()).verified_only_select(
         "SELECT X.* FROM T1, XMLTABLE('$CUSTLIST/customers/customerinfo' COLUMNS \"Cid\" BIGINT PATH '@Cid', \"Info\" XML PATH 'document{.}', \"History\" XML PATH 'NULL') AS X"
     );
 

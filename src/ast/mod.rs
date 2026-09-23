@@ -8116,10 +8116,15 @@ fn starts_with_operator_char(expr: &Expr) -> bool {
     struct FirstChar(Option<char>);
     impl fmt::Write for FirstChar {
         fn write_str(&mut self, s: &str) -> fmt::Result {
-            if self.0.is_none() {
-                self.0 = s.chars().next();
+            match s.chars().next() {
+                Some(c) => {
+                    self.0 = Some(c);
+                    // Failing aborts the render, which would otherwise walk the whole
+                    // subtree at every nesting level of a prefix chain.
+                    Err(fmt::Error)
+                }
+                None => Ok(()),
             }
-            Ok(())
         }
     }
     let mut first = FirstChar(None);

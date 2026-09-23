@@ -20143,3 +20143,15 @@ fn parse_stage_table_factor() {
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
 }
+
+#[test]
+fn display_nested_unary_minus_chain() {
+    let mut expr = Expr::Identifier(Ident::new("id"));
+    for _ in 0..64 {
+        expr = Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: Box::new(expr),
+        };
+    }
+    assert_eq!(expr.to_string(), format!("{}-id", "- ".repeat(63)));
+}

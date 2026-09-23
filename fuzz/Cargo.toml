@@ -27,6 +27,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 libsqlite3-sys = { version = "0.38", features = ["bundled"] }
+pg_query = "6.2"
 sqlparser = { path = ".." }
 
 # Prevent this from interfering with workspaces
@@ -50,6 +51,13 @@ bench = false
 [[bin]]
 name = "fuzz_sqlite_accepts"
 path = "fuzz_targets/fuzz_sqlite_accepts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_postgres_accepts"
+path = "fuzz_targets/fuzz_postgres_accepts.rs"
 test = false
 doc = false
 bench = false

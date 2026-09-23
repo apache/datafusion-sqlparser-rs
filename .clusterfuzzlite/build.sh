@@ -20,6 +20,8 @@ set -eu
 
 cd "$SRC/datafusion-sqlparser-rs"
 # the base image's RUSTUP_TOOLCHAIN (nightly) overrides the rust-toolchain pin, so we name none
+# CXXFLAGS in the image carries -stdlib=libc++ while the cc crate defaults to stdc++, so override.
+export CXXSTDLIB=c++
 cargo fuzz build -O --fuzz-dir fuzz
 
 targets=$(cargo fuzz list --fuzz-dir fuzz)
@@ -31,4 +33,6 @@ fi
 target_dir=fuzz/target/x86_64-unknown-linux-gnu/release
 for name in $targets; do
     cp "$target_dir/$name" "$OUT/"
+    # the runner unpacks <target>_seed_corpus.zip as the starting corpus
+    (cd fuzz/fuzz_seeds && zip -qr "$OUT/${name}_seed_corpus.zip" *)
 done

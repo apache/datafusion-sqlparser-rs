@@ -19344,7 +19344,14 @@ impl<'a> Parser<'a> {
         }
 
         let duplicate_treatment = self.parse_duplicate_treatment()?;
-        let args = self.parse_comma_separated(Parser::parse_function_args)?;
+        let args = if duplicate_treatment != Some(DuplicateTreatment::Distinct)
+            && self.dialect.supports_aggregate_order_by_with_empty_args()
+            && self.peek_keywords(&[Keyword::ORDER, Keyword::BY])
+        {
+            vec![]
+        } else {
+            self.parse_comma_separated(Parser::parse_function_args)?
+        };
 
         if self.parse_keyword(Keyword::WHERE) {
             clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));

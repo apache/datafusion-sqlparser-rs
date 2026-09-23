@@ -20699,3 +20699,25 @@ fn parse_cte_materialization() {
         }
     }
 }
+
+#[test]
+fn parse_aggregate_order_by_with_empty_args() {
+    let dialects = all_dialects_where(|d| d.supports_aggregate_order_by_with_empty_args());
+    dialects.verified_stmt("SELECT count(ORDER BY a) FROM t");
+    dialects.verified_stmt("SELECT count(ORDER BY a ASC, b DESC) FROM t");
+    dialects.verified_stmt("SELECT count(ALL ORDER BY a) FROM t");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT count(DISTINCT ORDER BY a) FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: BY".to_string()
+        ))
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_aggregate_order_by_with_empty_args())
+            .parse_sql_statements("SELECT count(ORDER BY a) FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: BY".to_string()
+        ))
+    );
+}

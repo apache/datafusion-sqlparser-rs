@@ -1647,7 +1647,7 @@ impl<'a> Parser<'a> {
                     })
                 })
             }
-            Keyword::LAMBDA if self.dialect.supports_lambda_functions() => {
+            Keyword::LAMBDA if self.dialect.supports_lambda_keyword_syntax() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
             _ if self.dialect.supports_geometric_types() => match w.keyword {
@@ -15625,44 +15625,16 @@ impl<'a> Parser<'a> {
 
     /// Parse `CREATE TABLE x AS TABLE y`
     pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
-        let token1 = self.next_token();
-        let token2 = self.next_token();
-        let token3 = self.next_token();
-
-        let table_name;
-        let schema_name;
-        if token2 == Token::Period {
-            match token1.token {
-                Token::Word(w) => {
-                    schema_name = w.value;
-                }
-                _ => {
-                    return self.expected("Schema name", token1);
-                }
-            }
-            match token3.token {
-                Token::Word(w) => {
-                    table_name = w.value;
-                }
-                _ => {
-                    return self.expected("Table name", token3);
-                }
-            }
+        let first_name = self.parse_identifier()?;
+        if self.consume_token(&Token::Period) {
+            let second_name = self.parse_identifier()?;
             Ok(Table {
-                table_name: Some(table_name),
-                schema_name: Some(schema_name),
+                table_name: Some(second_name),
+                schema_name: Some(first_name),
             })
         } else {
-            match token1.token {
-                Token::Word(w) => {
-                    table_name = w.value;
-                }
-                _ => {
-                    return self.expected("Table name", token1);
-                }
-            }
             Ok(Table {
-                table_name: Some(table_name),
+                table_name: Some(first_name),
                 schema_name: None,
             })
         }
@@ -16773,7 +16745,7 @@ impl<'a> Parser<'a> {
             && self.peek_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
         {
             self.parse_semantic_view_table_factor()
-        } else if self.peek_token_ref().token == Token::AtSign {
+        } else if self.dialect.supports_stages() && self.peek_token_ref().token == Token::AtSign {
             // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {
@@ -20915,7 +20887,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_column_position(&mut self) -> Result<Option<MySQLColumnPosition>, ParserError> {
-        if dialect_of!(self is MySqlDialect | GenericDialect) {
+        if self.dialect.supports_alter_column_position() {
             if self.parse_keyword(Keyword::FIRST) {
                 Ok(Some(MySQLColumnPosition::First))
             } else if self.parse_keyword(Keyword::AFTER) {

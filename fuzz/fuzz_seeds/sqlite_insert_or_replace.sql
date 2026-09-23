@@ -1,0 +1,1 @@
+INSERT OR REPLACE INTO t (a, b) VALUES (1, 2)

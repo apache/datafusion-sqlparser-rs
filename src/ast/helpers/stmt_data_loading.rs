@@ -27,6 +27,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
+use crate::ast::value::escape_single_quote_string;
 use crate::ast::{Ident, ObjectName, SelectItem};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
@@ -87,13 +88,13 @@ pub struct StageLoadSelectItem {
 impl fmt::Display for StageParamsObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(ref url) = self.url {
-            write!(f, " URL='{url}'")?;
+            write!(f, " URL='{}'", escape_single_quote_string(url))?;
         }
         if let Some(ref storage_integration) = self.storage_integration {
             write!(f, " STORAGE_INTEGRATION={storage_integration}")?;
         }
         if let Some(ref endpoint) = self.endpoint {
-            write!(f, " ENDPOINT='{endpoint}'")?;
+            write!(f, " ENDPOINT='{}'", escape_single_quote_string(endpoint))?;
         }
         if !self.credentials.options.is_empty() {
             write!(f, " CREDENTIALS=({})", self.credentials)?;
@@ -138,7 +139,7 @@ impl fmt::Display for FileStagingCommand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.stage)?;
         if let Some(pattern) = self.pattern.as_ref() {
-            write!(f, " PATTERN='{pattern}'")?;
+            write!(f, " PATTERN='{}'", escape_single_quote_string(pattern))?;
         }
         Ok(())
     }

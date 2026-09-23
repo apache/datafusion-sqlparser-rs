@@ -126,6 +126,8 @@ pub use self::value::{
     NormalizationForm, QuoteDelimitedString, TrimWhereField, Value, ValueWithSpan,
 };
 
+use self::value::{escape_single_quote_string, SingleQuotedChar};
+
 use crate::ast::helpers::key_value_options::KeyValueOptions;
 use crate::ast::helpers::stmt_data_loading::StageParamsObject;
 
@@ -5286,7 +5288,7 @@ impl fmt::Display for Statement {
                     "INSERT{overwrite}{local} DIRECTORY '{path}'",
                     overwrite = if *overwrite { " OVERWRITE" } else { "" },
                     local = if *local { " LOCAL" } else { "" },
-                    path = path
+                    path = escape_single_quote_string(path)
                 )?;
                 if let Some(ref ff) = file_format {
                     write!(f, " STORED AS {ff}")?
@@ -5447,10 +5449,10 @@ impl fmt::Display for Statement {
                 )?;
 
                 if let Some(l) = location {
-                    write!(f, " LOCATION '{l}'")?;
+                    write!(f, " LOCATION '{}'", escape_single_quote_string(l))?;
                 }
                 if let Some(ml) = managed_location {
-                    write!(f, " MANAGEDLOCATION '{ml}'")?;
+                    write!(f, " MANAGEDLOCATION '{}'", escape_single_quote_string(ml))?;
                 }
                 if let Some(clone) = clone {
                     write!(f, " CLONE {clone}")?;
@@ -5465,11 +5467,15 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(vol) = external_volume {
-                    write!(f, " EXTERNAL_VOLUME = '{vol}'")?;
+                    write!(
+                        f,
+                        " EXTERNAL_VOLUME = '{}'",
+                        escape_single_quote_string(vol)
+                    )?;
                 }
 
                 if let Some(cat) = catalog {
-                    write!(f, " CATALOG = '{cat}'")?;
+                    write!(f, " CATALOG = '{}'", escape_single_quote_string(cat))?;
                 }
 
                 if let Some(true) = replace_invalid_characters {
@@ -5479,7 +5485,11 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(collation) = default_ddl_collation {
-                    write!(f, " DEFAULT_DDL_COLLATION = '{collation}'")?;
+                    write!(
+                        f,
+                        " DEFAULT_DDL_COLLATION = '{}'",
+                        escape_single_quote_string(collation)
+                    )?;
                 }
 
                 if let Some(policy) = storage_serialization_policy {
@@ -5487,7 +5497,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(comment) = comment {
-                    write!(f, " COMMENT = '{comment}'")?;
+                    write!(f, " COMMENT = '{}'", escape_single_quote_string(comment))?;
                 }
 
                 if let Some(charset) = default_charset {
@@ -5499,7 +5509,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(sync) = catalog_sync {
-                    write!(f, " CATALOG_SYNC = '{sync}'")?;
+                    write!(f, " CATALOG_SYNC = '{}'", escape_single_quote_string(sync))?;
                 }
 
                 if let Some(mode) = catalog_sync_namespace_mode {
@@ -5507,7 +5517,11 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(delim) = catalog_sync_namespace_flatten_delimiter {
-                    write!(f, " CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '{delim}'")?;
+                    write!(
+                        f,
+                        " CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '{}'",
+                        escape_single_quote_string(delim)
+                    )?;
                 }
 
                 if let Some(tags) = with_tags {
@@ -5585,7 +5599,7 @@ impl fmt::Display for Statement {
                     f,
                     "LOAD DATA {local}INPATH '{inpath}' {overwrite}INTO TABLE {table_name}",
                     local = if *local { "LOCAL " } else { "" },
-                    inpath = inpath,
+                    inpath = escape_single_quote_string(inpath),
                     overwrite = if *overwrite { "OVERWRITE " } else { "" },
                     table_name = table_name,
                 )?;
@@ -5731,7 +5745,7 @@ impl fmt::Display for Statement {
                     )?;
                 }
                 if let Some(url) = url {
-                    write!(f, " SET URL '{url}'")?;
+                    write!(f, " SET URL '{}'", escape_single_quote_string(url))?;
                 }
                 if let Some(owner) = owner {
                     write!(f, " SET OWNER {owner}")?;
@@ -6200,7 +6214,7 @@ impl fmt::Display for Statement {
                 };
                 write!(f, "ON {object_type} {object_name} IS ")?;
                 if let Some(c) = comment {
-                    write!(f, "'{c}'")
+                    write!(f, "'{}'", escape_single_quote_string(c))
                 } else {
                     write!(f, "NULL")
                 }
@@ -6307,7 +6321,7 @@ impl fmt::Display for Statement {
                     write!(f, " COPY_OPTIONS=({copy_options})")?;
                 }
                 if let Some(comment) = comment {
-                    write!(f, " COMMENT='{}'", comment)?;
+                    write!(f, " COMMENT='{}'", escape_single_quote_string(comment))?;
                 }
                 Ok(())
             }
@@ -6332,7 +6346,7 @@ impl fmt::Display for Statement {
                     write!(f, " {options}")?;
                 }
                 if let Some(comment) = comment {
-                    write!(f, " COMMENT='{}'", comment)?;
+                    write!(f, " COMMENT='{}'", escape_single_quote_string(comment))?;
                 }
                 Ok(())
             }
@@ -6384,10 +6398,16 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(files) = files {
-                    write!(f, " FILES = ('{}')", display_separated(files, "', '"))?;
+                    f.write_str(" FILES = (")?;
+                    let mut separator = "";
+                    for file in files {
+                        write!(f, "{separator}'{}'", escape_single_quote_string(file))?;
+                        separator = ", ";
+                    }
+                    f.write_str(")")?;
                 }
                 if let Some(pattern) = pattern {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                    write!(f, " PATTERN = '{}'", escape_single_quote_string(pattern))?;
                 }
                 if let Some(partition) = partition {
                     write!(f, " PARTITION BY {partition}")?;
@@ -6449,7 +6469,7 @@ impl fmt::Display for Statement {
                     write!(f, "{query}")?;
                 }
                 if let Some(query_text) = query_text {
-                    write!(f, "'{query_text}'")?;
+                    write!(f, "'{}'", escape_single_quote_string(query_text))?;
                 }
                 write!(f, ") TO {to}")?;
                 if let Some(auth) = auth {
@@ -6509,7 +6529,7 @@ impl fmt::Display for Statement {
             Statement::NOTIFY { channel, payload } => {
                 write!(f, "NOTIFY {channel}")?;
                 if let Some(payload) = payload {
-                    write!(f, ", '{payload}'")?;
+                    write!(f, ", '{}'", escape_single_quote_string(payload))?;
                 }
                 Ok(())
             }
@@ -6543,7 +6563,7 @@ impl fmt::Display for Statement {
                 stage,
                 options,
             } => {
-                write!(f, "PUT '{source}' {stage}")?;
+                write!(f, "PUT '{}' {stage}", escape_single_quote_string(source))?;
                 if !options.options.is_empty() {
                     write!(f, " {options}")?;
                 }
@@ -9126,10 +9146,10 @@ impl fmt::Display for SqlOption {
             }
             SqlOption::Comment(comment) => match comment {
                 CommentDef::WithEq(comment) => {
-                    write!(f, "COMMENT = '{comment}'")
+                    write!(f, "COMMENT = '{}'", escape_single_quote_string(comment))
                 }
                 CommentDef::WithoutEq(comment) => {
-                    write!(f, "COMMENT '{comment}'")
+                    write!(f, "COMMENT '{}'", escape_single_quote_string(comment))
                 }
             },
             SqlOption::NamedParenthesizedList(value) => {
@@ -9600,12 +9620,12 @@ impl fmt::Display for CopyOption {
             Format(name) => write!(f, "FORMAT {name}"),
             Freeze(true) => write!(f, "FREEZE"),
             Freeze(false) => write!(f, "FREEZE FALSE"),
-            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
+            Delimiter(char) => write!(f, "DELIMITER {}", SingleQuotedChar(*char)),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
             Header(true) => write!(f, "HEADER"),
             Header(false) => write!(f, "HEADER FALSE"),
-            Quote(char) => write!(f, "QUOTE '{char}'"),
-            Escape(char) => write!(f, "ESCAPE '{char}'"),
+            Quote(char) => write!(f, "QUOTE {}", SingleQuotedChar(*char)),
+            Escape(char) => write!(f, "ESCAPE {}", SingleQuotedChar(*char)),
             ForceQuote(columns) => write!(f, "FORCE_QUOTE ({})", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE_NOT_NULL ({})", display_comma_separated(columns))
@@ -9758,7 +9778,7 @@ impl fmt::Display for CopyLegacyOption {
                 }
                 Ok(())
             }
-            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
+            Delimiter(char) => write!(f, "DELIMITER {}", SingleQuotedChar(*char)),
             EmptyAsNull => write!(f, "EMPTYASNULL"),
             Encrypted { auto } => write!(f, "ENCRYPTED{}", if *auto { " AUTO" } else { "" }),
             Escape => write!(f, "ESCAPE"),
@@ -9909,7 +9929,7 @@ impl fmt::Display for IamRoleKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             IamRoleKind::Default => write!(f, "DEFAULT"),
-            IamRoleKind::Arn(arn) => write!(f, "'{arn}'"),
+            IamRoleKind::Arn(arn) => write!(f, "'{}'", escape_single_quote_string(arn)),
         }
     }
 }
@@ -9938,8 +9958,8 @@ impl fmt::Display for CopyLegacyCsvOption {
         use CopyLegacyCsvOption::*;
         match self {
             Header => write!(f, "HEADER"),
-            Quote(char) => write!(f, "QUOTE '{char}'"),
-            Escape(char) => write!(f, "ESCAPE '{char}'"),
+            Quote(char) => write!(f, "QUOTE {}", SingleQuotedChar(*char)),
+            Escape(char) => write!(f, "ESCAPE {}", SingleQuotedChar(*char)),
             ForceQuote(columns) => write!(f, "FORCE QUOTE {}", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE NOT NULL {}", display_comma_separated(columns))
@@ -10470,9 +10490,13 @@ impl fmt::Display for CreateFunctionUsing {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "USING ")?;
         match self {
-            CreateFunctionUsing::Jar(uri) => write!(f, "JAR '{uri}'"),
-            CreateFunctionUsing::File(uri) => write!(f, "FILE '{uri}'"),
-            CreateFunctionUsing::Archive(uri) => write!(f, "ARCHIVE '{uri}'"),
+            CreateFunctionUsing::Jar(uri) => write!(f, "JAR '{}'", escape_single_quote_string(uri)),
+            CreateFunctionUsing::File(uri) => {
+                write!(f, "FILE '{}'", escape_single_quote_string(uri))
+            }
+            CreateFunctionUsing::Archive(uri) => {
+                write!(f, "ARCHIVE '{}'", escape_single_quote_string(uri))
+            }
         }
     }
 }
@@ -10887,7 +10911,12 @@ impl Tag {
 
 impl Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}='{}'", self.key, self.value)
+        write!(
+            f,
+            "{}='{}'",
+            self.key,
+            escape_single_quote_string(&self.value)
+        )
     }
 }
 
@@ -10925,7 +10954,9 @@ pub enum CommentDef {
 impl Display for CommentDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CommentDef::WithEq(comment) | CommentDef::WithoutEq(comment) => write!(f, "{comment}"),
+            CommentDef::WithEq(comment) | CommentDef::WithoutEq(comment) => {
+                write!(f, "{}", escape_single_quote_string(comment))
+            }
         }
     }
 }

@@ -20433,3 +20433,13 @@ fn parse_bang_not_renders_apart_from_operand() {
     dialects.verified_stmt("SET eaac_cion = ! !o");
     dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
 }
+
+#[test]
+fn display_doubled_quotes_in_string_literal_options() {
+    pg_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) COMMENT = 'it''s'"#);
+    pg_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) COMMENT 'it''s'"#);
+    pg_and_generic().verified_stmt(r#"CREATE EXTERNAL TABLE t () LOCATION 'a''b'"#);
+    pg_and_generic().verified_stmt(
+        r#"COPY t FROM 'f' (FORMAT text, DELIMITER '''', NULL 'n''u', QUOTE '''', ESCAPE '''')"#,
+    );
+}

@@ -1362,6 +1362,26 @@ fn parse_over_as_column_alias_after_function() {
     );
 }
 
+#[test]
+fn parse_bitwise_shift_operators() {
+    sqlite().verified_stmt("SELECT a << 1 FROM t");
+    sqlite().verified_stmt("SELECT a >> 1 FROM t");
+
+    let unsupported = all_dialects_where(|d| !d.supports_bitwise_shift_operators());
+    for (sql, token) in [
+        ("SELECT a << 1 FROM t", "ShiftLeft"),
+        ("SELECT a >> 1 FROM t", "ShiftRight"),
+    ] {
+        assert_eq!(
+            unsupported.parse_sql_statements(sql),
+            Err(ParserError::ParserError(format!(
+                "No infix parser for token {token}"
+            ))),
+            "{sql}"
+        );
+    }
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }
@@ -1517,6 +1537,122 @@ fn parse_bitwise_and_or_share_precedence() {
                 bin(num("1"), BitwiseOr, num("2")),
                 Eq,
                 bin(num("3"), BitwiseAnd, num("4")),
+            ),
+        ),
+    ] {
+        assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
+}
+
+#[test]
+fn parse_left_shift_and_bitwise_and_are_left_associative() {
+    assert_eq!(
+        sqlite().verified_expr("1 << 2 & 4"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("1"))),
+                op: BinaryOperator::PGBitwiseShiftLeft,
+                right: Box::new(Expr::value(number("2"))),
+            }),
+            op: BinaryOperator::BitwiseAnd,
+            right: Box::new(Expr::value(number("4"))),
+        }
+    );
+}
+
+#[test]
+fn parse_right_shift_and_bitwise_and_are_left_associative() {
+    assert_eq!(
+        sqlite().verified_expr("8 >> 1 & 2"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("8"))),
+                op: BinaryOperator::PGBitwiseShiftRight,
+                right: Box::new(Expr::value(number("1"))),
+            }),
+            op: BinaryOperator::BitwiseAnd,
+            right: Box::new(Expr::value(number("2"))),
+        }
+    );
+}
+
+#[test]
+fn parse_bitwise_shifts_share_precedence() {
+    use BinaryOperator::{BitwiseAnd, BitwiseOr, PGBitwiseShiftLeft, PGBitwiseShiftRight};
+
+    for (sql, first, second) in [
+        ("a | b << c", BitwiseOr, PGBitwiseShiftLeft),
+        ("a | b >> c", BitwiseOr, PGBitwiseShiftRight),
+        ("a << b | c", PGBitwiseShiftLeft, BitwiseOr),
+        ("a >> b | c", PGBitwiseShiftRight, BitwiseOr),
+        ("a & b << c", BitwiseAnd, PGBitwiseShiftLeft),
+        ("a & b >> c", BitwiseAnd, PGBitwiseShiftRight),
+        ("a << b >> c", PGBitwiseShiftLeft, PGBitwiseShiftRight),
+        ("a >> b << c", PGBitwiseShiftRight, PGBitwiseShiftLeft),
+    ] {
+        assert_eq!(
+            sqlite().verified_expr(sql),
+            Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("a"))),
+                    op: first,
+                    right: Box::new(Expr::Identifier(Ident::new("b"))),
+                }),
+                op: second,
+                right: Box::new(Expr::Identifier(Ident::new("c"))),
+            },
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_bitwise_shift_precedence_boundaries() {
+    let id = |name| Expr::Identifier(Ident::new(name));
+    let bin = |left, op, right| Expr::BinaryOp {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    };
+    use BinaryOperator::{
+        BitwiseAnd, Divide, Eq, Multiply, PGBitwiseShiftLeft, PGBitwiseShiftRight, Plus,
+    };
+
+    for (sql, expected) in [
+        (
+            "a << b + c",
+            bin(id("a"), PGBitwiseShiftLeft, bin(id("b"), Plus, id("c"))),
+        ),
+        (
+            "a + b << c",
+            bin(bin(id("a"), Plus, id("b")), PGBitwiseShiftLeft, id("c")),
+        ),
+        (
+            "a >> b * c",
+            bin(
+                id("a"),
+                PGBitwiseShiftRight,
+                bin(id("b"), Multiply, id("c")),
+            ),
+        ),
+        (
+            "a / b >> c",
+            bin(bin(id("a"), Divide, id("b")), PGBitwiseShiftRight, id("c")),
+        ),
+        (
+            "a << b = c",
+            bin(bin(id("a"), PGBitwiseShiftLeft, id("b")), Eq, id("c")),
+        ),
+        (
+            "a = b >> c",
+            bin(id("a"), Eq, bin(id("b"), PGBitwiseShiftRight, id("c"))),
+        ),
+        (
+            "a << (b & c)",
+            bin(
+                id("a"),
+                PGBitwiseShiftLeft,
+                Expr::Nested(Box::new(bin(id("b"), BitwiseAnd, id("c")))),
             ),
         ),
     ] {

@@ -102,11 +102,13 @@ impl Dialect for SQLiteDialect {
         None
     }
 
-    /// `&` and `|` share one left-associative precedence level.
+    /// `&`, `|`, `<<`, and `>>` share one left-associative precedence level.
     /// See <https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes>
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
         match parser.peek_token_ref().token {
-            Token::Ampersand | Token::Pipe => Some(Ok(self.prec_value(Precedence::Ampersand))),
+            Token::Ampersand | Token::Pipe | Token::ShiftLeft | Token::ShiftRight => {
+                Some(Ok(self.prec_value(Precedence::Ampersand)))
+            }
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Some(Ok(COMPARISON_PREC)),
             _ => None,
         }
@@ -228,6 +230,11 @@ impl Dialect for SQLiteDialect {
     }
 
     fn supports_aggregate_order_by_with_empty_args(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.sqlite.org/lang_expr.html#binaryops>
+    fn supports_bitwise_shift_operators(&self) -> bool {
         true
     }
 }

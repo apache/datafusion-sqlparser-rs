@@ -324,4 +324,8 @@ impl Dialect for GenericDialect {
     fn supports_aliased_function_args(&self) -> bool {
         true
     }
+
+    fn supports_alter_column_position(&self) -> bool {
+        true
+    }
 }

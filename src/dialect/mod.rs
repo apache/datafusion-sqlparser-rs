@@ -1537,6 +1537,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports a `FIRST` or `AFTER col` column
+    /// position in `ALTER TABLE ... ADD | CHANGE | MODIFY COLUMN`.
+    /// Example:
+    ///  ```sql
+    ///  ALTER TABLE tbl ADD COLUMN c INT AFTER b
+    /// ```
+    fn supports_alter_column_position(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect considers the specified ident as a function
     /// that returns an identifier. Typically used to generate identifiers
     /// programmatically.

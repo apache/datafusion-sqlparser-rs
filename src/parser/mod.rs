@@ -13180,12 +13180,24 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::OBJECT
                     if self.peek_token_ref().token == Token::LParen
-                        && !matches!(
-                            self.peek_nth_token_ref(1).token,
-                            Token::SingleQuotedString(_)
-                        ) =>
+                        && (dialect_is!(dialect is SnowflakeDialect)
+                            || !matches!(
+                                self.peek_nth_token_ref(1).token,
+                                Token::SingleQuotedString(_)
+                            )) =>
                 {
-                    Ok(DataType::Object(self.parse_structured_object_type_def()?))
+                    if dialect_is!(dialect is SnowflakeDialect) {
+                        Ok(DataType::Object(self.parse_structured_object_type_def()?))
+                    } else if let Some(fields) =
+                        self.maybe_parse(|parser| parser.parse_structured_object_type_def())?
+                    {
+                        Ok(DataType::Object(fields))
+                    } else {
+                        self.prev_token();
+                        let type_name = self.parse_object_name(false)?;
+                        let modifiers = self.parse_optional_type_modifiers()?.unwrap_or_default();
+                        Ok(DataType::Custom(type_name, modifiers))
+                    }
                 }
                 Keyword::STRUCT if dialect_is!(dialect is DuckDbDialect) => {
                     self.prev_token();
@@ -14410,6 +14422,9 @@ impl<'a> Parser<'a> {
             return Ok(vec![]);
         }
         let fields = self.parse_comma_separated(|parser| {
+            if matches!(parser.peek_token_ref().token, Token::SingleQuotedString(_)) {
+                return parser.expected("an object field identifier", parser.peek_token());
+            }
             let name = parser.parse_identifier()?;
             let data_type = parser.parse_data_type()?;
             let options = if parser.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {

@@ -1976,10 +1976,50 @@ fn parse_object_type_parameter() {
                 vec!["json".to_string()]
             )
         );
+
+        let formatted = statements[0].to_string();
+        assert_eq!(
+            dialects.parse_sql_statements(&formatted).unwrap(),
+            statements
+        );
     }
 
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT(city VARCHAR NOT NULL))");
+
+    for (sql, modifiers) in [
+        ("CREATE TABLE t (o OBJECT(10))", vec!["10"]),
+        ("CREATE TABLE t (o OBJECT(foo))", vec!["foo"]),
+        ("CREATE TABLE t (o OBJECT(foo, bar))", vec!["foo", "bar"]),
+    ] {
+        for dialects in [
+            clickhouse(),
+            TestedDialects::new(vec![Box::new(GenericDialect {})]),
+        ] {
+            let statements = dialects.parse_sql_statements(sql).unwrap();
+            let [Statement::CreateTable(CreateTable { columns, .. })] = statements.as_slice()
+            else {
+                unreachable!();
+            };
+
+            assert_eq!(
+                columns[0].data_type,
+                DataType::Custom(
+                    ObjectName::from(vec![Ident::new("OBJECT")]),
+                    modifiers
+                        .iter()
+                        .map(|modifier| (*modifier).to_owned())
+                        .collect(),
+                )
+            );
+
+            let formatted = statements[0].to_string();
+            assert_eq!(
+                dialects.parse_sql_statements(&formatted).unwrap(),
+                statements
+            );
+        }
+    }
 }
 
 fn clickhouse() -> TestedDialects {

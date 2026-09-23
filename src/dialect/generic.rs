@@ -173,6 +173,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_comma_join_constraint(&self) -> bool {
+        true
+    }
+
     fn supports_comment_on(&self) -> bool {
         true
     }

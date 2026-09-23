@@ -173,4 +173,9 @@ impl Dialect for ClickHouseDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    /// See <https://clickhouse.com/docs/sql-reference/statements/alter/column>
+    fn supports_alter_column_position(&self) -> bool {
+        true
+    }
 }

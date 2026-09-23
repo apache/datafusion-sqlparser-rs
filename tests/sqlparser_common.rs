@@ -2341,7 +2341,9 @@ fn parse_ilike() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
                 any: false,
             },
             select.selection.unwrap()
@@ -2405,7 +2407,9 @@ fn parse_like() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
                 any: false,
             },
             select.selection.unwrap()
@@ -2433,6 +2437,11 @@ fn parse_like() {
     }
     chk(false);
     chk(true);
+}
+
+#[test]
+fn parse_like_escape_expression() {
+    verified_expr("'a%' LIKE 'a#%' ESCAPE ('' || '#')");
 }
 
 #[test]
@@ -2468,7 +2477,9 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
             },
             select.selection.unwrap()
         );
@@ -2485,7 +2496,7 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::Null.with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(Value::Null.with_empty_span()))),
             },
             select.selection.unwrap()
         );
@@ -2503,7 +2514,9 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
             })),
             select.selection.unwrap()
         );
@@ -4835,7 +4848,7 @@ fn parse_create_table_as_table() {
     let expected_query1 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
+            table_name: Some(Ident::new("old_table")),
             schema_name: None,
         }))),
         order_by: None,
@@ -4861,8 +4874,8 @@ fn parse_create_table_as_table() {
     let expected_query2 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
-            schema_name: Some("schema_name".to_string()),
+            table_name: Some(Ident::new("old_table")),
+            schema_name: Some(Ident::new("schema_name")),
         }))),
         order_by: None,
         limit_clause: None,
@@ -10272,6 +10285,9 @@ fn parse_grant() {
     verified_stmt("GRANT ROLE role1 TO ROLE role2");
     verified_stmt("GRANT ROLE role1 TO USER user");
     verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
+    // PUBLIC takes no name, so it must not trail a space. MsSql reserves it as
+    // an ordinary grantee name.
+    all_dialects_except(|d| d.is::<MsSqlDialect>()).verified_stmt("GRANT SELECT ON t TO PUBLIC");
 }
 
 #[test]
@@ -11657,6 +11673,24 @@ fn parse_deeply_nested_interval_hits_recursion_limits() {
     let dialect = GenericDialect {};
 
     let sql = format!("SELECT {}1", "INTERVAL ".repeat(1000));
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_data_type_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!(
+        "SELECT CAST(x AS {}INT64{})",
+        "ARRAY<".repeat(1000),
+        ">".repeat(1000)
+    );
 
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)
@@ -17551,7 +17585,7 @@ fn parse_pipeline_operator_negative_tests() {
 
     // Test that CALL with invalid function syntax fails
     assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL 123invalid")
+        .parse_sql_statements("SELECT * FROM users |> CALL 123 invalid")
         .is_err());
 
     // Test that CALL with malformed arguments fails
@@ -19435,11 +19469,7 @@ fn test_parse_alter_user() {
 
 #[test]
 fn parse_generic_unary_ops() {
-    let unary_ops = &[
-        ("~", UnaryOperator::BitwiseNot),
-        ("-", UnaryOperator::Minus),
-        ("+", UnaryOperator::Plus),
-    ];
+    let unary_ops = &[("-", UnaryOperator::Minus), ("+", UnaryOperator::Plus)];
     for (str_op, op) in unary_ops {
         let select = verified_only_select(&format!("SELECT {}expr", str_op));
         assert_eq!(
@@ -19450,6 +19480,16 @@ fn parse_generic_unary_ops() {
             select.projection[0]
         );
     }
+
+    let select = verified_only_select("SELECT ~ expr");
+    assert_eq!(
+        UnnamedExpr(UnaryOp {
+            op: UnaryOperator::BitwiseNot,
+            expr: Box::new(Identifier(Ident::new("expr"))),
+        }),
+        select.projection[0]
+    );
+    one_statement_parses_to("SELECT ~expr", "SELECT ~ expr");
 }
 
 #[test]
@@ -19980,4 +20020,166 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
 
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
+}
+
+#[test]
+fn parse_insert_by_name() {
+    verified_stmt("INSERT INTO target BY NAME SELECT 1 AS a");
+
+    match verified_stmt("INSERT INTO target (a) BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            by_name, columns, ..
+        }) => {
+            assert!(by_name);
+            assert_eq!(columns.len(), 1);
+        }
+        _ => unreachable!(),
+    }
+
+    let dialects = all_dialects_where(|d| !d.supports_insert_table_alias());
+    match dialects.verified_stmt("INSERT INTO TABLE target PARTITION (p = 1) BY NAME SELECT 1 AS a")
+    {
+        Statement::Insert(Insert {
+            by_name,
+            has_table_keyword,
+            partitioned,
+            ..
+        }) => {
+            assert!(by_name);
+            assert!(has_table_keyword);
+            assert_eq!(partitioned.unwrap().len(), 1);
+        }
+        _ => unreachable!(),
+    }
+
+    // `BY NAME` does not shadow a table alias in dialects supporting one.
+    let dialects = all_dialects_where(|d| d.supports_insert_table_alias());
+    match dialects.verified_stmt("INSERT INTO target AS t BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            by_name,
+            table_alias,
+            ..
+        }) => {
+            assert!(by_name);
+            assert_eq!(table_alias.unwrap().alias.value, "t");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_bitwise_not_renders_apart_from_operand() {
+    all_dialects().verified_stmt("SELECT ~ -1");
+    all_dialects().verified_stmt("SELECT ~ ~ 1");
+}
+
+#[test]
+fn parse_unary_minus_never_renders_line_comment() {
+    all_dialects().verified_stmt("SELECT - -1");
+    all_dialects().verified_stmt("SELECT - - -1");
+    all_dialects().verified_stmt("SELECT -1");
+    all_dialects().verified_stmt("SELECT -x");
+}
+
+#[test]
+fn parse_table_preserves_quotes_and_trailing_tokens() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(SnowflakeDialect {}),
+    ]);
+    dialects.verified_stmt(r#"CREATE TABLE new_table AS TABLE "old_table""#);
+    dialects.verified_stmt(r#"CREATE TABLE new_table AS TABLE "schema_name"."old_table""#);
+    dialects.verified_stmt("CREATE TABLE new_table AS TABLE old_table ORDER BY x");
+    dialects.verified_stmt("CREATE TABLE new_table AS TABLE old_table LIMIT 10");
+    dialects.verified_stmt("SELECT * FROM (TABLE old_table ORDER BY x)");
+
+    let backtick_dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(MySqlDialect {}),
+    ]);
+    backtick_dialects.verified_stmt("CREATE TABLE new_table AS TABLE `old_table`");
+    backtick_dialects.verified_stmt("CREATE TABLE new_table AS TABLE `%mpty`");
+    backtick_dialects.verified_stmt("INSERT INTO t TABLE `%mpty`");
+
+    let err = dialects
+        .parse_sql_statements("CREATE TABLE new_table AS TABLE %mpty")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: %".to_string()),
+        err
+    );
+
+    let err = backtick_dialects
+        .parse_sql_statements("CREATE TABLE new_table AS TABLE `x` ORE")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: ORE".to_string()),
+        err
+    );
+}
+
+#[test]
+fn parse_hex_string_literal_display_escaping() {
+    all_dialects().verified_stmt("SELECT X''''");
+    all_dialects().verified_stmt("SELECT X'ab''cd'");
+    all_dialects().one_statement_parses_to("SELECT x'''' N", "SELECT X'''' AS N");
+}
+
+#[test]
+fn parse_stage_table_factor() {
+    let supported = all_dialects_where(|d| d.supports_stages());
+    supported.verified_stmt("SELECT * FROM @stage");
+    supported.verified_stmt("SELECT * FROM @stage, my_table");
+
+    let unsupported = all_dialects_where(|d| !d.supports_stages() && !d.is_identifier_start('@'));
+    assert_eq!(
+        unsupported
+            .parse_sql_statements("SELECT * FROM @stage")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: @".to_string()),
+    );
+}
+
+#[test]
+fn parse_alter_table_column_position() {
+    let dialects = all_dialects_where(|d| d.supports_alter_column_position());
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT FIRST")) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(column_position, Some(MySQLColumnPosition::First)),
+        _ => unreachable!(),
+    }
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT AFTER b")) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::new("b")))
+        ),
+        _ => unreachable!(),
+    }
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab MODIFY COLUMN c INT AFTER b")) {
+        AlterTableOperation::ModifyColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::new("b")))
+        ),
+        _ => unreachable!(),
+    }
+    assert!(dialects
+        .parse_sql_statements("ALTER TABLE tab ADD COLUMN c INT AFTER")
+        .is_err());
+
+    let dialects = all_dialects_where(|d| !d.supports_alter_column_position());
+    for sql in [
+        "ALTER TABLE tab ADD COLUMN c INT FIRST",
+        "ALTER TABLE tab ADD COLUMN c INT AFTER b",
+    ] {
+        assert!(dialects.parse_sql_statements(sql).is_err(), "{sql}");
+    }
 }

@@ -964,7 +964,14 @@ impl<'a> Tokenizer<'a> {
         };
 
         let mut location = state.location();
-        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = self.next_token(
+            &mut state,
+            buf.last().map(|t| &t.token),
+            buf.iter()
+                .rev()
+                .find(|t| !matches!(t.token, Token::Whitespace(_)))
+                .map(|t| &t.token),
+        )? {
             let span = location.span_to(state.location());
 
             // Check if this is a multiline comment hint that should be expanded
@@ -1018,7 +1025,14 @@ impl<'a> Tokenizer<'a> {
 
         // Tokenize the hint content and add tokens to the buffer
         let mut location = state.location();
-        while let Some(token) = inner.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = inner.next_token(
+            &mut state,
+            buf.last().map(|t| &t.token),
+            buf.iter()
+                .rev()
+                .find(|t| !matches!(t.token, Token::Whitespace(_)))
+                .map(|t| &t.token),
+        )? {
             let token_span = location.span_to(state.location());
             buf.push(mapper(TokenWithSpan {
                 token,
@@ -1061,6 +1075,7 @@ impl<'a> Tokenizer<'a> {
         &self,
         chars: &mut State,
         prev_token: Option<&Token>,
+        prev_non_ws_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
@@ -1338,12 +1353,9 @@ impl<'a> Tokenizer<'a> {
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
-                    // special case where if ._ is encountered after a word then that word
-                    // is a table and the _ is the start of the col name.
-                    // if the prev token is not a word, then this is not a valid sql
-                    // word or number.
+                    // ._ after a word is a field access, not a decimal point
                     if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if let Some(Token::Word(_)) = prev_non_ws_token {
                             chars.next();
                             return Ok(Some(Token::Period));
                         }
@@ -4379,15 +4391,30 @@ mod tests {
 
         compare(expected, tokens);
 
-        let sql = String::from("SELECT ._123");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
+        // Whitespace between the word and ._ is accepted
+        let sql = String::from("SELECT table ._col");
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "table".to_string(),
+                quote_style: None,
+                keyword: Keyword::TABLE,
+            }),
+            Token::Whitespace(Whitespace::Space),
+            Token::Period,
+            Token::Word(Word {
+                value: "_col".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+        ];
+        compare(expected, tokens);
 
-        let sql = String::from("SELECT ._abc");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
+        // Without a preceding identifier ._ is still rejected
+        let err = Tokenizer::new(&dialect, "._abc").tokenize();
+        assert!(err.is_err(), "expected tokenizer error for bare ._abc");
     }
 
     #[test]

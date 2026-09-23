@@ -1,0 +1,1 @@
+CREATE TABLE onecolumn_w(w INT)

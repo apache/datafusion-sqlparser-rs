@@ -1,0 +1,1 @@
+INSERT INTO othercolumn(x) VALUES (43),(42),(16)

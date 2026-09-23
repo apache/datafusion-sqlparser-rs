@@ -1,0 +1,1 @@
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42)

@@ -1193,6 +1193,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows string literals as column names in `CREATE TABLE`.
+    /// SQLite's grammar rule `nm ::= id | STRING | JOIN_KW` permits this.
+    fn supports_string_literal_column_names(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `a!` expressions
     fn supports_factorial_operator(&self) -> bool {
         false

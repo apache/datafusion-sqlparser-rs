@@ -1,0 +1,1 @@
+CREATE TABLE [Monty].[Coconut] ( LumberJack int ) WITH ( DISTRIBUTION = REPLICATE, HEAP )

@@ -1,0 +1,1 @@
+SELECT amount_of_honey :: time FROM bear_inventory

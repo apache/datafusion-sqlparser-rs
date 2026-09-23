@@ -15,36 +15,35 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use honggfuzz::fuzz;
+#![no_main]
+
+use libfuzzer_sys::fuzz_target;
 use sqlparser::dialect::{
-    AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, DuckDbDialect,
+    AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, Dialect, DuckDbDialect,
     GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, OracleDialect, PostgreSqlDialect,
-    RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
+    RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect, SparkSqlDialect, TeradataDialect,
 };
 use sqlparser::parser::Parser;
-
-fn main() {
-    let dialects: Vec<Box<dyn sqlparser::dialect::Dialect>> = vec![
-        Box::new(AnsiDialect::default()),
-        Box::new(BigQueryDialect::default()),
-        Box::new(ClickHouseDialect::default()),
-        Box::new(DatabricksDialect::default()),
-        Box::new(DuckDbDialect::default()),
-        Box::new(GenericDialect::default()),
-        Box::new(HiveDialect::default()),
-        Box::new(MsSqlDialect::default()),
-        Box::new(MySqlDialect::default()),
-        Box::new(OracleDialect::default()),
-        Box::new(PostgreSqlDialect::default()),
-        Box::new(RedshiftSqlDialect::default()),
-        Box::new(SQLiteDialect::default()),
-        Box::new(SnowflakeDialect::default()),
+fuzz_target!(|sql: &str| {
+    let dialects: [&dyn Dialect; 16] = [
+        &AnsiDialect {},
+        &BigQueryDialect {},
+        &ClickHouseDialect {},
+        &DatabricksDialect {},
+        &DuckDbDialect {},
+        &GenericDialect {},
+        &HiveDialect {},
+        &MsSqlDialect {},
+        &MySqlDialect {},
+        &OracleDialect {},
+        &PostgreSqlDialect {},
+        &RedshiftSqlDialect {},
+        &SQLiteDialect {},
+        &SnowflakeDialect {},
+        &SparkSqlDialect {},
+        &TeradataDialect {},
     ];
-    loop {
-        fuzz!(|data: String| {
-            for dialect in &dialects {
-                let _ = Parser::parse_sql(dialect.as_ref(), &data);
-            }
-        });
+    for dialect in dialects {
+        let _ = Parser::parse_sql(dialect, sql);
     }
-}
+});

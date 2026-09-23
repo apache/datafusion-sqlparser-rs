@@ -957,6 +957,23 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn parse_update_set_double_eq() {
+    // SQLite treats `==` as `=` in all positions, including SET assignments.
+    sqlite().one_statement_parses_to("UPDATE t SET a == 1", "UPDATE t SET a = 1");
+    sqlite().one_statement_parses_to("UPDATE t SET a == 1, b == 2", "UPDATE t SET a = 1, b = 2");
+    // `=` still works
+    sqlite().verified_stmt("UPDATE t SET a = 1");
+    // Other dialects reject `==` in SET
+    let res = ParserError::ParserError("Expected: =, found: ==".to_string());
+    assert_eq!(
+        all_dialects_except(|d| d.supports_double_eq_assignment())
+            .parse_sql_statements("UPDATE t SET a == 1")
+            .unwrap_err(),
+        res,
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

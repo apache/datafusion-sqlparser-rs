@@ -20,7 +20,7 @@ use alloc::boxed::Box;
 
 use crate::ast::BinaryOperator;
 use crate::ast::{Expr, Statement};
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
@@ -141,5 +141,10 @@ impl Dialect for SQLiteDialect {
 
     fn supports_national_string_literal(&self) -> bool {
         false
+    }
+
+    /// Comparison and postfix operators bind within the BETWEEN low bound in SQLite (<https://www.sqlite.org/lang_expr.html>).
+    fn between_low_bound_precedence(&self) -> u8 {
+        self.prec_value(Precedence::And)
     }
 }

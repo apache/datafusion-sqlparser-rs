@@ -107,7 +107,16 @@ impl Parser<'_> {
                 Keyword::UPDATE,
                 Keyword::INSERT,
                 Keyword::DELETE,
+                Keyword::DO,
             ]) {
+                Some(Keyword::DO) => {
+                    let do_token = self.get_current_token().clone();
+                    let nothing_token = self.expect_keyword(Keyword::NOTHING)?;
+                    MergeAction::DoNothing {
+                        do_token: do_token.into(),
+                        nothing_token: nothing_token.into(),
+                    }
+                }
                 Some(Keyword::UPDATE) => {
                     if matches!(
                         clause_kind,
@@ -212,7 +221,7 @@ impl Parser<'_> {
                 }
                 _ => {
                     return parser_err!(
-                        "expected UPDATE, DELETE or INSERT in merge clause",
+                        "expected UPDATE, DELETE, INSERT or DO NOTHING in merge clause",
                         self.peek_token_ref().span.start
                     );
                 }

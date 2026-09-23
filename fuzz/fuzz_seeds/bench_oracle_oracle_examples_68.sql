@@ -1,0 +1,1 @@
+create table t as select * from all_objects where owner in ('SYS','SYSTEM','PUBLIC','SCOTT','HR','SALES')

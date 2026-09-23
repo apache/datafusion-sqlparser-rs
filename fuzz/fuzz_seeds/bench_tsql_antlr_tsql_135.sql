@@ -1,0 +1,1 @@
+CREATE TABLE [Monty].[Eggs] ( Ham int, Chilli int, Milk int ) WITH ( CLUSTERED INDEX(Ham DESC, Chilli ASC, Milk), DISTRIBUTION = ROUND_ROBIN )

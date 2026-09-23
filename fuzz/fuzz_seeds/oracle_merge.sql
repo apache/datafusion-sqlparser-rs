@@ -1,0 +1,1 @@
+MERGE INTO t USING u ON (t.id = u.id) WHEN MATCHED THEN UPDATE SET t.v = u.v WHEN NOT MATCHED THEN INSERT (id, v) VALUES (u.id, u.v)

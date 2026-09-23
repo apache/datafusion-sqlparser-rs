@@ -1303,6 +1303,44 @@ fn parse_over_as_column_alias_after_function() {
     );
 }
 
+#[test]
+fn parse_comma_join_constraint() {
+    let dialects = all_dialects_where(|d| d.supports_comma_join_constraint());
+    for (sql, canonical) in [
+        (
+            "SELECT * FROM t, u ON t.a = u.a",
+            "SELECT * FROM t JOIN u ON t.a = u.a",
+        ),
+        (
+            "SELECT * FROM t, u USING (a)",
+            "SELECT * FROM t JOIN u USING(a)",
+        ),
+        (
+            "SELECT * FROM t, u ON t.a = u.a, v ON v.a = u.a",
+            "SELECT * FROM t JOIN u ON t.a = u.a JOIN v ON v.a = u.a",
+        ),
+        (
+            "SELECT * FROM t, u ON t.a = u.a JOIN v ON v.a = u.a",
+            "SELECT * FROM t JOIN u ON t.a = u.a JOIN v ON v.a = u.a",
+        ),
+        (
+            "UPDATE t SET a = 1 FROM u, v ON u.a = v.a",
+            "UPDATE t SET a = 1 FROM u JOIN v ON u.a = v.a",
+        ),
+    ] {
+        dialects.one_statement_parses_to(sql, canonical);
+    }
+    dialects.verified_stmt("SELECT * FROM t, u");
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_comma_join_constraint())
+            .parse_sql_statements("SELECT * FROM t, u ON t.a = u.a"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: ON".to_string()
+        ))
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

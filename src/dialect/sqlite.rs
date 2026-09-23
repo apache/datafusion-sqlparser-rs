@@ -222,4 +222,8 @@ impl Dialect for SQLiteDialect {
             _ => !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw),
         }
     }
+
+    fn supports_comma_join_constraint(&self) -> bool {
+        true
+    }
 }

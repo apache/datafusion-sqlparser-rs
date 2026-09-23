@@ -20161,3 +20161,43 @@ fn parse_stage_table_factor() {
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
 }
+
+#[test]
+fn parse_alter_table_column_position() {
+    let dialects = all_dialects_where(|d| d.supports_alter_column_position());
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT FIRST")) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(column_position, Some(MySQLColumnPosition::First)),
+        _ => unreachable!(),
+    }
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT AFTER b")) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::new("b")))
+        ),
+        _ => unreachable!(),
+    }
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab MODIFY COLUMN c INT AFTER b")) {
+        AlterTableOperation::ModifyColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::new("b")))
+        ),
+        _ => unreachable!(),
+    }
+    assert!(dialects
+        .parse_sql_statements("ALTER TABLE tab ADD COLUMN c INT AFTER")
+        .is_err());
+
+    let dialects = all_dialects_where(|d| !d.supports_alter_column_position());
+    for sql in [
+        "ALTER TABLE tab ADD COLUMN c INT FIRST",
+        "ALTER TABLE tab ADD COLUMN c INT AFTER b",
+    ] {
+        assert!(dialects.parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}

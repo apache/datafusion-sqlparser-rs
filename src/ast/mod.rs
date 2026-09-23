@@ -10704,10 +10704,7 @@ impl Display for MySQLColumnPosition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MySQLColumnPosition::First => write!(f, "FIRST"),
-            MySQLColumnPosition::After(ident) => {
-                let column_name = &ident.value;
-                write!(f, "AFTER {column_name}")
-            }
+            MySQLColumnPosition::After(ident) => write!(f, "AFTER {ident}"),
         }
     }
 }

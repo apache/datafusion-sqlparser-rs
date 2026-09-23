@@ -20895,7 +20895,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_column_position(&mut self) -> Result<Option<MySQLColumnPosition>, ParserError> {
-        if dialect_of!(self is MySqlDialect | GenericDialect) {
+        if self.dialect.supports_alter_column_position() {
             if self.parse_keyword(Keyword::FIRST) {
                 Ok(Some(MySQLColumnPosition::First))
             } else if self.parse_keyword(Keyword::AFTER) {

@@ -2031,7 +2031,11 @@ impl fmt::Display for Expr {
                 format,
             } => match kind {
                 CastKind::Cast => {
-                    write!(f, "CAST({expr} AS {data_type}")?;
+                    if matches!(data_type, DataType::Unspecified) {
+                        write!(f, "CAST({expr} AS")?;
+                    } else {
+                        write!(f, "CAST({expr} AS {data_type}")?;
+                    }
                     if let Some(format) = format {
                         write!(f, " FORMAT {format}")?;
                     }

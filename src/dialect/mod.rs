@@ -1887,6 +1887,18 @@ pub trait Dialect: Debug + Any {
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports `CAST(expr AS)` with an empty type name.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT CAST(a AS)
+    /// ```
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html)
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

@@ -1,0 +1,1 @@
+CREATE TABLE t1 (val VARCHAR, arg INT)

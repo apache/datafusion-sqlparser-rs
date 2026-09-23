@@ -1,0 +1,1 @@
+CREATE INDEX t3ac ON t3(a, c-1)

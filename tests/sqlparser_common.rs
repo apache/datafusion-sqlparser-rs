@@ -21173,3 +21173,26 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
         dialects.tokenizes_to(sql, vec![token]);
     }
 }
+
+#[test]
+fn parse_period_underscore_after_whitespace() {
+    let dialects = all_dialects_where(|d| d.is_identifier_start('_'));
+    dialects.verified_stmt("SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t ._a FROM t", "SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t . _a FROM t", "SELECT t._a FROM t");
+
+    let no_expression =
+        || ParserError::ParserError("Expected: an expression, found: .".to_string());
+    for (sql, error) in [
+        ("SELECT ._abc", no_expression()),
+        ("SELECT ._123", no_expression()),
+        (
+            "SELECT 1 ._a",
+            ParserError::TokenizerError(
+                "Unexpected character '_' at Line: 1, Column: 10".to_string(),
+            ),
+        ),
+    ] {
+        assert_eq!(dialects.parse_sql_statements(sql), Err(error), "{sql}");
+    }
+}

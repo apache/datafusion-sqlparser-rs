@@ -28,6 +28,8 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 libsqlite3-sys = { version = "0.38", features = ["bundled"] }
 pg_query = "6.2"
+libduckdb-sys = { version = "1.10505.0", features = ["bundled", "json"] }
+serde_json = "1"
 sqlparser = { path = ".." }
 
 # Prevent this from interfering with workspaces
@@ -58,6 +60,13 @@ bench = false
 [[bin]]
 name = "fuzz_postgres_accepts"
 path = "fuzz_targets/fuzz_postgres_accepts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_duckdb_accepts"
+path = "fuzz_targets/fuzz_duckdb_accepts.rs"
 test = false
 doc = false
 bench = false

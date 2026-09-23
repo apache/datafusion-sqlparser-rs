@@ -35,6 +35,8 @@ rendered statement no longer parses.
 
 `fuzz_postgres_accepts` parses the input with PostgreSQL's own grammar through `pg_query` and fails when PostgreSQL accepts SQL that `PostgreSqlDialect` rejects.
 
+`fuzz_duckdb_accepts` parses the input with DuckDB's own parser and fails when DuckDB accepts a `SELECT` that `DuckDbDialect` rejects.
+
 ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
 `code-change` mode, a daily batch job grows the shared corpus stored on the
 `clusterfuzzlite` branch, and a daily prune compacts it.

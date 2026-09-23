@@ -2973,8 +2973,15 @@ impl From<Ident> for OrderByExpr {
 impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.expr)?;
+        self.fmt_sort_modifiers(f)
+    }
+}
+
+impl OrderByExpr {
+    /// Writes the modifiers that follow the sort expression (`ASC`/`DESC`, `NULLS`, `WITH FILL`).
+    pub(crate) fn fmt_sort_modifiers(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.options)?;
-        if let Some(ref with_fill) = self.with_fill {
+        if let Some(with_fill) = &self.with_fill {
             write!(f, " {with_fill}")?
         }
         Ok(())

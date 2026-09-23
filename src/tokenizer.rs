@@ -1614,7 +1614,7 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some('*') => self
                                     .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
-                                Some('~') => {
+                                Some('~') if self.dialect.supports_tilde_like_match_operator() => {
                                     chars.next();
                                     match chars.peek() {
                                         Some('*') => self.consume_and_return(
@@ -1752,7 +1752,7 @@ impl<'a> Tokenizer<'a> {
                         Some('=') if self.dialect.supports_geometric_types() => {
                             self.consume_for_binop(chars, "~=", Token::TildeEqual)
                         }
-                        Some('~') => {
+                        Some('~') if self.dialect.supports_tilde_like_match_operator() => {
                             chars.next();
                             match chars.peek() {
                                 Some('*') => {
@@ -3707,6 +3707,26 @@ mod tests {
             Token::SingleQuotedString("_a%".into()),
         ];
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_tilde_without_like_match_operators() {
+        all_dialects_where(|d| !d.supports_tilde_like_match_operator()).tokenizes_to(
+            "~~ ~~* !~~ !~~*",
+            vec![
+                Token::Tilde,
+                Token::Tilde,
+                Token::Whitespace(Whitespace::Space),
+                Token::Tilde,
+                Token::TildeAsterisk,
+                Token::Whitespace(Whitespace::Space),
+                Token::ExclamationMarkTilde,
+                Token::Tilde,
+                Token::Whitespace(Whitespace::Space),
+                Token::ExclamationMarkTilde,
+                Token::TildeAsterisk,
+            ],
+        );
     }
 
     #[test]

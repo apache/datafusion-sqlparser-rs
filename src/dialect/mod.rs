@@ -1556,6 +1556,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect tokenizes `~~`, `~~*`, `!~~` and `!~~*` as
+    /// `LIKE`, `ILIKE`, `NOT LIKE` and `NOT ILIKE` pattern-match operators.
+    ///
+    /// When false, `~~` is two `~` tokens, e.g. two bitwise-NOT prefixes.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-LIKE),
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_patternmatching_condition_like.html),
+    /// [DuckDB](https://duckdb.org/docs/current/sql/functions/pattern_matching)
+    fn supports_tilde_like_match_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `ORDER BY ALL`.
     /// `ALL` which means all columns of the SELECT clause.
     ///

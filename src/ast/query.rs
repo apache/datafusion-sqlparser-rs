@@ -1453,6 +1453,30 @@ impl fmt::Display for TableIndexHints {
     }
 }
 
+/// A table-level index-selection directive, see [`TableFactor::Table::index_directives`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableIndexDirective {
+    /// `{USE | IGNORE | FORCE} {INDEX | KEY} [FOR ...] (index_name, ...)`, see
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/index-hints.html)
+    MySql(TableIndexHints),
+    /// Require the named index with SQLite's [`INDEXED BY`](https://www.sqlite.org/lang_indexedby.html).
+    IndexedBy(Ident),
+    /// Prohibit index use except rowid lookups with SQLite's [`NOT INDEXED`](https://www.sqlite.org/lang_indexedby.html).
+    NotIndexed,
+}
+
+impl fmt::Display for TableIndexDirective {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TableIndexDirective::MySql(hint) => hint.fmt(f),
+            TableIndexDirective::IndexedBy(name) => write!(f, "INDEXED BY {name}"),
+            TableIndexDirective::NotIndexed => f.write_str("NOT INDEXED"),
+        }
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1490,9 +1514,8 @@ pub enum TableFactor {
         /// Optional table sample modifier
         /// See: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
         sample: Option<TableSampleKind>,
-        /// Optional index hints(mysql)
-        /// See: <https://dev.mysql.com/doc/refman/8.4/en/index-hints.html>
-        index_hints: Vec<TableIndexHints>,
+        /// Optional table-level index-selection hints or requirements.
+        index_directives: Vec<TableIndexDirective>,
     },
     /// A derived table (a parenthesized subquery), optionally `LATERAL`.
     Derived {
@@ -2226,7 +2249,7 @@ impl fmt::Display for TableFactor {
                 with_ordinality,
                 json_path,
                 sample,
-                index_hints,
+                index_directives,
             } => {
                 name.fmt(f)?;
                 if let Some(json_path) = json_path {
@@ -2255,8 +2278,8 @@ impl fmt::Display for TableFactor {
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }
-                if !index_hints.is_empty() {
-                    write!(f, " {}", display_separated(index_hints, " "))?;
+                if !index_directives.is_empty() {
+                    write!(f, " {}", display_separated(index_directives, " "))?;
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;

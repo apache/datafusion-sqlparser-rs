@@ -1225,6 +1225,55 @@ fn parse_over_as_column_alias_after_function() {
     );
 }
 
+#[test]
+fn parse_indexed_by() {
+    let index_directives = |relation: &TableFactor| match relation {
+        TableFactor::Table {
+            index_directives, ..
+        } => index_directives.clone(),
+        _ => panic!("expected TableFactor::Table"),
+    };
+
+    let select = sqlite().verified_only_select("SELECT * FROM t INDEXED BY i WHERE a = 1");
+    assert_eq!(
+        index_directives(&select.from[0].relation),
+        vec![TableIndexDirective::IndexedBy(Ident::new("i"))]
+    );
+
+    for sql in [
+        "SELECT * FROM t NOT INDEXED",
+        "SELECT * FROM t AS x NOT INDEXED",
+    ] {
+        let select = sqlite().verified_only_select(sql);
+        assert_eq!(
+            index_directives(&select.from[0].relation),
+            vec![TableIndexDirective::NotIndexed]
+        );
+    }
+
+    let select = sqlite().verified_only_select("SELECT * FROM t INDEXED BY i, t AS u NOT INDEXED");
+    assert_eq!(
+        index_directives(&select.from[0].relation),
+        vec![TableIndexDirective::IndexedBy(Ident::new("i"))]
+    );
+    assert_eq!(
+        index_directives(&select.from[1].relation),
+        vec![TableIndexDirective::NotIndexed]
+    );
+
+    sqlite().verified_stmt("SELECT * FROM t AS x INDEXED BY i WHERE a = 1");
+    sqlite().verified_stmt("DELETE FROM t INDEXED BY i WHERE a = 1");
+    sqlite().verified_stmt("UPDATE t INDEXED BY i SET a = 2 WHERE a = 1");
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_indexed_by())
+            .parse_sql_statements("SELECT * FROM t INDEXED BY i"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: BY".to_string()
+        ))
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

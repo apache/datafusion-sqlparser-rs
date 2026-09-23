@@ -13685,7 +13685,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_table_index_hints(&mut self) -> Result<Vec<TableIndexHints>, ParserError> {
+    fn parse_table_index_hints(&mut self) -> Result<Vec<TableIndexDirective>, ParserError> {
         let mut hints = vec![];
         while let Some(hint_type) =
             self.parse_one_of_keywords(&[Keyword::USE, Keyword::IGNORE, Keyword::FORCE])
@@ -13734,12 +13734,12 @@ impl<'a> Parser<'a> {
                 vec![]
             };
             self.expect_token(&Token::RParen)?;
-            hints.push(TableIndexHints {
+            hints.push(TableIndexDirective::MySql(TableIndexHints {
                 hint_type,
                 index_type,
                 for_clause,
                 index_names,
-            });
+            }));
         }
         Ok(hints)
     }
@@ -17127,13 +17127,19 @@ impl<'a> Parser<'a> {
 
             let alias = self.maybe_parse_table_alias()?;
 
-            // MYSQL-specific table hints:
-            let index_hints = if self.dialect.supports_table_hints() {
+            let mut index_directives = if self.dialect.supports_table_hints() {
                 self.maybe_parse(|p| p.parse_table_index_hints())?
                     .unwrap_or(vec![])
             } else {
                 vec![]
             };
+            if self.dialect.supports_indexed_by() {
+                if self.parse_keywords(&[Keyword::INDEXED, Keyword::BY]) {
+                    index_directives.push(TableIndexDirective::IndexedBy(self.parse_identifier()?));
+                } else if self.parse_keywords(&[Keyword::NOT, Keyword::INDEXED]) {
+                    index_directives.push(TableIndexDirective::NotIndexed);
+                }
+            }
 
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
@@ -17163,7 +17169,7 @@ impl<'a> Parser<'a> {
                 with_ordinality,
                 json_path,
                 sample,
-                index_hints,
+                index_directives,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
@@ -17213,7 +17219,7 @@ impl<'a> Parser<'a> {
             with_ordinality: false,
             json_path: None,
             sample: None,
-            index_hints: vec![],
+            index_directives: vec![],
         })
     }
 

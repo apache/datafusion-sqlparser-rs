@@ -1,0 +1,1 @@
+CREATE TABLE t (id INT NOT NULL PRIMARY KEY, name VARCHAR(50) DEFAULT 'anon', amount DECIMAL(10, 2) CHECK (amount >= 0), owner_id INT REFERENCES u (id), UNIQUE (name, amount))

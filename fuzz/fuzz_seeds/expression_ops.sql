@@ -1,0 +1,1 @@
+SELECT -a, +b, a % 2, a ^ 2, a / b * c, NOT a AND b OR c FROM t WHERE (a + b) * (c - d) / (e % f) > 0

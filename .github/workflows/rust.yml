@@ -19,11 +19,10 @@ name: Rust
 
 on:
   push:
-    # When PR is in the Merge Queue, GitHub will create a temporary branch - but we already have a
-    # CI running because of `merge_group`
-    # See also: https://github.com/orgs/community/discussions/15254
-    branches-ignore:
-      - 'gh-readonly-queue/**'
+    # Feature branches get CI from pull_request, so push runs only the long-lived branches.
+    branches:
+      - main
+      - 'branch-*'
   pull_request:
   merge_group:
 

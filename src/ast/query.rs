@@ -31,6 +31,8 @@ use crate::{
     tokenizer::{Token, TokenWithSpan},
 };
 
+use crate::ast::value::escape_single_quote_string;
+
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3937,7 +3939,7 @@ impl fmt::Display for ForClause {
                 write!(f, "FOR JSON ")?;
                 write!(f, "{for_json}")?;
                 if let Some(root) = root {
-                    write!(f, ", ROOT('{root}')")?;
+                    write!(f, ", ROOT('{}')", escape_single_quote_string(root))?;
                 }
                 if *include_null_values {
                     write!(f, ", INCLUDE_NULL_VALUES")?;
@@ -3963,7 +3965,7 @@ impl fmt::Display for ForClause {
                     write!(f, ", TYPE")?;
                 }
                 if let Some(root) = root {
-                    write!(f, ", ROOT('{root}')")?;
+                    write!(f, ", ROOT('{}')", escape_single_quote_string(root))?;
                 }
                 if *elements {
                     write!(f, ", ELEMENTS")?;
@@ -3995,7 +3997,7 @@ impl fmt::Display for ForXml {
             ForXml::Raw(root) => {
                 write!(f, "RAW")?;
                 if let Some(root) = root {
-                    write!(f, "('{root}')")?;
+                    write!(f, "('{}')", escape_single_quote_string(root))?;
                 }
                 Ok(())
             }
@@ -4004,7 +4006,7 @@ impl fmt::Display for ForXml {
             ForXml::Path(root) => {
                 write!(f, "PATH")?;
                 if let Some(root) = root {
-                    write!(f, "('{root}')")?;
+                    write!(f, "('{}')", escape_single_quote_string(root))?;
                 }
                 Ok(())
             }

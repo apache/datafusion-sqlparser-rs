@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::value::escape_single_quote_string;
+use crate::ast::value::{escape_single_quote_string, SingleQuotedChar};
 use crate::ast::{
     display_comma_separated, display_separated,
     table_constraints::{
@@ -1028,7 +1028,7 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::Refresh { subpath } => {
                 write!(f, "REFRESH")?;
                 if let Some(path) = subpath {
-                    write!(f, " '{path}'")?;
+                    write!(f, " '{}'", escape_single_quote_string(path))?;
                 }
                 Ok(())
             }
@@ -1479,7 +1479,7 @@ impl fmt::Display for IndexOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Using(index_type) => write!(f, "USING {index_type}"),
-            Self::Comment(s) => write!(f, "COMMENT '{s}'"),
+            Self::Comment(s) => write!(f, "COMMENT '{}'", escape_single_quote_string(s)),
         }
     }
 }
@@ -2718,7 +2718,9 @@ impl fmt::Display for UserDefinedTypeSqlDefinitionOption {
                 write!(f, "STORAGE = {}", storage)
             }
             UserDefinedTypeSqlDefinitionOption::Like(name) => write!(f, "LIKE = {}", name),
-            UserDefinedTypeSqlDefinitionOption::Category(c) => write!(f, "CATEGORY = '{}'", c),
+            UserDefinedTypeSqlDefinitionOption::Category(c) => {
+                write!(f, "CATEGORY = {}", SingleQuotedChar(*c))
+            }
             UserDefinedTypeSqlDefinitionOption::Preferred(b) => write!(f, "PREFERRED = {}", b),
             UserDefinedTypeSqlDefinitionOption::Default(expr) => write!(f, "DEFAULT = {}", expr),
             UserDefinedTypeSqlDefinitionOption::Element(dt) => write!(f, "ELEMENT = {}", dt),
@@ -3227,7 +3229,11 @@ impl fmt::Display for CreateTable {
         }) = &self.hive_formats
         {
             match row_format {
-                Some(HiveRowFormat::SERDE { class }) => write!(f, " ROW FORMAT SERDE '{class}'")?,
+                Some(HiveRowFormat::SERDE { class }) => write!(
+                    f,
+                    " ROW FORMAT SERDE '{}'",
+                    escape_single_quote_string(class)
+                )?,
                 Some(HiveRowFormat::DELIMITED { delimiters }) => {
                     write!(f, " ROW FORMAT DELIMITED")?;
                     if !delimiters.is_empty() {
@@ -3259,7 +3265,7 @@ impl fmt::Display for CreateTable {
             }
             if !self.external {
                 if let Some(loc) = location {
-                    write!(f, " LOCATION '{loc}'")?;
+                    write!(f, " LOCATION '{}'", escape_single_quote_string(loc))?;
                 }
             }
         }
@@ -3268,7 +3274,7 @@ impl fmt::Display for CreateTable {
                 write!(f, " STORED AS {file_format}")?;
             }
             if let Some(location) = &self.location {
-                write!(f, " LOCATION '{location}'")?;
+                write!(f, " LOCATION '{}'", escape_single_quote_string(location))?;
             }
         }
 
@@ -3301,21 +3307,33 @@ impl fmt::Display for CreateTable {
             write!(f, " {options}")?;
         }
         if let Some(external_volume) = self.external_volume.as_ref() {
-            write!(f, " EXTERNAL_VOLUME='{external_volume}'")?;
+            write!(
+                f,
+                " EXTERNAL_VOLUME='{}'",
+                escape_single_quote_string(external_volume)
+            )?;
         }
 
         if let Some(catalog) = self.catalog.as_ref() {
-            write!(f, " CATALOG='{catalog}'")?;
+            write!(f, " CATALOG='{}'", escape_single_quote_string(catalog))?;
         }
 
         if self.iceberg {
             if let Some(base_location) = self.base_location.as_ref() {
-                write!(f, " BASE_LOCATION='{base_location}'")?;
+                write!(
+                    f,
+                    " BASE_LOCATION='{}'",
+                    escape_single_quote_string(base_location)
+                )?;
             }
         }
 
         if let Some(catalog_sync) = self.catalog_sync.as_ref() {
-            write!(f, " CATALOG_SYNC='{catalog_sync}'")?;
+            write!(
+                f,
+                " CATALOG_SYNC='{}'",
+                escape_single_quote_string(catalog_sync)
+            )?;
         }
 
         if let Some(storage_serialization_policy) = self.storage_serialization_policy.as_ref() {
@@ -3360,7 +3378,11 @@ impl fmt::Display for CreateTable {
         }
 
         if let Some(default_ddl_collation) = &self.default_ddl_collation {
-            write!(f, " DEFAULT_DDL_COLLATION='{default_ddl_collation}'",)?;
+            write!(
+                f,
+                " DEFAULT_DDL_COLLATION='{}'",
+                escape_single_quote_string(default_ddl_collation)
+            )?;
         }
 
         if let Some(with_aggregation_policy) = &self.with_aggregation_policy {
@@ -3380,7 +3402,11 @@ impl fmt::Display for CreateTable {
         }
 
         if let Some(target_lag) = &self.target_lag {
-            write!(f, " TARGET_LAG='{target_lag}'")?;
+            write!(
+                f,
+                " TARGET_LAG='{}'",
+                escape_single_quote_string(target_lag)
+            )?;
         }
 
         if let Some(warehouse) = &self.warehouse {
@@ -3847,11 +3873,11 @@ impl fmt::Display for CreateConnector {
         )?;
 
         if let Some(connector_type) = &self.connector_type {
-            write!(f, " TYPE '{connector_type}'")?;
+            write!(f, " TYPE '{}'", escape_single_quote_string(connector_type))?;
         }
 
         if let Some(url) = &self.url {
-            write!(f, " URL '{url}'")?;
+            write!(f, " URL '{}'", escape_single_quote_string(url))?;
         }
 
         if let Some(comment) = &self.comment {

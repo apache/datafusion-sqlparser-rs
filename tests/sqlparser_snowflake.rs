@@ -4959,3 +4959,11 @@ fn test_stage_name_delimiters() {
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
 }
+
+#[test]
+fn display_doubled_quotes_in_stage_options() {
+    snowflake().verified_stmt(r#"PUT 'fi''le' @stage"#);
+    snowflake().verified_stmt(r#"CREATE STAGE s URL='a''b'"#);
+    snowflake().verified_stmt(r#"CREATE TABLE t (a INT) DEFAULT_DDL_COLLATION='x''y'"#);
+    snowflake().verified_stmt(r#"COPY INTO t FROM @s FILES = ('a''b') PATTERN = 'x''y'"#);
+}

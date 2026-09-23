@@ -20143,3 +20143,13 @@ fn parse_stage_table_factor() {
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
 }
+
+#[test]
+fn display_doubled_quotes_in_string_literal_options() {
+    pg_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) COMMENT = 'it''s'"#);
+    pg_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) COMMENT 'it''s'"#);
+    pg_and_generic().verified_stmt(r#"CREATE EXTERNAL TABLE t () LOCATION 'a''b'"#);
+    pg_and_generic().verified_stmt(
+        r#"COPY t FROM 'f' (FORMAT text, DELIMITER '''', NULL 'n''u', QUOTE '''', ESCAPE '''')"#,
+    );
+}

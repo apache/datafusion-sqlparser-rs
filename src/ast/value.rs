@@ -618,6 +618,19 @@ pub fn escape_double_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\"')
 }
 
+/// A character written as a single-quoted SQL string literal.
+pub(crate) struct SingleQuotedChar(pub(crate) char);
+
+impl fmt::Display for SingleQuotedChar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0 == '\'' {
+            f.write_str("''''")
+        } else {
+            write!(f, "'{}'", self.0)
+        }
+    }
+}
+
 pub struct EscapeEscapedStringLiteral<'a>(&'a str);
 
 impl fmt::Display for EscapeEscapedStringLiteral<'_> {

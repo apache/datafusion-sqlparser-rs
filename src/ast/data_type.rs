@@ -893,7 +893,7 @@ fn format_clickhouse_datetime_precision_and_timezone(
     write!(f, "{sql_type}({len}")?;
 
     if let Some(time_zone) = time_zone {
-        write!(f, ", '{time_zone}'")?;
+        write!(f, ", '{}'", escape_single_quote_string(time_zone))?;
     }
 
     write!(f, ")")?;

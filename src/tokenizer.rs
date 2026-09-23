@@ -1062,6 +1062,9 @@ impl<'a> Tokenizer<'a> {
         chars: &mut State,
         prev_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
+        // A prefix letter written directly after a period continues an identifier, so the `x` in
+        // `t.x'01'` names a column instead of starting a hex string literal.
+        let after_period = prev_token == Some(&Token::Period);
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
@@ -1076,7 +1079,9 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
                 // BigQuery and MySQL use b or B for byte string literal, Postgres for bit strings
-                b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
+                b @ 'B' | b @ 'b'
+                    if !after_period
+                        && dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
                 {
                     chars.next(); // consume
                     match chars.peek() {
@@ -1116,7 +1121,9 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // BigQuery uses r or R for raw string literal
-                b @ 'R' | b @ 'r' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                b @ 'R' | b @ 'r'
+                    if !after_period && dialect_of!(self is BigQueryDialect | GenericDialect) =>
+                {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('\'') => self
@@ -1143,7 +1150,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // Redshift uses lower case n for national string literal
-                n @ 'N' | n @ 'n' => {
+                n @ 'N' | n @ 'n' if !after_period => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
                         Some('\'') => {
@@ -1173,7 +1180,9 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                 }
-                q @ 'Q' | q @ 'q' if self.dialect.supports_quote_delimited_string() => {
+                q @ 'Q' | q @ 'q'
+                    if !after_period && self.dialect.supports_quote_delimited_string() =>
+                {
                     chars.next(); // consume and check the next char
                     if let Some('\'') = chars.peek() {
                         self.tokenize_quote_delimited_string(chars, &[q])
@@ -1184,7 +1193,9 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
-                x @ 'e' | x @ 'E' if self.dialect.supports_string_escape_constant() => {
+                x @ 'e' | x @ 'E'
+                    if !after_period && self.dialect.supports_string_escape_constant() =>
+                {
                     let starting_loc = chars.location();
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
@@ -1201,7 +1212,9 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // Unicode string literals like U&'first \000A second' are supported in some dialects, including PostgreSQL
-                x @ 'u' | x @ 'U' if self.dialect.supports_unicode_string_literal() => {
+                x @ 'u' | x @ 'U'
+                    if !after_period && self.dialect.supports_unicode_string_literal() =>
+                {
                     chars.next(); // consume, to check the next char
                     if chars.peek() == Some(&'&') {
                         // we cannot advance the iterator here, as we need to consume the '&' later if the 'u' was an identifier
@@ -1219,7 +1232,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 // The spec only allows an uppercase 'X' to introduce a hex
                 // string, but PostgreSQL, at least, allows a lowercase 'x' too.
-                x @ 'x' | x @ 'X' => {
+                x @ 'x' | x @ 'X' if !after_period => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
                         Some('\'') => {
@@ -2632,8 +2645,8 @@ fn take_char_from_hex_digits(
 mod tests {
     use super::*;
     use crate::dialect::{
-        BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect,
-        PostgreSqlDialect, SQLiteDialect,
+        BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
+        MySqlDialect, OracleDialect, PostgreSqlDialect, SQLiteDialect,
     };
     use crate::test_utils::{all_dialects, all_dialects_except, all_dialects_where};
     use core::fmt::Debug;
@@ -4576,5 +4589,133 @@ mod tests {
             .to_string(),
             "[a b]"
         );
+    }
+
+    #[test]
+    fn tokenize_literal_prefix_after_period() {
+        for (dialect, sql, expected) in [
+            (
+                Box::new(GenericDialect {}) as Box<dyn Dialect>,
+                "t.x'ff'",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("x", None),
+                    Token::SingleQuotedString("ff".to_string()),
+                ],
+            ),
+            (
+                Box::new(PostgreSqlDialect {}),
+                "t.b'01'",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("b", None),
+                    Token::SingleQuotedString("01".to_string()),
+                ],
+            ),
+            (
+                Box::new(BigQueryDialect {}),
+                "t.r'raw'",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("r", None),
+                    Token::SingleQuotedString("raw".to_string()),
+                ],
+            ),
+            (
+                Box::new(PostgreSqlDialect {}),
+                "t.e'es'",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("e", None),
+                    Token::SingleQuotedString("es".to_string()),
+                ],
+            ),
+            (
+                Box::new(PostgreSqlDialect {}),
+                "t.u&'uni'",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("u", None),
+                    Token::Ampersand,
+                    Token::SingleQuotedString("uni".to_string()),
+                ],
+            ),
+            (
+                Box::new(OracleDialect {}),
+                "t.q'[quoted]'",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("q", None),
+                    Token::SingleQuotedString("[quoted]".to_string()),
+                ],
+            ),
+            (
+                Box::new(GenericDialect {}),
+                "t.n'nat'",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("n", None),
+                    Token::SingleQuotedString("nat".to_string()),
+                ],
+            ),
+        ] {
+            let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+            assert_eq!(tokenizer.tokenize().unwrap(), expected, "{sql}");
+        }
+    }
+
+    #[test]
+    fn tokenize_literal_prefix_without_period() {
+        for (dialect, sql, expected) in [
+            (
+                Box::new(GenericDialect {}) as Box<dyn Dialect>,
+                "x'ff'",
+                Token::HexStringLiteral("ff".to_string()),
+            ),
+            (
+                Box::new(PostgreSqlDialect {}),
+                "b'01'",
+                Token::SingleQuotedByteStringLiteral("01".to_string()),
+            ),
+            (
+                Box::new(BigQueryDialect {}),
+                "r'raw'",
+                Token::SingleQuotedRawStringLiteral("raw".to_string()),
+            ),
+            (
+                Box::new(PostgreSqlDialect {}),
+                "e'es'",
+                Token::EscapedStringLiteral("es".to_string()),
+            ),
+            (
+                Box::new(PostgreSqlDialect {}),
+                "u&'uni'",
+                Token::UnicodeStringLiteral("uni".to_string()),
+            ),
+            (
+                Box::new(OracleDialect {}),
+                "q'[quoted]'",
+                Token::QuoteDelimitedStringLiteral(QuoteDelimitedString {
+                    start_quote: '[',
+                    value: "quoted".to_string(),
+                    end_quote: ']',
+                }),
+            ),
+            (
+                Box::new(GenericDialect {}),
+                "n'nat'",
+                Token::NationalStringLiteral("nat".to_string()),
+            ),
+        ] {
+            let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+            assert_eq!(tokenizer.tokenize().unwrap(), vec![expected], "{sql}");
+        }
     }
 }

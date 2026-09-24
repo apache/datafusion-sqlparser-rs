@@ -426,8 +426,10 @@ pub trait Visitor {
         ControlFlow::Continue(())
     }
 
-    /// Invoked for every AST node before visiting its children, and before
-    /// the node's typed hook such as [`Visitor::pre_visit_expr`].
+    /// Invoked for every AST node before visiting its children. It runs before
+    /// hooks declared on the node's type, such as [`Visitor::pre_visit_expr`],
+    /// and after hooks declared on the field holding it, such as
+    /// [`Visitor::pre_visit_relation`].
     ///
     /// # Example
     /// ```
@@ -458,8 +460,10 @@ pub trait Visitor {
         ControlFlow::Continue(())
     }
 
-    /// Invoked for every AST node after visiting its children, and after the
-    /// node's typed hook such as [`Visitor::post_visit_expr`].
+    /// Invoked for every AST node after visiting its children. It runs after
+    /// hooks declared on the node's type, such as [`Visitor::post_visit_expr`],
+    /// and before hooks declared on the field holding it, such as
+    /// [`Visitor::post_visit_relation`].
     fn post_visit_node(&mut self, _node: NodeRef<'_>) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
@@ -1435,6 +1439,66 @@ mod tests {
         assert_eq!(visitor.relations, vec!["db1.v", "t"]);
     }
 
+    #[derive(Default)]
+    struct HookOrderVisitor(Vec<String>);
+
+    impl HookOrderVisitor {
+        fn node(&mut self, event: &str, node: NodeRef<'_>) -> ControlFlow<()> {
+            let name = node.type_name().rsplit("::").next().unwrap();
+            if matches!(name, "Expr" | "ObjectName") {
+                self.0.push(format!("{event} node {name}"));
+            }
+            ControlFlow::Continue(())
+        }
+
+        fn typed(&mut self, event: &str) -> ControlFlow<()> {
+            self.0.push(event.to_string());
+            ControlFlow::Continue(())
+        }
+    }
+
+    impl Visitor for HookOrderVisitor {
+        type Break = ();
+
+        fn pre_visit_node(&mut self, node: NodeRef<'_>) -> ControlFlow<()> {
+            self.node("pre", node)
+        }
+        fn post_visit_node(&mut self, node: NodeRef<'_>) -> ControlFlow<()> {
+            self.node("post", node)
+        }
+        fn pre_visit_expr(&mut self, _: &Expr) -> ControlFlow<()> {
+            self.typed("pre expr")
+        }
+        fn post_visit_expr(&mut self, _: &Expr) -> ControlFlow<()> {
+            self.typed("post expr")
+        }
+        fn pre_visit_relation(&mut self, _: &ObjectName) -> ControlFlow<()> {
+            self.typed("pre relation")
+        }
+        fn post_visit_relation(&mut self, _: &ObjectName) -> ControlFlow<()> {
+            self.typed("post relation")
+        }
+    }
+
+    #[test]
+    fn test_visit_node_order_around_typed_hooks() {
+        let mut visitor = HookOrderVisitor::default();
+        do_visit("SELECT a FROM t", &mut visitor);
+        assert_eq!(
+            visitor.0,
+            [
+                "pre node Expr",
+                "pre expr",
+                "post expr",
+                "post node Expr",
+                "pre relation",
+                "pre node ObjectName",
+                "post node ObjectName",
+                "post relation",
+            ]
+        );
+    }
+
     #[derive(Debug, PartialEq)]
     struct Node {
         depth: usize,
@@ -1472,7 +1536,7 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_node_reaches_every_derived_node() {
+    fn test_visit_node_reaches_every_node() {
         let mut visitor = NodeVisitor::default();
         do_visit(
             "SELECT CAST(a AS INT) AS x FROM t JOIN u ON t.id = u.id",
@@ -1491,6 +1555,9 @@ mod tests {
         let item = &visitor.nodes[find("SelectItem", "CAST(a AS INT) AS x")];
         assert!(item.spanned);
         assert_eq!(item.variant, Some("ExprWithAlias"));
+
+        let alias = &visitor.nodes[find("Ident", "x")];
+        assert_eq!(alias.variant, None);
 
         let data_type = &visitor.nodes[find("DataType", "INT")];
         assert!(!data_type.spanned);

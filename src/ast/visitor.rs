@@ -19,10 +19,12 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, string::String, vec::Vec};
+use core::any::Any;
+use core::fmt;
 use core::ops::ControlFlow;
 
 use crate::ast::{
-    Expr, GroupByExpr, Ident, ObjectName, OrderBy, OrderByExpr, Query, Select, Statement,
+    Expr, GroupByExpr, Ident, ObjectName, OrderBy, OrderByExpr, Query, Select, Spanned, Statement,
     TableFactor, ValueWithSpan,
 };
 
@@ -63,6 +65,103 @@ pub trait VisitMut {
     /// traverse and allow in-place mutation of child nodes. Returning a
     /// `ControlFlow` value permits early termination of the traversal.
     fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break>;
+}
+
+/// Any AST node, as passed to [`Visitor::pre_visit_node`] and
+/// [`Visitor::post_visit_node`].
+#[derive(Clone, Copy)]
+pub struct NodeRef<'a> {
+    any: &'a dyn Any,
+    type_name: &'static str,
+    spanned: Option<&'a dyn Spanned>,
+    display: Option<&'a dyn fmt::Display>,
+}
+
+impl<'a> NodeRef<'a> {
+    #[doc(hidden)]
+    pub fn __new(
+        any: &'a dyn Any,
+        type_name: &'static str,
+        spanned: Option<&'a dyn Spanned>,
+        display: Option<&'a dyn fmt::Display>,
+    ) -> Self {
+        Self {
+            any,
+            type_name,
+            spanned,
+            display,
+        }
+    }
+
+    /// The node as `T`, if it is a `T`.
+    pub fn downcast_ref<T: Any>(&self) -> Option<&'a T> {
+        self.any.downcast_ref()
+    }
+
+    /// The [`core::any::type_name`] of the node.
+    pub fn type_name(&self) -> &'static str {
+        self.type_name
+    }
+
+    /// The node, if its type implements [`Spanned`].
+    pub fn spanned(&self) -> Option<&'a dyn Spanned> {
+        self.spanned
+    }
+
+    /// The node, if its type implements [`fmt::Display`].
+    pub fn display(&self) -> Option<&'a dyn fmt::Display> {
+        self.display
+    }
+}
+
+impl fmt::Debug for NodeRef<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.type_name)
+    }
+}
+
+/// Autoref specialization used by the `Visit` derive to fill [`NodeRef`].
+#[doc(hidden)]
+pub mod __private {
+    use super::{fmt, Spanned};
+
+    pub struct Probe<'a, T>(pub &'a T);
+
+    pub trait SpannedProbe<'a> {
+        fn spanned(&self) -> Option<&'a dyn Spanned>;
+    }
+    impl<'a, T: Spanned> SpannedProbe<'a> for &Probe<'a, T> {
+        fn spanned(&self) -> Option<&'a dyn Spanned> {
+            Some(self.0)
+        }
+    }
+
+    pub trait SpannedFallback<'a> {
+        fn spanned(&self) -> Option<&'a dyn Spanned>;
+    }
+    impl<'a, T> SpannedFallback<'a> for Probe<'a, T> {
+        fn spanned(&self) -> Option<&'a dyn Spanned> {
+            None
+        }
+    }
+
+    pub trait DisplayProbe<'a> {
+        fn display(&self) -> Option<&'a dyn fmt::Display>;
+    }
+    impl<'a, T: fmt::Display> DisplayProbe<'a> for &Probe<'a, T> {
+        fn display(&self) -> Option<&'a dyn fmt::Display> {
+            Some(self.0)
+        }
+    }
+
+    pub trait DisplayFallback<'a> {
+        fn display(&self) -> Option<&'a dyn fmt::Display>;
+    }
+    impl<'a, T> DisplayFallback<'a> for Probe<'a, T> {
+        fn display(&self) -> Option<&'a dyn fmt::Display> {
+            None
+        }
+    }
 }
 
 impl<T: Visit> Visit for Option<T> {
@@ -316,6 +415,44 @@ pub trait Visitor {
 
     /// Invoked for any `GROUP BY` clauses that appear in the AST after visiting children
     fn post_visit_group_by(&mut self, _group_by: &GroupByExpr) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for every AST node before visiting its children, and before
+    /// the node's typed hook such as [`Visitor::pre_visit_expr`].
+    ///
+    /// # Example
+    /// ```
+    /// # use sqlparser::parser::Parser;
+    /// # use sqlparser::dialect::GenericDialect;
+    /// # use sqlparser::ast::{Join, NodeRef, Visit, Visitor};
+    /// # use core::ops::ControlFlow;
+    /// struct Joins(Vec<String>);
+    ///
+    /// impl Visitor for Joins {
+    ///     type Break = ();
+    ///
+    ///     fn pre_visit_node(&mut self, node: NodeRef<'_>) -> ControlFlow<()> {
+    ///         if let Some(join) = node.downcast_ref::<Join>() {
+    ///             self.0.push(join.relation.to_string());
+    ///         }
+    ///         ControlFlow::Continue(())
+    ///     }
+    /// }
+    ///
+    /// let sql = "SELECT * FROM a JOIN b ON a.id = b.id JOIN c ON b.id = c.id";
+    /// let statements = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+    /// let mut joins = Joins(Vec::new());
+    /// let _ = statements.visit(&mut joins);
+    /// assert_eq!(joins.0, ["b", "c"]);
+    /// ```
+    fn pre_visit_node(&mut self, _node: NodeRef<'_>) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for every AST node after visiting its children, and after the
+    /// node's typed hook such as [`Visitor::post_visit_expr`].
+    fn post_visit_node(&mut self, _node: NodeRef<'_>) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 }
@@ -1288,6 +1425,62 @@ mod tests {
         let mut visitor = RelationVisitor::default();
         do_visit("CREATE VIEW db1.v AS SELECT * FROM t", &mut visitor);
         assert_eq!(visitor.relations, vec!["db1.v", "t"]);
+    }
+
+    #[derive(Default)]
+    struct NodeVisitor {
+        depth: usize,
+        nodes: Vec<(usize, &'static str, bool, Option<String>)>,
+    }
+
+    impl Visitor for NodeVisitor {
+        type Break = ();
+
+        fn pre_visit_node(&mut self, node: NodeRef<'_>) -> ControlFlow<Self::Break> {
+            let name = node.type_name().rsplit("::").next().unwrap();
+            let display = node.display().map(|d| d.to_string());
+            self.nodes
+                .push((self.depth, name, node.spanned().is_some(), display));
+            self.depth += 1;
+            ControlFlow::Continue(())
+        }
+
+        fn post_visit_node(&mut self, _node: NodeRef<'_>) -> ControlFlow<Self::Break> {
+            self.depth -= 1;
+            ControlFlow::Continue(())
+        }
+    }
+
+    #[test]
+    fn test_visit_node_reaches_every_derived_node() {
+        let mut visitor = NodeVisitor::default();
+        do_visit(
+            "SELECT CAST(a AS INT) AS x FROM t JOIN u ON t.id = u.id",
+            &mut visitor,
+        );
+        assert_eq!(visitor.depth, 0);
+
+        let find = |name: &str, display: &str| {
+            visitor
+                .nodes
+                .iter()
+                .position(|(_, n, _, d)| *n == name && d.as_deref() == Some(display))
+                .unwrap_or_else(|| panic!("{name} `{display}` not visited"))
+        };
+
+        let item = find("SelectItem", "CAST(a AS INT) AS x");
+        assert!(visitor.nodes[item].2);
+
+        let data_type = find("DataType", "INT");
+        assert!(!visitor.nodes[data_type].2);
+
+        let join = find("Join", "JOIN u ON t.id = u.id");
+        assert!(visitor.nodes[join].2);
+        let (join_depth, ..) = visitor.nodes[join];
+        assert_eq!(
+            visitor.nodes[join + 1],
+            (join_depth + 1, "TableFactor", true, Some("u".to_string()))
+        );
     }
 }
 

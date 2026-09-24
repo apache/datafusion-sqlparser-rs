@@ -46,12 +46,35 @@ pub(crate) fn derive_visit(
     } = visit_type;
 
     let attributes = Attributes::parse(&input.attrs);
-    // Add a bound `T: Visit` to every type parameter T.
+    // Add a bound `T: Visit` to every type parameter T, and `T: 'static` for `Visit`.
     let generics = add_trait_bounds(input.generics, visit_type);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let (pre_visit, post_visit) = attributes.visit(quote!(self));
     let children = visit_children(&input.data, visit_type);
+    let (pre_visit_node, post_visit_node) = if modifier.is_none() {
+        (
+            Some(quote! {
+                let node = {
+                    use sqlparser::ast::__private::{
+                        DisplayFallback as _, DisplayProbe as _, SpannedFallback as _,
+                        SpannedProbe as _,
+                    };
+                    let probe = sqlparser::ast::__private::Probe(self);
+                    sqlparser::ast::NodeRef::__new(
+                        self,
+                        ::core::any::type_name::<Self>(),
+                        (&&probe).spanned(),
+                        (&&probe).display(),
+                    )
+                };
+                visitor.pre_visit_node(node)?;
+            }),
+            Some(quote!(visitor.post_visit_node(node)?;)),
+        )
+    } else {
+        (None, None)
+    };
 
     let expanded = quote! {
         // The generated impl.
@@ -63,9 +86,11 @@ pub(crate) fn derive_visit(
                 &#modifier self,
                 visitor: &mut V
             ) -> ::core::ops::ControlFlow<V::Break> {
+                #pre_visit_node
                 #pre_visit
                 #children
                 #post_visit
+                #post_visit_node
                 ::core::ops::ControlFlow::Continue(())
             }
         }
@@ -137,13 +162,24 @@ impl Attributes {
     }
 }
 
-// Add a bound `T: Visit` to every type parameter T.
-fn add_trait_bounds(mut generics: Generics, VisitType { visit_trait, .. }: &VisitType) -> Generics {
+// Add a bound `T: Visit` to every type parameter T, and `T: 'static` for
+// `Visit`, whose node hook passes the node as `&dyn Any`.
+fn add_trait_bounds(
+    mut generics: Generics,
+    VisitType {
+        visit_trait,
+        modifier,
+        ..
+    }: &VisitType,
+) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
             type_param
                 .bounds
                 .push(parse_quote!(sqlparser::ast::#visit_trait));
+            if modifier.is_none() {
+                type_param.bounds.push(parse_quote!('static));
+            }
         }
     }
     generics

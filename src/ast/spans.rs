@@ -3166,17 +3166,16 @@ WHERE id = 1
     }
 
     #[test]
-    fn test_create_foreign_table_span_includes_option_keys() {
+    fn test_create_foreign_table_span_includes_quoted_option_value() {
         let dialect = &crate::dialect::PostgreSqlDialect {};
         let sql = "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public')";
         let mut test = SpanTest::new(dialect, sql);
 
-        // Ends at the option key, not the statement: a quoted option value is an
-        // Ident with an empty span, so it contributes nothing to the union.
+        // Span reaches through the quoted value but not the closing paren.
         let stmt = test.0.parse_statement().unwrap();
         assert_eq!(
             test.get_source(stmt.span()),
-            "ft (a INT) SERVER s OPTIONS (schema_name"
+            "ft (a INT) SERVER s OPTIONS (schema_name 'public'"
         );
     }
 }

@@ -1220,6 +1220,9 @@ impl Spanned for AlterTableOperation {
             } => {
                 union_spans(core::iter::once(col_name.span).chain(options.iter().map(|i| i.span())))
             }
+            AlterTableOperation::ModifyOrderBy { order_by } => {
+                union_spans(order_by.iter().map(|e| e.span()))
+            }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 old_name.span.union(&new_name.span)
             }

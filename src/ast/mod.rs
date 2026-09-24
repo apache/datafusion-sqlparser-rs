@@ -402,8 +402,11 @@ impl fmt::Display for Ident {
 #[cfg(feature = "visitor")]
 impl Visit for Ident {
     fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        let node = NodeRef::__new(self, core::any::type_name::<Self>(), None, None, Some(self));
+        visitor.pre_visit_node(node)?;
         visitor.pre_visit_ident(self)?;
-        visitor.post_visit_ident(self)
+        visitor.post_visit_ident(self)?;
+        visitor.post_visit_node(node)
     }
 }
 

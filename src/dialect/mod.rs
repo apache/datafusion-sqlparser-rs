@@ -502,6 +502,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if type names may consist of multiple space-separated identifiers
+    /// or string literals, as in SQLite's `typename` grammar.
+    fn supports_multiword_type_names(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports specifying null treatment
     /// as part of a window function's parameter list as opposed
     /// to after the parameter list.

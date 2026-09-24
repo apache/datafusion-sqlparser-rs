@@ -1821,7 +1821,7 @@ impl<'a> Parser<'a> {
                         uses_odbc_syntax: false,
                     }))
                 }
-                DataType::Custom(..) => parser_err!("dummy", loc),
+                DataType::Custom(..) | DataType::CustomMultiWord(..) => parser_err!("dummy", loc),
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
                     Ok(Expr::Cast {
@@ -9553,7 +9553,9 @@ impl<'a> Parser<'a> {
                         | Keyword::GENERATED
                         | Keyword::AS
                 ),
-                _ => true, // e.g. comma immediately after column name
+                // A single-quoted string is a valid type name in SQLite's ids grammar.
+                Token::SingleQuotedString(_) => false,
+                _ => true,
             }
         } else {
             false
@@ -13227,6 +13229,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::SIGNED => {
+                    if self.dialect.supports_multiword_type_names() {
+                        self.prev_token();
+                        return self.parse_multiword_type_name();
+                    }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::SignedInteger)
                     } else {
@@ -13234,6 +13240,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::UNSIGNED => {
+                    if self.dialect.supports_multiword_type_names() {
+                        self.prev_token();
+                        return self.parse_multiword_type_name();
+                    }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::UnsignedInteger)
                     } else {
@@ -13248,6 +13258,9 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     self.prev_token();
+                    if self.dialect.supports_multiword_type_names() {
+                        return self.parse_multiword_type_name();
+                    }
                     let type_name = self.parse_object_name(false)?;
                     if let Some(modifiers) = self.parse_optional_type_modifiers()? {
                         Ok(DataType::Custom(type_name, modifiers))
@@ -13256,6 +13269,10 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
+            Token::SingleQuotedString(_) if self.dialect.supports_multiword_type_names() => {
+                self.prev_token();
+                return self.parse_multiword_type_name();
+            }
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
@@ -14367,6 +14384,60 @@ impl<'a> Parser<'a> {
             Ok(Some(modifiers))
         } else {
             Ok(None)
+        }
+    }
+
+    /// Parse a space-separated multi-word typename per SQLite's `typename` grammar.
+    fn parse_multiword_type_name(
+        &mut self,
+    ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        let mut parts: Vec<Ident> = vec![];
+        let first = self.next_token();
+        match first.token {
+            Token::Word(w) => parts.push(w.into_ident(first.span)),
+            Token::SingleQuotedString(s) => parts.push(Ident::with_quote('\'', s)),
+            _ => return self.expected("a data type name", first),
+        }
+        loop {
+            let can_extend = {
+                let peeked = self.peek_token_ref();
+                match &peeked.token {
+                    Token::Word(w) => !matches!(
+                        w.keyword,
+                        Keyword::CONSTRAINT
+                            | Keyword::PRIMARY
+                            | Keyword::NOT
+                            | Keyword::NULL
+                            | Keyword::UNIQUE
+                            | Keyword::CHECK
+                            | Keyword::DEFAULT
+                            | Keyword::COLLATE
+                            | Keyword::REFERENCES
+                            | Keyword::GENERATED
+                            | Keyword::AS
+                    ),
+                    Token::SingleQuotedString(_) => true,
+                    _ => false,
+                }
+            };
+            if !can_extend {
+                break;
+            }
+            let next = self.next_token();
+            match next.token {
+                Token::Word(w) => parts.push(w.into_ident(next.span)),
+                Token::SingleQuotedString(s) => parts.push(Ident::with_quote('\'', s)),
+                _ => break,
+            }
+        }
+        let modifiers = self.parse_optional_type_modifiers()?.unwrap_or_default();
+        if parts.len() == 1 {
+            Ok((
+                DataType::Custom(ObjectName::from(vec![parts.remove(0)]), modifiers),
+                false.into(),
+            ))
+        } else {
+            Ok((DataType::CustomMultiWord(parts, modifiers), false.into()))
         }
     }
 

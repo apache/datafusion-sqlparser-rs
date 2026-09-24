@@ -82,8 +82,8 @@ pub use self::ddl::{
     IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
     OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
     Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    ReplicaIdentity, SqliteTableOption, TagsColumnOption, TextSearchObjectType, TriggerObjectKind,
+    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
     UserDefinedTypeStorage, ViewColumnDef, WithData,
 };

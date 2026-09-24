@@ -569,7 +569,7 @@ impl Spanned for CreateTable {
             file_format: _,       // enum
             location: _,          // string, no span
             query,
-            without_rowid: _, // bool
+            sqlite_table_options: _, // keywords, no span
             like: _,
             clone,
             comment: _, // todo, no span
@@ -583,7 +583,6 @@ impl Spanned for CreateTable {
             inherits: _,     // todo, PostgreSQL specific
             partition_of,
             for_values,
-            strict: _,                          // bool
             copy_grants: _,                     // bool
             enable_schema_evolution: _,         // bool
             change_tracking: _,                 // bool

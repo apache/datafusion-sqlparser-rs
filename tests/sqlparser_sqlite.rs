@@ -132,9 +132,10 @@ fn parse_create_table_without_rowid() {
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
-            without_rowid: true,
+            sqlite_table_options,
             ..
         }) => {
+            assert_eq!(sqlite_table_options, vec![SqliteTableOption::WithoutRowid]);
             assert_eq!("t", name.to_string());
         }
         _ => unreachable!(),
@@ -389,9 +390,14 @@ fn test_placeholder() {
 #[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
-    if let Statement::CreateTable(CreateTable { name, strict, .. }) = sqlite().verified_stmt(sql) {
+    if let Statement::CreateTable(CreateTable {
+        name,
+        sqlite_table_options,
+        ..
+    }) = sqlite().verified_stmt(sql)
+    {
         assert_eq!(name.to_string(), "Fruits");
-        assert!(strict);
+        assert_eq!(sqlite_table_options, vec![SqliteTableOption::Strict]);
     }
 }
 
@@ -967,6 +973,45 @@ fn parse_n_prefix_not_national_string() {
 
     // Other dialects still tokenize N'...' as a national string literal.
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
+}
+
+#[test]
+fn parse_create_table_options_list() {
+    use SqliteTableOption::{Strict, WithoutRowid};
+    for (options, expected) in [
+        ("WITHOUT ROWID, STRICT", vec![WithoutRowid, Strict]),
+        ("STRICT, WITHOUT ROWID", vec![Strict, WithoutRowid]),
+        ("STRICT, STRICT", vec![Strict, Strict]),
+    ] {
+        let sql = format!("CREATE TABLE t (a INT) {options}");
+        match sqlite_and_generic().verified_stmt(&sql) {
+            Statement::CreateTable(CreateTable {
+                sqlite_table_options,
+                ..
+            }) => assert_eq!(sqlite_table_options, expected, "{sql}"),
+            _ => unreachable!(),
+        }
+    }
+
+    for (options, error) in [
+        (
+            "WITHOUT ROWID STRICT",
+            "Expected: end of statement, found: STRICT",
+        ),
+        (
+            "STRICT WITHOUT ROWID",
+            "Expected: end of statement, found: WITHOUT",
+        ),
+        ("STRICT,", "Expected: WITHOUT ROWID or STRICT, found: EOF"),
+        (
+            "STRICT, WITHOUT",
+            "Expected: WITHOUT ROWID or STRICT, found: WITHOUT",
+        ),
+    ] {
+        let sql = format!("CREATE TABLE t (a INT) {options}");
+        let actual = sqlite_and_generic().parse_sql_statements(&sql).unwrap_err();
+        assert!(actual.to_string().contains(error), "{sql}: {actual}");
+    }
 }
 
 fn sqlite() -> TestedDialects {

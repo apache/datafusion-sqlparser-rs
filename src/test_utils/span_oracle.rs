@@ -40,47 +40,104 @@ pub(super) fn check(
     recursion_limit: Option<usize>,
     sql: &str,
 ) {
-    let recording = std::env::var_os("SPAN_ORACLE").is_some_and(|mode| mode == "record");
-    if !recording && BASELINE_FINDINGS.is_none() {
-        return;
+    let input = Input {
+        dialects,
+        options,
+        recursion_limit,
+        sql,
+    };
+    // Recording must not read the baseline, which may hold merge conflict markers.
+    if std::env::var_os("SPAN_ORACLE").is_some_and(|mode| mode == "record") {
+        append_lines(Path::new(RECORD_DIR), &input.recorded_lines());
+    } else if let Some(report) = BASELINE_FINDINGS
+        .as_ref()
+        .and_then(|baseline| input.mismatch_report(baseline))
+    {
+        panic!("span oracle mismatch parsing {sql:?}\n{report}\nSee docs/span_oracle.md.");
     }
-    let input = format!("{:016x}", fnv64(sql));
-    let mut grouped: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
-    let mut mismatches = String::new();
-    for dialect in dialects {
-        let options = effective_options(&**dialect, options);
-        let Some(found) = findings(&**dialect, &options, recursion_limit, sql) else {
-            continue;
-        };
-        let options = format!("{:016x}", fnv64(&format!("{options:?}")));
-        let name = dialect_name(&**dialect);
-        let actual: BTreeSet<String> = found.iter().map(ToString::to_string).collect();
-        // Recording must not read the baseline, which may hold merge conflict markers.
-        if !recording {
-            let key = format!("{input}\t{options}\t{name}");
-            let expected = BASELINE_FINDINGS
-                .as_ref()
-                .and_then(|baseline| baseline.get(&key))
-                .cloned()
-                .unwrap_or_default();
-            if let Some(mismatch) = mismatch(&expected, &actual) {
-                mismatches.push_str(&format!("\n{name}:{mismatch}"));
-            }
-        }
-        for finding in actual {
-            grouped
-                .entry((options.clone(), finding))
-                .or_default()
-                .push(name.clone());
-        }
+}
+
+type Baseline = HashMap<String, BTreeSet<String>>;
+
+/// One SQL string as a `TestedDialects` set parses it.
+struct Input<'a> {
+    dialects: &'a [Box<dyn Dialect>],
+    options: Option<&'a ParserOptions>,
+    recursion_limit: Option<usize>,
+    sql: &'a str,
+}
+
+/// The findings of one dialect, with the options hash and name its baseline lines carry.
+struct DialectFindings {
+    options: String,
+    name: String,
+    findings: BTreeSet<String>,
+}
+
+impl Input<'_> {
+    fn hash(&self) -> String {
+        format!("{:016x}", fnv64(self.sql))
     }
 
-    if recording {
-        record(grouped.into_iter().map(|((options, finding), names)| {
-            format!("{input}\t{options}\t{}\t{finding}", names.join(","))
-        }));
-    } else if !mismatches.is_empty() {
-        panic!("span oracle mismatch parsing {sql:?}\n{mismatches}\nSee docs/span_oracle.md.");
+    fn per_dialect(&self) -> Vec<DialectFindings> {
+        self.dialects
+            .iter()
+            .filter_map(|dialect| {
+                let options = effective_options(&**dialect, self.options);
+                let found = findings(&**dialect, &options, self.recursion_limit, self.sql)?;
+                Some(DialectFindings {
+                    options: format!("{:016x}", fnv64(&format!("{options:?}"))),
+                    name: dialect_name(&**dialect),
+                    findings: found.iter().map(ToString::to_string).collect(),
+                })
+            })
+            .collect()
+    }
+
+    /// Baseline lines, one per finding and options hash, listing the dialects that produce it.
+    fn recorded_lines(&self) -> Vec<String> {
+        let mut grouped: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+        for DialectFindings {
+            options,
+            name,
+            findings,
+        } in self.per_dialect()
+        {
+            for finding in findings {
+                grouped
+                    .entry((options.clone(), finding))
+                    .or_default()
+                    .push(name.clone());
+            }
+        }
+        let input = self.hash();
+        grouped
+            .into_iter()
+            .map(|((options, finding), names)| {
+                format!("{input}\t{options}\t{}\t{finding}", names.join(","))
+            })
+            .collect()
+    }
+
+    /// Every difference from `baseline`, per dialect, or `None` when there is none.
+    fn mismatch_report(&self, baseline: &Baseline) -> Option<String> {
+        let input = self.hash();
+        let mut report = String::new();
+        for DialectFindings {
+            options,
+            name,
+            findings,
+        } in self.per_dialect()
+        {
+            let expected = baseline
+                .get(&format!("{input}\t{options}\t{name}"))
+                .cloned()
+                .unwrap_or_default();
+            if let Some(mismatch) = mismatch(&expected, &findings) {
+                report.push_str(&format!("\n{name}:{mismatch}"));
+            }
+        }
+        (!report.is_empty()).then_some(report)
     }
 }
 
@@ -535,17 +592,17 @@ mod nodes {
 }
 
 /// Baseline findings keyed by input, options and dialect, `None` outside this repository.
-static BASELINE_FINDINGS: LazyLock<Option<HashMap<String, BTreeSet<String>>>> =
+static BASELINE_FINDINGS: LazyLock<Option<Baseline>> =
     LazyLock::new(|| load_baseline(Path::new(BASELINE)));
 
 /// `None` when the file does not exist, as in the published crate, which ships without it.
-fn load_baseline(path: &Path) -> Option<HashMap<String, BTreeSet<String>>> {
+fn load_baseline(path: &Path) -> Option<Baseline> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
         Err(e) => panic!("reading {}: {e}", path.display()),
     };
-    let mut findings: HashMap<String, BTreeSet<String>> = HashMap::new();
+    let mut findings = Baseline::new();
     for line in text.lines() {
         let fields: Vec<&str> = line.splitn(4, '\t').collect();
         let [input, options, dialects, finding] = fields[..] else {
@@ -561,17 +618,17 @@ fn load_baseline(path: &Path) -> Option<HashMap<String, BTreeSet<String>>> {
     Some(findings)
 }
 
-fn record(lines: impl Iterator<Item = String>) {
+/// Appends `lines` to this process's file in `dir`, which the recording merge reads.
+fn append_lines(dir: &Path, lines: &[String]) {
     static WRITE: Mutex<()> = Mutex::new(());
-    let lines: Vec<String> = lines.collect();
     if lines.is_empty() {
         return;
     }
     let _guard = WRITE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let path = format!("{RECORD_DIR}/{}.tsv", std::process::id());
-    let written = std::fs::create_dir_all(RECORD_DIR).and_then(|()| {
+    let path = dir.join(format!("{}.tsv", std::process::id()));
+    let written = std::fs::create_dir_all(dir).and_then(|()| {
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -579,7 +636,7 @@ fn record(lines: impl Iterator<Item = String>) {
         lines.iter().try_for_each(|line| writeln!(file, "{line}"))
     });
     if let Err(e) = written {
-        panic!("recording span findings to {path}: {e}");
+        panic!("recording span findings to {}: {e}", path.display());
     }
 }
 
@@ -626,7 +683,8 @@ fn fnv64(text: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::GenericDialect;
+    use crate::ast::{Expr, Select, SelectItem, SetExpr};
+    use crate::dialect::{AnsiDialect, GenericDialect};
     use crate::tokenizer::Location;
 
     fn findings_of(sql: &str) -> Vec<Finding> {
@@ -696,15 +754,161 @@ mod tests {
 
     #[test]
     fn missing_baseline_disables_the_check() {
-        let dir = std::env::temp_dir().join(format!("span-oracle-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let missing = dir.join("missing.tsv");
-        let empty = dir.join("empty.tsv");
+        let dir = TempDir::new("missing");
+        let missing = dir.0.join("missing.tsv");
+        let empty = dir.0.join("empty.tsv");
         std::fs::write(&empty, "").unwrap();
 
         assert!(load_baseline(&missing).is_none());
         assert_eq!(load_baseline(&empty), Some(HashMap::new()));
-        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn input<'a>(dialects: &'a [Box<dyn Dialect>], sql: &'a str) -> Input<'a> {
+        Input {
+            dialects,
+            options: None,
+            recursion_limit: None,
+            sql,
+        }
+    }
+
+    fn generic_and_ansi() -> Vec<Box<dyn Dialect>> {
+        vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]
+    }
+
+    /// A scratch directory removed on drop, also when a test panics.
+    struct TempDir(std::path::PathBuf);
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let dir =
+                std::env::temp_dir().join(format!("span-oracle-{name}-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn recorded_lines_list_every_dialect_with_the_finding() {
+        let dialects = generic_and_ansi();
+        let lines = input(&dialects, "SELECT CAST(a AS INT)").recorded_lines();
+        assert!(lines
+            .iter()
+            .any(|l| l.contains("\tGenericDialect,AnsiDialect\textent\tinexact\t")));
+    }
+
+    #[test]
+    fn recorded_lines_round_trip_through_the_baseline() {
+        let dialects = generic_and_ansi();
+        let input = input(&dialects, "SELECT CAST(a AS INT)");
+        let lines = input.recorded_lines();
+        let dir = TempDir::new("round-trip");
+        let path = dir.0.join("baseline.tsv");
+
+        std::fs::write(&path, lines.join("\n")).unwrap();
+        assert_eq!(input.mismatch_report(&load_baseline(&path).unwrap()), None);
+
+        let (dropped, kept) = lines.split_first().unwrap();
+        std::fs::write(&path, kept.join("\n")).unwrap();
+        let report = input
+            .mismatch_report(&load_baseline(&path).unwrap())
+            .unwrap();
+        let finding = dropped.splitn(4, '\t').nth(3).unwrap();
+        assert!(report.contains(finding));
+
+        let key: Vec<&str> = dropped.splitn(4, '\t').take(3).collect();
+        let stale = format!("{}\tstructure\tempty\tFixed\t0\tfixed", key.join("\t"));
+        std::fs::write(&path, [lines.join("\n"), stale].join("\n")).unwrap();
+        let report = input
+            .mismatch_report(&load_baseline(&path).unwrap())
+            .unwrap();
+        assert!(report.contains("Fixed\t0\tfixed"));
+    }
+
+    #[test]
+    fn unparsable_input_has_no_findings() {
+        let dialects = generic_and_ansi();
+        let input = input(&dialects, "SELEC a");
+        assert_eq!(input.recorded_lines(), Vec::<String>::new());
+        assert_eq!(input.mismatch_report(&Baseline::new()), None);
+    }
+
+    #[test]
+    fn appended_lines_accumulate_in_one_file_per_process() {
+        let dir = TempDir::new("append");
+        append_lines(&dir.0, &["a".to_string()]);
+        append_lines(&dir.0, &["b".to_string()]);
+        let written = std::fs::read_to_string(dir.0.join(format!("{}.tsv", std::process::id())));
+        assert_eq!(written.unwrap(), "a\nb\n");
+
+        std::fs::remove_dir_all(&dir.0).unwrap();
+        append_lines(&dir.0, &[]);
+        assert!(!dir.0.exists());
+    }
+
+    #[test]
+    #[should_panic(expected = "malformed line")]
+    fn malformed_baseline_line_is_rejected() {
+        let dir = TempDir::new("malformed");
+        let path = dir.0.join("baseline.tsv");
+        std::fs::write(&path, "<<<<<<< HEAD\n").unwrap();
+        load_baseline(&path);
+    }
+
+    fn select_mut(statement: &mut Statement) -> Option<&mut Select> {
+        match statement {
+            Statement::Query(query) => match query.body.as_mut() {
+                SetExpr::Select(select) => Some(select),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn far_away() -> Span {
+        Span::new(Location::new(9, 1), Location::new(9, 2))
+    }
+
+    #[test]
+    fn span_outside_the_input_is_invalid() {
+        let dialect = GenericDialect {};
+        let options = effective_options(&dialect, None);
+        let sql = "SELECT a FROM t";
+        let mut statements = Parser::parse_sql(&dialect, sql).unwrap();
+        if let Some(select) = select_mut(&mut statements[0]) {
+            if let SelectItem::UnnamedExpr(Expr::Identifier(ident)) = &mut select.projection[0] {
+                ident.span = far_away();
+            }
+        }
+        let found = nodes::walk(&dialect, &options, sql, &statements);
+        assert!(has(&found, "structure", "invalid", "a"));
+
+        if let Some(select) = select_mut(&mut statements[0]) {
+            select.select_token.0.span = far_away();
+        }
+        let found = extent(&dialect, &options, sql, &statements);
+        assert!(has(&found, "extent", "invalid", "SELECT a FROM t"));
+    }
+
+    #[test]
+    fn span_splitting_a_token_fails_reparse() {
+        let dialect = GenericDialect {};
+        let options = effective_options(&dialect, None);
+        let sql = "SELECT 'ab' FROM t";
+        let mut statements = Parser::parse_sql(&dialect, sql).unwrap();
+        if let Some(select) = select_mut(&mut statements[0]) {
+            if let SelectItem::UnnamedExpr(Expr::Value(value)) = &mut select.projection[0] {
+                value.span = Span::new(Location::new(1, 8), Location::new(1, 10));
+            }
+        }
+        let found = nodes::walk(&dialect, &options, sql, &statements);
+        assert!(has(&found, "reparse", "inexact", "'ab'"));
     }
 
     #[test]

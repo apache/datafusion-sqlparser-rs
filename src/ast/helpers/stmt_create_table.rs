@@ -767,7 +767,7 @@ pub(crate) struct CreateTableConfiguration {
 #[cfg(test)]
 mod tests {
     use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
-    use crate::ast::{Ident, ObjectName, Statement};
+    use crate::ast::{CommitStatement, Ident, ObjectName, Statement};
     use crate::parser::ParserError;
 
     #[test]
@@ -782,11 +782,11 @@ mod tests {
 
     #[test]
     pub fn test_from_invalid_statement() {
-        let stmt = Statement::Commit {
+        let stmt = Statement::Commit(CommitStatement {
             chain: false,
             end: false,
             modifier: None,
-        };
+        });
 
         assert_eq!(
             CreateTableBuilder::try_from(stmt).unwrap_err(),

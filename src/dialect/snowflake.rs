@@ -27,6 +27,10 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
+    AlterSessionStatement, CopyIntoSnowflakeStatement, CreateFileFormatStatement,
+    CreateStageStatement, PutStatement,
+};
+use crate::ast::{
     AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
     ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
     CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
@@ -743,11 +747,11 @@ fn parse_put(parser: &mut Parser) -> Result<Statement, ParserError> {
     let source = parser.parse_literal_string()?;
     let stage = parse_snowflake_stage_name(parser)?;
     let options = parser.parse_key_value_options(false, &[])?;
-    Ok(Statement::Put {
+    Ok(Statement::Put(PutStatement {
         source,
         stage,
         options,
-    })
+    }))
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
@@ -854,13 +858,13 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
 fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
     let session_options = parse_session_options(parser, set)?;
-    Ok(Statement::AlterSession {
+    Ok(Statement::AlterSession(AlterSessionStatement {
         set,
         session_params: KeyValueOptions {
             options: session_options,
             delimiter: KeyValueOptionsDelimiter::Space,
         },
-    })
+    }))
 }
 
 /// Parse snowflake create table statement.
@@ -1285,7 +1289,7 @@ pub fn parse_create_stage(
         comment = Some(parser.parse_comment_value()?);
     }
 
-    Ok(Statement::CreateStage {
+    Ok(Statement::CreateStage(CreateStageStatement {
         or_replace,
         temporary,
         if_not_exists,
@@ -1304,7 +1308,7 @@ pub fn parse_create_stage(
             delimiter: KeyValueOptionsDelimiter::Space,
         },
         comment,
-    })
+    }))
 }
 
 /// Parse a Snowflake `CREATE FILE FORMAT` statement.
@@ -1325,7 +1329,7 @@ pub fn parse_create_file_format(
         None
     };
 
-    Ok(Statement::CreateFileFormat {
+    Ok(Statement::CreateFileFormat(CreateFileFormatStatement {
         or_replace,
         temporary,
         volatile,
@@ -1333,7 +1337,7 @@ pub fn parse_create_file_format(
         name,
         options,
         comment,
-    })
+    }))
 }
 
 pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
@@ -1528,7 +1532,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         }
     }
 
-    Ok(Statement::CopyIntoSnowflake {
+    Ok(Statement::CopyIntoSnowflake(CopyIntoSnowflakeStatement {
         kind,
         into,
         into_columns,
@@ -1549,7 +1553,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         },
         validation_mode,
         partition,
-    })
+    }))
 }
 
 fn parse_select_items_for_data_load(

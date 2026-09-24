@@ -264,12 +264,12 @@ fn parse_at_at_identifier() {
 #[test]
 fn parse_begin() {
     let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; RAISE USING MESSAGE = FORMAT('ERR: %s', 'Bad'); END"#;
-    let Statement::StartTransaction {
+    let Statement::StartTransaction(StartTransactionStatement {
         statements,
         exception,
         has_end_keyword,
         ..
-    } = bigquery().verified_stmt(sql)
+    }) = bigquery().verified_stmt(sql)
     else {
         unreachable!();
     };
@@ -2174,7 +2174,7 @@ fn parse_big_query_declare() {
         ),
     ] {
         match bigquery().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare(DeclareStatement { mut stmts }) => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,

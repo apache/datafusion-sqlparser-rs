@@ -37,11 +37,11 @@ use sqlparser::tokenizer::Token;
 fn pragma_no_value() {
     let sql = "PRAGMA cache_size";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma {
+        Statement::Pragma(PragmaStatement {
             name,
             value: None,
             is_eq: false,
-        } => {
+        }) => {
             assert_eq!("cache_size", name.to_string());
         }
         _ => unreachable!(),
@@ -51,11 +51,11 @@ fn pragma_no_value() {
 fn pragma_eq_style() {
     let sql = "PRAGMA cache_size = 10";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma {
+        Statement::Pragma(PragmaStatement {
             name,
             value: Some(val),
             is_eq: true,
-        } => {
+        }) => {
             assert_eq!("cache_size", name.to_string());
             assert_eq!("10", val.to_string());
         }
@@ -66,11 +66,11 @@ fn pragma_eq_style() {
 fn pragma_function_style() {
     let sql = "PRAGMA cache_size(10)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma {
+        Statement::Pragma(PragmaStatement {
             name,
             value: Some(val),
             is_eq: false,
-        } => {
+        }) => {
             assert_eq!("cache_size", name.to_string());
             assert_eq!("10", val.to_string());
         }
@@ -82,11 +82,11 @@ fn pragma_function_style() {
 fn pragma_eq_string_style() {
     let sql = "PRAGMA table_info = 'sqlite_master'";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma {
+        Statement::Pragma(PragmaStatement {
             name,
             value: Some(val),
             is_eq: true,
-        } => {
+        }) => {
             assert_eq!("table_info", name.to_string());
             assert_eq!("'sqlite_master'", val.to_string());
         }
@@ -98,11 +98,11 @@ fn pragma_eq_string_style() {
 fn pragma_function_string_style() {
     let sql = "PRAGMA table_info(\"sqlite_master\")";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma {
+        Statement::Pragma(PragmaStatement {
             name,
             value: Some(val),
             is_eq: false,
-        } => {
+        }) => {
             assert_eq!("table_info", name.to_string());
             assert_eq!("\"sqlite_master\"", val.to_string());
         }
@@ -114,11 +114,11 @@ fn pragma_function_string_style() {
 fn pragma_eq_placeholder_style() {
     let sql = "PRAGMA table_info = ?";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma {
+        Statement::Pragma(PragmaStatement {
             name,
             value: Some(val),
             is_eq: true,
-        } => {
+        }) => {
             assert_eq!("table_info", name.to_string());
             assert_eq!("?", val.to_string());
         }
@@ -145,12 +145,12 @@ fn parse_create_table_without_rowid() {
 fn parse_create_virtual_table() {
     let sql = "CREATE VIRTUAL TABLE IF NOT EXISTS t USING module_name (arg1, arg2)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateVirtualTable {
+        Statement::CreateVirtualTable(CreateVirtualTableStatement {
             name,
             if_not_exists: true,
             module_name,
             module_args,
-        } => {
+        }) => {
             let args = vec![Ident::new("arg1"), Ident::new("arg2")];
             assert_eq!("t", name.to_string());
             assert_eq!("module_name", module_name.to_string());
@@ -457,7 +457,7 @@ fn parse_attach_database() {
     let verified_stmt = sqlite().verified_stmt(sql);
     assert_eq!(sql, format!("{verified_stmt}"));
     match verified_stmt {
-        Statement::AttachDatabase {
+        Statement::AttachDatabase(AttachDatabaseStatement {
             schema_name,
             database_file_name:
                 Expr::Value(ValueWithSpan {
@@ -465,7 +465,7 @@ fn parse_attach_database() {
                     span: _,
                 }),
             database: true,
-        } => {
+        }) => {
             assert_eq!(schema_name.value, "test");
             assert_eq!(literal_name, "test.db");
         }

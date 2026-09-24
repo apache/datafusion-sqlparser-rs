@@ -1917,6 +1917,33 @@ fn parse_alter_table_column_position() {
         .is_err());
 }
 
+#[test]
+fn parse_tuple_element_access() {
+    clickhouse().verified_stmt("SELECT t.1 FROM t");
+    clickhouse().verified_stmt("SELECT t.1 AS a, t.2 AS b FROM (SELECT (1, 'x') AS t)");
+    clickhouse().verified_stmt("SELECT (1, 'a').1");
+    clickhouse().verified_stmt("SELECT tuple(1, 'a').2");
+    clickhouse().verified_stmt("SELECT arr[1].1 FROM t");
+    clickhouse().verified_stmt("SELECT `t`.1 FROM t");
+    clickhouse().verified_stmt("SELECT t.1 + 1 FROM t");
+    clickhouse().verified_stmt("SELECT * FROM t WHERE t.1 = 1");
+
+    let select = clickhouse().verified_only_select("SELECT t.1 FROM t");
+    assert_eq!(
+        select.projection[0],
+        UnnamedExpr(Expr::CompoundFieldAccess {
+            root: Box::new(Identifier(Ident::new("t"))),
+            access_chain: vec![AccessExpr::Dot(Expr::Value(number("1").with_empty_span()))],
+        })
+    );
+
+    clickhouse().one_statement_parses_to("SELECT t . 1 FROM t", "SELECT t.1 FROM t");
+
+    clickhouse().verified_stmt("SELECT 1.5, 1 + 0.5");
+
+    assert!(clickhouse().parse_sql_statements("SELECT t.").is_err());
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

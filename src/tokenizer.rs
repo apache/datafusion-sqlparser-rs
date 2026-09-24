@@ -1354,6 +1354,18 @@ impl<'a> Tokenizer<'a> {
                         );
                     }
 
+                    // A period directly after an identifier, `)` or `]` starts a
+                    // field access such as `t.1` or `(1, 2).1`, never a float.
+                    if ch == '.'
+                        && matches!(
+                            prev_token,
+                            Some(Token::Word(_) | Token::RParen | Token::RBracket)
+                        )
+                    {
+                        chars.next();
+                        return Ok(Some(Token::Period));
+                    }
+
                     let mut s = self.tokenize_number_part(chars, |ch| ch.is_ascii_digit())?;
 
                     // match binary literal that starts with 0x
@@ -1367,17 +1379,6 @@ impl<'a> Tokenizer<'a> {
                     if let Some('.') = chars.peek() {
                         s.push('.');
                         chars.next();
-                    }
-
-                    // If the dialect supports identifiers that start with a numeric prefix
-                    // and we have now consumed a dot, check if the previous token was a Word.
-                    // If so, what follows is definitely not part of a decimal number and
-                    // we should yield the dot as a dedicated token so compound identifiers
-                    // starting with digits can be parsed correctly.
-                    if s == "." && self.dialect.supports_numeric_prefix() {
-                        if let Some(Token::Word(_)) = prev_token {
-                            return Ok(Some(Token::Period));
-                        }
                     }
 
                     // Consume fractional digits.
@@ -4576,5 +4577,53 @@ mod tests {
             .to_string(),
             "[a b]"
         );
+    }
+
+    #[test]
+    fn tokenize_period_before_digits_after_identifier_or_bracket() {
+        let dialect = GenericDialect {};
+        for (sql, expected) in [
+            (
+                "t.1",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "(1).1",
+                vec![
+                    Token::LParen,
+                    Token::Number("1".to_string(), false),
+                    Token::RParen,
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "a[1].1",
+                vec![
+                    Token::make_word("a", None),
+                    Token::LBracket,
+                    Token::Number("1".to_string(), false),
+                    Token::RBracket,
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "t .1",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Number(".1".to_string(), false),
+                ],
+            ),
+            ("1.5", vec![Token::Number("1.5".to_string(), false)]),
+        ] {
+            let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+            compare(expected, tokens);
+        }
     }
 }

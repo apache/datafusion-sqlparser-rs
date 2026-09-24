@@ -223,7 +223,7 @@ impl TestedDialects {
     /// string (is not modified after a serialization round-trip).
     pub fn verified_query(&self, sql: &str) -> Query {
         match self.verified_stmt(sql) {
-            Statement::Query(query) => *query,
+            Statement::Query(query) => *query.content,
             _ => panic!("Expected Query"),
         }
     }
@@ -233,7 +233,7 @@ impl TestedDialects {
     /// sql string.
     pub fn verified_query_with_canonical(&self, query: &str, canonical: &str) -> Query {
         match self.one_statement_parses_to(query, canonical) {
-            Statement::Query(query) => *query,
+            Statement::Query(query) => *query.content,
             _ => panic!("Expected Query"),
         }
     }
@@ -257,7 +257,7 @@ impl TestedDialects {
     ///    `canonical` sql string
     pub fn verified_only_select_with_canonical(&self, query: &str, canonical: &str) -> Select {
         let q = match self.one_statement_parses_to(query, canonical) {
-            Statement::Query(query) => *query,
+            Statement::Query(query) => *query.content,
             _ => panic!("Expected Query"),
         };
         match *q.body {
@@ -365,7 +365,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
             assert!(!alter_table.if_exists);
             assert!(!alter_table.only);
             assert_eq!(alter_table.table_type, None);
-            only(alter_table.operations)
+            only(alter_table.content.operations)
         }
         _ => panic!("Expected ALTER TABLE statement"),
     }
@@ -475,10 +475,10 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
 /// [`Statement::CreateIndex`], [`Statement::CreateTable`], or [`Statement::AlterTable`].
 pub fn index_column(stmt: Statement) -> Expr {
     match stmt {
-        Statement::CreateIndex(CreateIndex { columns, .. }) => {
+        Statement::CreateIndex(SpannedObject { content: CreateIndex { columns, .. }, .. }) => {
             columns.first().unwrap().column.expr.clone()
         }
-        Statement::CreateTable(CreateTable { constraints, .. }) => {
+        Statement::CreateTable(SpannedObject { content: CreateTable { constraints, .. }, .. }) => {
             match constraints.first().unwrap() {
                 TableConstraint::Index(constraint) => {
                     constraint.columns.first().unwrap().column.expr.clone()

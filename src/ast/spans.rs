@@ -15,31 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::{
-    AlterConnectorStatement, AlterIndexStatement, AlterRoleStatement, AlterSessionStatement,
-    AlterViewStatement, AssertStatement, AttachDatabaseStatement, AttachDuckDBDatabaseStatement,
-    CacheStatement, CloseStatement, CommentStatement, CommitStatement, CopyIntoSnowflakeStatement,
-    CopyStatement, CreateDatabaseStatement, CreateFileFormatStatement, CreateMacroStatement,
-    CreateProcedureStatement, CreateSchemaStatement, CreateSecretStatement,
-    CreateSequenceStatement, CreateStageStatement, CreateTypeStatement,
-    CreateVirtualTableStatement, DeallocateStatement, DeclareStatement,
-    DetachDuckDBDatabaseStatement, DirectoryStatement, DiscardStatement, DropConnectorStatement,
-    DropProcedureStatement, DropSecretStatement, DropStatement, ExecuteStatement, ExplainStatement,
-    ExplainTableStatement, FetchStatement, FlushStatement, InstallStatement, KillStatement,
-    LISTENStatement, LoadDataStatement, LoadStatement, LockTablesStatement, NOTIFYStatement,
-    OptimizeTableStatement, PragmaStatement, PrepareStatement, PutStatement, RaisErrorStatement,
-    ReleaseSavepointStatement, RollbackStatement, SavepointStatement, ShowCatalogsStatement,
-    ShowCollationStatement, ShowColumnsStatement, ShowCreateStatement, ShowDatabasesStatement,
-    ShowFunctionsStatement, ShowProcessListStatement, ShowSchemasStatement, ShowStatusStatement,
-    ShowTablesStatement, ShowVariableStatement, ShowVariablesStatement, ShowViewsStatement,
-    StartTransactionStatement, UNCacheStatement, UNLISTENStatement, UnloadStatement,
-    UnlockTablesStatement,
-};
 use crate::{
     ast::{
-        ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
-        ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
-        ExportData, Owner, TypedString,
+        query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, ColumnOptions, Owner,
+        TypedString,
     },
     tokenizer::TokenWithSpan,
 };
@@ -48,26 +27,24 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
-    AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
-    ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
-    ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement,
+    comments, value::ValueWithSpan, AccessExpr, AlterColumnOperation, AlterIndexOperation,
+    AlterTableOperation, Array, Assignment, AssignmentTarget, AttachedToken, BeginEndStatements,
+    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
+    ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
+    CreateTableOptions, Cte, DoUpdate, ExceptSelectItem, ExcludeConstraintElement,
     ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
     FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
-    HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr,
-    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
-    PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
-    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    HavingBound, IlikeSelectItem, IndexColumn, Interpolate, InterpolateExpr, Join, JoinConstraint,
+    JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure,
+    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
+    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
+    PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatementValue,
+    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, SpannedObject, SqlOption, Statement, Subscript,
     SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Values, ViewColumnDef,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -273,431 +250,732 @@ impl Spanned for Values {
     }
 }
 
-/// # partial span
-///
-/// Missing spans:
-/// - [Statement::CopyIntoSnowflake]
-/// - [Statement::CreateRole]
-/// - [Statement::CreateExtension]
-/// - [Statement::CreateCollation]
-/// - [Statement::DropExtension]
-/// - [Statement::DropOperator]
-/// - [Statement::DropOperatorFamily]
-/// - [Statement::DropOperatorClass]
-/// - [Statement::CreateSecret]
-/// - [Statement::CreateServer]
-/// - [Statement::CreateConnector]
-/// - [Statement::CreateOperator]
-/// - [Statement::CreateOperatorFamily]
-/// - [Statement::CreateOperatorClass]
-/// - [Statement::CreateTextSearch]
-/// - [Statement::AlterFunction]
-/// - [Statement::AlterType]
-/// - [Statement::AlterCollation]
-/// - [Statement::AlterOperator]
-/// - [Statement::AlterOperatorFamily]
-/// - [Statement::AlterOperatorClass]
-/// - [Statement::AlterTextSearch]
-/// - [Statement::AlterRole]
-/// - [Statement::AlterSession]
-/// - [Statement::AttachDatabase]
-/// - [Statement::AttachDuckDBDatabase]
-/// - [Statement::DetachDuckDBDatabase]
-/// - [Statement::Drop]
-/// - [Statement::DropFunction]
-/// - [Statement::DropDomain]
-/// - [Statement::DropProcedure]
-/// - [Statement::DropSecret]
-/// - [Statement::Declare]
-/// - [Statement::Fetch]
-/// - [Statement::Flush]
-/// - [Statement::Discard]
-/// - [Statement::Set]
-/// - [Statement::ShowFunctions]
-/// - [Statement::ShowVariable]
-/// - [Statement::ShowStatus]
-/// - [Statement::ShowVariables]
-/// - [Statement::ShowCreate]
-/// - [Statement::ShowColumns]
-/// - [Statement::ShowTables]
-/// - [Statement::ShowCollation]
-/// - [Statement::ShowCharset]
-/// - [Statement::StartTransaction]
-/// - [Statement::Comment]
-/// - [Statement::Commit]
-/// - [Statement::Rollback]
-/// - [Statement::CreateSchema]
-/// - [Statement::CreateDatabase]
-/// - [Statement::CreateFunction]
-/// - [Statement::CreateDomain]
-/// - [Statement::CreateTrigger]
-/// - [Statement::DropTrigger]
-/// - [Statement::CreateProcedure]
-/// - [Statement::CreateMacro]
-/// - [Statement::CreateStage]
-/// - [Statement::CreateFileFormat]
-/// - [Statement::CreateWarehouse]
-/// - [Statement::Assert]
-/// - [Statement::Grant]
-/// - [Statement::Deny]
-/// - [Statement::Revoke]
-/// - [Statement::Deallocate]
-/// - [Statement::Execute]
-/// - [Statement::Prepare]
-/// - [Statement::Kill]
-/// - [Statement::ExplainTable]
-/// - [Statement::Explain]
-/// - [Statement::Savepoint]
-/// - [Statement::ReleaseSavepoint]
-/// - [Statement::Cache]
-/// - [Statement::UNCache]
-/// - [Statement::CreateSequence]
-/// - [Statement::CreateType]
-/// - [Statement::Pragma]
-/// - [Statement::Lock]
-/// - [Statement::LockTables]
-/// - [Statement::UnlockTables(UnlockTablesStatement)]
-/// - [Statement::Unload]
-/// - [Statement::OptimizeTable]
-/// - [Statement::CreatePolicy]
-/// - [Statement::AlterPolicy]
-/// - [Statement::AlterConnector]
-/// - [Statement::DropPolicy]
-/// - [Statement::DropConnector]
-/// - [Statement::ShowCatalogs]
-/// - [Statement::ShowDatabases]
-/// - [Statement::ShowProcessList]
-/// - [Statement::ShowSchemas]
-/// - [Statement::ShowObjects]
-/// - [Statement::ShowViews]
-/// - [Statement::LISTEN]
-/// - [Statement::NOTIFY]
-/// - [Statement::LoadData]
-/// - [Statement::UNLISTEN]
-/// - [Statement::RenameTable]
-/// - [Statement::RaisError]
-/// - [Statement::Throw]
-/// - [Statement::Print]
-/// - [Statement::WaitFor]
-/// - [Statement::Return]
-/// - [Statement::List]
-/// - [Statement::Put]
-/// - [Statement::Remove]
-/// - [Statement::CreateUser]
-/// - [Statement::Vacuum]
-/// - [Statement::AlterUser]
-/// - [Statement::Reset]
+/// The first and last token of any statement, by reference through match ergonomics.
+macro_rules! statement_tokens {
+    ($statement:expr) => {
+        match $statement {
+            Statement::Analyze(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Set(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Truncate(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Msck(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Query(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Insert(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Install(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Load(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Directory(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Case(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::If(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::While(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Raise(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Call(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Copy(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CopyIntoSnowflake(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Open(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Close(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Update(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Delete(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateView(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateTable(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateVirtualTable(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateIndex(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateRole(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateSecret(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateServer(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreatePolicy(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateConnector(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateOperator(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateOperatorFamily(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateOperatorClass(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateTextSearch(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterTable(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterSchema(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterIndex(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterView(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterFunction(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterType(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterCollation(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterOperator(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterOperatorFamily(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterOperatorClass(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterTextSearch(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterRole(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterPolicy(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterConnector(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterSession(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AttachDatabase(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AttachDuckDBDatabase(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DetachDuckDBDatabase(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Drop(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropFunction(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropDomain(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropProcedure(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropSecret(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropPolicy(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropConnector(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Declare(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateExtension(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateCollation(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropExtension(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropOperator(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropOperatorFamily(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropOperatorClass(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Fetch(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Flush(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Discard(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowFunctions(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowVariable(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowStatus(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowVariables(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowCreate(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowColumns(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowCatalogs(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowDatabases(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowProcessList(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowSchemas(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowCharset(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowObjects(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowTables(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowViews(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ShowCollation(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Use(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::StartTransaction(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Comment(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Commit(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Rollback(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateSchema(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateDatabase(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateFunction(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateTrigger(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::DropTrigger(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateProcedure(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateMacro(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateStage(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateFileFormat(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateWarehouse(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Assert(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Grant(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Deny(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Revoke(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Deallocate(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Execute(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Prepare(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Kill(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ExplainTable(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Explain(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Savepoint(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ReleaseSavepoint(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Merge(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Cache(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::UNCache(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateSequence(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateDomain(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateType(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Pragma(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Lock(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::LockTables(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::UnlockTables(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Unload(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::OptimizeTable(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::LISTEN(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::UNLISTEN(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::NOTIFY(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::LoadData(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::RenameTable(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::List(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Put(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Remove(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::RaisError(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Throw(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Print(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::WaitFor(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Return(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::ExportData(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::CreateUser(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::AlterUser(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Vacuum(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            })
+            | Statement::Reset(SpannedObject {
+                start_token,
+                end_token,
+                ..
+            }) => (start_token, end_token),
+        }
+    };
+}
+
+/// The span from the statement's first to its last token.
 impl Spanned for Statement {
     fn span(&self) -> Span {
-        match self {
-            Statement::Analyze(analyze) => analyze.span(),
-            Statement::Truncate(truncate) => truncate.span(),
-            Statement::Msck(msck) => msck.span(),
-            Statement::Query(query) => query.span(),
-            Statement::Insert(insert) => insert.span(),
-            Statement::Install(InstallStatement { extension_name }) => extension_name.span,
-            Statement::Load(LoadStatement { extension_name }) => extension_name.span,
-            Statement::Directory(DirectoryStatement {
-                overwrite: _,
-                local: _,
-                path: _,
-                file_format: _,
-                source,
-            }) => source.span(),
-            Statement::Case(stmt) => stmt.span(),
-            Statement::If(stmt) => stmt.span(),
-            Statement::While(stmt) => stmt.span(),
-            Statement::Raise(stmt) => stmt.span(),
-            Statement::Call(function) => function.span(),
-            Statement::Copy(CopyStatement {
-                source,
-                to: _,
-                target: _,
-                options: _,
-                legacy_options: _,
-                values: _,
-            }) => source.span(),
-            Statement::CopyIntoSnowflake(CopyIntoSnowflakeStatement {
-                into: _,
-                into_columns: _,
-                from_obj: _,
-                from_obj_alias: _,
-                stage_params: _,
-                from_transformations: _,
-                files: _,
-                pattern: _,
-                file_format: _,
-                copy_options: _,
-                validation_mode: _,
-                kind: _,
-                from_query: _,
-                partition: _,
-            }) => Span::empty(),
-            Statement::Open(open) => open.span(),
-            Statement::Close(CloseStatement { cursor }) => match cursor {
-                CloseCursor::All => Span::empty(),
-                CloseCursor::Specific { name } => name.span,
-            },
-            Statement::Update(update) => update.span(),
-            Statement::Delete(delete) => delete.span(),
-            Statement::CreateView(create_view) => create_view.span(),
-            Statement::CreateTable(create_table) => create_table.span(),
-            Statement::CreateVirtualTable(CreateVirtualTableStatement {
-                name,
-                if_not_exists: _,
-                module_name,
-                module_args,
-            }) => union_spans(
-                core::iter::once(name.span())
-                    .chain(core::iter::once(module_name.span))
-                    .chain(module_args.iter().map(|i| i.span)),
-            ),
-            Statement::CreateIndex(create_index) => create_index.span(),
-            Statement::CreateRole(create_role) => create_role.span(),
-            Statement::CreateExtension(create_extension) => create_extension.span(),
-            Statement::CreateCollation(create_collation) => create_collation.span(),
-            Statement::DropExtension(drop_extension) => drop_extension.span(),
-            Statement::DropOperator(drop_operator) => drop_operator.span(),
-            Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
-            Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
-            Statement::CreateSecret(CreateSecretStatement { .. }) => Span::empty(),
-            Statement::CreateServer { .. } => Span::empty(),
-            Statement::CreateConnector { .. } => Span::empty(),
-            Statement::CreateOperator(create_operator) => create_operator.span(),
-            Statement::CreateOperatorFamily(create_operator_family) => {
-                create_operator_family.span()
-            }
-            Statement::CreateOperatorClass(create_operator_class) => create_operator_class.span(),
-            Statement::CreateTextSearch(create_text_search) => create_text_search.span(),
-            Statement::AlterTable(alter_table) => alter_table.span(),
-            Statement::AlterIndex(AlterIndexStatement { name, operation }) => {
-                name.span().union(&operation.span())
-            }
-            Statement::AlterView(AlterViewStatement {
-                name,
-                columns,
-                query,
-                with_options,
-            }) => union_spans(
-                core::iter::once(name.span())
-                    .chain(columns.iter().map(|i| i.span))
-                    .chain(core::iter::once(query.span()))
-                    .chain(with_options.iter().map(|i| i.span())),
-            ),
-            // These statements need to be implemented
-            Statement::AlterFunction { .. } => Span::empty(),
-            Statement::AlterType { .. } => Span::empty(),
-            Statement::AlterCollation { .. } => Span::empty(),
-            Statement::AlterOperator { .. } => Span::empty(),
-            Statement::AlterOperatorFamily { .. } => Span::empty(),
-            Statement::AlterOperatorClass { .. } => Span::empty(),
-            Statement::AlterTextSearch { .. } => Span::empty(),
-            Statement::AlterRole(AlterRoleStatement { .. }) => Span::empty(),
-            Statement::AlterSession(AlterSessionStatement { .. }) => Span::empty(),
-            Statement::AttachDatabase(AttachDatabaseStatement { .. }) => Span::empty(),
-            Statement::AttachDuckDBDatabase(AttachDuckDBDatabaseStatement { .. }) => Span::empty(),
-            Statement::DetachDuckDBDatabase(DetachDuckDBDatabaseStatement { .. }) => Span::empty(),
-            Statement::Drop(DropStatement { .. }) => Span::empty(),
-            Statement::DropFunction(drop_function) => drop_function.span(),
-            Statement::DropDomain { .. } => Span::empty(),
-            Statement::DropProcedure(DropProcedureStatement { .. }) => Span::empty(),
-            Statement::DropSecret(DropSecretStatement { .. }) => Span::empty(),
-            Statement::Declare(DeclareStatement { .. }) => Span::empty(),
-            Statement::Fetch(FetchStatement { .. }) => Span::empty(),
-            Statement::Flush(FlushStatement { .. }) => Span::empty(),
-            Statement::Discard(DiscardStatement { .. }) => Span::empty(),
-            Statement::Set(_) => Span::empty(),
-            Statement::ShowFunctions(ShowFunctionsStatement { .. }) => Span::empty(),
-            Statement::ShowVariable(ShowVariableStatement { .. }) => Span::empty(),
-            Statement::ShowStatus(ShowStatusStatement { .. }) => Span::empty(),
-            Statement::ShowVariables(ShowVariablesStatement { .. }) => Span::empty(),
-            Statement::ShowCreate(ShowCreateStatement { .. }) => Span::empty(),
-            Statement::ShowColumns(ShowColumnsStatement { .. }) => Span::empty(),
-            Statement::ShowTables(ShowTablesStatement { .. }) => Span::empty(),
-            Statement::ShowCollation(ShowCollationStatement { .. }) => Span::empty(),
-            Statement::ShowCharset { .. } => Span::empty(),
-            Statement::Use(u) => u.span(),
-            Statement::StartTransaction(StartTransactionStatement { .. }) => Span::empty(),
-            Statement::Comment(CommentStatement { .. }) => Span::empty(),
-            Statement::Commit(CommitStatement { .. }) => Span::empty(),
-            Statement::Rollback(RollbackStatement { .. }) => Span::empty(),
-            Statement::CreateSchema(CreateSchemaStatement { .. }) => Span::empty(),
-            Statement::CreateDatabase(CreateDatabaseStatement { .. }) => Span::empty(),
-            Statement::CreateFunction { .. } => Span::empty(),
-            Statement::CreateDomain { .. } => Span::empty(),
-            Statement::CreateTrigger { .. } => Span::empty(),
-            Statement::DropTrigger { .. } => Span::empty(),
-            Statement::CreateProcedure(CreateProcedureStatement { .. }) => Span::empty(),
-            Statement::CreateMacro(CreateMacroStatement { .. }) => Span::empty(),
-            Statement::CreateStage(CreateStageStatement { .. }) => Span::empty(),
-            Statement::CreateFileFormat(CreateFileFormatStatement { .. }) => Span::empty(),
-            Statement::CreateWarehouse(..) => Span::empty(),
-            Statement::Assert(AssertStatement { .. }) => Span::empty(),
-            Statement::Grant { .. } => Span::empty(),
-            Statement::Deny { .. } => Span::empty(),
-            Statement::Revoke { .. } => Span::empty(),
-            Statement::Deallocate(DeallocateStatement { .. }) => Span::empty(),
-            Statement::Execute(ExecuteStatement { .. }) => Span::empty(),
-            Statement::Prepare(PrepareStatement { .. }) => Span::empty(),
-            Statement::Kill(KillStatement { .. }) => Span::empty(),
-            Statement::ExplainTable(ExplainTableStatement { .. }) => Span::empty(),
-            Statement::Explain(ExplainStatement { .. }) => Span::empty(),
-            Statement::Savepoint(SavepointStatement { .. }) => Span::empty(),
-            Statement::ReleaseSavepoint(ReleaseSavepointStatement { .. }) => Span::empty(),
-            Statement::Merge(merge) => merge.span(),
-            Statement::Cache(CacheStatement { .. }) => Span::empty(),
-            Statement::UNCache(UNCacheStatement { .. }) => Span::empty(),
-            Statement::CreateSequence(CreateSequenceStatement { .. }) => Span::empty(),
-            Statement::CreateType(CreateTypeStatement { .. }) => Span::empty(),
-            Statement::Pragma(PragmaStatement { .. }) => Span::empty(),
-            Statement::Lock(_) => Span::empty(),
-            Statement::LockTables(LockTablesStatement { .. }) => Span::empty(),
-            Statement::UnlockTables(UnlockTablesStatement) => Span::empty(),
-            Statement::Unload(UnloadStatement { .. }) => Span::empty(),
-            Statement::OptimizeTable(OptimizeTableStatement { .. }) => Span::empty(),
-            Statement::CreatePolicy { .. } => Span::empty(),
-            Statement::AlterPolicy { .. } => Span::empty(),
-            Statement::AlterConnector(AlterConnectorStatement { .. }) => Span::empty(),
-            Statement::DropPolicy { .. } => Span::empty(),
-            Statement::DropConnector(DropConnectorStatement { .. }) => Span::empty(),
-            Statement::ShowCatalogs(ShowCatalogsStatement { .. }) => Span::empty(),
-            Statement::ShowDatabases(ShowDatabasesStatement { .. }) => Span::empty(),
-            Statement::ShowProcessList(ShowProcessListStatement { .. }) => Span::empty(),
-            Statement::ShowSchemas(ShowSchemasStatement { .. }) => Span::empty(),
-            Statement::ShowObjects { .. } => Span::empty(),
-            Statement::ShowViews(ShowViewsStatement { .. }) => Span::empty(),
-            Statement::LISTEN(LISTENStatement { .. }) => Span::empty(),
-            Statement::NOTIFY(NOTIFYStatement { .. }) => Span::empty(),
-            Statement::LoadData(LoadDataStatement { .. }) => Span::empty(),
-            Statement::UNLISTEN(UNLISTENStatement { .. }) => Span::empty(),
-            Statement::RenameTable { .. } => Span::empty(),
-            Statement::RaisError(RaisErrorStatement { .. }) => Span::empty(),
-            Statement::Throw(_) => Span::empty(),
-            Statement::Print { .. } => Span::empty(),
-            Statement::WaitFor(_) => Span::empty(),
-            Statement::Return { .. } => Span::empty(),
-            Statement::List(..) | Statement::Put(PutStatement { .. }) | Statement::Remove(..) => {
-                Span::empty()
-            }
-            Statement::ExportData(ExportData {
-                options,
-                query,
-                connection,
-            }) => union_spans(
-                options
-                    .iter()
-                    .map(|i| i.span())
-                    .chain(core::iter::once(query.span()))
-                    .chain(connection.iter().map(|i| i.span())),
-            ),
-            Statement::CreateUser(..) => Span::empty(),
-            Statement::AlterSchema(s) => s.span(),
-            Statement::Vacuum(..) => Span::empty(),
-            Statement::AlterUser(..) => Span::empty(),
-            Statement::Reset(..) => Span::empty(),
-        }
+        let (start_token, end_token) = statement_tokens!(self);
+        start_token.0.span.union(&end_token.0.span)
     }
 }
 
-impl Spanned for Use {
-    fn span(&self) -> Span {
-        match self {
-            Use::Catalog(object_name) => object_name.span(),
-            Use::Schema(object_name) => object_name.span(),
-            Use::Database(object_name) => object_name.span(),
-            Use::Warehouse(object_name) => object_name.span(),
-            Use::Role(object_name) => object_name.span(),
-            Use::SecondaryRoles(secondary_roles) => {
-                if let SecondaryRoles::List(roles) = secondary_roles {
-                    return union_spans(roles.iter().map(|i| i.span));
-                }
-                Span::empty()
-            }
-            Use::Object(object_name) => object_name.span(),
-            Use::Default => Span::empty(),
-        }
+impl Statement {
+    /// The statement's first and last token, which the parser sets.
+    pub(crate) fn tokens_mut(&mut self) -> (&mut AttachedToken, &mut AttachedToken) {
+        statement_tokens!(self)
     }
 }
 
-impl Spanned for CreateTable {
+impl<T> Spanned for SpannedObject<T> {
     fn span(&self) -> Span {
-        let CreateTable {
-            or_replace: _,    // bool
-            temporary: _,     // bool
-            unlogged: _,      // bool
-            external: _,      // bool
-            global: _,        // bool
-            dynamic: _,       // bool
-            if_not_exists: _, // bool
-            transient: _,     // bool
-            volatile: _,      // bool
-            iceberg: _,       // bool, Snowflake specific
-            snapshot: _,      // bool, BigQuery specific
-            name,
-            columns,
-            constraints,
-            hive_distribution: _, // hive specific
-            hive_formats: _,      // hive specific
-            file_format: _,       // enum
-            location: _,          // string, no span
-            query,
-            without_rowid: _, // bool
-            like: _,
-            clone,
-            comment: _, // todo, no span
-            on_commit: _,
-            on_cluster: _,   // todo, clickhouse specific
-            primary_key: _,  // todo, clickhouse specific
-            order_by: _,     // todo, clickhouse specific
-            partition_by: _, // todo, BigQuery specific
-            cluster_by: _,   // todo, BigQuery specific
-            clustered_by: _, // todo, Hive specific
-            inherits: _,     // todo, PostgreSQL specific
-            partition_of,
-            for_values,
-            strict: _,                          // bool
-            copy_grants: _,                     // bool
-            enable_schema_evolution: _,         // bool
-            change_tracking: _,                 // bool
-            data_retention_time_in_days: _,     // u64, no span
-            max_data_extension_time_in_days: _, // u64, no span
-            default_ddl_collation: _,           // string, no span
-            with_aggregation_policy: _,         // todo, Snowflake specific
-            with_row_access_policy: _,          // todo, Snowflake specific
-            with_storage_lifecycle_policy: _,   // todo, Snowflake specific
-            with_tags: _,                       // todo, Snowflake specific
-            external_volume: _,                 // todo, Snowflake specific
-            with_connection: _,                 // todo, BigQuery external table connection
-            base_location: _,                   // todo, Snowflake specific
-            catalog: _,                         // todo, Snowflake specific
-            catalog_sync: _,                    // todo, Snowflake specific
-            storage_serialization_policy: _,
-            table_options,
-            target_lag: _,
-            warehouse: _,
-            version: _,
-            refresh_mode: _,
-            initialize: _,
-            require_user: _,
-            diststyle: _,
-            distkey: _,
-            sortkey: _,
-            backup: _,
-            multiset: _,
-            fallback: _,
-            with_data: _,
-        } = self;
-
-        union_spans(
-            core::iter::once(name.span())
-                .chain(core::iter::once(table_options.span()))
-                .chain(columns.iter().map(|i| i.span()))
-                .chain(constraints.iter().map(|i| i.span()))
-                .chain(query.iter().map(|i| i.span()))
-                .chain(clone.iter().map(|i| i.span()))
-                .chain(partition_of.iter().map(|i| i.span()))
-                .chain(for_values.iter().map(|i| i.span())),
-        )
+        self.start_token.0.span.union(&self.end_token.0.span)
     }
 }
 
@@ -764,38 +1042,6 @@ impl Spanned for ForValues {
     }
 }
 
-impl Spanned for CreateIndex {
-    fn span(&self) -> Span {
-        let CreateIndex {
-            name,
-            table_name,
-            using: _,
-            columns,
-            unique: _,        // bool
-            concurrently: _,  // bool
-            r#async: _,       // bool
-            if_not_exists: _, // bool
-            include,
-            nulls_distinct: _, // bool
-            with,
-            predicate,
-            index_options: _,
-            alter_options,
-        } = self;
-
-        union_spans(
-            name.iter()
-                .map(|i| i.span())
-                .chain(core::iter::once(table_name.span()))
-                .chain(columns.iter().map(|i| i.column.span()))
-                .chain(include.iter().map(|i| i.span))
-                .chain(with.iter().map(|i| i.span()))
-                .chain(predicate.iter().map(|i| i.span()))
-                .chain(alter_options.iter().map(|i| i.span())),
-        )
-    }
-}
-
 impl Spanned for IndexColumn {
     fn span(&self) -> Span {
         self.column.span()
@@ -805,46 +1051,6 @@ impl Spanned for IndexColumn {
 impl Spanned for ExcludeConstraintElement {
     fn span(&self) -> Span {
         self.column.span()
-    }
-}
-
-impl Spanned for CaseStatement {
-    fn span(&self) -> Span {
-        let CaseStatement {
-            case_token: AttachedToken(start),
-            match_expr: _,
-            when_blocks: _,
-            else_block: _,
-            end_case_token: AttachedToken(end),
-        } = self;
-
-        union_spans([start.span, end.span].into_iter())
-    }
-}
-
-impl Spanned for IfStatement {
-    fn span(&self) -> Span {
-        let IfStatement {
-            if_block,
-            elseif_blocks,
-            else_block,
-            end_token,
-        } = self;
-
-        union_spans(
-            iter::once(if_block.span())
-                .chain(elseif_blocks.iter().map(|b| b.span()))
-                .chain(else_block.as_ref().map(|b| b.span()))
-                .chain(end_token.as_ref().map(|AttachedToken(t)| t.span)),
-        )
-    }
-}
-
-impl Spanned for WhileStatement {
-    fn span(&self) -> Span {
-        let WhileStatement { while_block } = self;
-
-        while_block.span()
     }
 }
 
@@ -874,14 +1080,6 @@ impl Spanned for ConditionalStatementBlock {
                 .chain(then_token.as_ref().map(|AttachedToken(t)| t.span))
                 .chain(iter::once(conditional_statements.span())),
         )
-    }
-}
-
-impl Spanned for RaiseStatement {
-    fn span(&self) -> Span {
-        let RaiseStatement { value } = self;
-
-        union_spans(value.iter().map(|value| value.span()))
     }
 }
 
@@ -954,22 +1152,6 @@ impl Spanned for ConstraintCharacteristics {
     }
 }
 
-impl Spanned for Analyze {
-    fn span(&self) -> Span {
-        union_spans(
-            self.table_name
-                .iter()
-                .map(|t| t.span())
-                .chain(
-                    self.partitions
-                        .iter()
-                        .flat_map(|i| i.iter().map(|k| k.span())),
-                )
-                .chain(self.columns.iter().map(|i| i.span)),
-        )
-    }
-}
-
 /// # partial span
 ///
 /// Missing spans:
@@ -1005,83 +1187,6 @@ impl Spanned for CopySource {
             ),
             CopySource::Query(query) => query.span(),
         }
-    }
-}
-
-impl Spanned for Delete {
-    fn span(&self) -> Span {
-        let Delete {
-            delete_token,
-            optimizer_hints: _,
-            tables,
-            from,
-            using,
-            selection,
-            returning,
-            output,
-            order_by,
-            limit,
-        } = self;
-
-        union_spans(
-            core::iter::once(delete_token.0.span).chain(
-                tables
-                    .iter()
-                    .map(|i| i.span())
-                    .chain(core::iter::once(from.span()))
-                    .chain(
-                        using
-                            .iter()
-                            .map(|u| union_spans(u.iter().map(|i| i.span()))),
-                    )
-                    .chain(selection.iter().map(|i| i.span()))
-                    .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
-                    .chain(output.iter().map(|i| i.span()))
-                    .chain(order_by.iter().map(|i| i.span()))
-                    .chain(limit.iter().map(|i| i.span())),
-            ),
-        )
-    }
-}
-
-impl Spanned for Update {
-    fn span(&self) -> Span {
-        let Update {
-            update_token,
-            optimizer_hints: _,
-            table,
-            assignments,
-            from,
-            selection,
-            returning,
-            output,
-            or: _,
-            order_by,
-            limit,
-        } = self;
-
-        union_spans(
-            core::iter::once(table.span())
-                .chain(core::iter::once(update_token.0.span))
-                .chain(assignments.iter().map(|i| i.span()))
-                .chain(from.iter().map(|i| i.span()))
-                .chain(selection.iter().map(|i| i.span()))
-                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
-                .chain(output.iter().map(|i| i.span()))
-                .chain(order_by.iter().map(|i| i.span()))
-                .chain(limit.iter().map(|i| i.span())),
-        )
-    }
-}
-
-impl Spanned for Merge {
-    fn span(&self) -> Span {
-        union_spans(
-            [self.merge_token.0.span, self.on.span()]
-                .into_iter()
-                .chain(self.clauses.iter().map(Spanned::span))
-                .chain(self.output.iter().map(Spanned::span)),
-        )
     }
 }
 
@@ -1408,58 +1513,6 @@ impl Spanned for AlterIndexOperation {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => index_name.span(),
         }
-    }
-}
-
-/// # partial span
-///
-/// Missing spans:ever
-/// - [Insert::insert_alias]
-impl Spanned for Insert {
-    fn span(&self) -> Span {
-        let Insert {
-            insert_token,
-            optimizer_hints: _,
-            or: _,     // enum, sqlite specific
-            ignore: _, // bool
-            into: _,   // bool
-            table,
-            table_alias,
-            columns,
-            by_name: _,   // bool
-            overwrite: _, // bool
-            source,
-            partitioned,
-            after_columns,
-            has_table_keyword: _, // bool
-            on,
-            returning,
-            output,
-            replace_into: _, // bool
-            priority: _,     // todo, mysql specific
-            insert_alias: _, // todo, mysql specific
-            assignments,
-            settings: _,                 // todo, clickhouse specific
-            format_clause: _,            // todo, clickhouse specific
-            multi_table_insert_type: _,  // snowflake multi-table insert
-            multi_table_into_clauses: _, // snowflake multi-table insert
-            multi_table_when_clauses: _, // snowflake multi-table insert
-            multi_table_else_clause: _,  // snowflake multi-table insert
-        } = self;
-
-        union_spans(
-            core::iter::once(insert_token.0.span)
-                .chain(core::iter::once(table.span()))
-                .chain(table_alias.iter().map(|k| k.alias.span))
-                .chain(columns.iter().map(|i| i.span()))
-                .chain(source.as_ref().map(|q| q.span()))
-                .chain(assignments.iter().map(|i| i.span()))
-                .chain(partitioned.iter().flat_map(|i| i.iter().map(|k| k.span())))
-                .chain(after_columns.iter().map(|i| i.span))
-                .chain(on.as_ref().map(|i| i.span()))
-                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
-                .chain(output.iter().map(|i| i.span())),
-        )
     }
 }
 
@@ -1826,6 +1879,9 @@ impl Spanned for Array {
     }
 }
 
+/// # partial span
+///
+/// The span of [FunctionArguments::None] is empty.
 impl Spanned for Function {
     fn span(&self) -> Span {
         let Function {
@@ -1851,9 +1907,6 @@ impl Spanned for Function {
     }
 }
 
-/// # partial span
-///
-/// The span of [FunctionArguments::None] is empty.
 impl Spanned for FunctionArguments {
     fn span(&self) -> Span {
         match self {
@@ -2537,13 +2590,6 @@ impl Spanned for BeginEndStatements {
     }
 }
 
-impl Spanned for OpenStatement {
-    fn span(&self) -> Span {
-        let OpenStatement { cursor_name } = self;
-        cursor_name.span
-    }
-}
-
 impl Spanned for AlterSchemaOperation {
     fn span(&self) -> Span {
         match self {
@@ -2565,56 +2611,6 @@ impl Spanned for AlterSchemaOperation {
                 }
             }
         }
-    }
-}
-
-impl Spanned for AlterSchema {
-    fn span(&self) -> Span {
-        union_spans(
-            core::iter::once(self.name.span()).chain(self.operations.iter().map(|i| i.span())),
-        )
-    }
-}
-
-impl Spanned for CreateView {
-    fn span(&self) -> Span {
-        union_spans(
-            core::iter::once(self.name.span())
-                .chain(self.columns.iter().map(|i| i.span()))
-                .chain(core::iter::once(self.query.span()))
-                .chain(core::iter::once(self.options.span()))
-                .chain(self.cluster_by.iter().map(|i| i.span))
-                .chain(self.to.iter().map(|i| i.span())),
-        )
-    }
-}
-
-impl Spanned for AlterTable {
-    fn span(&self) -> Span {
-        union_spans(
-            core::iter::once(self.name.span())
-                .chain(self.operations.iter().map(|i| i.span()))
-                .chain(self.on_cluster.iter().map(|i| i.span))
-                .chain(core::iter::once(self.end_token.0.span)),
-        )
-    }
-}
-
-impl Spanned for CreateOperator {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
-impl Spanned for CreateOperatorFamily {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
-impl Spanned for CreateOperatorClass {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -2708,6 +2704,7 @@ pub mod tests {
     use crate::tokenizer::{Location, Span};
 
     use super::*;
+    use crate::ast::Merge;
 
     struct SpanTest<'a>(Parser<'a>, &'a str);
 
@@ -2872,8 +2869,8 @@ ALTER TABLE users
 
         let stmt_span = r[0].span();
 
-        assert_eq!(stmt_span.start, (2, 13).into());
-        assert_eq!(stmt_span.end, (4, 11).into());
+        assert_eq!(stmt_span.start, (2, 1).into());
+        assert_eq!(stmt_span.end, (4, 10).into());
     }
 
     #[test]
@@ -2982,15 +2979,19 @@ WHERE id = 1
         assert_eq!(stmt_span.end, (17, 37).into());
 
         // ~ individual tokens within the statement
-        let Statement::Merge(Merge {
-            merge_token,
-            optimizer_hints: _,
-            into: _,
-            table: _,
-            source: _,
-            on: _,
-            clauses,
-            output,
+        let Statement::Merge(SpannedObject {
+            start_token: merge_token,
+            content:
+                Merge {
+                    optimizer_hints: _,
+                    into: _,
+                    table: _,
+                    source: _,
+                    on: _,
+                    clauses,
+                    output,
+                },
+            ..
         }) = &r[0]
         else {
             panic!("not a MERGE statement");
@@ -3132,7 +3133,11 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge(Merge { output, .. }) = &r[0] {
+        if let Statement::Merge(SpannedObject {
+            content: Merge { output, .. },
+            ..
+        }) = &r[0]
+        {
             if let Some(OutputClause::Returning {
                 returning_token, ..
             }) = output
@@ -3166,7 +3171,11 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge(Merge { output, .. }) = &r[0] {
+        if let Statement::Merge(SpannedObject {
+            content: Merge { output, .. },
+            ..
+        }) = &r[0]
+        {
             if let Some(OutputClause::Output { output_token, .. }) = output {
                 assert_eq!(
                     output_token.0.span,

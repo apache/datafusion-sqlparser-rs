@@ -147,10 +147,13 @@ fn parse_kill() {
     let stmt = clickhouse().verified_stmt("KILL MUTATION 5");
     assert_eq!(
         stmt,
-        Statement::Kill(KillStatement {
-            modifier: Some(KillType::Mutation),
-            id: 5,
-        })
+        Statement::Kill(
+            KillStatement {
+                modifier: Some(KillType::Mutation),
+                id: 5,
+            }
+            .into()
+        )
     );
 }
 
@@ -266,7 +269,10 @@ fn parse_create_table_partition_by_after_order_by() {
     match clickhouse_and_generic()
         .verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree ORDER BY a PARTITION BY a % 64")
     {
-        Statement::CreateTable(CreateTable { partition_by, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { partition_by, .. },
+            ..
+        }) => {
             assert_eq!(
                 partition_by,
                 Some(Box::new(BinaryOp {
@@ -325,8 +331,11 @@ fn parse_alter_table_attach_and_detach_partition() {
         match clickhouse_and_generic()
             .verified_stmt(format!("ALTER TABLE t1 {operation} PART part").as_str())
         {
-            Statement::AlterTable(AlterTable {
-                name, operations, ..
+            Statement::AlterTable(SpannedObject {
+                content: AlterTable {
+                    name, operations, ..
+                },
+                ..
             }) => {
                 pretty_assertions::assert_eq!("t1", name.to_string());
                 pretty_assertions::assert_eq!(
@@ -367,8 +376,11 @@ fn parse_alter_table_add_projection() {
         "ALTER TABLE t0 ADD PROJECTION IF NOT EXISTS my_name",
         " (SELECT a, b GROUP BY a ORDER BY b)",
     )) {
-        Statement::AlterTable(AlterTable {
-            name, operations, ..
+        Statement::AlterTable(SpannedObject {
+            content: AlterTable {
+                name, operations, ..
+            },
+            ..
         }) => {
             assert_eq!(name, ObjectName::from(vec!["t0".into()]));
             assert_eq!(1, operations.len());
@@ -439,8 +451,11 @@ fn parse_alter_table_add_projection() {
 fn parse_alter_table_drop_projection() {
     match clickhouse_and_generic().verified_stmt("ALTER TABLE t0 DROP PROJECTION IF EXISTS my_name")
     {
-        Statement::AlterTable(AlterTable {
-            name, operations, ..
+        Statement::AlterTable(SpannedObject {
+            content: AlterTable {
+                name, operations, ..
+            },
+            ..
         }) => {
             assert_eq!(name, ObjectName::from(vec!["t0".into()]));
             assert_eq!(1, operations.len());
@@ -472,8 +487,11 @@ fn parse_alter_table_clear_and_materialize_projection() {
             format!("ALTER TABLE t0 {keyword} PROJECTION IF EXISTS my_name IN PARTITION p0",)
                 .as_str(),
         ) {
-            Statement::AlterTable(AlterTable {
-                name, operations, ..
+            Statement::AlterTable(SpannedObject {
+                content: AlterTable {
+                    name, operations, ..
+                },
+                ..
             }) => {
                 assert_eq!(name, ObjectName::from(vec!["t0".into()]));
                 assert_eq!(1, operations.len());
@@ -546,12 +564,16 @@ fn parse_optimize_table() {
     match clickhouse_and_generic().verified_stmt(
         "OPTIMIZE TABLE t0 ON CLUSTER cluster PARTITION ID '2024-07' FINAL DEDUPLICATE BY id",
     ) {
-        Statement::OptimizeTable(OptimizeTableStatement {
-            name,
-            on_cluster,
-            partition,
-            include_final,
-            deduplicate,
+        Statement::OptimizeTable(SpannedObject {
+            content:
+                OptimizeTableStatement {
+                    name,
+                    on_cluster,
+                    partition,
+                    include_final,
+                    deduplicate,
+                    ..
+                },
             ..
         }) => {
             assert_eq!(name.to_string(), "t0");
@@ -617,7 +639,10 @@ fn parse_clickhouse_data_types() {
         .replace(" Float64", " FLOAT64");
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -658,7 +683,10 @@ fn parse_create_table_with_nullable() {
     let canonical_sql = sql.replace("String", "STRING");
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -706,7 +734,10 @@ fn parse_create_table_with_nested_data_types() {
     );
 
     match clickhouse().one_statement_parses_to(sql, "") {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -797,12 +828,16 @@ fn parse_create_table_with_primary_key() {
         " PRIMARY KEY tuple(i)",
         " ORDER BY tuple(i)",
     )) {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            table_options,
-            primary_key,
-            order_by,
+        Statement::CreateTable(SpannedObject {
+            content:
+                CreateTable {
+                    name,
+                    columns,
+                    table_options,
+                    primary_key,
+                    order_by,
+                    ..
+                },
             ..
         }) => {
             assert_eq!(name.to_string(), "db.table");
@@ -887,7 +922,10 @@ fn parse_create_table_with_variant_default_expressions() {
         ") ENGINE = MergeTree"
     );
     match clickhouse_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { columns, .. },
+            ..
+        }) => {
             assert_eq!(
                 columns,
                 vec![
@@ -974,7 +1012,10 @@ fn parse_create_table_with_variant_default_expressions() {
 #[test]
 fn parse_create_view_with_fields_data_types() {
     match clickhouse().verified_stmt(r#"CREATE VIEW v (i "int", f "String") AS SELECT * FROM t"#) {
-        Statement::CreateView(CreateView { name, columns, .. }) => {
+        Statement::CreateView(SpannedObject {
+            content: CreateView { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(name, ObjectName::from(vec!["v".into()]));
             assert_eq!(
                 columns,
@@ -1486,18 +1527,21 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             clickhouse().verified_stmt(&format!("USE {object_name}")),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
-                object_name.to_string()
-            )])))
+            Statement::Use(
+                Use::Object(ObjectName::from(vec![Ident::new(object_name.to_string())])).into()
+            )
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
                 clickhouse().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
-                    quote,
-                    object_name.to_string(),
-                )])))
+                Statement::Use(
+                    Use::Object(ObjectName::from(vec![Ident::with_quote(
+                        quote,
+                        object_name.to_string(),
+                    )]))
+                    .into()
+                )
             );
         }
     }
@@ -1559,10 +1603,14 @@ fn test_insert_query_with_format_clause() {
 fn parse_create_table_on_commit_and_as_query() {
     let sql = r#"CREATE LOCAL TEMPORARY TABLE test ON COMMIT PRESERVE ROWS AS SELECT 1"#;
     match clickhouse_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            on_commit,
-            query,
+        Statement::CreateTable(SpannedObject {
+            content:
+                CreateTable {
+                    name,
+                    on_commit,
+                    query,
+                    ..
+                },
             ..
         }) => {
             assert_eq!(name.to_string(), "test");
@@ -1588,7 +1636,10 @@ fn parse_freeze_and_unfreeze_partition() {
             Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),
         ));
         match clickhouse_and_generic().verified_stmt(&sql) {
-            Statement::AlterTable(AlterTable { operations, .. }) => {
+            Statement::AlterTable(SpannedObject {
+                content: AlterTable { operations, .. },
+                ..
+            }) => {
                 assert_eq!(operations.len(), 1);
                 let expected_operation = if operation_name == &"FREEZE" {
                     AlterTableOperation::FreezePartition {
@@ -1612,7 +1663,10 @@ fn parse_freeze_and_unfreeze_partition() {
         let sql =
             format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14' WITH NAME 'hello'");
         match clickhouse_and_generic().verified_stmt(&sql) {
-            Statement::AlterTable(AlterTable { operations, .. }) => {
+            Statement::AlterTable(SpannedObject {
+                content: AlterTable { operations, .. },
+                ..
+            }) => {
                 assert_eq!(operations.len(), 1);
                 let expected_partition = Partition::Expr(Expr::Value(
                     Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),
@@ -1752,11 +1806,15 @@ fn explain_desc() {
 #[test]
 fn parse_explain_table() {
     match clickhouse().verified_stmt("EXPLAIN TABLE test_identifier") {
-        Statement::ExplainTable(ExplainTableStatement {
-            describe_alias,
-            hive_format,
-            has_table_keyword,
-            table_name,
+        Statement::ExplainTable(SpannedObject {
+            content:
+                ExplainTableStatement {
+                    describe_alias,
+                    hive_format,
+                    has_table_keyword,
+                    table_name,
+                },
+            ..
         }) => {
             pretty_assertions::assert_eq!(describe_alias, DescribeAlias::Explain);
             pretty_assertions::assert_eq!(hive_format, None);
@@ -1891,7 +1949,10 @@ fn parse_alter_table_column_position() {
     match clickhouse()
         .verified_stmt("ALTER TABLE t ADD COLUMN c UInt8 FIRST, ADD COLUMN d UInt8 AFTER c")
     {
-        Statement::AlterTable(AlterTable { operations, .. }) => {
+        Statement::AlterTable(SpannedObject {
+            content: AlterTable { operations, .. },
+            ..
+        }) => {
             let positions: Vec<_> = operations
                 .into_iter()
                 .map(|op| match op {

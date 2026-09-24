@@ -116,11 +116,14 @@ fn custom_statement_parser() -> Result<(), ParserError> {
                 for _ in 0..3 {
                     let _ = parser.next_token();
                 }
-                Some(Ok(Statement::Commit(CommitStatement {
-                    chain: false,
-                    end: false,
-                    modifier: None,
-                })))
+                Some(Ok(Statement::Commit(
+                    CommitStatement {
+                        chain: false,
+                        end: false,
+                        modifier: None,
+                    }
+                    .into(),
+                )))
             } else {
                 None
             }

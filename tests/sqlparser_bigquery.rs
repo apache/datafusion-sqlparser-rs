@@ -130,7 +130,7 @@ fn parse_byte_literal() {
     );
     let stmt = bigquery().verified_stmt(sql);
     if let Statement::Query(query) = stmt {
-        if let SetExpr::Select(select) = *query.body {
+        if let SetExpr::Select(select) = *query.content.body {
             assert_eq!(6, select.projection.len());
             assert_eq!(
                 &Expr::Value(
@@ -196,7 +196,7 @@ fn parse_raw_literal() {
     );
     let stmt = bigquery().verified_stmt(sql);
     if let Statement::Query(query) = stmt {
-        if let SetExpr::Select(select) = *query.body {
+        if let SetExpr::Select(select) = *query.content.body {
             assert_eq!(6, select.projection.len());
             assert_eq!(
                 &Expr::Value(
@@ -264,10 +264,14 @@ fn parse_at_at_identifier() {
 #[test]
 fn parse_begin() {
     let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; RAISE USING MESSAGE = FORMAT('ERR: %s', 'Bad'); END"#;
-    let Statement::StartTransaction(StartTransactionStatement {
-        statements,
-        exception,
-        has_end_keyword,
+    let Statement::StartTransaction(SpannedObject {
+        content:
+            StartTransactionStatement {
+                statements,
+                exception,
+                has_end_keyword,
+                ..
+            },
         ..
     }) = bigquery().verified_stmt(sql)
     else {
@@ -309,8 +313,12 @@ fn parse_begin() {
 fn parse_delete_statement() {
     let sql = "DELETE \"table\" WHERE 1";
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Delete(Delete {
-            from: FromTable::WithoutKeyword(from),
+        Statement::Delete(SpannedObject {
+            content:
+                Delete {
+                    from: FromTable::WithoutKeyword(from),
+                    ..
+                },
             ..
         }) => {
             assert_eq!(
@@ -332,11 +340,15 @@ fn parse_create_view_with_options() {
         "AS SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable",
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            query,
-            options,
-            columns,
+        Statement::CreateView(SpannedObject {
+            content:
+                CreateView {
+                    name,
+                    query,
+                    options,
+                    columns,
+                    ..
+                },
             ..
         }) => {
             assert_eq!(
@@ -401,18 +413,22 @@ fn parse_create_view_with_options() {
 fn parse_create_view_if_not_exists() {
     let sql = "CREATE VIEW IF NOT EXISTS mydataset.newview AS SELECT foo FROM bar";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            columns,
-            query,
-            or_replace,
-            materialized,
-            options,
-            cluster_by,
-            comment,
-            with_no_schema_binding: late_binding,
-            if_not_exists,
-            temporary,
+        Statement::CreateView(SpannedObject {
+            content:
+                CreateView {
+                    name,
+                    columns,
+                    query,
+                    or_replace,
+                    materialized,
+                    options,
+                    cluster_by,
+                    comment,
+                    with_no_schema_binding: late_binding,
+                    if_not_exists,
+                    temporary,
+                    ..
+                },
             ..
         }) => {
             assert_eq!("mydataset.newview", name.to_string());
@@ -435,10 +451,14 @@ fn parse_create_view_if_not_exists() {
 fn parse_create_view_with_unquoted_hyphen() {
     let sql = "CREATE VIEW IF NOT EXISTS my-pro-ject.mydataset.myview AS SELECT 1";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            query,
-            if_not_exists,
+        Statement::CreateView(SpannedObject {
+            content:
+                CreateView {
+                    name,
+                    query,
+                    if_not_exists,
+                    ..
+                },
             ..
         }) => {
             assert_eq!("my-pro-ject.mydataset.myview", name.to_string());
@@ -453,7 +473,10 @@ fn parse_create_view_with_unquoted_hyphen() {
 fn parse_create_table_with_unquoted_hyphen() {
     let sql = "CREATE TABLE my-pro-ject.mydataset.mytable (x INT64)";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(
                 name,
                 ObjectName::from(vec![
@@ -486,12 +509,16 @@ fn parse_create_table_with_options() {
         r#"OPTIONS(partition_expiration_days = 1, description = "table option description")"#
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            partition_by,
-            cluster_by,
-            table_options,
+        Statement::CreateTable(SpannedObject {
+            content:
+                CreateTable {
+                    name,
+                    columns,
+                    partition_by,
+                    cluster_by,
+                    table_options,
+                    ..
+                },
             ..
         }) => {
             assert_eq!(
@@ -605,7 +632,10 @@ fn parse_create_external_table_with_options() {
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery_and_generic().one_statement_parses_to(sql, sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -1845,12 +1875,16 @@ fn parse_merge() {
     });
 
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Merge(Merge {
-            into,
-            table,
-            source,
-            on,
-            clauses,
+        Statement::Merge(SpannedObject {
+            content:
+                Merge {
+                    into,
+                    table,
+                    source,
+                    on,
+                    clauses,
+                    ..
+                },
             ..
         }) => {
             assert!(!into);
@@ -2174,7 +2208,10 @@ fn parse_big_query_declare() {
         ),
     ] {
         match bigquery().verified_stmt(sql) {
-            Statement::Declare(DeclareStatement { mut stmts }) => {
+            Statement::Declare(SpannedObject {
+                content: DeclareStatement { mut stmts },
+                ..
+            }) => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -2306,35 +2343,38 @@ fn test_bigquery_create_function() {
     let stmt = bigquery().verified_stmt(sql);
     assert_eq!(
         stmt,
-        Statement::CreateFunction(CreateFunction {
-            or_alter: false,
-            or_replace: true,
-            temporary: true,
-            if_not_exists: false,
-            name: ObjectName::from(vec![
-                Ident::new("project1"),
-                Ident::new("mydataset"),
-                Ident::new("myfunction"),
-            ]),
-            args: Some(vec![OperateFunctionArg::with_name("x", DataType::Float64),]),
-            return_type: Some(FunctionReturnType::DataType(DataType::Float64)),
-            function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(
-                number("42").with_empty_span()
-            ))),
-            options: Some(vec![SqlOption::KeyValue {
-                key: Ident::new("x"),
-                value: Expr::Value(Value::SingleQuotedString("y".into()).with_empty_span()),
-            }]),
-            behavior: None,
-            using: None,
-            language: None,
-            determinism_specifier: None,
-            remote_connection: None,
-            called_on_null: None,
-            parallel: None,
-            security: None,
-            set_params: vec![],
-        })
+        Statement::CreateFunction(
+            CreateFunction {
+                or_alter: false,
+                or_replace: true,
+                temporary: true,
+                if_not_exists: false,
+                name: ObjectName::from(vec![
+                    Ident::new("project1"),
+                    Ident::new("mydataset"),
+                    Ident::new("myfunction"),
+                ]),
+                args: Some(vec![OperateFunctionArg::with_name("x", DataType::Float64),]),
+                return_type: Some(FunctionReturnType::DataType(DataType::Float64)),
+                function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(
+                    number("42").with_empty_span()
+                ))),
+                options: Some(vec![SqlOption::KeyValue {
+                    key: Ident::new("x"),
+                    value: Expr::Value(Value::SingleQuotedString("y".into()).with_empty_span()),
+                }]),
+                behavior: None,
+                using: None,
+                language: None,
+                determinism_specifier: None,
+                remote_connection: None,
+                called_on_null: None,
+                parallel: None,
+                security: None,
+                set_params: vec![],
+            }
+            .into()
+        )
     );
 
     let sqls = [
@@ -2687,95 +2727,98 @@ fn test_export_data() {
     ));
     assert_eq!(
         stmt,
-        Statement::ExportData(ExportData {
-            options: vec![
-                SqlOption::KeyValue {
-                    key: Ident::new("uri"),
-                    value: Expr::Value(
-                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
-                            .with_empty_span()
-                    ),
-                },
-                SqlOption::KeyValue {
-                    key: Ident::new("format"),
-                    value: Expr::Value(
-                        Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
-                    ),
-                },
-                SqlOption::KeyValue {
-                    key: Ident::new("overwrite"),
-                    value: Expr::Value(Value::Boolean(true).with_empty_span()),
-                },
-            ],
-            connection: None,
-            query: Box::new(Query {
-                with: None,
-                body: Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: AttachedToken(TokenWithSpan::new(
-                        Token::Word(Word {
-                            value: "SELECT".to_string(),
-                            quote_style: None,
-                            keyword: Keyword::SELECT,
-                        }),
-                        Span::empty()
-                    )),
-                    optimizer_hints: vec![],
-                    distinct: None,
-                    select_modifiers: None,
-                    top: None,
-                    top_before_distinct: false,
-                    projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field1"))),
-                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field2"))),
-                    ],
-                    exclude: None,
-                    into: None,
-                    from: vec![TableWithJoins {
-                        relation: table_from_name(ObjectName::from(vec![
-                            Ident::new("mydataset"),
-                            Ident::new("table1")
-                        ])),
-                        joins: vec![],
-                    }],
-                    lateral_views: vec![],
-                    prewhere: None,
-                    selection: None,
-                    group_by: GroupByExpr::Expressions(vec![], vec![]),
-                    cluster_by: vec![],
-                    distribute_by: vec![],
-                    sort_by: vec![],
-                    having: None,
-                    named_window: vec![],
-                    qualify: None,
-                    window_before_qualify: false,
-                    value_table_mode: None,
-                    connect_by: vec![],
-                    flavor: SelectFlavor::Standard,
-                }))),
-                order_by: Some(OrderBy {
-                    kind: OrderByKind::Expressions(vec![OrderByExpr {
-                        expr: Expr::Identifier(Ident::new("field1")),
-                        options: OrderByOptions {
-                            sort: None,
-                            nulls_first: None,
-                        },
-                        with_fill: None,
-                    },]),
-                    interpolate: None,
-                }),
-                limit_clause: Some(LimitClause::LimitOffset {
-                    limit: Some(Expr::Value(number("10").with_empty_span())),
-                    offset: None,
-                    limit_by: vec![],
-                }),
-                fetch: None,
-                locks: vec![],
-                for_clause: None,
-                settings: None,
-                format_clause: None,
-                pipe_operators: vec![],
-            })
-        })
+        Statement::ExportData(
+            ExportData {
+                options: vec![
+                    SqlOption::KeyValue {
+                        key: Ident::new("uri"),
+                        value: Expr::Value(
+                            Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
+                                .with_empty_span()
+                        ),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::new("format"),
+                        value: Expr::Value(
+                            Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
+                        ),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::new("overwrite"),
+                        value: Expr::Value(Value::Boolean(true).with_empty_span()),
+                    },
+                ],
+                connection: None,
+                query: Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Select(Box::new(Select {
+                        select_token: AttachedToken(TokenWithSpan::new(
+                            Token::Word(Word {
+                                value: "SELECT".to_string(),
+                                quote_style: None,
+                                keyword: Keyword::SELECT,
+                            }),
+                            Span::empty()
+                        )),
+                        optimizer_hints: vec![],
+                        distinct: None,
+                        select_modifiers: None,
+                        top: None,
+                        top_before_distinct: false,
+                        projection: vec![
+                            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field1"))),
+                            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field2"))),
+                        ],
+                        exclude: None,
+                        into: None,
+                        from: vec![TableWithJoins {
+                            relation: table_from_name(ObjectName::from(vec![
+                                Ident::new("mydataset"),
+                                Ident::new("table1")
+                            ])),
+                            joins: vec![],
+                        }],
+                        lateral_views: vec![],
+                        prewhere: None,
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None,
+                        window_before_qualify: false,
+                        value_table_mode: None,
+                        connect_by: vec![],
+                        flavor: SelectFlavor::Standard,
+                    }))),
+                    order_by: Some(OrderBy {
+                        kind: OrderByKind::Expressions(vec![OrderByExpr {
+                            expr: Expr::Identifier(Ident::new("field1")),
+                            options: OrderByOptions {
+                                sort: None,
+                                nulls_first: None,
+                            },
+                            with_fill: None,
+                        },]),
+                        interpolate: None,
+                    }),
+                    limit_clause: Some(LimitClause::LimitOffset {
+                        limit: Some(Expr::Value(number("10").with_empty_span())),
+                        offset: None,
+                        limit_by: vec![],
+                    }),
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                    settings: None,
+                    format_clause: None,
+                    pipe_operators: vec![],
+                })
+            }
+            .into()
+        )
     );
 
     let stmt = bigquery().verified_stmt(concat!(
@@ -2789,99 +2832,102 @@ fn test_export_data() {
 
     assert_eq!(
         stmt,
-        Statement::ExportData(ExportData {
-            options: vec![
-                SqlOption::KeyValue {
-                    key: Ident::new("uri"),
-                    value: Expr::Value(
-                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
-                            .with_empty_span()
-                    ),
-                },
-                SqlOption::KeyValue {
-                    key: Ident::new("format"),
-                    value: Expr::Value(
-                        Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
-                    ),
-                },
-                SqlOption::KeyValue {
-                    key: Ident::new("overwrite"),
-                    value: Expr::Value(Value::Boolean(true).with_empty_span()),
-                },
-            ],
-            connection: Some(ObjectName::from(vec![
-                Ident::new("myconnection"),
-                Ident::new("myproject"),
-                Ident::new("us")
-            ])),
-            query: Box::new(Query {
-                with: None,
-                body: Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: AttachedToken(TokenWithSpan::new(
-                        Token::Word(Word {
-                            value: "SELECT".to_string(),
-                            quote_style: None,
-                            keyword: Keyword::SELECT,
-                        }),
-                        Span::empty()
-                    )),
-                    optimizer_hints: vec![],
-                    distinct: None,
-                    select_modifiers: None,
-                    top: None,
-                    top_before_distinct: false,
-                    projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field1"))),
-                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field2"))),
-                    ],
-                    exclude: None,
-                    into: None,
-                    from: vec![TableWithJoins {
-                        relation: table_from_name(ObjectName::from(vec![
-                            Ident::new("mydataset"),
-                            Ident::new("table1")
-                        ])),
-                        joins: vec![],
-                    }],
-                    lateral_views: vec![],
-                    prewhere: None,
-                    selection: None,
-                    group_by: GroupByExpr::Expressions(vec![], vec![]),
-                    cluster_by: vec![],
-                    distribute_by: vec![],
-                    sort_by: vec![],
-                    having: None,
-                    named_window: vec![],
-                    qualify: None,
-                    window_before_qualify: false,
-                    value_table_mode: None,
-                    connect_by: vec![],
-                    flavor: SelectFlavor::Standard,
-                }))),
-                order_by: Some(OrderBy {
-                    kind: OrderByKind::Expressions(vec![OrderByExpr {
-                        expr: Expr::Identifier(Ident::new("field1")),
-                        options: OrderByOptions {
-                            sort: None,
-                            nulls_first: None,
-                        },
-                        with_fill: None,
-                    },]),
-                    interpolate: None,
-                }),
-                limit_clause: Some(LimitClause::LimitOffset {
-                    limit: Some(Expr::Value(number("10").with_empty_span())),
-                    offset: None,
-                    limit_by: vec![],
-                }),
-                fetch: None,
-                locks: vec![],
-                for_clause: None,
-                settings: None,
-                format_clause: None,
-                pipe_operators: vec![],
-            })
-        })
+        Statement::ExportData(
+            ExportData {
+                options: vec![
+                    SqlOption::KeyValue {
+                        key: Ident::new("uri"),
+                        value: Expr::Value(
+                            Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
+                                .with_empty_span()
+                        ),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::new("format"),
+                        value: Expr::Value(
+                            Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
+                        ),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::new("overwrite"),
+                        value: Expr::Value(Value::Boolean(true).with_empty_span()),
+                    },
+                ],
+                connection: Some(ObjectName::from(vec![
+                    Ident::new("myconnection"),
+                    Ident::new("myproject"),
+                    Ident::new("us")
+                ])),
+                query: Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Select(Box::new(Select {
+                        select_token: AttachedToken(TokenWithSpan::new(
+                            Token::Word(Word {
+                                value: "SELECT".to_string(),
+                                quote_style: None,
+                                keyword: Keyword::SELECT,
+                            }),
+                            Span::empty()
+                        )),
+                        optimizer_hints: vec![],
+                        distinct: None,
+                        select_modifiers: None,
+                        top: None,
+                        top_before_distinct: false,
+                        projection: vec![
+                            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field1"))),
+                            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field2"))),
+                        ],
+                        exclude: None,
+                        into: None,
+                        from: vec![TableWithJoins {
+                            relation: table_from_name(ObjectName::from(vec![
+                                Ident::new("mydataset"),
+                                Ident::new("table1")
+                            ])),
+                            joins: vec![],
+                        }],
+                        lateral_views: vec![],
+                        prewhere: None,
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None,
+                        window_before_qualify: false,
+                        value_table_mode: None,
+                        connect_by: vec![],
+                        flavor: SelectFlavor::Standard,
+                    }))),
+                    order_by: Some(OrderBy {
+                        kind: OrderByKind::Expressions(vec![OrderByExpr {
+                            expr: Expr::Identifier(Ident::new("field1")),
+                            options: OrderByOptions {
+                                sort: None,
+                                nulls_first: None,
+                            },
+                            with_fill: None,
+                        },]),
+                        interpolate: None,
+                    }),
+                    limit_clause: Some(LimitClause::LimitOffset {
+                        limit: Some(Expr::Value(number("10").with_empty_span())),
+                        offset: None,
+                        limit_by: vec![],
+                    }),
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                    settings: None,
+                    format_clause: None,
+                    pipe_operators: vec![],
+                })
+            }
+            .into()
+        )
     );
 
     // at least one option (uri) is required

@@ -220,6 +220,56 @@ pub struct Parens<T> {
     pub closing_token: AttachedToken,
 }
 
+/// A statement together with its first and last token, which give its [`Span`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SpannedObject<T> {
+    /// The first token.
+    pub start_token: AttachedToken,
+    /// The wrapped node.
+    pub content: T,
+    /// The last token.
+    pub end_token: AttachedToken,
+}
+
+impl<T> SpannedObject<T> {
+    /// Wraps `content` without source tokens, as for a node built by hand.
+    pub fn new(content: T) -> Self {
+        Self {
+            start_token: AttachedToken::empty(),
+            content,
+            end_token: AttachedToken::empty(),
+        }
+    }
+}
+
+impl<T> From<T> for SpannedObject<T> {
+    fn from(content: T) -> Self {
+        Self::new(content)
+    }
+}
+
+impl<T> core::ops::Deref for SpannedObject<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.content
+    }
+}
+
+impl<T> core::ops::DerefMut for SpannedObject<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.content
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for SpannedObject<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.content.fmt(f)
+    }
+}
+
 impl<T> Parens<T> {
     /// Constructor wrapping `content` into `Parens` with an empty span;
     /// useful for testing purposes.
@@ -3608,54 +3658,54 @@ pub enum Statement {
     /// ANALYZE
     /// ```
     /// Analyze (Hive)
-    Analyze(Analyze),
+    Analyze(SpannedObject<Analyze>),
     /// `SET` statements (session, transaction, timezone, etc.).
-    Set(Set),
+    Set(SpannedObject<Set>),
     /// ```sql
     /// TRUNCATE
     /// ```
     /// Truncate (Hive)
-    Truncate(Truncate),
+    Truncate(SpannedObject<Truncate>),
     /// ```sql
     /// MSCK
     /// ```
     /// Msck (Hive)
-    Msck(Msck),
+    Msck(SpannedObject<Msck>),
     /// ```sql
     /// SELECT
     /// ```
-    Query(Box<Query>),
+    Query(SpannedObject<Box<Query>>),
     /// ```sql
     /// INSERT
     /// ```
-    Insert(Insert),
+    Insert(SpannedObject<Insert>),
     /// ```sql
     /// INSTALL
     /// ```
-    Install(InstallStatement),
+    Install(SpannedObject<InstallStatement>),
     /// ```sql
     /// LOAD
     /// ```
-    Load(LoadStatement),
+    Load(SpannedObject<LoadStatement>),
     // TODO: Support ROW FORMAT
     /// LOAD DATA from a directory or query source.
-    Directory(DirectoryStatement),
+    Directory(SpannedObject<DirectoryStatement>),
     /// A `CASE` statement.
-    Case(CaseStatement),
+    Case(SpannedObject<CaseStatement>),
     /// An `IF` statement.
-    If(IfStatement),
+    If(SpannedObject<IfStatement>),
     /// A `WHILE` statement.
-    While(WhileStatement),
+    While(SpannedObject<WhileStatement>),
     /// A `RAISE` statement.
-    Raise(RaiseStatement),
+    Raise(SpannedObject<RaiseStatement>),
     /// ```sql
     /// CALL <function>
     /// ```
-    Call(Function),
+    Call(SpannedObject<Function>),
     /// ```sql
     /// COPY [TO | FROM] ...
     /// ```
-    Copy(CopyStatement),
+    Copy(SpannedObject<CopyStatement>),
     /// ```sql
     /// COPY INTO <table> | <location>
     /// ```
@@ -3667,145 +3717,145 @@ pub enum Statement {
     /// Postgres. Although they share common prefix, it is reasonable to implement them
     /// in different enums. This can be refactored later once custom dialects
     /// are allowed to have custom Statements.
-    CopyIntoSnowflake(CopyIntoSnowflakeStatement),
+    CopyIntoSnowflake(SpannedObject<CopyIntoSnowflakeStatement>),
     /// ```sql
     /// OPEN cursor_name
     /// ```
     /// Opens a cursor.
-    Open(OpenStatement),
+    Open(SpannedObject<OpenStatement>),
     /// ```sql
     /// CLOSE
     /// ```
     /// Closes the portal underlying an open cursor.
-    Close(CloseStatement),
+    Close(SpannedObject<CloseStatement>),
     /// ```sql
     /// UPDATE
     /// ```
-    Update(Update),
+    Update(SpannedObject<Update>),
     /// ```sql
     /// DELETE
     /// ```
-    Delete(Delete),
+    Delete(SpannedObject<Delete>),
     /// ```sql
     /// CREATE VIEW
     /// ```
-    CreateView(CreateView),
+    CreateView(SpannedObject<CreateView>),
     /// ```sql
     /// CREATE TABLE
     /// ```
-    CreateTable(CreateTable),
+    CreateTable(SpannedObject<CreateTable>),
     /// ```sql
     /// CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     /// ```
     /// Sqlite specific statement
-    CreateVirtualTable(CreateVirtualTableStatement),
+    CreateVirtualTable(SpannedObject<CreateVirtualTableStatement>),
     /// ```sql
     /// `CREATE INDEX`
     /// ```
-    CreateIndex(CreateIndex),
+    CreateIndex(SpannedObject<CreateIndex>),
     /// ```sql
     /// CREATE ROLE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrole.html)
-    CreateRole(CreateRole),
+    CreateRole(SpannedObject<CreateRole>),
     /// ```sql
     /// CREATE SECRET
     /// ```
     /// See [DuckDB](https://duckdb.org/docs/sql/statements/create_secret.html)
-    CreateSecret(CreateSecretStatement),
+    CreateSecret(SpannedObject<CreateSecretStatement>),
     /// A `CREATE SERVER` statement.
-    CreateServer(CreateServerStatement),
+    CreateServer(SpannedObject<CreateServerStatement>),
     /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-    CreatePolicy(CreatePolicy),
+    CreatePolicy(SpannedObject<CreatePolicy>),
     /// ```sql
     /// CREATE CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
-    CreateConnector(CreateConnector),
+    CreateConnector(SpannedObject<CreateConnector>),
     /// ```sql
     /// CREATE OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createoperator.html)
-    CreateOperator(CreateOperator),
+    CreateOperator(SpannedObject<CreateOperator>),
     /// ```sql
     /// CREATE OPERATOR FAMILY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopfamily.html)
-    CreateOperatorFamily(CreateOperatorFamily),
+    CreateOperatorFamily(SpannedObject<CreateOperatorFamily>),
     /// ```sql
     /// CREATE OPERATOR CLASS
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopclass.html)
-    CreateOperatorClass(CreateOperatorClass),
+    CreateOperatorClass(SpannedObject<CreateOperatorClass>),
     /// A `CREATE TEXT SEARCH` statement.
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html)
-    CreateTextSearch(CreateTextSearch),
+    CreateTextSearch(SpannedObject<CreateTextSearch>),
     /// ```sql
     /// ALTER TABLE
     /// ```
-    AlterTable(AlterTable),
+    AlterTable(SpannedObject<AlterTable>),
     /// ```sql
     /// ALTER SCHEMA
     /// ```
     /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
-    AlterSchema(AlterSchema),
+    AlterSchema(SpannedObject<AlterSchema>),
     /// ```sql
     /// ALTER INDEX
     /// ```
-    AlterIndex(AlterIndexStatement),
+    AlterIndex(SpannedObject<AlterIndexStatement>),
     /// ```sql
     /// ALTER VIEW
     /// ```
-    AlterView(AlterViewStatement),
+    AlterView(SpannedObject<AlterViewStatement>),
     /// ```sql
     /// ALTER FUNCTION
     /// ALTER AGGREGATE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterfunction.html)
     /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteraggregate.html)
-    AlterFunction(AlterFunction),
+    AlterFunction(SpannedObject<AlterFunction>),
     /// ```sql
     /// ALTER TYPE
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertype.html)
     /// ```
-    AlterType(AlterType),
+    AlterType(SpannedObject<AlterType>),
     /// ```sql
     /// ALTER COLLATION
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
-    AlterCollation(AlterCollation),
+    AlterCollation(SpannedObject<AlterCollation>),
     /// ```sql
     /// ALTER OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteroperator.html)
-    AlterOperator(AlterOperator),
+    AlterOperator(SpannedObject<AlterOperator>),
     /// ```sql
     /// ALTER OPERATOR FAMILY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropfamily.html)
-    AlterOperatorFamily(AlterOperatorFamily),
+    AlterOperatorFamily(SpannedObject<AlterOperatorFamily>),
     /// ```sql
     /// ALTER OPERATOR CLASS
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropclass.html)
-    AlterOperatorClass(AlterOperatorClass),
+    AlterOperatorClass(SpannedObject<AlterOperatorClass>),
     /// An `ALTER TEXT SEARCH` statement.
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-configuration.html)
-    AlterTextSearch(AlterTextSearch),
+    AlterTextSearch(SpannedObject<AlterTextSearch>),
     /// ```sql
     /// ALTER ROLE
     /// ```
-    AlterRole(AlterRoleStatement),
+    AlterRole(SpannedObject<AlterRoleStatement>),
     /// ```sql
     /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
     /// ```
     /// (Postgresql-specific)
-    AlterPolicy(AlterPolicy),
+    AlterPolicy(SpannedObject<AlterPolicy>),
     /// ```sql
     /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
     /// or
@@ -3814,38 +3864,38 @@ pub enum Statement {
     /// ALTER CONNECTOR connector_name SET OWNER [USER|ROLE] user_or_role;
     /// ```
     /// (Hive-specific)
-    AlterConnector(AlterConnectorStatement),
+    AlterConnector(SpannedObject<AlterConnectorStatement>),
     /// ```sql
     /// ALTER SESSION SET sessionParam
     /// ALTER SESSION UNSET <param_name> [ , <param_name> , ... ]
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
-    AlterSession(AlterSessionStatement),
+    AlterSession(SpannedObject<AlterSessionStatement>),
     /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
     /// ```
     /// (SQLite-specific)
-    AttachDatabase(AttachDatabaseStatement),
+    AttachDatabase(SpannedObject<AttachDatabaseStatement>),
     /// (DuckDB-specific)
     /// ```sql
     /// ATTACH 'sqlite_file.db' AS sqlite_db (READ_ONLY, TYPE SQLITE);
     /// ```
     /// See <https://duckdb.org/docs/sql/statements/attach.html>
-    AttachDuckDBDatabase(AttachDuckDBDatabaseStatement),
+    AttachDuckDBDatabase(SpannedObject<AttachDuckDBDatabaseStatement>),
     /// (DuckDB-specific)
     /// ```sql
     /// DETACH db_alias;
     /// ```
     /// See <https://duckdb.org/docs/sql/statements/attach.html>
-    DetachDuckDBDatabase(DetachDuckDBDatabaseStatement),
+    DetachDuckDBDatabase(SpannedObject<DetachDuckDBDatabaseStatement>),
     /// ```sql
     /// DROP [TABLE, VIEW, ...]
     /// ```
-    Drop(DropStatement),
+    Drop(SpannedObject<DropStatement>),
     /// ```sql
     /// DROP FUNCTION
     /// ```
-    DropFunction(DropFunction),
+    DropFunction(SpannedObject<DropFunction>),
     /// ```sql
     /// DROP DOMAIN
     /// ```
@@ -3853,25 +3903,25 @@ pub enum Statement {
     ///
     /// DROP DOMAIN [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     ///
-    DropDomain(DropDomain),
+    DropDomain(SpannedObject<DropDomain>),
     /// ```sql
     /// DROP PROCEDURE
     /// ```
-    DropProcedure(DropProcedureStatement),
+    DropProcedure(SpannedObject<DropProcedureStatement>),
     /// ```sql
     /// DROP SECRET
     /// ```
-    DropSecret(DropSecretStatement),
+    DropSecret(SpannedObject<DropSecretStatement>),
     ///```sql
     /// DROP POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
-    DropPolicy(DropPolicy),
+    DropPolicy(SpannedObject<DropPolicy>),
     /// ```sql
     /// DROP CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
-    DropConnector(DropConnectorStatement),
+    DropConnector(SpannedObject<DropConnectorStatement>),
     /// ```sql
     /// DECLARE
     /// ```
@@ -3879,7 +3929,7 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Declare(DeclareStatement),
+    Declare(SpannedObject<DeclareStatement>),
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
     ///     [ WITH ] [ SCHEMA schema_name ]
@@ -3888,37 +3938,37 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
-    CreateExtension(CreateExtension),
+    CreateExtension(SpannedObject<CreateExtension>),
     /// ```sql
     /// CREATE COLLATION
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
-    CreateCollation(CreateCollation),
+    CreateCollation(SpannedObject<CreateCollation>),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropextension.html>
-    DropExtension(DropExtension),
+    DropExtension(SpannedObject<DropExtension>),
     /// ```sql
     /// DROP OPERATOR [ IF EXISTS ] name ( { left_type | NONE } , right_type ) [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropoperator.html>
-    DropOperator(DropOperator),
+    DropOperator(SpannedObject<DropOperator>),
     /// ```sql
     /// DROP OPERATOR FAMILY [ IF EXISTS ] name USING index_method [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropopfamily.html>
-    DropOperatorFamily(DropOperatorFamily),
+    DropOperatorFamily(SpannedObject<DropOperatorFamily>),
     /// ```sql
     /// DROP OPERATOR CLASS [ IF EXISTS ] name USING index_method [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropopclass.html>
-    DropOperatorClass(DropOperatorClass),
+    DropOperatorClass(SpannedObject<DropOperatorClass>),
     /// ```sql
     /// FETCH
     /// ```
@@ -3926,102 +3976,102 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Fetch(FetchStatement),
+    Fetch(SpannedObject<FetchStatement>),
     /// ```sql
     /// FLUSH [NO_WRITE_TO_BINLOG | LOCAL] flush_option [, flush_option] ... | tables_option
     /// ```
     ///
     /// Note: this is a Mysql-specific statement,
     /// but may also compatible with other SQL.
-    Flush(FlushStatement),
+    Flush(SpannedObject<FlushStatement>),
     /// ```sql
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Discard(DiscardStatement),
+    Discard(SpannedObject<DiscardStatement>),
     /// `SHOW FUNCTIONS`
     ///
     /// Note: this is a Presto-specific statement.
-    ShowFunctions(ShowFunctionsStatement),
+    ShowFunctions(SpannedObject<ShowFunctionsStatement>),
     /// ```sql
     /// SHOW <variable>
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable(ShowVariableStatement),
+    ShowVariable(SpannedObject<ShowVariableStatement>),
     /// ```sql
     /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowStatus(ShowStatusStatement),
+    ShowStatus(SpannedObject<ShowStatusStatement>),
     /// ```sql
     /// SHOW VARIABLES
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowVariables(ShowVariablesStatement),
+    ShowVariables(SpannedObject<ShowVariablesStatement>),
     /// ```sql
     /// SHOW CREATE TABLE
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCreate(ShowCreateStatement),
+    ShowCreate(SpannedObject<ShowCreateStatement>),
     /// ```sql
     /// SHOW COLUMNS
     /// ```
-    ShowColumns(ShowColumnsStatement),
+    ShowColumns(SpannedObject<ShowColumnsStatement>),
     /// ```sql
     /// SHOW CATALOGS
     /// ```
-    ShowCatalogs(ShowCatalogsStatement),
+    ShowCatalogs(SpannedObject<ShowCatalogsStatement>),
     /// ```sql
     /// SHOW DATABASES
     /// ```
-    ShowDatabases(ShowDatabasesStatement),
+    ShowDatabases(SpannedObject<ShowDatabasesStatement>),
     /// ```sql
     /// SHOW [FULL] PROCESSLIST
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowProcessList(ShowProcessListStatement),
+    ShowProcessList(SpannedObject<ShowProcessListStatement>),
     /// ```sql
     /// SHOW SCHEMAS
     /// ```
-    ShowSchemas(ShowSchemasStatement),
+    ShowSchemas(SpannedObject<ShowSchemasStatement>),
     // ```sql
     // SHOW {CHARACTER SET | CHARSET}
     // ```
     // [MySQL]:
     // <https://dev.mysql.com/doc/refman/8.4/en/show.html#:~:text=SHOW%20%7BCHARACTER%20SET%20%7C%20CHARSET%7D%20%5Blike_or_where%5D>
     /// Show the available character sets (alias `CHARSET`).
-    ShowCharset(ShowCharset),
+    ShowCharset(SpannedObject<ShowCharset>),
     /// ```sql
     /// SHOW OBJECTS LIKE 'line%' IN mydb.public
     /// ```
     /// Snowflake-specific statement
     /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
-    ShowObjects(ShowObjects),
+    ShowObjects(SpannedObject<ShowObjects>),
     /// ```sql
     /// SHOW TABLES
     /// ```
-    ShowTables(ShowTablesStatement),
+    ShowTables(SpannedObject<ShowTablesStatement>),
     /// ```sql
     /// SHOW VIEWS
     /// ```
-    ShowViews(ShowViewsStatement),
+    ShowViews(SpannedObject<ShowViewsStatement>),
     /// ```sql
     /// SHOW COLLATION
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCollation(ShowCollationStatement),
+    ShowCollation(SpannedObject<ShowCollationStatement>),
     /// ```sql
     /// `USE ...`
     /// ```
-    Use(Use),
+    Use(SpannedObject<Use>),
     /// ```sql
     /// START  [ TRANSACTION | WORK ] | START TRANSACTION } ...
     /// ```
@@ -4031,13 +4081,13 @@ pub enum Statement {
     /// `BEGIN  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     /// ```
     /// If `begin` is true
-    StartTransaction(StartTransactionStatement),
+    StartTransaction(SpannedObject<StartTransactionStatement>),
     /// ```sql
     /// COMMENT ON ...
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Comment(CommentStatement),
+    Comment(SpannedObject<CommentStatement>),
     /// ```sql
     /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
     /// ```
@@ -4047,21 +4097,21 @@ pub enum Statement {
     /// END [ TRY | CATCH ]
     /// ```
     /// If `end` is true
-    Commit(CommitStatement),
+    Commit(SpannedObject<CommitStatement>),
     /// ```sql
     /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]
     /// ```
-    Rollback(RollbackStatement),
+    Rollback(SpannedObject<RollbackStatement>),
     /// ```sql
     /// CREATE SCHEMA
     /// ```
-    CreateSchema(CreateSchemaStatement),
+    CreateSchema(SpannedObject<CreateSchemaStatement>),
     /// ```sql
     /// CREATE DATABASE
     /// ```
     /// See:
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
-    CreateDatabase(CreateDatabaseStatement),
+    CreateDatabase(SpannedObject<CreateDatabaseStatement>),
     /// ```sql
     /// CREATE FUNCTION
     /// ```
@@ -4071,34 +4121,34 @@ pub enum Statement {
     /// 2. [PostgreSQL](https://www.postgresql.org/docs/15/sql-createfunction.html)
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
     /// 4. [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
-    CreateFunction(CreateFunction),
+    CreateFunction(SpannedObject<CreateFunction>),
     /// CREATE TRIGGER statement. See struct [CreateTrigger] for details.
-    CreateTrigger(CreateTrigger),
+    CreateTrigger(SpannedObject<CreateTrigger>),
     /// DROP TRIGGER statement. See struct [DropTrigger] for details.
-    DropTrigger(DropTrigger),
+    DropTrigger(SpannedObject<DropTrigger>),
     /// ```sql
     /// CREATE PROCEDURE
     /// ```
-    CreateProcedure(CreateProcedureStatement),
+    CreateProcedure(SpannedObject<CreateProcedureStatement>),
     /// ```sql
     /// CREATE MACRO
     /// ```
     ///
     /// Supported variants:
     /// 1. [DuckDB](https://duckdb.org/docs/sql/statements/create_macro)
-    CreateMacro(CreateMacroStatement),
+    CreateMacro(SpannedObject<CreateMacroStatement>),
     /// ```sql
     /// CREATE STAGE
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-stage>
-    CreateStage(CreateStageStatement),
+    CreateStage(SpannedObject<CreateStageStatement>),
     /// ```sql
     /// CREATE [ OR REPLACE ] [ { TEMP | TEMPORARY | VOLATILE } ] FILE FORMAT [ IF NOT EXISTS ] <name>
     ///   [ TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ]
     ///   [ COMMENT = '<string_literal>' ]
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-file-format>
-    CreateFileFormat(CreateFileFormatStatement),
+    CreateFileFormat(SpannedObject<CreateFileFormatStatement>),
     /// ```sql
     /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
     ///   [ [ WITH ] <property> = <value> [ ... ] ]
@@ -4106,29 +4156,29 @@ pub enum Statement {
     /// Snowflake-specific statement to create a virtual warehouse.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
-    CreateWarehouse(CreateWarehouse),
+    CreateWarehouse(SpannedObject<CreateWarehouse>),
     /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
-    Assert(AssertStatement),
+    Assert(SpannedObject<AssertStatement>),
     /// ```sql
     /// GRANT privileges ON objects TO grantees
     /// ```
-    Grant(Grant),
+    Grant(SpannedObject<Grant>),
     /// ```sql
     /// DENY privileges ON object TO grantees
     /// ```
-    Deny(DenyStatement),
+    Deny(SpannedObject<DenyStatement>),
     /// ```sql
     /// REVOKE privileges ON objects FROM grantees
     /// ```
-    Revoke(Revoke),
+    Revoke(SpannedObject<Revoke>),
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate(DeallocateStatement),
+    Deallocate(SpannedObject<DeallocateStatement>),
     /// ```sql
     /// An `EXECUTE` statement
     /// ```
@@ -4137,38 +4187,38 @@ pub enum Statement {
     /// MSSQL: <https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/execute-a-stored-procedure>
     /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate>
     /// Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/execute-immediate>
-    Execute(ExecuteStatement),
+    Execute(SpannedObject<ExecuteStatement>),
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Prepare(PrepareStatement),
+    Prepare(SpannedObject<PrepareStatement>),
     /// ```sql
     /// KILL [CONNECTION | QUERY | MUTATION]
     /// ```
     ///
     /// See <https://clickhouse.com/docs/en/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
-    Kill(KillStatement),
+    Kill(SpannedObject<KillStatement>),
     /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE] TABLE
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
-    ExplainTable(ExplainTableStatement),
+    ExplainTable(SpannedObject<ExplainTableStatement>),
     /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE]  <statement>
     /// ```
-    Explain(ExplainStatement),
+    Explain(SpannedObject<ExplainStatement>),
     /// ```sql
     /// SAVEPOINT
     /// ```
     /// Define a new savepoint within the current transaction
-    Savepoint(SavepointStatement),
+    Savepoint(SpannedObject<SavepointStatement>),
     /// ```sql
     /// RELEASE [ SAVEPOINT ] savepoint_name
     /// ```
-    ReleaseSavepoint(ReleaseSavepointStatement),
+    ReleaseSavepoint(SpannedObject<ReleaseSavepointStatement>),
     /// A `MERGE` statement.
     ///
     /// ```sql
@@ -4177,7 +4227,7 @@ pub enum Statement {
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
     /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql?view=sql-server-ver16)
-    Merge(Merge),
+    Merge(SpannedObject<Merge>),
     /// ```sql
     /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
     /// ```
@@ -4185,42 +4235,42 @@ pub enum Statement {
     /// See [Spark SQL docs] for more details.
     ///
     /// [Spark SQL docs]: https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html
-    Cache(CacheStatement),
+    Cache(SpannedObject<CacheStatement>),
     /// ```sql
     /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
     /// ```
-    UNCache(UNCacheStatement),
+    UNCache(SpannedObject<UNCacheStatement>),
     /// ```sql
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
     /// ```
     /// Define a new sequence:
-    CreateSequence(CreateSequenceStatement),
+    CreateSequence(SpannedObject<CreateSequenceStatement>),
     /// A `CREATE DOMAIN` statement.
-    CreateDomain(CreateDomain),
+    CreateDomain(SpannedObject<CreateDomain>),
     /// ```sql
     /// CREATE TYPE <name>
     /// ```
-    CreateType(CreateTypeStatement),
+    CreateType(SpannedObject<CreateTypeStatement>),
     /// ```sql
     /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
     /// ```
-    Pragma(PragmaStatement),
+    Pragma(SpannedObject<PragmaStatement>),
     /// ```sql
     /// LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
     /// ```
     ///
     /// See <https://www.postgresql.org/docs/current/sql-lock.html>
-    Lock(Lock),
+    Lock(SpannedObject<Lock>),
     /// ```sql
     /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    LockTables(LockTablesStatement),
+    LockTables(SpannedObject<LockTablesStatement>),
     /// ```sql
     /// UNLOCK TABLES
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    UnlockTables(UnlockTablesStatement),
+    UnlockTables(SpannedObject<UnlockTablesStatement>),
     /// Unloads the result of a query to file
     ///
     /// [Athena](https://docs.aws.amazon.com/athena/latest/ug/unload.html):
@@ -4232,7 +4282,7 @@ pub enum Statement {
     /// ```sql
     /// UNLOAD('statement') TO <destination> [ OPTIONS ]
     /// ```
-    Unload(UnloadStatement),
+    Unload(SpannedObject<UnloadStatement>),
     /// ClickHouse:
     /// ```sql
     /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
@@ -4244,28 +4294,28 @@ pub enum Statement {
     /// OPTIMIZE table_name [WHERE predicate] [ZORDER BY (col_name1 [, ...])]
     /// ```
     /// See Databricks <https://docs.databricks.com/en/sql/language-manual/delta-optimize.html>
-    OptimizeTable(OptimizeTableStatement),
+    OptimizeTable(SpannedObject<OptimizeTableStatement>),
     /// ```sql
     /// LISTEN
     /// ```
     /// listen for a notification channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
-    LISTEN(LISTENStatement),
+    LISTEN(SpannedObject<LISTENStatement>),
     /// ```sql
     /// UNLISTEN
     /// ```
     /// stop listening for a notification
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-unlisten.html>
-    UNLISTEN(UNLISTENStatement),
+    UNLISTEN(SpannedObject<UNLISTENStatement>),
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
     /// send a notification event together with an optional "payload" string to channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
-    NOTIFY(NOTIFYStatement),
+    NOTIFY(SpannedObject<NOTIFYStatement>),
     /// ```sql
     /// LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO TABLE tablename
     /// [PARTITION (partcol1=val1, partcol2=val2 ...)]
@@ -4274,52 +4324,52 @@ pub enum Statement {
     /// Loading files into tables
     ///
     /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
-    LoadData(LoadDataStatement),
+    LoadData(SpannedObject<LoadDataStatement>),
     /// ```sql
     /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
     /// ```
     /// Renames one or more tables
     ///
     /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
-    RenameTable(Vec<RenameTable>),
+    RenameTable(SpannedObject<Vec<RenameTable>>),
     /// Snowflake `LIST`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/list>
-    List(FileStagingCommand),
+    List(SpannedObject<FileStagingCommand>),
     /// Snowflake `PUT`
     /// ```sql
     /// PUT 'file://<path>' <internalStage> [ <option> = <value> ... ]
     /// ```
     /// Options include `PARALLEL`, `AUTO_COMPRESS`, `SOURCE_COMPRESSION`, `OVERWRITE`.
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/put>
-    Put(PutStatement),
+    Put(SpannedObject<PutStatement>),
     /// Snowflake `REMOVE`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
-    Remove(FileStagingCommand),
+    Remove(SpannedObject<FileStagingCommand>),
     /// RaiseError (MSSQL)
     /// RAISERROR ( { msg_id | msg_str | @local_variable }
     /// { , severity , state }
     /// [ , argument [ , ...n ] ] )
     /// [ WITH option [ , ...n ] ]
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/raiserror-transact-sql?view=sql-server-ver16>
-    RaisError(RaisErrorStatement),
+    RaisError(SpannedObject<RaisErrorStatement>),
     /// A MSSQL `THROW` statement.
-    Throw(ThrowStatement),
+    Throw(SpannedObject<ThrowStatement>),
     /// ```sql
     /// PRINT msg_str | @local_variable | string_expr
     /// ```
     ///
     /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/print-transact-sql>
-    Print(PrintStatement),
+    Print(SpannedObject<PrintStatement>),
     /// MSSQL `WAITFOR` statement.
     ///
     /// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
-    WaitFor(WaitForStatement),
+    WaitFor(SpannedObject<WaitForStatement>),
     /// ```sql
     /// RETURN [ expression ]
     /// ```
     ///
     /// See [ReturnStatement]
-    Return(ReturnStatement),
+    Return(SpannedObject<ReturnStatement>),
     /// Export data statement
     ///
     /// Example:
@@ -4328,24 +4378,24 @@ pub enum Statement {
     /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
     /// ```
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/export-statements)
-    ExportData(ExportData),
+    ExportData(SpannedObject<ExportData>),
     /// ```sql
     /// CREATE [OR REPLACE] USER <user> [IF NOT EXISTS]
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
-    CreateUser(CreateUser),
+    CreateUser(SpannedObject<CreateUser>),
     /// ```sql
     /// ALTER USER \[ IF EXISTS \] \[ <name> \]
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
-    AlterUser(AlterUser),
+    AlterUser(SpannedObject<AlterUser>),
     /// Re-sorts rows and reclaims space in either a specified table or all tables in the current database
     ///
     /// ```sql
     /// VACUUM tbl
     /// ```
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
-    Vacuum(VacuumStatement),
+    Vacuum(SpannedObject<VacuumStatement>),
     /// Restore the value of a run-time parameter to the default value.
     ///
     /// ```sql
@@ -4353,30 +4403,30 @@ pub enum Statement {
     /// RESET ALL;
     /// ```
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reset.html)
-    Reset(ResetStatement),
+    Reset(SpannedObject<ResetStatement>),
 }
 
 impl From<Analyze> for Statement {
     fn from(analyze: Analyze) -> Self {
-        Statement::Analyze(analyze)
+        Statement::Analyze(analyze.into())
     }
 }
 
 impl From<ddl::Truncate> for Statement {
     fn from(truncate: ddl::Truncate) -> Self {
-        Statement::Truncate(truncate)
+        Statement::Truncate(truncate.into())
     }
 }
 
 impl From<Lock> for Statement {
     fn from(lock: Lock) -> Self {
-        Statement::Lock(lock)
+        Statement::Lock(lock.into())
     }
 }
 
 impl From<ddl::Msck> for Statement {
     fn from(msck: ddl::Msck) -> Self {
-        Statement::Msck(msck)
+        Statement::Msck(msck.into())
     }
 }
 
@@ -4456,13 +4506,17 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Statement::Flush(FlushStatement {
-                object_type,
-                location,
-                channel,
-                read_lock,
-                export,
-                tables,
+            Statement::Flush(SpannedObject {
+                content:
+                    FlushStatement {
+                        object_type,
+                        location,
+                        channel,
+                        read_lock,
+                        export,
+                        tables,
+                    },
+                ..
             }) => {
                 write!(f, "FLUSH")?;
                 if let Some(location) = location {
@@ -4487,7 +4541,10 @@ impl fmt::Display for Statement {
                     read = if *read_lock { " WITH READ LOCK" } else { "" }
                 )
             }
-            Statement::Kill(KillStatement { modifier, id }) => {
+            Statement::Kill(SpannedObject {
+                content: KillStatement { modifier, id },
+                ..
+            }) => {
                 write!(f, "KILL ")?;
 
                 if let Some(m) = modifier {
@@ -4496,11 +4553,15 @@ impl fmt::Display for Statement {
 
                 write!(f, "{id}")
             }
-            Statement::ExplainTable(ExplainTableStatement {
-                describe_alias,
-                hive_format,
-                has_table_keyword,
-                table_name,
+            Statement::ExplainTable(SpannedObject {
+                content:
+                    ExplainTableStatement {
+                        describe_alias,
+                        hive_format,
+                        has_table_keyword,
+                        table_name,
+                    },
+                ..
             }) => {
                 write!(f, "{describe_alias} ")?;
 
@@ -4513,15 +4574,19 @@ impl fmt::Display for Statement {
 
                 write!(f, "{table_name}")
             }
-            Statement::Explain(ExplainStatement {
-                describe_alias,
-                verbose,
-                analyze,
-                query_plan,
-                estimate,
-                statement,
-                format,
-                options,
+            Statement::Explain(SpannedObject {
+                content:
+                    ExplainStatement {
+                        describe_alias,
+                        verbose,
+                        analyze,
+                        query_plan,
+                        estimate,
+                        statement,
+                        format,
+                        options,
+                    },
+                ..
             }) => {
                 write!(f, "{describe_alias} ")?;
 
@@ -4550,15 +4615,22 @@ impl fmt::Display for Statement {
                 write!(f, "{statement}")
             }
             Statement::Query(s) => s.fmt(f),
-            Statement::Declare(DeclareStatement { stmts }) => {
+            Statement::Declare(SpannedObject {
+                content: DeclareStatement { stmts },
+                ..
+            }) => {
                 write!(f, "DECLARE ")?;
                 write!(f, "{}", display_separated(stmts, "; "))
             }
-            Statement::Fetch(FetchStatement {
-                name,
-                direction,
-                position,
-                into,
+            Statement::Fetch(SpannedObject {
+                content:
+                    FetchStatement {
+                        name,
+                        direction,
+                        position,
+                        into,
+                    },
+                ..
             }) => {
                 write!(f, "FETCH {direction} {position} {name}")?;
 
@@ -4568,12 +4640,16 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
-            Statement::Directory(DirectoryStatement {
-                overwrite,
-                local,
-                path,
-                file_format,
-                source,
+            Statement::Directory(SpannedObject {
+                content:
+                    DirectoryStatement {
+                        overwrite,
+                        local,
+                        path,
+                        file_format,
+                        source,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4601,20 +4677,28 @@ impl fmt::Display for Statement {
             Statement::Raise(stmt) => {
                 write!(f, "{stmt}")
             }
-            Statement::AttachDatabase(AttachDatabaseStatement {
-                schema_name,
-                database_file_name,
-                database,
+            Statement::AttachDatabase(SpannedObject {
+                content:
+                    AttachDatabaseStatement {
+                        schema_name,
+                        database_file_name,
+                        database,
+                    },
+                ..
             }) => {
                 let keyword = if *database { "DATABASE " } else { "" };
                 write!(f, "ATTACH {keyword}{database_file_name} AS {schema_name}")
             }
-            Statement::AttachDuckDBDatabase(AttachDuckDBDatabaseStatement {
-                if_not_exists,
-                database,
-                database_path,
-                database_alias,
-                attach_options,
+            Statement::AttachDuckDBDatabase(SpannedObject {
+                content:
+                    AttachDuckDBDatabaseStatement {
+                        if_not_exists,
+                        database,
+                        database_path,
+                        database_alias,
+                        attach_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4630,10 +4714,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DetachDuckDBDatabase(DetachDuckDBDatabaseStatement {
-                if_exists,
-                database,
-                database_alias,
+            Statement::DetachDuckDBDatabase(SpannedObject {
+                content:
+                    DetachDuckDBDatabaseStatement {
+                        if_exists,
+                        database,
+                        database_alias,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4645,23 +4733,34 @@ impl fmt::Display for Statement {
             }
             Statement::Analyze(analyze) => analyze.fmt(f),
             Statement::Insert(insert) => insert.fmt(f),
-            Statement::Install(InstallStatement {
-                extension_name: name,
+            Statement::Install(SpannedObject {
+                content:
+                    InstallStatement {
+                        extension_name: name,
+                    },
+                ..
             }) => write!(f, "INSTALL {name}"),
 
-            Statement::Load(LoadStatement {
-                extension_name: name,
+            Statement::Load(SpannedObject {
+                content: LoadStatement {
+                    extension_name: name,
+                },
+                ..
             }) => write!(f, "LOAD {name}"),
 
             Statement::Call(function) => write!(f, "CALL {function}"),
 
-            Statement::Copy(CopyStatement {
-                source,
-                to,
-                target,
-                options,
-                legacy_options,
-                values,
+            Statement::Copy(SpannedObject {
+                content:
+                    CopyStatement {
+                        source,
+                        to,
+                        target,
+                        options,
+                        legacy_options,
+                        values,
+                    },
+                ..
             }) => {
                 write!(f, "COPY")?;
                 match source {
@@ -4702,34 +4801,41 @@ impl fmt::Display for Statement {
             Statement::Update(update) => update.fmt(f),
             Statement::Delete(delete) => delete.fmt(f),
             Statement::Open(open) => open.fmt(f),
-            Statement::Close(CloseStatement { cursor }) => {
+            Statement::Close(SpannedObject {
+                content: CloseStatement { cursor },
+                ..
+            }) => {
                 write!(f, "CLOSE {cursor}")?;
 
                 Ok(())
             }
-            Statement::CreateDatabase(CreateDatabaseStatement {
-                db_name,
-                if_not_exists,
-                location,
-                managed_location,
-                or_replace,
-                transient,
-                clone,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                external_volume,
-                catalog,
-                replace_invalid_characters,
-                default_ddl_collation,
-                storage_serialization_policy,
-                comment,
-                default_charset,
-                default_collation,
-                catalog_sync,
-                catalog_sync_namespace_mode,
-                catalog_sync_namespace_flatten_delimiter,
-                with_tags,
-                with_contacts,
+            Statement::CreateDatabase(SpannedObject {
+                content:
+                    CreateDatabaseStatement {
+                        db_name,
+                        if_not_exists,
+                        location,
+                        managed_location,
+                        or_replace,
+                        transient,
+                        clone,
+                        data_retention_time_in_days,
+                        max_data_extension_time_in_days,
+                        external_volume,
+                        catalog,
+                        replace_invalid_characters,
+                        default_ddl_collation,
+                        storage_serialization_policy,
+                        comment,
+                        default_charset,
+                        default_collation,
+                        catalog_sync,
+                        catalog_sync_namespace_mode,
+                        catalog_sync_namespace_flatten_delimiter,
+                        with_tags,
+                        with_contacts,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4817,12 +4923,16 @@ impl fmt::Display for Statement {
             Statement::CreateDomain(create_domain) => create_domain.fmt(f),
             Statement::CreateTrigger(create_trigger) => create_trigger.fmt(f),
             Statement::DropTrigger(drop_trigger) => drop_trigger.fmt(f),
-            Statement::CreateProcedure(CreateProcedureStatement {
-                name,
-                or_alter,
-                params,
-                language,
-                body,
+            Statement::CreateProcedure(SpannedObject {
+                content:
+                    CreateProcedureStatement {
+                        name,
+                        or_alter,
+                        params,
+                        language,
+                        body,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4843,12 +4953,16 @@ impl fmt::Display for Statement {
 
                 write!(f, " AS {body}")
             }
-            Statement::CreateMacro(CreateMacroStatement {
-                or_replace,
-                temporary,
-                name,
-                args,
-                definition,
+            Statement::CreateMacro(SpannedObject {
+                content:
+                    CreateMacroStatement {
+                        or_replace,
+                        temporary,
+                        name,
+                        args,
+                        definition,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4867,13 +4981,17 @@ impl fmt::Display for Statement {
             }
             Statement::CreateView(create_view) => create_view.fmt(f),
             Statement::CreateTable(create_table) => create_table.fmt(f),
-            Statement::LoadData(LoadDataStatement {
-                local,
-                inpath,
-                overwrite,
-                table_name,
-                partitioned,
-                table_format,
+            Statement::LoadData(SpannedObject {
+                content:
+                    LoadDataStatement {
+                        local,
+                        inpath,
+                        overwrite,
+                        table_name,
+                        partitioned,
+                        table_format,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4897,11 +5015,15 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateVirtualTable(CreateVirtualTableStatement {
-                name,
-                if_not_exists,
-                module_name,
-                module_args,
+            Statement::CreateVirtualTable(SpannedObject {
+                content:
+                    CreateVirtualTableStatement {
+                        name,
+                        if_not_exists,
+                        module_name,
+                        module_args,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4927,14 +5049,18 @@ impl fmt::Display for Statement {
                 write!(f, "{drop_operator_class}")
             }
             Statement::CreateRole(create_role) => write!(f, "{create_role}"),
-            Statement::CreateSecret(CreateSecretStatement {
-                or_replace,
-                temporary,
-                if_not_exists,
-                name,
-                storage_specifier,
-                secret_type,
-                options,
+            Statement::CreateSecret(SpannedObject {
+                content:
+                    CreateSecretStatement {
+                        or_replace,
+                        temporary,
+                        if_not_exists,
+                        name,
+                        storage_specifier,
+                        secret_type,
+                        options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -4974,14 +5100,21 @@ impl fmt::Display for Statement {
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
             Statement::CreateTextSearch(create_text_search) => create_text_search.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
-            Statement::AlterIndex(AlterIndexStatement { name, operation }) => {
+            Statement::AlterIndex(SpannedObject {
+                content: AlterIndexStatement { name, operation },
+                ..
+            }) => {
                 write!(f, "ALTER INDEX {name} {operation}")
             }
-            Statement::AlterView(AlterViewStatement {
-                name,
-                columns,
-                query,
-                with_options,
+            Statement::AlterView(SpannedObject {
+                content:
+                    AlterViewStatement {
+                        name,
+                        columns,
+                        query,
+                        with_options,
+                    },
+                ..
             }) => {
                 write!(f, "ALTER VIEW {name}")?;
                 if !with_options.is_empty() {
@@ -4993,7 +5126,10 @@ impl fmt::Display for Statement {
                 write!(f, " AS {query}")
             }
             Statement::AlterFunction(alter_function) => write!(f, "{alter_function}"),
-            Statement::AlterType(AlterType { name, operation }) => {
+            Statement::AlterType(SpannedObject {
+                content: AlterType { name, operation },
+                ..
+            }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
             Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
@@ -5005,15 +5141,22 @@ impl fmt::Display for Statement {
                 write!(f, "{alter_operator_class}")
             }
             Statement::AlterTextSearch(alter_text_search) => write!(f, "{alter_text_search}"),
-            Statement::AlterRole(AlterRoleStatement { name, operation }) => {
+            Statement::AlterRole(SpannedObject {
+                content: AlterRoleStatement { name, operation },
+                ..
+            }) => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
             Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
-            Statement::AlterConnector(AlterConnectorStatement {
-                name,
-                properties,
-                url,
-                owner,
+            Statement::AlterConnector(SpannedObject {
+                content:
+                    AlterConnectorStatement {
+                        name,
+                        properties,
+                        url,
+                        owner,
+                    },
+                ..
             }) => {
                 write!(f, "ALTER CONNECTOR {name}")?;
                 if let Some(properties) = properties {
@@ -5031,9 +5174,13 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::AlterSession(AlterSessionStatement {
-                set,
-                session_params,
+            Statement::AlterSession(SpannedObject {
+                content:
+                    AlterSessionStatement {
+                        set,
+                        session_params,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5054,15 +5201,19 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Drop(DropStatement {
-                object_type,
-                if_exists,
-                names,
-                cascade,
-                restrict,
-                purge,
-                temporary,
-                table,
+            Statement::Drop(SpannedObject {
+                content:
+                    DropStatement {
+                        object_type,
+                        if_exists,
+                        names,
+                        cascade,
+                        restrict,
+                        purge,
+                        temporary,
+                        table,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5081,10 +5232,14 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
-            Statement::DropDomain(DropDomain {
-                if_exists,
-                name,
-                drop_behavior,
+            Statement::DropDomain(SpannedObject {
+                content:
+                    DropDomain {
+                        if_exists,
+                        name,
+                        drop_behavior,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5096,10 +5251,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropProcedure(DropProcedureStatement {
-                if_exists,
-                proc_desc,
-                drop_behavior,
+            Statement::DropProcedure(SpannedObject {
+                content:
+                    DropProcedureStatement {
+                        if_exists,
+                        proc_desc,
+                        drop_behavior,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5112,11 +5271,15 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropSecret(DropSecretStatement {
-                if_exists,
-                temporary,
-                name,
-                storage_specifier,
+            Statement::DropSecret(SpannedObject {
+                content:
+                    DropSecretStatement {
+                        if_exists,
+                        temporary,
+                        name,
+                        storage_specifier,
+                    },
+                ..
             }) => {
                 write!(f, "DROP ")?;
                 if let Some(t) = temporary {
@@ -5133,7 +5296,10 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::DropPolicy(policy) => write!(f, "{policy}"),
-            Statement::DropConnector(DropConnectorStatement { if_exists, name }) => {
+            Statement::DropConnector(SpannedObject {
+                content: DropConnectorStatement { if_exists, name },
+                ..
+            }) => {
                 write!(
                     f,
                     "DROP CONNECTOR {if_exists}{name}",
@@ -5141,22 +5307,32 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::Discard(DiscardStatement { object_type }) => {
+            Statement::Discard(SpannedObject {
+                content: DiscardStatement { object_type },
+                ..
+            }) => {
                 write!(f, "DISCARD {object_type}")?;
                 Ok(())
             }
             Self::Set(set) => write!(f, "{set}"),
-            Statement::ShowVariable(ShowVariableStatement { variable }) => {
+            Statement::ShowVariable(SpannedObject {
+                content: ShowVariableStatement { variable },
+                ..
+            }) => {
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
                 }
                 Ok(())
             }
-            Statement::ShowStatus(ShowStatusStatement {
-                filter,
-                global,
-                session,
+            Statement::ShowStatus(SpannedObject {
+                content:
+                    ShowStatusStatement {
+                        filter,
+                        global,
+                        session,
+                    },
+                ..
             }) => {
                 write!(f, "SHOW")?;
                 if *global {
@@ -5171,10 +5347,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowVariables(ShowVariablesStatement {
-                filter,
-                global,
-                session,
+            Statement::ShowVariables(SpannedObject {
+                content:
+                    ShowVariablesStatement {
+                        filter,
+                        global,
+                        session,
+                    },
+                ..
             }) => {
                 write!(f, "SHOW")?;
                 if *global {
@@ -5189,14 +5369,21 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowCreate(ShowCreateStatement { obj_type, obj_name }) => {
+            Statement::ShowCreate(SpannedObject {
+                content: ShowCreateStatement { obj_type, obj_name },
+                ..
+            }) => {
                 write!(f, "SHOW CREATE {obj_type} {obj_name}",)?;
                 Ok(())
             }
-            Statement::ShowColumns(ShowColumnsStatement {
-                extended,
-                full,
-                show_options,
+            Statement::ShowColumns(SpannedObject {
+                content:
+                    ShowColumnsStatement {
+                        extended,
+                        full,
+                        show_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5206,10 +5393,14 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowDatabases(ShowDatabasesStatement {
-                terse,
-                history,
-                show_options,
+            Statement::ShowDatabases(SpannedObject {
+                content:
+                    ShowDatabasesStatement {
+                        terse,
+                        history,
+                        show_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5219,10 +5410,14 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowCatalogs(ShowCatalogsStatement {
-                terse,
-                history,
-                show_options,
+            Statement::ShowCatalogs(SpannedObject {
+                content:
+                    ShowCatalogsStatement {
+                        terse,
+                        history,
+                        show_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5232,7 +5427,10 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowProcessList(ShowProcessListStatement { full }) => {
+            Statement::ShowProcessList(SpannedObject {
+                content: ShowProcessListStatement { full },
+                ..
+            }) => {
                 write!(
                     f,
                     "SHOW {full}PROCESSLIST",
@@ -5240,10 +5438,14 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowSchemas(ShowSchemasStatement {
-                terse,
-                history,
-                show_options,
+            Statement::ShowSchemas(SpannedObject {
+                content:
+                    ShowSchemasStatement {
+                        terse,
+                        history,
+                        show_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5253,9 +5455,13 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowObjects(ShowObjects {
-                terse,
-                show_options,
+            Statement::ShowObjects(SpannedObject {
+                content:
+                    ShowObjects {
+                        terse,
+                        show_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5264,13 +5470,17 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowTables(ShowTablesStatement {
-                terse,
-                history,
-                extended,
-                full,
-                external,
-                show_options,
+            Statement::ShowTables(SpannedObject {
+                content:
+                    ShowTablesStatement {
+                        terse,
+                        history,
+                        extended,
+                        full,
+                        external,
+                        show_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5283,10 +5493,14 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowViews(ShowViewsStatement {
-                terse,
-                materialized,
-                show_options,
+            Statement::ShowViews(SpannedObject {
+                content:
+                    ShowViewsStatement {
+                        terse,
+                        materialized,
+                        show_options,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5296,7 +5510,10 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowFunctions(ShowFunctionsStatement { filter }) => {
+            Statement::ShowFunctions(SpannedObject {
+                content: ShowFunctionsStatement { filter },
+                ..
+            }) => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -5304,7 +5521,10 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Use(use_expr) => use_expr.fmt(f),
-            Statement::ShowCollation(ShowCollationStatement { filter }) => {
+            Statement::ShowCollation(SpannedObject {
+                content: ShowCollationStatement { filter },
+                ..
+            }) => {
                 write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -5312,14 +5532,18 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::ShowCharset(show_stm) => show_stm.fmt(f),
-            Statement::StartTransaction(StartTransactionStatement {
-                modes,
-                begin: syntax_begin,
-                transaction,
-                modifier,
-                statements,
-                exception,
-                has_end_keyword,
+            Statement::StartTransaction(SpannedObject {
+                content:
+                    StartTransactionStatement {
+                        modes,
+                        begin: syntax_begin,
+                        transaction,
+                        modifier,
+                        statements,
+                        exception,
+                        has_end_keyword,
+                    },
+                ..
             }) => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
@@ -5351,10 +5575,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Commit(CommitStatement {
-                chain,
-                end: end_syntax,
-                modifier,
+            Statement::Commit(SpannedObject {
+                content:
+                    CommitStatement {
+                        chain,
+                        end: end_syntax,
+                        modifier,
+                    },
+                ..
             }) => {
                 if *end_syntax {
                     write!(f, "END")?;
@@ -5369,7 +5597,10 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Rollback(RollbackStatement { chain, savepoint }) => {
+            Statement::Rollback(SpannedObject {
+                content: RollbackStatement { chain, savepoint },
+                ..
+            }) => {
                 write!(f, "ROLLBACK")?;
 
                 if *chain {
@@ -5382,14 +5613,18 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
-            Statement::CreateSchema(CreateSchemaStatement {
-                schema_name,
-                or_replace,
-                if_not_exists,
-                with,
-                options,
-                default_collate_spec,
-                clone,
+            Statement::CreateSchema(SpannedObject {
+                content:
+                    CreateSchemaStatement {
+                        schema_name,
+                        or_replace,
+                        if_not_exists,
+                        with,
+                        options,
+                        default_collate_spec,
+                        clone,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5416,7 +5651,10 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Assert(AssertStatement { condition, message }) => {
+            Statement::Assert(SpannedObject {
+                content: AssertStatement { condition, message },
+                ..
+            }) => {
                 write!(f, "ASSERT {condition}")?;
                 if let Some(m) = message {
                     write!(f, " AS {m}")?;
@@ -5426,21 +5664,28 @@ impl fmt::Display for Statement {
             Statement::Grant(grant) => write!(f, "{grant}"),
             Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke(revoke) => write!(f, "{revoke}"),
-            Statement::Deallocate(DeallocateStatement { name, prepare }) => write!(
+            Statement::Deallocate(SpannedObject {
+                content: DeallocateStatement { name, prepare },
+                ..
+            }) => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",
                 prepare = if *prepare { "PREPARE " } else { "" },
                 name = name,
             ),
-            Statement::Execute(ExecuteStatement {
-                name,
-                parameters,
-                has_parentheses,
-                immediate,
-                into,
-                using,
-                output,
-                default,
+            Statement::Execute(SpannedObject {
+                content:
+                    ExecuteStatement {
+                        name,
+                        parameters,
+                        has_parentheses,
+                        immediate,
+                        into,
+                        using,
+                        output,
+                        default,
+                    },
+                ..
             }) => {
                 let (open, close) = if *has_parentheses {
                     // Space before `(` only when there is no name directly preceding it.
@@ -5470,10 +5715,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Prepare(PrepareStatement {
-                name,
-                data_types,
-                statement,
+            Statement::Prepare(SpannedObject {
+                content:
+                    PrepareStatement {
+                        name,
+                        data_types,
+                        statement,
+                    },
+                ..
             }) => {
                 write!(f, "PREPARE {name} ")?;
                 if !data_types.is_empty() {
@@ -5481,11 +5730,15 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "AS {statement}")
             }
-            Statement::Comment(CommentStatement {
-                object_type,
-                object_name,
-                comment,
-                if_exists,
+            Statement::Comment(SpannedObject {
+                content:
+                    CommentStatement {
+                        object_type,
+                        object_name,
+                        comment,
+                        if_exists,
+                    },
+                ..
             }) => {
                 write!(f, "COMMENT ")?;
                 if *if_exists {
@@ -5498,20 +5751,30 @@ impl fmt::Display for Statement {
                     write!(f, "NULL")
                 }
             }
-            Statement::Savepoint(SavepointStatement { name }) => {
+            Statement::Savepoint(SpannedObject {
+                content: SavepointStatement { name },
+                ..
+            }) => {
                 write!(f, "SAVEPOINT ")?;
                 write!(f, "{name}")
             }
-            Statement::ReleaseSavepoint(ReleaseSavepointStatement { name }) => {
+            Statement::ReleaseSavepoint(SpannedObject {
+                content: ReleaseSavepointStatement { name },
+                ..
+            }) => {
                 write!(f, "RELEASE SAVEPOINT {name}")
             }
             Statement::Merge(merge) => merge.fmt(f),
-            Statement::Cache(CacheStatement {
-                table_name,
-                table_flag,
-                has_as,
-                options,
-                query,
+            Statement::Cache(SpannedObject {
+                content:
+                    CacheStatement {
+                        table_name,
+                        table_flag,
+                        has_as,
+                        options,
+                        query,
+                    },
+                ..
             }) => {
                 if let Some(table_flag) = table_flag {
                     write!(f, "CACHE {table_flag} TABLE {table_name}")?;
@@ -5530,9 +5793,13 @@ impl fmt::Display for Statement {
                     (false, None) => Ok(()),
                 }
             }
-            Statement::UNCache(UNCacheStatement {
-                table_name,
-                if_exists,
+            Statement::UNCache(SpannedObject {
+                content:
+                    UNCacheStatement {
+                        table_name,
+                        if_exists,
+                    },
+                ..
             }) => {
                 if *if_exists {
                     write!(f, "UNCACHE TABLE IF EXISTS {table_name}")
@@ -5540,13 +5807,17 @@ impl fmt::Display for Statement {
                     write!(f, "UNCACHE TABLE {table_name}")
                 }
             }
-            Statement::CreateSequence(CreateSequenceStatement {
-                temporary,
-                if_not_exists,
-                name,
-                data_type,
-                sequence_options,
-                owned_by,
+            Statement::CreateSequence(SpannedObject {
+                content:
+                    CreateSequenceStatement {
+                        temporary,
+                        if_not_exists,
+                        name,
+                        data_type,
+                        sequence_options,
+                        owned_by,
+                    },
+                ..
             }) => {
                 let as_type: String = if let Some(dt) = data_type.as_ref() {
                     //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
@@ -5571,16 +5842,20 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "")
             }
-            Statement::CreateStage(CreateStageStatement {
-                or_replace,
-                temporary,
-                if_not_exists,
-                name,
-                stage_params,
-                directory_table_params,
-                file_format,
-                copy_options,
-                comment,
+            Statement::CreateStage(SpannedObject {
+                content:
+                    CreateStageStatement {
+                        or_replace,
+                        temporary,
+                        if_not_exists,
+                        name,
+                        stage_params,
+                        directory_table_params,
+                        file_format,
+                        copy_options,
+                        comment,
+                        ..
+                    },
                 ..
             }) => {
                 write!(
@@ -5604,14 +5879,18 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateFileFormat(CreateFileFormatStatement {
-                or_replace,
-                temporary,
-                volatile,
-                if_not_exists,
-                name,
-                options,
-                comment,
+            Statement::CreateFileFormat(SpannedObject {
+                content:
+                    CreateFileFormatStatement {
+                        or_replace,
+                        temporary,
+                        volatile,
+                        if_not_exists,
+                        name,
+                        options,
+                        comment,
+                    },
+                ..
             }) => {
                 write!(
                     f,
@@ -5630,21 +5909,25 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateWarehouse(s) => write!(f, "{s}"),
-            Statement::CopyIntoSnowflake(CopyIntoSnowflakeStatement {
-                kind,
-                into,
-                into_columns,
-                from_obj,
-                from_obj_alias,
-                stage_params,
-                from_transformations,
-                from_query,
-                files,
-                pattern,
-                file_format,
-                copy_options,
-                validation_mode,
-                partition,
+            Statement::CopyIntoSnowflake(SpannedObject {
+                content:
+                    CopyIntoSnowflakeStatement {
+                        kind,
+                        into,
+                        into_columns,
+                        from_obj,
+                        from_obj_alias,
+                        stage_params,
+                        from_transformations,
+                        from_query,
+                        files,
+                        pattern,
+                        file_format,
+                        copy_options,
+                        validation_mode,
+                        partition,
+                    },
+                ..
             }) => {
                 write!(f, "COPY INTO {into}")?;
                 if let Some(into_columns) = into_columns {
@@ -5701,9 +5984,13 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateType(CreateTypeStatement {
-                name,
-                representation,
+            Statement::CreateType(SpannedObject {
+                content:
+                    CreateTypeStatement {
+                        name,
+                        representation,
+                    },
+                ..
             }) => {
                 write!(f, "CREATE TYPE {name}")?;
                 if let Some(repr) = representation {
@@ -5711,7 +5998,10 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Pragma(PragmaStatement { name, value, is_eq }) => {
+            Statement::Pragma(SpannedObject {
+                content: PragmaStatement { name, value, is_eq },
+                ..
+            }) => {
                 write!(f, "PRAGMA {name}")?;
                 if let Some(value) = value {
                     if *is_eq {
@@ -5723,19 +6013,29 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Lock(lock) => lock.fmt(f),
-            Statement::LockTables(LockTablesStatement { tables }) => {
+            Statement::LockTables(SpannedObject {
+                content: LockTablesStatement { tables },
+                ..
+            }) => {
                 write!(f, "LOCK TABLES {}", display_comma_separated(tables))
             }
-            Statement::UnlockTables(UnlockTablesStatement) => {
+            Statement::UnlockTables(SpannedObject {
+                content: UnlockTablesStatement,
+                ..
+            }) => {
                 write!(f, "UNLOCK TABLES")
             }
-            Statement::Unload(UnloadStatement {
-                query,
-                query_text,
-                to,
-                auth,
-                with,
-                options,
+            Statement::Unload(SpannedObject {
+                content:
+                    UnloadStatement {
+                        query,
+                        query_text,
+                        to,
+                        auth,
+                        with,
+                        options,
+                    },
+                ..
             }) => {
                 write!(f, "UNLOAD(")?;
                 if let Some(query) = query {
@@ -5756,15 +6056,19 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::OptimizeTable(OptimizeTableStatement {
-                name,
-                has_table_keyword,
-                on_cluster,
-                partition,
-                include_final,
-                deduplicate,
-                predicate,
-                zorder,
+            Statement::OptimizeTable(SpannedObject {
+                content:
+                    OptimizeTableStatement {
+                        name,
+                        has_table_keyword,
+                        on_cluster,
+                        partition,
+                        include_final,
+                        deduplicate,
+                        predicate,
+                        zorder,
+                    },
+                ..
             }) => {
                 write!(f, "OPTIMIZE")?;
                 if *has_table_keyword {
@@ -5791,15 +6095,24 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::LISTEN(LISTENStatement { channel }) => {
+            Statement::LISTEN(SpannedObject {
+                content: LISTENStatement { channel },
+                ..
+            }) => {
                 write!(f, "LISTEN {channel}")?;
                 Ok(())
             }
-            Statement::UNLISTEN(UNLISTENStatement { channel }) => {
+            Statement::UNLISTEN(SpannedObject {
+                content: UNLISTENStatement { channel },
+                ..
+            }) => {
                 write!(f, "UNLISTEN {channel}")?;
                 Ok(())
             }
-            Statement::NOTIFY(NOTIFYStatement { channel, payload }) => {
+            Statement::NOTIFY(SpannedObject {
+                content: NOTIFYStatement { channel, payload },
+                ..
+            }) => {
                 write!(f, "NOTIFY {channel}")?;
                 if let Some(payload) = payload {
                     write!(f, ", '{payload}'")?;
@@ -5809,12 +6122,16 @@ impl fmt::Display for Statement {
             Statement::RenameTable(rename_tables) => {
                 write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
             }
-            Statement::RaisError(RaisErrorStatement {
-                message,
-                severity,
-                state,
-                arguments,
-                options,
+            Statement::RaisError(SpannedObject {
+                content:
+                    RaisErrorStatement {
+                        message,
+                        severity,
+                        state,
+                        arguments,
+                        options,
+                    },
+                ..
             }) => {
                 write!(f, "RAISERROR({message}, {severity}, {state}")?;
                 if !arguments.is_empty() {
@@ -5831,10 +6148,14 @@ impl fmt::Display for Statement {
             Statement::WaitFor(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
-            Statement::Put(PutStatement {
-                source,
-                stage,
-                options,
+            Statement::Put(SpannedObject {
+                content:
+                    PutStatement {
+                        source,
+                        stage,
+                        options,
+                    },
+                ..
             }) => {
                 write!(f, "PUT '{source}' {stage}")?;
                 if !options.options.is_empty() {
@@ -11633,7 +11954,7 @@ impl fmt::Display for ResetStatement {
 
 impl From<Set> for Statement {
     fn from(s: Set) -> Self {
-        Self::Set(s)
+        Self::Set(s.into())
     }
 }
 
@@ -11645,289 +11966,289 @@ impl From<Query> for Statement {
 
 impl From<Box<Query>> for Statement {
     fn from(q: Box<Query>) -> Self {
-        Self::Query(q)
+        Self::Query(q.into())
     }
 }
 
 impl From<Insert> for Statement {
     fn from(i: Insert) -> Self {
-        Self::Insert(i)
+        Self::Insert(i.into())
     }
 }
 
 impl From<Update> for Statement {
     fn from(u: Update) -> Self {
-        Self::Update(u)
+        Self::Update(u.into())
     }
 }
 
 impl From<CreateView> for Statement {
     fn from(cv: CreateView) -> Self {
-        Self::CreateView(cv)
+        Self::CreateView(cv.into())
     }
 }
 
 impl From<CreateRole> for Statement {
     fn from(cr: CreateRole) -> Self {
-        Self::CreateRole(cr)
+        Self::CreateRole(cr.into())
     }
 }
 
 impl From<AlterTable> for Statement {
     fn from(at: AlterTable) -> Self {
-        Self::AlterTable(at)
+        Self::AlterTable(at.into())
     }
 }
 
 impl From<DropFunction> for Statement {
     fn from(df: DropFunction) -> Self {
-        Self::DropFunction(df)
+        Self::DropFunction(df.into())
     }
 }
 
 impl From<CreateExtension> for Statement {
     fn from(ce: CreateExtension) -> Self {
-        Self::CreateExtension(ce)
+        Self::CreateExtension(ce.into())
     }
 }
 
 impl From<CreateCollation> for Statement {
     fn from(c: CreateCollation) -> Self {
-        Self::CreateCollation(c)
+        Self::CreateCollation(c.into())
     }
 }
 
 impl From<DropExtension> for Statement {
     fn from(de: DropExtension) -> Self {
-        Self::DropExtension(de)
+        Self::DropExtension(de.into())
     }
 }
 
 impl From<CaseStatement> for Statement {
     fn from(c: CaseStatement) -> Self {
-        Self::Case(c)
+        Self::Case(c.into())
     }
 }
 
 impl From<IfStatement> for Statement {
     fn from(i: IfStatement) -> Self {
-        Self::If(i)
+        Self::If(i.into())
     }
 }
 
 impl From<WhileStatement> for Statement {
     fn from(w: WhileStatement) -> Self {
-        Self::While(w)
+        Self::While(w.into())
     }
 }
 
 impl From<RaiseStatement> for Statement {
     fn from(r: RaiseStatement) -> Self {
-        Self::Raise(r)
+        Self::Raise(r.into())
     }
 }
 
 impl From<ThrowStatement> for Statement {
     fn from(t: ThrowStatement) -> Self {
-        Self::Throw(t)
+        Self::Throw(t.into())
     }
 }
 
 impl From<Function> for Statement {
     fn from(f: Function) -> Self {
-        Self::Call(f)
+        Self::Call(f.into())
     }
 }
 
 impl From<OpenStatement> for Statement {
     fn from(o: OpenStatement) -> Self {
-        Self::Open(o)
+        Self::Open(o.into())
     }
 }
 
 impl From<Delete> for Statement {
     fn from(d: Delete) -> Self {
-        Self::Delete(d)
+        Self::Delete(d.into())
     }
 }
 
 impl From<CreateTable> for Statement {
     fn from(c: CreateTable) -> Self {
-        Self::CreateTable(c)
+        Self::CreateTable(c.into())
     }
 }
 
 impl From<CreateIndex> for Statement {
     fn from(c: CreateIndex) -> Self {
-        Self::CreateIndex(c)
+        Self::CreateIndex(c.into())
     }
 }
 
 impl From<CreateServerStatement> for Statement {
     fn from(c: CreateServerStatement) -> Self {
-        Self::CreateServer(c)
+        Self::CreateServer(c.into())
     }
 }
 
 impl From<CreateConnector> for Statement {
     fn from(c: CreateConnector) -> Self {
-        Self::CreateConnector(c)
+        Self::CreateConnector(c.into())
     }
 }
 
 impl From<CreateOperator> for Statement {
     fn from(c: CreateOperator) -> Self {
-        Self::CreateOperator(c)
+        Self::CreateOperator(c.into())
     }
 }
 
 impl From<CreateOperatorFamily> for Statement {
     fn from(c: CreateOperatorFamily) -> Self {
-        Self::CreateOperatorFamily(c)
+        Self::CreateOperatorFamily(c.into())
     }
 }
 
 impl From<CreateOperatorClass> for Statement {
     fn from(c: CreateOperatorClass) -> Self {
-        Self::CreateOperatorClass(c)
+        Self::CreateOperatorClass(c.into())
     }
 }
 
 impl From<CreateTextSearch> for Statement {
     fn from(c: CreateTextSearch) -> Self {
-        Self::CreateTextSearch(c)
+        Self::CreateTextSearch(c.into())
     }
 }
 
 impl From<AlterSchema> for Statement {
     fn from(a: AlterSchema) -> Self {
-        Self::AlterSchema(a)
+        Self::AlterSchema(a.into())
     }
 }
 
 impl From<AlterFunction> for Statement {
     fn from(a: AlterFunction) -> Self {
-        Self::AlterFunction(a)
+        Self::AlterFunction(a.into())
     }
 }
 
 impl From<AlterType> for Statement {
     fn from(a: AlterType) -> Self {
-        Self::AlterType(a)
+        Self::AlterType(a.into())
     }
 }
 
 impl From<AlterCollation> for Statement {
     fn from(a: AlterCollation) -> Self {
-        Self::AlterCollation(a)
+        Self::AlterCollation(a.into())
     }
 }
 
 impl From<AlterOperator> for Statement {
     fn from(a: AlterOperator) -> Self {
-        Self::AlterOperator(a)
+        Self::AlterOperator(a.into())
     }
 }
 
 impl From<AlterOperatorFamily> for Statement {
     fn from(a: AlterOperatorFamily) -> Self {
-        Self::AlterOperatorFamily(a)
+        Self::AlterOperatorFamily(a.into())
     }
 }
 
 impl From<AlterOperatorClass> for Statement {
     fn from(a: AlterOperatorClass) -> Self {
-        Self::AlterOperatorClass(a)
+        Self::AlterOperatorClass(a.into())
     }
 }
 
 impl From<AlterTextSearch> for Statement {
     fn from(a: AlterTextSearch) -> Self {
-        Self::AlterTextSearch(a)
+        Self::AlterTextSearch(a.into())
     }
 }
 
 impl From<Merge> for Statement {
     fn from(m: Merge) -> Self {
-        Self::Merge(m)
+        Self::Merge(m.into())
     }
 }
 
 impl From<AlterUser> for Statement {
     fn from(a: AlterUser) -> Self {
-        Self::AlterUser(a)
+        Self::AlterUser(a.into())
     }
 }
 
 impl From<DropDomain> for Statement {
     fn from(d: DropDomain) -> Self {
-        Self::DropDomain(d)
+        Self::DropDomain(d.into())
     }
 }
 
 impl From<ShowCharset> for Statement {
     fn from(s: ShowCharset) -> Self {
-        Self::ShowCharset(s)
+        Self::ShowCharset(s.into())
     }
 }
 
 impl From<ShowObjects> for Statement {
     fn from(s: ShowObjects) -> Self {
-        Self::ShowObjects(s)
+        Self::ShowObjects(s.into())
     }
 }
 
 impl From<Use> for Statement {
     fn from(u: Use) -> Self {
-        Self::Use(u)
+        Self::Use(u.into())
     }
 }
 
 impl From<CreateFunction> for Statement {
     fn from(c: CreateFunction) -> Self {
-        Self::CreateFunction(c)
+        Self::CreateFunction(c.into())
     }
 }
 
 impl From<CreateTrigger> for Statement {
     fn from(c: CreateTrigger) -> Self {
-        Self::CreateTrigger(c)
+        Self::CreateTrigger(c.into())
     }
 }
 
 impl From<DropTrigger> for Statement {
     fn from(d: DropTrigger) -> Self {
-        Self::DropTrigger(d)
+        Self::DropTrigger(d.into())
     }
 }
 
 impl From<DropOperator> for Statement {
     fn from(d: DropOperator) -> Self {
-        Self::DropOperator(d)
+        Self::DropOperator(d.into())
     }
 }
 
 impl From<DropOperatorFamily> for Statement {
     fn from(d: DropOperatorFamily) -> Self {
-        Self::DropOperatorFamily(d)
+        Self::DropOperatorFamily(d.into())
     }
 }
 
 impl From<DropOperatorClass> for Statement {
     fn from(d: DropOperatorClass) -> Self {
-        Self::DropOperatorClass(d)
+        Self::DropOperatorClass(d.into())
     }
 }
 
 impl From<DenyStatement> for Statement {
     fn from(d: DenyStatement) -> Self {
-        Self::Deny(d)
+        Self::Deny(d.into())
     }
 }
 
 impl From<CreateDomain> for Statement {
     fn from(c: CreateDomain) -> Self {
-        Self::CreateDomain(c)
+        Self::CreateDomain(c.into())
     }
 }
 
@@ -11939,49 +12260,49 @@ impl From<RenameTable> for Statement {
 
 impl From<Vec<RenameTable>> for Statement {
     fn from(r: Vec<RenameTable>) -> Self {
-        Self::RenameTable(r)
+        Self::RenameTable(r.into())
     }
 }
 
 impl From<PrintStatement> for Statement {
     fn from(p: PrintStatement) -> Self {
-        Self::Print(p)
+        Self::Print(p.into())
     }
 }
 
 impl From<ReturnStatement> for Statement {
     fn from(r: ReturnStatement) -> Self {
-        Self::Return(r)
+        Self::Return(r.into())
     }
 }
 
 impl From<ExportData> for Statement {
     fn from(e: ExportData) -> Self {
-        Self::ExportData(e)
+        Self::ExportData(e.into())
     }
 }
 
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
-        Self::CreateUser(c)
+        Self::CreateUser(c.into())
     }
 }
 
 impl From<CreateWarehouse> for Statement {
     fn from(c: CreateWarehouse) -> Self {
-        Self::CreateWarehouse(c)
+        Self::CreateWarehouse(c.into())
     }
 }
 
 impl From<VacuumStatement> for Statement {
     fn from(v: VacuumStatement) -> Self {
-        Self::Vacuum(v)
+        Self::Vacuum(v.into())
     }
 }
 
 impl From<ResetStatement> for Statement {
     fn from(r: ResetStatement) -> Self {
-        Self::Reset(r)
+        Self::Reset(r.into())
     }
 }
 

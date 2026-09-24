@@ -137,12 +137,15 @@ impl Parser<'_> {
             None
         };
 
-        Ok(Statement::AlterConnector(AlterConnectorStatement {
-            name,
-            properties,
-            url,
-            owner,
-        }))
+        Ok(Statement::AlterConnector(
+            AlterConnectorStatement {
+                name,
+                properties,
+                url,
+                owner,
+            }
+            .into(),
+        ))
     }
 
     /// Parse an `ALTER USER` statement
@@ -365,10 +368,13 @@ impl Parser<'_> {
             return self.expected_ref("'ADD' or 'DROP' or 'WITH NAME'", self.peek_token_ref());
         };
 
-        Ok(Statement::AlterRole(AlterRoleStatement {
-            name: role_name,
-            operation,
-        }))
+        Ok(Statement::AlterRole(
+            AlterRoleStatement {
+                name: role_name,
+                operation,
+            }
+            .into(),
+        ))
     }
 
     fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
@@ -449,10 +455,13 @@ impl Parser<'_> {
             AlterRoleOperation::WithOptions { options }
         };
 
-        Ok(Statement::AlterRole(AlterRoleStatement {
-            name: role_name,
-            operation,
-        }))
+        Ok(Statement::AlterRole(
+            AlterRoleStatement {
+                name: role_name,
+                operation,
+            }
+            .into(),
+        ))
     }
 
     fn parse_pg_role_option(&mut self) -> Result<RoleOption, ParserError> {

@@ -42,8 +42,6 @@ use super::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Insert {
-    /// Token for the `INSERT` keyword (or its substitutes)
-    pub insert_token: AttachedToken,
     /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
@@ -299,8 +297,6 @@ impl Display for Insert {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Delete {
-    /// Token for the `DELETE` keyword
-    pub delete_token: AttachedToken,
     /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
@@ -384,8 +380,6 @@ impl Display for Delete {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Update {
-    /// Token for the `UPDATE` keyword
-    pub update_token: AttachedToken,
     /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
@@ -474,8 +468,6 @@ impl Display for Update {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Merge {
-    /// The `MERGE` token that starts the statement.
-    pub merge_token: AttachedToken,
     /// Query optimizer hints
     ///
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)

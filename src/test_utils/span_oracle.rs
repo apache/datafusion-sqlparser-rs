@@ -687,6 +687,7 @@ fn fnv64(text: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::helpers::attached_token::AttachedToken;
     use crate::ast::{Expr, Select, SelectItem, SetExpr};
     use crate::dialect::{AnsiDialect, GenericDialect};
     use crate::tokenizer::Location;
@@ -718,16 +719,46 @@ mod tests {
         assert_eq!(findings_of("SELECT a FROM t WHERE b = 1"), []);
     }
 
+    /// Parses `sql` and applies `change` to the first statement's first and last token.
+    fn statement_with_tokens(
+        sql: &str,
+        change: impl FnOnce(&mut AttachedToken, &mut AttachedToken),
+    ) -> Vec<Statement> {
+        let mut statements = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+        let (start_token, end_token) = statements[0].tokens_mut();
+        change(start_token, end_token);
+        statements
+    }
+
     #[test]
     fn truncated_statement_fails_extent() {
-        let found = findings_of("SELECT CAST(a AS INT)");
-        assert!(has(&found, "extent", "inexact", "SELECT CAST(a AS INT)"));
+        let sql = "SELECT CAST(a AS INT)";
+        let statements = statement_with_tokens(sql, |start, end| *end = start.clone());
+        let dialect = GenericDialect {};
+        let found = extent(
+            &dialect,
+            &effective_options(&dialect, None),
+            sql,
+            &statements,
+        );
+        assert!(has(&found, "extent", "inexact", sql));
     }
 
     #[test]
     fn empty_statement_fails_extent() {
-        let found = findings_of("DROP TABLE t");
-        assert!(has(&found, "extent", "empty", "DROP TABLE t"));
+        let sql = "DROP TABLE t";
+        let statements = statement_with_tokens(sql, |start, end| {
+            *start = AttachedToken::empty();
+            *end = AttachedToken::empty();
+        });
+        let dialect = GenericDialect {};
+        let found = extent(
+            &dialect,
+            &effective_options(&dialect, None),
+            sql,
+            &statements,
+        );
+        assert!(has(&found, "extent", "empty", sql));
     }
 
     #[test]
@@ -804,7 +835,7 @@ mod tests {
         let lines = input(&dialects, "SELECT CAST(a AS INT)").recorded_lines();
         assert!(lines
             .iter()
-            .any(|l| l.contains("\tGenericDialect,AnsiDialect\textent\tinexact\t")));
+            .any(|l| l.contains("\tGenericDialect,AnsiDialect\treparse\tinexact\tExpr::Cast\t")));
     }
 
     #[test]
@@ -893,9 +924,7 @@ mod tests {
         let found = nodes::walk(&dialect, &options, sql, &statements);
         assert!(has(&found, "structure", "invalid", "a"));
 
-        if let Some(select) = select_mut(&mut statements[0]) {
-            select.select_token.0.span = far_away();
-        }
+        statements[0].tokens_mut().1 .0.span = far_away();
         let found = extent(&dialect, &options, sql, &statements);
         assert!(has(&found, "extent", "invalid", "SELECT a FROM t"));
     }

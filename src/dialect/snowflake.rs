@@ -17,7 +17,6 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
-use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::helpers::key_value_options::{
     KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
 };
@@ -43,7 +42,6 @@ use crate::ast::{
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::TokenWithSpan;
 use crate::tokenizer::{Span, Token};
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
@@ -396,7 +394,6 @@ impl Dialect for SnowflakeDialect {
         // Check for multi-table INSERT
         // `INSERT [OVERWRITE] ALL ... or INSERT [OVERWRITE] FIRST ...`
         if parser.parse_keyword(Keyword::INSERT) {
-            let insert_token = parser.get_current_token().clone();
             let overwrite = parser.parse_keyword(Keyword::OVERWRITE);
 
             // Check for ALL or FIRST keyword
@@ -407,7 +404,6 @@ impl Dialect for SnowflakeDialect {
                 };
                 return Some(parse_multi_table_insert(
                     parser,
-                    insert_token,
                     overwrite,
                     multi_table_insert_type,
                 ));
@@ -734,11 +730,14 @@ fn parse_put(parser: &mut Parser) -> Result<Statement, ParserError> {
     let source = parser.parse_literal_string()?;
     let stage = parse_snowflake_stage_name(parser)?;
     let options = parser.parse_key_value_options(false, &[])?;
-    Ok(Statement::Put(PutStatement {
-        source,
-        stage,
-        options,
-    }))
+    Ok(Statement::Put(
+        PutStatement {
+            source,
+            stage,
+            options,
+        }
+        .into(),
+    ))
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
@@ -751,10 +750,12 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
     };
 
     match kw {
-        Keyword::LIST | Keyword::LS => Ok(Statement::List(FileStagingCommand { stage, pattern })),
-        Keyword::REMOVE | Keyword::RM => {
-            Ok(Statement::Remove(FileStagingCommand { stage, pattern }))
-        }
+        Keyword::LIST | Keyword::LS => Ok(Statement::List(
+            FileStagingCommand { stage, pattern }.into(),
+        )),
+        Keyword::REMOVE | Keyword::RM => Ok(Statement::Remove(
+            FileStagingCommand { stage, pattern }.into(),
+        )),
         _ => Err(ParserError::ParserError(
             "unexpected stage command, expecting LIST, LS, REMOVE or RM".to_string(),
         )),
@@ -781,22 +782,18 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
         );
     };
 
-    let end_token = if parser.peek_token_ref().token == Token::SemiColon {
-        parser.peek_token_ref().clone()
-    } else {
-        parser.get_current_token().clone()
-    };
-
-    Ok(Statement::AlterTable(AlterTable {
-        name: table_name,
-        if_exists: false,
-        only: false,
-        operations: vec![operation],
-        location: None,
-        on_cluster: None,
-        table_type: Some(AlterTableType::Dynamic),
-        end_token: AttachedToken(end_token),
-    }))
+    Ok(Statement::AlterTable(
+        AlterTable {
+            name: table_name,
+            if_exists: false,
+            only: false,
+            operations: vec![operation],
+            location: None,
+            on_cluster: None,
+            table_type: Some(AlterTableType::Dynamic),
+        }
+        .into(),
+    ))
 }
 
 /// Parse snowflake alter external table.
@@ -823,35 +820,34 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
         );
     };
 
-    let end_token = if parser.peek_token_ref().token == Token::SemiColon {
-        parser.peek_token_ref().clone()
-    } else {
-        parser.get_current_token().clone()
-    };
-
-    Ok(Statement::AlterTable(AlterTable {
-        name: table_name,
-        if_exists,
-        only: false,
-        operations: vec![operation],
-        location: None,
-        on_cluster: None,
-        table_type: Some(AlterTableType::External),
-        end_token: AttachedToken(end_token),
-    }))
+    Ok(Statement::AlterTable(
+        AlterTable {
+            name: table_name,
+            if_exists,
+            only: false,
+            operations: vec![operation],
+            location: None,
+            on_cluster: None,
+            table_type: Some(AlterTableType::External),
+        }
+        .into(),
+    ))
 }
 
 /// Parse snowflake alter session.
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
 fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
     let session_options = parse_session_options(parser, set)?;
-    Ok(Statement::AlterSession(AlterSessionStatement {
-        set,
-        session_params: KeyValueOptions {
-            options: session_options,
-            delimiter: KeyValueOptionsDelimiter::Space,
-        },
-    }))
+    Ok(Statement::AlterSession(
+        AlterSessionStatement {
+            set,
+            session_params: KeyValueOptions {
+                options: session_options,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+        }
+        .into(),
+    ))
 }
 
 /// Parse snowflake create table statement.
@@ -1276,26 +1272,29 @@ pub fn parse_create_stage(
         comment = Some(parser.parse_comment_value()?);
     }
 
-    Ok(Statement::CreateStage(CreateStageStatement {
-        or_replace,
-        temporary,
-        if_not_exists,
-        name,
-        stage_params,
-        directory_table_params: KeyValueOptions {
-            options: directory_table_params,
-            delimiter: KeyValueOptionsDelimiter::Space,
-        },
-        file_format: KeyValueOptions {
-            options: file_format,
-            delimiter: KeyValueOptionsDelimiter::Space,
-        },
-        copy_options: KeyValueOptions {
-            options: copy_options,
-            delimiter: KeyValueOptionsDelimiter::Space,
-        },
-        comment,
-    }))
+    Ok(Statement::CreateStage(
+        CreateStageStatement {
+            or_replace,
+            temporary,
+            if_not_exists,
+            name,
+            stage_params,
+            directory_table_params: KeyValueOptions {
+                options: directory_table_params,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+            file_format: KeyValueOptions {
+                options: file_format,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+            copy_options: KeyValueOptions {
+                options: copy_options,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+            comment,
+        }
+        .into(),
+    ))
 }
 
 /// Parse a Snowflake `CREATE FILE FORMAT` statement.
@@ -1316,15 +1315,18 @@ pub fn parse_create_file_format(
         None
     };
 
-    Ok(Statement::CreateFileFormat(CreateFileFormatStatement {
-        or_replace,
-        temporary,
-        volatile,
-        if_not_exists,
-        name,
-        options,
-        comment,
-    }))
+    Ok(Statement::CreateFileFormat(
+        CreateFileFormatStatement {
+            or_replace,
+            temporary,
+            volatile,
+            if_not_exists,
+            name,
+            options,
+            comment,
+        }
+        .into(),
+    ))
 }
 
 pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
@@ -1519,28 +1521,31 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         }
     }
 
-    Ok(Statement::CopyIntoSnowflake(CopyIntoSnowflakeStatement {
-        kind,
-        into,
-        into_columns,
-        from_obj: from_stage,
-        from_obj_alias: from_stage_alias,
-        stage_params,
-        from_transformations,
-        from_query,
-        files: if files.is_empty() { None } else { Some(files) },
-        pattern,
-        file_format: KeyValueOptions {
-            options: file_format,
-            delimiter: KeyValueOptionsDelimiter::Space,
-        },
-        copy_options: KeyValueOptions {
-            options: copy_options,
-            delimiter: KeyValueOptionsDelimiter::Space,
-        },
-        validation_mode,
-        partition,
-    }))
+    Ok(Statement::CopyIntoSnowflake(
+        CopyIntoSnowflakeStatement {
+            kind,
+            into,
+            into_columns,
+            from_obj: from_stage,
+            from_obj_alias: from_stage_alias,
+            stage_params,
+            from_transformations,
+            from_query,
+            files: if files.is_empty() { None } else { Some(files) },
+            pattern,
+            file_format: KeyValueOptions {
+                options: file_format,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+            copy_options: KeyValueOptions {
+                options: copy_options,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+            validation_mode,
+            partition,
+        }
+        .into(),
+    ))
 }
 
 fn parse_select_items_for_data_load(
@@ -1831,10 +1836,13 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
 fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
     let show_options = parser.parse_show_stmt_options()?;
-    Ok(Statement::ShowObjects(ShowObjects {
-        terse,
-        show_options,
-    }))
+    Ok(Statement::ShowObjects(
+        ShowObjects {
+            terse,
+            show_options,
+        }
+        .into(),
+    ))
 }
 
 /// Parse multi-table INSERT statement.
@@ -1857,7 +1865,6 @@ fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, Par
 /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
 fn parse_multi_table_insert(
     parser: &mut Parser,
-    insert_token: TokenWithSpan,
     overwrite: bool,
     multi_table_insert_type: MultiTableInsertType,
 ) -> Result<Statement, ParserError> {
@@ -1878,35 +1885,37 @@ fn parse_multi_table_insert(
     // Parse the source query
     let source = parser.parse_query()?;
 
-    Ok(Statement::Insert(Insert {
-        insert_token: insert_token.into(),
-        optimizer_hints: vec![],
-        or: None,
-        ignore: false,
-        into: false,
-        table: TableObject::TableName(ObjectName(vec![])), // Not used for multi-table insert
-        table_alias: None,
-        columns: vec![],
-        by_name: false,
-        overwrite,
-        source: Some(source),
-        assignments: vec![],
-        partitioned: None,
-        after_columns: vec![],
-        has_table_keyword: false,
-        on: None,
-        returning: None,
-        output: None,
-        replace_into: false,
-        priority: None,
-        insert_alias: None,
-        settings: None,
-        format_clause: None,
-        multi_table_insert_type: Some(multi_table_insert_type),
-        multi_table_into_clauses,
-        multi_table_when_clauses,
-        multi_table_else_clause,
-    }))
+    Ok(Statement::Insert(
+        Insert {
+            optimizer_hints: vec![],
+            or: None,
+            ignore: false,
+            into: false,
+            table: TableObject::TableName(ObjectName(vec![])), // Not used for multi-table insert
+            table_alias: None,
+            columns: vec![],
+            by_name: false,
+            overwrite,
+            source: Some(source),
+            assignments: vec![],
+            partitioned: None,
+            after_columns: vec![],
+            has_table_keyword: false,
+            on: None,
+            returning: None,
+            output: None,
+            replace_into: false,
+            priority: None,
+            insert_alias: None,
+            settings: None,
+            format_clause: None,
+            multi_table_insert_type: Some(multi_table_insert_type),
+            multi_table_into_clauses,
+            multi_table_when_clauses,
+            multi_table_else_clause,
+        }
+        .into(),
+    ))
 }
 
 /// Parse one or more INTO clauses for multi-table INSERT.

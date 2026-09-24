@@ -41,7 +41,7 @@ fn test_create_table_using() {
             assert_eq!(ct.name.to_string(), "t");
             assert_eq!(ct.columns.len(), 2);
             assert_eq!(
-                ct.hive_formats.unwrap().storage,
+                ct.content.hive_formats.unwrap().storage,
                 Some(HiveIOFormat::Using {
                     format: Ident::new("parquet")
                 })

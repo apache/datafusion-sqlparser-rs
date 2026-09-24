@@ -41,9 +41,9 @@ use crate::ast::{
         CheckConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint,
         UniqueConstraint,
     },
-    ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
-    CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr,
-    FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
+    ArgMode, CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
+    CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat,
+    FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
     FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
     MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
@@ -4317,18 +4317,6 @@ impl fmt::Display for Truncate {
     }
 }
 
-impl Spanned for Truncate {
-    fn span(&self) -> Span {
-        Span::union_iter(
-            self.table_names.iter().map(|i| i.name.span()).chain(
-                self.partitions
-                    .iter()
-                    .flat_map(|i| i.iter().map(|k| k.span())),
-            ),
-        )
-    }
-}
-
 /// An `MSCK` statement.
 ///
 /// ```sql
@@ -4360,12 +4348,6 @@ impl fmt::Display for Msck {
             write!(f, " {pa}")?;
         }
         Ok(())
-    }
-}
-
-impl Spanned for Msck {
-    fn span(&self) -> Span {
-        self.table_name.span()
     }
 }
 
@@ -4542,12 +4524,6 @@ impl fmt::Display for CreateExtension {
     }
 }
 
-impl Spanned for CreateExtension {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
 /// DROP EXTENSION statement
 /// Note: this is a PostgreSQL-specific statement
 ///
@@ -4578,12 +4554,6 @@ impl fmt::Display for DropExtension {
             write!(f, " {cascade_or_restrict}")?;
         }
         Ok(())
-    }
-}
-
-impl Spanned for DropExtension {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -4640,12 +4610,6 @@ impl fmt::Display for CreateCollation {
                 write!(f, " ({})", display_comma_separated(options))
             }
         }
-    }
-}
-
-impl Spanned for CreateCollation {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -4717,12 +4681,6 @@ impl fmt::Display for AlterCollation {
     }
 }
 
-impl Spanned for AlterCollation {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
 /// Table type for ALTER TABLE statements.
 /// Used to distinguish between regular tables, Iceberg tables, and Dynamic tables.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4762,8 +4720,6 @@ pub struct AlterTable {
     pub on_cluster: Option<Ident>,
     /// Table type: None for regular tables, Some(AlterTableType) for Iceberg or Dynamic tables
     pub table_type: Option<AlterTableType>,
-    /// Token that represents the end of the statement (semicolon or EOF)
-    pub end_token: AttachedToken,
 }
 
 impl fmt::Display for AlterTable {
@@ -4818,12 +4774,6 @@ impl fmt::Display for DropFunction {
             write!(f, " {op}")?;
         }
         Ok(())
-    }
-}
-
-impl Spanned for DropFunction {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -5100,12 +5050,6 @@ impl fmt::Display for DropOperator {
     }
 }
 
-impl Spanned for DropOperator {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
 /// `DROP OPERATOR FAMILY` statement
 /// See <https://www.postgresql.org/docs/current/sql-dropopfamily.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5137,12 +5081,6 @@ impl fmt::Display for DropOperatorFamily {
     }
 }
 
-impl Spanned for DropOperatorFamily {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
 /// `DROP OPERATOR CLASS` statement
 /// See <https://www.postgresql.org/docs/current/sql-dropopclass.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5171,12 +5109,6 @@ impl fmt::Display for DropOperatorClass {
             write!(f, " {}", drop_behavior)?;
         }
         Ok(())
-    }
-}
-
-impl Spanned for DropOperatorClass {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -5372,12 +5304,6 @@ impl fmt::Display for AlterOperatorFamilyOperation {
     }
 }
 
-impl Spanned for AlterOperatorFamily {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
 /// `ALTER OPERATOR CLASS` statement
 /// See <https://www.postgresql.org/docs/current/sql-alteropclass.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5433,12 +5359,6 @@ impl fmt::Display for AlterOperatorClassOperation {
                 write!(f, "SET SCHEMA {schema_name}")
             }
         }
-    }
-}
-
-impl Spanned for AlterOperatorClass {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -5644,12 +5564,6 @@ impl fmt::Display for AlterFunctionAction {
     }
 }
 
-impl Spanned for AlterFunction {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
 /// Text search object kind.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html).
@@ -5702,12 +5616,6 @@ impl fmt::Display for CreateTextSearch {
             self.name,
             display_comma_separated(&self.options)
         )
-    }
-}
-
-impl Spanned for CreateTextSearch {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -5796,12 +5704,6 @@ impl fmt::Display for AlterTextSearch {
             "ALTER TEXT SEARCH {} {} {}",
             self.object_type, self.name, self.operation
         )
-    }
-}
-
-impl Spanned for AlterTextSearch {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 
@@ -5949,13 +5851,13 @@ impl fmt::Display for DropPolicy {
 
 impl From<CreatePolicy> for crate::ast::Statement {
     fn from(v: CreatePolicy) -> Self {
-        crate::ast::Statement::CreatePolicy(v)
+        crate::ast::Statement::CreatePolicy(v.into())
     }
 }
 
 impl From<DropPolicy> for crate::ast::Statement {
     fn from(v: DropPolicy) -> Self {
-        crate::ast::Statement::DropPolicy(v)
+        crate::ast::Statement::DropPolicy(v.into())
     }
 }
 
@@ -5992,6 +5894,6 @@ impl fmt::Display for AlterPolicy {
 
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
-        crate::ast::Statement::AlterPolicy(v)
+        crate::ast::Statement::AlterPolicy(v.into())
     }
 }

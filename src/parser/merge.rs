@@ -18,7 +18,7 @@ use alloc::{boxed::Box, format, vec, vec::Vec};
 use crate::{
     ast::{
         Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        MergeUpdateExpr, MergeUpdateKind, ObjectName, OutputClause, SetExpr,
+        MergeUpdateExpr, MergeUpdateKind, ObjectName, OutputClause, SetExpr, Statement,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
@@ -37,13 +37,13 @@ impl Parser<'_> {
         &mut self,
         merge_token: TokenWithSpan,
     ) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Merge(
-            self.parse_merge(merge_token)?.into(),
-        )))
+        let mut statement: Statement = self.parse_merge()?.into();
+        self.set_statement_tokens(&mut statement, merge_token);
+        Ok(Box::new(SetExpr::Merge(statement)))
     }
 
     /// Parse a `MERGE` statement
-    pub fn parse_merge(&mut self, merge_token: TokenWithSpan) -> Result<Merge, ParserError> {
+    pub fn parse_merge(&mut self) -> Result<Merge, ParserError> {
         let optimizer_hints = self.maybe_parse_optimizer_hints()?;
         let into = self.parse_keyword(Keyword::INTO);
 
@@ -60,7 +60,6 @@ impl Parser<'_> {
         };
 
         Ok(Merge {
-            merge_token: merge_token.into(),
             optimizer_hints,
             into,
             table,

@@ -22,7 +22,6 @@
 #[macro_use]
 mod test_utils;
 
-use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::keywords::Keyword;
 use test_utils::*;
 
@@ -37,10 +36,14 @@ use sqlparser::tokenizer::Token;
 fn pragma_no_value() {
     let sql = "PRAGMA cache_size";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma(PragmaStatement {
-            name,
-            value: None,
-            is_eq: false,
+        Statement::Pragma(SpannedObject {
+            content:
+                PragmaStatement {
+                    name,
+                    value: None,
+                    is_eq: false,
+                },
+            ..
         }) => {
             assert_eq!("cache_size", name.to_string());
         }
@@ -51,10 +54,14 @@ fn pragma_no_value() {
 fn pragma_eq_style() {
     let sql = "PRAGMA cache_size = 10";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma(PragmaStatement {
-            name,
-            value: Some(val),
-            is_eq: true,
+        Statement::Pragma(SpannedObject {
+            content:
+                PragmaStatement {
+                    name,
+                    value: Some(val),
+                    is_eq: true,
+                },
+            ..
         }) => {
             assert_eq!("cache_size", name.to_string());
             assert_eq!("10", val.to_string());
@@ -66,10 +73,14 @@ fn pragma_eq_style() {
 fn pragma_function_style() {
     let sql = "PRAGMA cache_size(10)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma(PragmaStatement {
-            name,
-            value: Some(val),
-            is_eq: false,
+        Statement::Pragma(SpannedObject {
+            content:
+                PragmaStatement {
+                    name,
+                    value: Some(val),
+                    is_eq: false,
+                },
+            ..
         }) => {
             assert_eq!("cache_size", name.to_string());
             assert_eq!("10", val.to_string());
@@ -82,10 +93,14 @@ fn pragma_function_style() {
 fn pragma_eq_string_style() {
     let sql = "PRAGMA table_info = 'sqlite_master'";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma(PragmaStatement {
-            name,
-            value: Some(val),
-            is_eq: true,
+        Statement::Pragma(SpannedObject {
+            content:
+                PragmaStatement {
+                    name,
+                    value: Some(val),
+                    is_eq: true,
+                },
+            ..
         }) => {
             assert_eq!("table_info", name.to_string());
             assert_eq!("'sqlite_master'", val.to_string());
@@ -98,10 +113,14 @@ fn pragma_eq_string_style() {
 fn pragma_function_string_style() {
     let sql = "PRAGMA table_info(\"sqlite_master\")";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma(PragmaStatement {
-            name,
-            value: Some(val),
-            is_eq: false,
+        Statement::Pragma(SpannedObject {
+            content:
+                PragmaStatement {
+                    name,
+                    value: Some(val),
+                    is_eq: false,
+                },
+            ..
         }) => {
             assert_eq!("table_info", name.to_string());
             assert_eq!("\"sqlite_master\"", val.to_string());
@@ -114,10 +133,14 @@ fn pragma_function_string_style() {
 fn pragma_eq_placeholder_style() {
     let sql = "PRAGMA table_info = ?";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::Pragma(PragmaStatement {
-            name,
-            value: Some(val),
-            is_eq: true,
+        Statement::Pragma(SpannedObject {
+            content:
+                PragmaStatement {
+                    name,
+                    value: Some(val),
+                    is_eq: true,
+                },
+            ..
         }) => {
             assert_eq!("table_info", name.to_string());
             assert_eq!("?", val.to_string());
@@ -130,9 +153,13 @@ fn pragma_eq_placeholder_style() {
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            without_rowid: true,
+        Statement::CreateTable(SpannedObject {
+            content:
+                CreateTable {
+                    name,
+                    without_rowid: true,
+                    ..
+                },
             ..
         }) => {
             assert_eq!("t", name.to_string());
@@ -145,11 +172,15 @@ fn parse_create_table_without_rowid() {
 fn parse_create_virtual_table() {
     let sql = "CREATE VIRTUAL TABLE IF NOT EXISTS t USING module_name (arg1, arg2)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateVirtualTable(CreateVirtualTableStatement {
-            name,
-            if_not_exists: true,
-            module_name,
-            module_args,
+        Statement::CreateVirtualTable(SpannedObject {
+            content:
+                CreateVirtualTableStatement {
+                    name,
+                    if_not_exists: true,
+                    module_name,
+                    module_args,
+                },
+            ..
         }) => {
             let args = vec![Ident::new("arg1"), Ident::new("arg2")];
             assert_eq!("t", name.to_string());
@@ -167,18 +198,22 @@ fn parse_create_virtual_table() {
 fn parse_create_view_temporary_if_not_exists() {
     let sql = "CREATE TEMPORARY VIEW IF NOT EXISTS myschema.myview AS SELECT foo FROM bar";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            columns,
-            query,
-            or_replace,
-            materialized,
-            options,
-            cluster_by,
-            comment,
-            with_no_schema_binding: late_binding,
-            if_not_exists,
-            temporary,
+        Statement::CreateView(SpannedObject {
+            content:
+                CreateView {
+                    name,
+                    columns,
+                    query,
+                    or_replace,
+                    materialized,
+                    options,
+                    cluster_by,
+                    comment,
+                    with_no_schema_binding: late_binding,
+                    if_not_exists,
+                    temporary,
+                    ..
+                },
             ..
         }) => {
             assert_eq!("myschema.myview", name.to_string());
@@ -209,7 +244,10 @@ fn double_equality_operator() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -270,14 +308,20 @@ fn parse_create_table_primary_key_asc_desc() {
 
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY ASC)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { columns, .. },
+            ..
+        }) => {
             assert_eq!(vec![expected_column_def("ASC")], columns);
         }
         _ => unreachable!(),
     }
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY DESC)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { columns, .. },
+            ..
+        }) => {
             assert_eq!(vec![expected_column_def("DESC")], columns);
         }
         _ => unreachable!(),
@@ -288,7 +332,10 @@ fn parse_create_table_primary_key_asc_desc() {
 fn parse_create_sqlite_quote() {
     let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
     match sqlite().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { name, columns, .. },
+            ..
+        }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![
@@ -337,7 +384,10 @@ fn parse_create_table_on_conflict_col() {
     ] {
         let sql = format!("CREATE TABLE t1 (a INT, b INT ON CONFLICT {keyword:?})");
         match sqlite_and_generic().verified_stmt(&sql) {
-            Statement::CreateTable(CreateTable { columns, .. }) => {
+            Statement::CreateTable(SpannedObject {
+                content: CreateTable { columns, .. },
+                ..
+            }) => {
                 assert_eq!(
                     vec![ColumnOptionDef {
                         name: None,
@@ -389,7 +439,11 @@ fn test_placeholder() {
 #[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
-    if let Statement::CreateTable(CreateTable { name, strict, .. }) = sqlite().verified_stmt(sql) {
+    if let Statement::CreateTable(SpannedObject {
+        content: CreateTable { name, strict, .. },
+        ..
+    }) = sqlite().verified_stmt(sql)
+    {
         assert_eq!(name.to_string(), "Fruits");
         assert!(strict);
     }
@@ -457,14 +511,18 @@ fn parse_attach_database() {
     let verified_stmt = sqlite().verified_stmt(sql);
     assert_eq!(sql, format!("{verified_stmt}"));
     match verified_stmt {
-        Statement::AttachDatabase(AttachDatabaseStatement {
-            schema_name,
-            database_file_name:
-                Expr::Value(ValueWithSpan {
-                    value: Value::SingleQuotedString(literal_name),
-                    span: _,
-                }),
-            database: true,
+        Statement::AttachDatabase(SpannedObject {
+            content:
+                AttachDatabaseStatement {
+                    schema_name,
+                    database_file_name:
+                        Expr::Value(ValueWithSpan {
+                            value: Value::SingleQuotedString(literal_name),
+                            span: _,
+                        }),
+                    database: true,
+                },
+            ..
         }) => {
             assert_eq!(schema_name.value, "test");
             assert_eq!(literal_name, "test.db");
@@ -478,31 +536,33 @@ fn parse_update_tuple_row_values() {
     // See https://github.com/sqlparser-rs/sqlparser-rs/issues/1311
     assert_eq!(
         sqlite().verified_stmt("UPDATE x SET (a, b) = (1, 2)"),
-        Statement::Update(Update {
-            optimizer_hints: vec![],
-            or: None,
-            assignments: vec![Assignment {
-                target: AssignmentTarget::Tuple(vec![
-                    ObjectName::from(vec![Ident::new("a"),]),
-                    ObjectName::from(vec![Ident::new("b"),]),
-                ]),
-                value: Expr::Tuple(vec![
-                    Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span()),
-                    Expr::Value((Value::Number("2".parse().unwrap(), false)).with_empty_span())
-                ])
-            }],
-            selection: None,
-            table: TableWithJoins {
-                relation: table_from_name(ObjectName::from(vec![Ident::new("x")])),
-                joins: vec![],
-            },
-            from: None,
-            returning: None,
-            output: None,
-            order_by: vec![],
-            limit: None,
-            update_token: AttachedToken::empty()
-        })
+        Statement::Update(
+            Update {
+                optimizer_hints: vec![],
+                or: None,
+                assignments: vec![Assignment {
+                    target: AssignmentTarget::Tuple(vec![
+                        ObjectName::from(vec![Ident::new("a"),]),
+                        ObjectName::from(vec![Ident::new("b"),]),
+                    ]),
+                    value: Expr::Tuple(vec![
+                        Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span()),
+                        Expr::Value((Value::Number("2".parse().unwrap(), false)).with_empty_span())
+                    ])
+                }],
+                selection: None,
+                table: TableWithJoins {
+                    relation: table_from_name(ObjectName::from(vec![Ident::new("x")])),
+                    joins: vec![],
+                },
+                from: None,
+                returning: None,
+                output: None,
+                order_by: vec![],
+                limit: None,
+            }
+            .into()
+        )
     );
 }
 
@@ -633,14 +693,20 @@ fn test_glob_operator() {
 #[test]
 fn test_update_delete_limit() {
     match sqlite().verified_stmt("UPDATE foo SET bar = 1 LIMIT 99") {
-        Statement::Update(Update { limit, .. }) => {
+        Statement::Update(SpannedObject {
+            content: Update { limit, .. },
+            ..
+        }) => {
             assert_eq!(limit, Some(Expr::value(number("99"))));
         }
         _ => unreachable!(),
     }
 
     match sqlite().verified_stmt("DELETE FROM foo LIMIT 99") {
-        Statement::Delete(Delete { limit, .. }) => {
+        Statement::Delete(SpannedObject {
+            content: Delete { limit, .. },
+            ..
+        }) => {
             assert_eq!(limit, Some(Expr::value(number("99"))));
         }
         _ => unreachable!(),
@@ -652,24 +718,28 @@ fn test_create_trigger() {
     let statement1 = "CREATE TRIGGER trg_inherit_asset_models AFTER INSERT ON assets FOR EACH ROW BEGIN INSERT INTO users (name) SELECT pam.name FROM users AS pam; END";
 
     match sqlite().verified_stmt(statement1) {
-        Statement::CreateTrigger(CreateTrigger {
-            or_alter,
-            temporary,
-            or_replace,
-            is_constraint,
-            name,
-            period,
-            period_before_table,
-            events,
-            table_name,
-            referenced_table_name,
-            referencing,
-            trigger_object,
-            condition,
-            exec_body: _,
-            statements_as,
-            statements: _,
-            characteristics,
+        Statement::CreateTrigger(SpannedObject {
+            content:
+                CreateTrigger {
+                    or_alter,
+                    temporary,
+                    or_replace,
+                    is_constraint,
+                    name,
+                    period,
+                    period_before_table,
+                    events,
+                    table_name,
+                    referenced_table_name,
+                    referencing,
+                    trigger_object,
+                    condition,
+                    exec_body: _,
+                    statements_as,
+                    statements: _,
+                    characteristics,
+                },
+            ..
         }) => {
             assert!(!or_alter);
             assert!(!temporary);
@@ -698,24 +768,28 @@ fn test_create_trigger() {
     let statement2 = "CREATE TRIGGER log_new_user AFTER INSERT ON users BEGIN INSERT INTO user_log (user_id, action, timestamp) VALUES (NEW.id, 'created', datetime('now')); END";
 
     match sqlite().verified_stmt(statement2) {
-        Statement::CreateTrigger(CreateTrigger {
-            or_alter,
-            temporary,
-            or_replace,
-            is_constraint,
-            name,
-            period,
-            period_before_table,
-            events,
-            table_name,
-            referenced_table_name,
-            referencing,
-            trigger_object,
-            condition,
-            exec_body: _,
-            statements_as,
-            statements: _,
-            characteristics,
+        Statement::CreateTrigger(SpannedObject {
+            content:
+                CreateTrigger {
+                    or_alter,
+                    temporary,
+                    or_replace,
+                    is_constraint,
+                    name,
+                    period,
+                    period_before_table,
+                    events,
+                    table_name,
+                    referenced_table_name,
+                    referencing,
+                    trigger_object,
+                    condition,
+                    exec_body: _,
+                    statements_as,
+                    statements: _,
+                    characteristics,
+                },
+            ..
         }) => {
             assert!(!or_alter);
             assert!(!temporary);
@@ -738,24 +812,28 @@ fn test_create_trigger() {
 
     let statement3 = "CREATE TRIGGER cleanup_orders AFTER DELETE ON customers BEGIN DELETE FROM orders WHERE customer_id = OLD.id; DELETE FROM invoices WHERE customer_id = OLD.id; END";
     match sqlite().verified_stmt(statement3) {
-        Statement::CreateTrigger(CreateTrigger {
-            or_alter,
-            temporary,
-            or_replace,
-            is_constraint,
-            name,
-            period,
-            period_before_table,
-            events,
-            table_name,
-            referenced_table_name,
-            referencing,
-            trigger_object,
-            condition,
-            exec_body: _,
-            statements_as,
-            statements: _,
-            characteristics,
+        Statement::CreateTrigger(SpannedObject {
+            content:
+                CreateTrigger {
+                    or_alter,
+                    temporary,
+                    or_replace,
+                    is_constraint,
+                    name,
+                    period,
+                    period_before_table,
+                    events,
+                    table_name,
+                    referenced_table_name,
+                    referencing,
+                    trigger_object,
+                    condition,
+                    exec_body: _,
+                    statements_as,
+                    statements: _,
+                    characteristics,
+                },
+            ..
         }) => {
             assert!(!or_alter);
             assert!(!temporary);
@@ -778,24 +856,28 @@ fn test_create_trigger() {
 
     let statement4 = "CREATE TRIGGER trg_before_update BEFORE UPDATE ON products FOR EACH ROW WHEN NEW.price < 0 BEGIN SELECT RAISE(ABORT, 'Price cannot be negative'); END";
     match sqlite().verified_stmt(statement4) {
-        Statement::CreateTrigger(CreateTrigger {
-            or_alter,
-            temporary,
-            or_replace,
-            is_constraint,
-            name,
-            period,
-            period_before_table,
-            events,
-            table_name,
-            referenced_table_name,
-            referencing,
-            trigger_object,
-            condition,
-            exec_body: _,
-            statements_as,
-            statements: _,
-            characteristics,
+        Statement::CreateTrigger(SpannedObject {
+            content:
+                CreateTrigger {
+                    or_alter,
+                    temporary,
+                    or_replace,
+                    is_constraint,
+                    name,
+                    period,
+                    period_before_table,
+                    events,
+                    table_name,
+                    referenced_table_name,
+                    referencing,
+                    trigger_object,
+                    condition,
+                    exec_body: _,
+                    statements_as,
+                    statements: _,
+                    characteristics,
+                },
+            ..
         }) => {
             assert!(!or_alter);
             assert!(!temporary);
@@ -822,24 +904,28 @@ fn test_create_trigger() {
     // We test a INSTEAD OF trigger on a view
     let statement5 = "CREATE TRIGGER trg_instead_of_insert INSTEAD OF INSERT ON my_view BEGIN INSERT INTO my_table (col1, col2) VALUES (NEW.col1, NEW.col2); END";
     match sqlite().verified_stmt(statement5) {
-        Statement::CreateTrigger(CreateTrigger {
-            or_alter,
-            temporary,
-            or_replace,
-            is_constraint,
-            name,
-            period,
-            period_before_table,
-            events,
-            table_name,
-            referenced_table_name,
-            referencing,
-            trigger_object,
-            condition,
-            exec_body: _,
-            statements_as,
-            statements: _,
-            characteristics,
+        Statement::CreateTrigger(SpannedObject {
+            content:
+                CreateTrigger {
+                    or_alter,
+                    temporary,
+                    or_replace,
+                    is_constraint,
+                    name,
+                    period,
+                    period_before_table,
+                    events,
+                    table_name,
+                    referenced_table_name,
+                    referencing,
+                    trigger_object,
+                    condition,
+                    exec_body: _,
+                    statements_as,
+                    statements: _,
+                    characteristics,
+                },
+            ..
         }) => {
             assert!(!or_alter);
             assert!(!temporary);
@@ -863,24 +949,28 @@ fn test_create_trigger() {
     // We test a temporary trigger
     let statement6 = "CREATE TEMPORARY TRIGGER temp_trigger AFTER INSERT ON temp_table BEGIN UPDATE log_table SET count = count + 1; END";
     match sqlite().verified_stmt(statement6) {
-        Statement::CreateTrigger(CreateTrigger {
-            or_alter,
-            temporary,
-            or_replace,
-            is_constraint,
-            name,
-            period,
-            period_before_table,
-            events,
-            table_name,
-            referenced_table_name,
-            referencing,
-            trigger_object,
-            condition,
-            exec_body: _,
-            statements_as,
-            statements: _,
-            characteristics,
+        Statement::CreateTrigger(SpannedObject {
+            content:
+                CreateTrigger {
+                    or_alter,
+                    temporary,
+                    or_replace,
+                    is_constraint,
+                    name,
+                    period,
+                    period_before_table,
+                    events,
+                    table_name,
+                    referenced_table_name,
+                    referencing,
+                    trigger_object,
+                    condition,
+                    exec_body: _,
+                    statements_as,
+                    statements: _,
+                    characteristics,
+                },
+            ..
         }) => {
             assert!(!or_alter);
             assert!(temporary);
@@ -911,11 +1001,15 @@ fn test_drop_trigger() {
     let statement = "DROP TRIGGER IF EXISTS trg_inherit_asset_models";
 
     match sqlite().verified_stmt(statement) {
-        Statement::DropTrigger(DropTrigger {
-            if_exists,
-            trigger_name,
-            table_name,
-            option,
+        Statement::DropTrigger(SpannedObject {
+            content:
+                DropTrigger {
+                    if_exists,
+                    trigger_name,
+                    table_name,
+                    option,
+                },
+            ..
         }) => {
             assert!(if_exists);
             assert_eq!(trigger_name.to_string(), "trg_inherit_asset_models");
@@ -932,7 +1026,7 @@ fn parse_pattern_operators_bind_at_like_precedence() {
         let Statement::Query(query) = sqlite().verified_stmt(sql) else {
             panic!("expected a query");
         };
-        let SetExpr::Select(select) = *query.body else {
+        let SetExpr::Select(select) = *query.content.body else {
             panic!("expected a select");
         };
         let Some(Expr::BinaryOp { op, .. }) = select.selection else {

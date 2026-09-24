@@ -237,7 +237,7 @@ impl Dialect for MySqlDialect {
 /// <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
 fn parse_lock_tables(parser: &mut Parser) -> Result<Statement, ParserError> {
     let tables = parser.parse_comma_separated(parse_lock_table)?;
-    Ok(Statement::LockTables(LockTablesStatement { tables }))
+    Ok(Statement::LockTables(LockTablesStatement { tables }.into()))
 }
 
 // tbl_name [[AS] alias] lock_type
@@ -276,5 +276,5 @@ fn parse_lock_tables_type(parser: &mut Parser) -> Result<LockTableType, ParserEr
 /// UNLOCK TABLES
 /// <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
 fn parse_unlock_tables(_parser: &mut Parser) -> Result<Statement, ParserError> {
-    Ok(Statement::UnlockTables(UnlockTablesStatement))
+    Ok(Statement::UnlockTables(UnlockTablesStatement.into()))
 }

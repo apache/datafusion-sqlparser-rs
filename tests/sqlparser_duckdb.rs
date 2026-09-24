@@ -147,7 +147,10 @@ fn test_struct() {
 /// Returns the ColumnDefinitions from a CreateTable statement
 fn column_defs(statement: Statement) -> Vec<ColumnDef> {
     match statement {
-        Statement::CreateTable(CreateTable { columns, .. }) => columns,
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { columns, .. },
+            ..
+        }) => columns,
         _ => panic!("Expected CreateTable"),
     }
 }
@@ -196,40 +199,46 @@ fn parse_div_infix() {
 #[test]
 fn test_create_macro() {
     let macro_ = duckdb().verified_stmt("CREATE MACRO schema.add(a, b) AS a + b");
-    let expected = Statement::CreateMacro(CreateMacroStatement {
-        or_replace: false,
-        temporary: false,
-        name: ObjectName::from(vec![Ident::new("schema"), Ident::new("add")]),
-        args: Some(vec![MacroArg::new("a"), MacroArg::new("b")]),
-        definition: MacroDefinition::Expr(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            op: BinaryOperator::Plus,
-            right: Box::new(Expr::Identifier(Ident::new("b"))),
-        }),
-    });
+    let expected = Statement::CreateMacro(
+        CreateMacroStatement {
+            or_replace: false,
+            temporary: false,
+            name: ObjectName::from(vec![Ident::new("schema"), Ident::new("add")]),
+            args: Some(vec![MacroArg::new("a"), MacroArg::new("b")]),
+            definition: MacroDefinition::Expr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+        }
+        .into(),
+    );
     assert_eq!(expected, macro_);
 }
 
 #[test]
 fn test_create_macro_default_args() {
     let macro_ = duckdb().verified_stmt("CREATE MACRO add_default(a, b := 5) AS a + b");
-    let expected = Statement::CreateMacro(CreateMacroStatement {
-        or_replace: false,
-        temporary: false,
-        name: ObjectName::from(vec![Ident::new("add_default")]),
-        args: Some(vec![
-            MacroArg::new("a"),
-            MacroArg {
-                name: Ident::new("b"),
-                default_expr: Some(Expr::value(number("5"))),
-            },
-        ]),
-        definition: MacroDefinition::Expr(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            op: BinaryOperator::Plus,
-            right: Box::new(Expr::Identifier(Ident::new("b"))),
-        }),
-    });
+    let expected = Statement::CreateMacro(
+        CreateMacroStatement {
+            or_replace: false,
+            temporary: false,
+            name: ObjectName::from(vec![Ident::new("add_default")]),
+            args: Some(vec![
+                MacroArg::new("a"),
+                MacroArg {
+                    name: Ident::new("b"),
+                    default_expr: Some(Expr::value(number("5"))),
+                },
+            ]),
+            definition: MacroDefinition::Expr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+        }
+        .into(),
+    );
     assert_eq!(expected, macro_);
 }
 
@@ -241,16 +250,19 @@ fn test_create_table_macro() {
             .to_string()
             + query),
     );
-    let expected = Statement::CreateMacro(CreateMacroStatement {
-        or_replace: true,
-        temporary: true,
-        name: ObjectName::from(vec![Ident::new("dynamic_table")]),
-        args: Some(vec![
-            MacroArg::new("col1_value"),
-            MacroArg::new("col2_value"),
-        ]),
-        definition: MacroDefinition::Table(duckdb().verified_query(query).into()),
-    });
+    let expected = Statement::CreateMacro(
+        CreateMacroStatement {
+            or_replace: true,
+            temporary: true,
+            name: ObjectName::from(vec![Ident::new("dynamic_table")]),
+            args: Some(vec![
+                MacroArg::new("col1_value"),
+                MacroArg::new("col2_value"),
+            ]),
+            definition: MacroDefinition::Table(duckdb().verified_query(query).into()),
+        }
+        .into(),
+    );
     assert_eq!(expected, macro_);
 }
 
@@ -344,13 +356,16 @@ fn test_duckdb_install() {
     let stmt = duckdb().verified_stmt("INSTALL tpch");
     assert_eq!(
         stmt,
-        Statement::Install(InstallStatement {
-            extension_name: Ident {
-                value: "tpch".to_string(),
-                quote_style: None,
-                span: Span::empty()
+        Statement::Install(
+            InstallStatement {
+                extension_name: Ident {
+                    value: "tpch".to_string(),
+                    quote_style: None,
+                    span: Span::empty()
+                }
             }
-        })
+            .into()
+        )
     );
 }
 
@@ -358,13 +373,16 @@ fn test_duckdb_install() {
 fn test_duckdb_load_extension() {
     let stmt = duckdb().verified_stmt("LOAD my_extension");
     assert_eq!(
-        Statement::Load(LoadStatement {
-            extension_name: Ident {
-                value: "my_extension".to_string(),
-                quote_style: None,
-                span: Span::empty()
+        Statement::Load(
+            LoadStatement {
+                extension_name: Ident {
+                    value: "my_extension".to_string(),
+                    quote_style: None,
+                    span: Span::empty()
+                }
             }
-        }),
+            .into()
+        ),
         stmt
     );
 }
@@ -492,24 +510,27 @@ fn test_create_secret() {
     let sql = r#"CREATE OR REPLACE PERSISTENT SECRET IF NOT EXISTS name IN storage ( TYPE type, key1 value1, key2 value2 )"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::CreateSecret(CreateSecretStatement {
-            or_replace: true,
-            temporary: Some(false),
-            if_not_exists: true,
-            name: Some(Ident::new("name")),
-            storage_specifier: Some(Ident::new("storage")),
-            secret_type: Ident::new("type"),
-            options: vec![
-                SecretOption {
-                    key: Ident::new("key1"),
-                    value: Ident::new("value1"),
-                },
-                SecretOption {
-                    key: Ident::new("key2"),
-                    value: Ident::new("value2"),
-                }
-            ]
-        }),
+        Statement::CreateSecret(
+            CreateSecretStatement {
+                or_replace: true,
+                temporary: Some(false),
+                if_not_exists: true,
+                name: Some(Ident::new("name")),
+                storage_specifier: Some(Ident::new("storage")),
+                secret_type: Ident::new("type"),
+                options: vec![
+                    SecretOption {
+                        key: Ident::new("key1"),
+                        value: Ident::new("value1"),
+                    },
+                    SecretOption {
+                        key: Ident::new("key2"),
+                        value: Ident::new("value2"),
+                    }
+                ]
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -519,15 +540,18 @@ fn test_create_secret_simple() {
     let sql = r#"CREATE SECRET ( TYPE type )"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::CreateSecret(CreateSecretStatement {
-            or_replace: false,
-            temporary: None,
-            if_not_exists: false,
-            name: None,
-            storage_specifier: None,
-            secret_type: Ident::new("type"),
-            options: vec![]
-        }),
+        Statement::CreateSecret(
+            CreateSecretStatement {
+                or_replace: false,
+                temporary: None,
+                if_not_exists: false,
+                name: None,
+                storage_specifier: None,
+                secret_type: Ident::new("type"),
+                options: vec![]
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -537,12 +561,15 @@ fn test_drop_secret() {
     let sql = r#"DROP PERSISTENT SECRET IF EXISTS secret FROM storage"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DropSecret(DropSecretStatement {
-            if_exists: true,
-            temporary: Some(false),
-            name: Ident::new("secret"),
-            storage_specifier: Some(Ident::new("storage"))
-        }),
+        Statement::DropSecret(
+            DropSecretStatement {
+                if_exists: true,
+                temporary: Some(false),
+                name: Ident::new("secret"),
+                storage_specifier: Some(Ident::new("storage"))
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -552,12 +579,15 @@ fn test_drop_secret_simple() {
     let sql = r#"DROP SECRET secret"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DropSecret(DropSecretStatement {
-            if_exists: false,
-            temporary: None,
-            name: Ident::new("secret"),
-            storage_specifier: None
-        }),
+        Statement::DropSecret(
+            DropSecretStatement {
+                if_exists: false,
+                temporary: None,
+                name: Ident::new("secret"),
+                storage_specifier: None
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -567,16 +597,19 @@ fn test_attach_database() {
     let sql = r#"ATTACH DATABASE IF NOT EXISTS 'sqlite_file.db' AS sqlite_db (READ_ONLY false, TYPE SQLITE)"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::AttachDuckDBDatabase(AttachDuckDBDatabaseStatement {
-            if_not_exists: true,
-            database: true,
-            database_path: Ident::with_quote('\'', "sqlite_file.db"),
-            database_alias: Some(Ident::new("sqlite_db")),
-            attach_options: vec![
-                AttachDuckDBDatabaseOption::ReadOnly(Some(false)),
-                AttachDuckDBDatabaseOption::Type(Ident::new("SQLITE")),
-            ]
-        }),
+        Statement::AttachDuckDBDatabase(
+            AttachDuckDBDatabaseStatement {
+                if_not_exists: true,
+                database: true,
+                database_path: Ident::with_quote('\'', "sqlite_file.db"),
+                database_alias: Some(Ident::new("sqlite_db")),
+                attach_options: vec![
+                    AttachDuckDBDatabaseOption::ReadOnly(Some(false)),
+                    AttachDuckDBDatabaseOption::Type(Ident::new("SQLITE")),
+                ]
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -586,16 +619,19 @@ fn test_attach_database_simple() {
     let sql = r#"ATTACH 'postgres://user.name:pass-word@some.url.com:5432/postgres'"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::AttachDuckDBDatabase(AttachDuckDBDatabaseStatement {
-            if_not_exists: false,
-            database: false,
-            database_path: Ident::with_quote(
-                '\'',
-                "postgres://user.name:pass-word@some.url.com:5432/postgres"
-            ),
-            database_alias: None,
-            attach_options: vec![]
-        }),
+        Statement::AttachDuckDBDatabase(
+            AttachDuckDBDatabaseStatement {
+                if_not_exists: false,
+                database: false,
+                database_path: Ident::with_quote(
+                    '\'',
+                    "postgres://user.name:pass-word@some.url.com:5432/postgres"
+                ),
+                database_alias: None,
+                attach_options: vec![]
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -605,11 +641,14 @@ fn test_detach_database() {
     let sql = r#"DETACH DATABASE IF EXISTS db_name"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DetachDuckDBDatabase(DetachDuckDBDatabaseStatement {
-            if_exists: true,
-            database: true,
-            database_alias: Ident::new("db_name"),
-        }),
+        Statement::DetachDuckDBDatabase(
+            DetachDuckDBDatabaseStatement {
+                if_exists: true,
+                database: true,
+                database_alias: Ident::new("db_name"),
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -619,11 +658,14 @@ fn test_detach_database_simple() {
     let sql = r#"DETACH db_name"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DetachDuckDBDatabase(DetachDuckDBDatabaseStatement {
-            if_exists: false,
-            database: false,
-            database_alias: Ident::new("db_name"),
-        }),
+        Statement::DetachDuckDBDatabase(
+            DetachDuckDBDatabaseStatement {
+                if_exists: false,
+                database: false,
+                database_alias: Ident::new("db_name"),
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -699,106 +741,109 @@ fn test_duckdb_union_datatype() {
     let sql = "CREATE TABLE tbl1 (one UNION(a INT), two UNION(a INT, b INT), nested UNION(a UNION(b INT)))";
     let stmt = duckdb_and_generic().verified_stmt(sql);
     assert_eq!(
-        Statement::CreateTable(CreateTable {
-            or_replace: Default::default(),
-            temporary: Default::default(),
-            unlogged: Default::default(),
-            external: Default::default(),
-            global: Default::default(),
-            if_not_exists: Default::default(),
-            transient: Default::default(),
-            volatile: Default::default(),
-            iceberg: Default::default(),
-            snapshot: false,
-            dynamic: Default::default(),
-            name: ObjectName::from(vec!["tbl1".into()]),
-            columns: vec![
-                ColumnDef {
-                    name: "one".into(),
-                    data_type: DataType::Union(vec![UnionField {
-                        field_name: "a".into(),
-                        field_type: DataType::Int(None)
-                    }]),
-                    options: Default::default()
-                },
-                ColumnDef {
-                    name: "two".into(),
-                    data_type: DataType::Union(vec![
-                        UnionField {
+        Statement::CreateTable(
+            CreateTable {
+                or_replace: Default::default(),
+                temporary: Default::default(),
+                unlogged: Default::default(),
+                external: Default::default(),
+                global: Default::default(),
+                if_not_exists: Default::default(),
+                transient: Default::default(),
+                volatile: Default::default(),
+                iceberg: Default::default(),
+                snapshot: false,
+                dynamic: Default::default(),
+                name: ObjectName::from(vec!["tbl1".into()]),
+                columns: vec![
+                    ColumnDef {
+                        name: "one".into(),
+                        data_type: DataType::Union(vec![UnionField {
                             field_name: "a".into(),
                             field_type: DataType::Int(None)
-                        },
-                        UnionField {
-                            field_name: "b".into(),
-                            field_type: DataType::Int(None)
-                        }
-                    ]),
-                    options: Default::default()
-                },
-                ColumnDef {
-                    name: "nested".into(),
-                    data_type: DataType::Union(vec![UnionField {
-                        field_name: "a".into(),
-                        field_type: DataType::Union(vec![UnionField {
-                            field_name: "b".into(),
-                            field_type: DataType::Int(None)
-                        }])
-                    }]),
-                    options: Default::default()
-                }
-            ],
-            constraints: Default::default(),
-            hive_distribution: HiveDistributionStyle::NONE,
-            hive_formats: None,
-            file_format: Default::default(),
-            location: Default::default(),
-            query: Default::default(),
-            without_rowid: Default::default(),
-            like: Default::default(),
-            clone: Default::default(),
-            comment: Default::default(),
-            on_commit: Default::default(),
-            on_cluster: Default::default(),
-            primary_key: Default::default(),
-            order_by: Default::default(),
-            partition_by: Default::default(),
-            cluster_by: Default::default(),
-            clustered_by: Default::default(),
-            inherits: Default::default(),
-            partition_of: Default::default(),
-            for_values: Default::default(),
-            strict: Default::default(),
-            copy_grants: Default::default(),
-            enable_schema_evolution: Default::default(),
-            change_tracking: Default::default(),
-            data_retention_time_in_days: Default::default(),
-            max_data_extension_time_in_days: Default::default(),
-            default_ddl_collation: Default::default(),
-            with_aggregation_policy: Default::default(),
-            with_row_access_policy: Default::default(),
-            with_storage_lifecycle_policy: Default::default(),
-            with_tags: Default::default(),
-            base_location: Default::default(),
-            external_volume: Default::default(),
-            with_connection: Default::default(),
-            catalog: Default::default(),
-            catalog_sync: Default::default(),
-            storage_serialization_policy: Default::default(),
-            table_options: CreateTableOptions::None,
-            target_lag: None,
-            warehouse: None,
-            version: None,
-            refresh_mode: None,
-            initialize: None,
-            require_user: Default::default(),
-            diststyle: Default::default(),
-            distkey: Default::default(),
-            sortkey: Default::default(),
-            backup: Default::default(),
-            multiset: Default::default(),
-            fallback: Default::default(),
-            with_data: Default::default(),
-        }),
+                        }]),
+                        options: Default::default()
+                    },
+                    ColumnDef {
+                        name: "two".into(),
+                        data_type: DataType::Union(vec![
+                            UnionField {
+                                field_name: "a".into(),
+                                field_type: DataType::Int(None)
+                            },
+                            UnionField {
+                                field_name: "b".into(),
+                                field_type: DataType::Int(None)
+                            }
+                        ]),
+                        options: Default::default()
+                    },
+                    ColumnDef {
+                        name: "nested".into(),
+                        data_type: DataType::Union(vec![UnionField {
+                            field_name: "a".into(),
+                            field_type: DataType::Union(vec![UnionField {
+                                field_name: "b".into(),
+                                field_type: DataType::Int(None)
+                            }])
+                        }]),
+                        options: Default::default()
+                    }
+                ],
+                constraints: Default::default(),
+                hive_distribution: HiveDistributionStyle::NONE,
+                hive_formats: None,
+                file_format: Default::default(),
+                location: Default::default(),
+                query: Default::default(),
+                without_rowid: Default::default(),
+                like: Default::default(),
+                clone: Default::default(),
+                comment: Default::default(),
+                on_commit: Default::default(),
+                on_cluster: Default::default(),
+                primary_key: Default::default(),
+                order_by: Default::default(),
+                partition_by: Default::default(),
+                cluster_by: Default::default(),
+                clustered_by: Default::default(),
+                inherits: Default::default(),
+                partition_of: Default::default(),
+                for_values: Default::default(),
+                strict: Default::default(),
+                copy_grants: Default::default(),
+                enable_schema_evolution: Default::default(),
+                change_tracking: Default::default(),
+                data_retention_time_in_days: Default::default(),
+                max_data_extension_time_in_days: Default::default(),
+                default_ddl_collation: Default::default(),
+                with_aggregation_policy: Default::default(),
+                with_row_access_policy: Default::default(),
+                with_storage_lifecycle_policy: Default::default(),
+                with_tags: Default::default(),
+                base_location: Default::default(),
+                external_volume: Default::default(),
+                with_connection: Default::default(),
+                catalog: Default::default(),
+                catalog_sync: Default::default(),
+                storage_serialization_policy: Default::default(),
+                table_options: CreateTableOptions::None,
+                target_lag: None,
+                warehouse: None,
+                version: None,
+                refresh_mode: None,
+                initialize: None,
+                require_user: Default::default(),
+                diststyle: Default::default(),
+                distkey: Default::default(),
+                sortkey: Default::default(),
+                backup: Default::default(),
+                multiset: Default::default(),
+                fallback: Default::default(),
+                with_data: Default::default(),
+            }
+            .into()
+        ),
         stmt
     );
 }
@@ -819,18 +864,21 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             duckdb().verified_stmt(&format!("USE {object_name}")),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
-                object_name.to_string()
-            )])))
+            Statement::Use(
+                Use::Object(ObjectName::from(vec![Ident::new(object_name.to_string())])).into()
+            )
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
                 duckdb().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
-                    quote,
-                    object_name.to_string(),
-                )])))
+                Statement::Use(
+                    Use::Object(ObjectName::from(vec![Ident::with_quote(
+                        quote,
+                        object_name.to_string(),
+                    )]))
+                    .into()
+                )
             );
         }
     }
@@ -841,19 +889,25 @@ fn parse_use() {
             duckdb().verified_stmt(&format!(
                 "USE {quote}CATALOG{quote}.{quote}my_schema{quote}"
             )),
-            Statement::Use(Use::Object(ObjectName::from(vec![
-                Ident::with_quote(quote, "CATALOG"),
-                Ident::with_quote(quote, "my_schema")
-            ])))
+            Statement::Use(
+                Use::Object(ObjectName::from(vec![
+                    Ident::with_quote(quote, "CATALOG"),
+                    Ident::with_quote(quote, "my_schema")
+                ]))
+                .into()
+            )
         );
     }
     // Test double identifier without quotes
     assert_eq!(
         duckdb().verified_stmt("USE mydb.my_schema"),
-        Statement::Use(Use::Object(ObjectName::from(vec![
-            Ident::new("mydb"),
-            Ident::new("my_schema")
-        ])))
+        Statement::Use(
+            Use::Object(ObjectName::from(vec![
+                Ident::new("mydb"),
+                Ident::new("my_schema")
+            ]))
+            .into()
+        )
     );
 }
 

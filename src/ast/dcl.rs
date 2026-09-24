@@ -28,12 +28,11 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use super::{display_comma_separated, Expr, Ident, Password, Spanned};
+use super::{display_comma_separated, Expr, Ident, Password};
 use crate::ast::{
     display_separated, CascadeOption, CurrentGrantsKind, GrantObjects, Grantee, ObjectName,
     Privileges,
 };
-use crate::tokenizer::Span;
 
 /// An option in `ROLE` statement.
 ///
@@ -425,12 +424,6 @@ impl fmt::Display for CreateRole {
     }
 }
 
-impl Spanned for CreateRole {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
 /// GRANT privileges ON objects TO grantees
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -482,7 +475,7 @@ impl fmt::Display for Grant {
 
 impl From<Grant> for crate::ast::Statement {
     fn from(v: Grant) -> Self {
-        crate::ast::Statement::Grant(v)
+        crate::ast::Statement::Grant(v.into())
     }
 }
 
@@ -532,6 +525,6 @@ impl fmt::Display for Revoke {
 
 impl From<Revoke> for crate::ast::Statement {
     fn from(v: Revoke) -> Self {
-        crate::ast::Statement::Revoke(v)
+        crate::ast::Statement::Revoke(v.into())
     }
 }

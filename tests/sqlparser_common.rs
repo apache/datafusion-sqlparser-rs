@@ -20197,3 +20197,11 @@ fn parse_alter_table_column_position() {
         assert!(dialects.parse_sql_statements(sql).is_err(), "{sql}");
     }
 }
+
+#[test]
+fn parse_and_or_not_bare_column_alias() {
+    let dialects = all_dialects_but_pg();
+    for sql in ["SELECT 1 AND", "SELECT 1 OR", "SELECT 1 AND, 2"] {
+        assert!(dialects.parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}

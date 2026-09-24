@@ -514,12 +514,14 @@ impl Dialect for SnowflakeDialect {
             // Reserved keywords by the Snowflake dialect, which seem to be less strictive
             // than what is listed in `keywords::RESERVED_FOR_COLUMN_ALIAS`. The following
             // keywords were tested with the this statement: `SELECT 1 <KW>`.
-            Keyword::FROM
+            Keyword::AND
+            | Keyword::FROM
             | Keyword::GROUP
             | Keyword::HAVING
             | Keyword::INTERSECT
             | Keyword::INTO
             | Keyword::MINUS
+            | Keyword::OR
             | Keyword::ORDER
             | Keyword::SELECT
             | Keyword::UNION

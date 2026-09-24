@@ -71,6 +71,11 @@ const ADDITIONALLY_ALLOWED_BARE_COLUMN_ALIASES: &[Keyword] = &[
     Keyword::EXPLAIN,
     Keyword::VALUES,
     Keyword::VIEW,
+    // These are not PostgreSQL keywords, but the parser treats them as clause keywords.
+    Keyword::DISTRIBUTE,
+    Keyword::MINUS,
+    Keyword::SORT,
+    Keyword::TOP,
 ];
 
 const PERIOD_PREC: u8 = 200;

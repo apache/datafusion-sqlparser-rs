@@ -705,6 +705,9 @@
 072241e812cb7a5e	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	ColumnOption::PrimaryKey	0	PRIMARY KEY
 072241e812cb7a5e	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	ColumnOptionDef	0	PRIMARY KEY
 072241e812cb7a5e	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	PrimaryKeyConstraint	0	PRIMARY KEY ()
+072c71fbae4f66e8	4edff8487059a4e8	SnowflakeDialect	edges	both	CreateTable	0	CREATE TABLE t (a ARRAY(VARCHAR NOT NULL))
+072c71fbae4f66e8	4edff8487059a4e8	SnowflakeDialect	edges	end	ColumnDef	0	a ARRAY(VARCHAR NOT NULL)
+072c71fbae4f66e8	4edff8487059a4e8	SnowflakeDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE t (a ARRAY(VARCHAR NOT NULL))
 072d769651b991ef	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	extent	empty	Statement::Drop	0	DROP SCHEMA X
 072d769651b991ef	fdaf9332c09858cf	DuckDbDialect	extent	empty	Statement::Drop	0	DROP SCHEMA X
 0738064b1e936ad9	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	both	Join	0	ANTI JOIN t2 USING(c1)
@@ -3442,6 +3445,9 @@
 230b2d99a4a08442	4edff8487059a4e8	SnowflakeDialect,GenericDialect	extent	inexact	Statement::AlterTable	0	ALTER ICEBERG TABLE tbl RESUME RECLUSTER
 230b2d99a4a08442	4edff8487059a4e8	SnowflakeDialect,GenericDialect	structure	empty	AlterTableOperation::ResumeRecluster	0	RESUME RECLUSTER
 230f96f692df166c	4edff8487059a4e8	SnowflakeDialect	extent	empty	Statement::ShowObjects	0	SHOW OBJECTS LIKE '%test%' IN abc
+232214506eb561db	4edff8487059a4e8	SnowflakeDialect	edges	both	SelectItem::UnnamedExpr	0	CAST(a AS Array(NUMBER(10, 2)))
+232214506eb561db	4edff8487059a4e8	SnowflakeDialect	reparse	inexact	Expr::Cast	0	CAST(a AS Array(NUMBER(10, 2)))
+232214506eb561db	4edff8487059a4e8	SnowflakeDialect	structure	outside-parent	ObjectName	0	NUMBER
 23233439cc99cd90	4edff8487059a4e8	MySqlDialect,GenericDialect	extent	empty	Statement::CreateDatabase	0	CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci
 2345e15ccf8c5d02	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	extent	empty	Statement::Drop	0	DROP DATABASE mycatalog.mydb
 2345e15ccf8c5d02	fdaf9332c09858cf	DuckDbDialect	extent	empty	Statement::Drop	0	DROP DATABASE mycatalog.mydb
@@ -3571,6 +3577,9 @@
 2528f00eab19fbe1	4edff8487059a4e8	PostgreSqlDialect,SnowflakeDialect,RedshiftSqlDialect,MySqlDialect	edges	start	TableAlias	0	AS o
 2528f00eab19fbe1	4edff8487059a4e8	PostgreSqlDialect,SnowflakeDialect,RedshiftSqlDialect,MySqlDialect	edges	start	TableAlias	0	AS p
 2528f00eab19fbe1	4edff8487059a4e8	PostgreSqlDialect,SnowflakeDialect,RedshiftSqlDialect,MySqlDialect	reparse	inexact	TableFactor::NestedJoin	0	(customers AS c RIGHT JOIN products AS p ON p.customer_id = c.customer_id)
+254d4ca46c233542	4edff8487059a4e8	SnowflakeDialect	edges	both	CreateTable	0	CREATE TABLE t (a Array(VARCHAR))
+254d4ca46c233542	4edff8487059a4e8	SnowflakeDialect	edges	end	ColumnDef	0	a Array(VARCHAR)
+254d4ca46c233542	4edff8487059a4e8	SnowflakeDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE t (a Array(VARCHAR))
 255c3922cc94cf45	4edff8487059a4e8	BigQueryDialect	edges	both	FunctionArguments::List	0	(DISTINCT x ORDER BY x LIMIT 2)
 255c3922cc94cf45	4edff8487059a4e8	BigQueryDialect	edges	end	Function	0	ARRAY_AGG(DISTINCT x ORDER BY x LIMIT 2)
 255c3922cc94cf45	4edff8487059a4e8	BigQueryDialect	edges	end	SelectItem::UnnamedExpr	0	ARRAY_AGG(DISTINCT x ORDER BY x LIMIT 2)
@@ -12712,6 +12721,8 @@
 8aa824ac20d671d2	4edff8487059a4e8	SnowflakeDialect	extent	inexact	Statement::CreateView	0	CREATE OR REPLACE TEMPORARY VIEW foo.bar.baz ("COL_1" COMMENT 'comment 1') COMMENT = 'view comment' AS (SELECT 1)
 8aa824ac20d671d2	4edff8487059a4e8	SnowflakeDialect	reparse	inexact	Query	0	(SELECT 1)
 8aa824ac20d671d2	4edff8487059a4e8	SnowflakeDialect	structure	empty	ColumnOption::Comment	0	COMMENT 'comment 1'
+8aad756afc01a965	4edff8487059a4e8	SnowflakeDialect	edges	both	SelectItem::UnnamedExpr	0	CAST(a AS ARRAY(VARCHAR NOT NULL))
+8aad756afc01a965	4edff8487059a4e8	SnowflakeDialect	reparse	inexact	Expr::Cast	0	CAST(a AS ARRAY(VARCHAR NOT NULL))
 8aada9e6174a7d0f	4edff8487059a4e8	GenericDialect,BigQueryDialect	edges	both	AccessExpr::Subscript	0	[1]
 8aada9e6174a7d0f	4edff8487059a4e8	GenericDialect,BigQueryDialect	edges	end	SelectItem::UnnamedExpr	0	f1.f2.abc[1]
 8aada9e6174a7d0f	4edff8487059a4e8	GenericDialect,BigQueryDialect	edges	start	AccessExpr::Dot	0	.abc
@@ -17645,6 +17656,9 @@ b88be75326f2d046	fdaf9332c09858cf	DuckDbDialect	edges	end	ColumnDef	0	name VARCH
 b88be75326f2d046	fdaf9332c09858cf	DuckDbDialect	extent	inexact	Statement::CreateTable	0	CREATE OR REPLACE EXTERNAL TABLE uk_cities (name VARCHAR(100) NOT NULL) STORED AS TEXTFILE LOCATION '/tmp/example.csv'
 b88be75326f2d046	fdaf9332c09858cf	DuckDbDialect	structure	empty	ColumnOption::NotNull	0	NOT NULL
 b88be75326f2d046	fdaf9332c09858cf	DuckDbDialect	structure	empty	ColumnOptionDef	0	NOT NULL
+b88e966f48270942	4edff8487059a4e8	SnowflakeDialect	edges	both	CreateTable	0	CREATE TABLE t (a Array(VARCHAR))
+b88e966f48270942	4edff8487059a4e8	SnowflakeDialect	edges	end	ColumnDef	0	a Array(VARCHAR)
+b88e966f48270942	4edff8487059a4e8	SnowflakeDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE t (a Array(VARCHAR))
 b8a17e3edd788e84	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	both	CheckConstraint	0	CONSTRAINT c CHECK (a > 0) NO INHERIT
 b8a17e3edd788e84	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	both	CreateTable	0	CREATE TABLE t (a INT, CONSTRAINT c CHECK (a > 0) NO INHERIT)
 b8a17e3edd788e84	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	both	TableConstraint::Check	0	CONSTRAINT c CHECK (a > 0) NO INHERIT
@@ -19521,6 +19535,9 @@ cce750bcbd360ece	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,
 cce750bcbd360ece	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	extent	inexact	Statement::Analyze	0	ANALYZE test_table
 cce750bcbd360ece	fdaf9332c09858cf	DuckDbDialect	edges	start	Analyze	0	ANALYZE test_table
 cce750bcbd360ece	fdaf9332c09858cf	DuckDbDialect	extent	inexact	Statement::Analyze	0	ANALYZE test_table
+cced3f305dbeef1b	4edff8487059a4e8	SnowflakeDialect	edges	both	SelectItem::UnnamedExpr	0	CAST(a AS Array(NUMBER(10, 2)))
+cced3f305dbeef1b	4edff8487059a4e8	SnowflakeDialect	reparse	inexact	Expr::Cast	0	CAST(a AS Array(NUMBER(10, 2)))
+cced3f305dbeef1b	4edff8487059a4e8	SnowflakeDialect	structure	outside-parent	ObjectName	0	NUMBER
 cd146d98b60f08c1	4edff8487059a4e8	SQLiteDialect,GenericDialect	edges	both	CreateTable	0	CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)
 cd146d98b60f08c1	4edff8487059a4e8	SQLiteDialect,GenericDialect	edges	end	ColumnDef	0	bar INT PRIMARY KEY AUTOINCREMENT
 cd146d98b60f08c1	4edff8487059a4e8	SQLiteDialect,GenericDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)

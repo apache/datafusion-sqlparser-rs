@@ -23,6 +23,7 @@ use crate::ast::{Expr, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 ///
@@ -40,6 +41,13 @@ impl Dialect for SQLiteDialect {
     // TODO: support depending on the context tread '...' as identifier too.
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '`' || ch == '"' || ch == '['
+    }
+
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        match parser.peek_token_ref().token {
+            Token::Colon => Some(Ok(self.prec_unknown())),
+            _ => None,
+        }
     }
 
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {

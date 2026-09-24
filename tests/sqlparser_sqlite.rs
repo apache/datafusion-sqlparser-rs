@@ -1008,3 +1008,17 @@ fn parse_sqlite_variable_tokens() {
     // SQLite ends a subscript at whitespace and rejects the token
     assert!(sqlite().parse_sql_statements("SELECT $a(x y)").is_err());
 }
+
+#[test]
+fn parse_colon_is_not_an_operator() {
+    for sql in [
+        "SELECT b : c",
+        "SELECT a / b : c",
+        "SELECT b : c.d",
+        "SELECT b : \"c\"",
+        "SELECT b :c",
+    ] {
+        assert!(sqlite().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+    sqlite().verified_stmt("SELECT a FROM t WHERE b = :c");
+}

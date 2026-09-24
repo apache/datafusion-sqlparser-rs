@@ -21,6 +21,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::io::Write as _;
+use std::path::Path;
 use std::sync::{LazyLock, Mutex};
 
 use crate::ast::{Spanned, Statement};
@@ -40,6 +41,9 @@ pub(super) fn check(
     sql: &str,
 ) {
     let recording = std::env::var_os("SPAN_ORACLE").is_some_and(|mode| mode == "record");
+    if !recording && BASELINE_FINDINGS.is_none() {
+        return;
+    }
     let input = format!("{:016x}", fnv64(sql));
     let mut grouped: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     let mut mismatches = String::new();
@@ -54,7 +58,11 @@ pub(super) fn check(
         // Recording must not read the baseline, which may hold merge conflict markers.
         if !recording {
             let key = format!("{input}\t{options}\t{name}");
-            let expected = BASELINE_FINDINGS.get(&key).cloned().unwrap_or_default();
+            let expected = BASELINE_FINDINGS
+                .as_ref()
+                .and_then(|baseline| baseline.get(&key))
+                .cloned()
+                .unwrap_or_default();
             if let Some(mismatch) = mismatch(&expected, &actual) {
                 mismatches.push_str(&format!("\n{name}:{mismatch}"));
             }
@@ -526,18 +534,22 @@ mod nodes {
     }
 }
 
-/// Baseline findings keyed by input, options and dialect.
-static BASELINE_FINDINGS: LazyLock<HashMap<String, BTreeSet<String>>> = LazyLock::new(|| {
-    let text = match std::fs::read_to_string(BASELINE) {
+/// Baseline findings keyed by input, options and dialect, `None` outside this repository.
+static BASELINE_FINDINGS: LazyLock<Option<HashMap<String, BTreeSet<String>>>> =
+    LazyLock::new(|| load_baseline(Path::new(BASELINE)));
+
+/// `None` when the file does not exist, as in the published crate, which ships without it.
+fn load_baseline(path: &Path) -> Option<HashMap<String, BTreeSet<String>>> {
+    let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(e) => panic!("reading {BASELINE}: {e}"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => panic!("reading {}: {e}", path.display()),
     };
     let mut findings: HashMap<String, BTreeSet<String>> = HashMap::new();
     for line in text.lines() {
         let fields: Vec<&str> = line.splitn(4, '\t').collect();
         let [input, options, dialects, finding] = fields[..] else {
-            panic!("malformed line in {BASELINE}: {line:?}");
+            panic!("malformed line in {}: {line:?}", path.display());
         };
         for dialect in dialects.split(',') {
             findings
@@ -546,8 +558,8 @@ static BASELINE_FINDINGS: LazyLock<HashMap<String, BTreeSet<String>>> = LazyLock
                 .insert(finding.to_string());
         }
     }
-    findings
-});
+    Some(findings)
+}
 
 fn record(lines: impl Iterator<Item = String>) {
     static WRITE: Mutex<()> = Mutex::new(());
@@ -680,6 +692,19 @@ mod tests {
         assert!(!found
             .iter()
             .any(|f| f.check == "edges" && f.text == "NULL AS x"));
+    }
+
+    #[test]
+    fn missing_baseline_disables_the_check() {
+        let dir = std::env::temp_dir().join(format!("span-oracle-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let missing = dir.join("missing.tsv");
+        let empty = dir.join("empty.tsv");
+        std::fs::write(&empty, "").unwrap();
+
+        assert!(load_baseline(&missing).is_none());
+        assert_eq!(load_baseline(&empty), Some(HashMap::new()));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -53,6 +53,17 @@ pub(crate) fn derive_visit(
     let (pre_visit, post_visit) = attributes.visit(quote!(self));
     let children = visit_children(&input.data, visit_type);
     let (pre_visit_node, post_visit_node) = if modifier.is_none() {
+        let variant_name = match &input.data {
+            Data::Enum(data) => {
+                let arms = data.variants.iter().map(|v| {
+                    let name = &v.ident;
+                    let text = name.to_string();
+                    quote!(Self::#name { .. } => ::core::option::Option::Some(#text))
+                });
+                quote!(match self { #(#arms),* })
+            }
+            _ => quote!(::core::option::Option::None),
+        };
         (
             Some(quote! {
                 let node = {
@@ -64,6 +75,7 @@ pub(crate) fn derive_visit(
                     sqlparser::ast::NodeRef::__new(
                         self,
                         ::core::any::type_name::<Self>(),
+                        #variant_name,
                         (&&probe).spanned(),
                         (&&probe).display(),
                     )

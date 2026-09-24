@@ -73,6 +73,7 @@ pub trait VisitMut {
 pub struct NodeRef<'a> {
     any: &'a dyn Any,
     type_name: &'static str,
+    variant_name: Option<&'static str>,
     spanned: Option<&'a dyn Spanned>,
     display: Option<&'a dyn fmt::Display>,
 }
@@ -82,12 +83,14 @@ impl<'a> NodeRef<'a> {
     pub fn __new(
         any: &'a dyn Any,
         type_name: &'static str,
+        variant_name: Option<&'static str>,
         spanned: Option<&'a dyn Spanned>,
         display: Option<&'a dyn fmt::Display>,
     ) -> Self {
         Self {
             any,
             type_name,
+            variant_name,
             spanned,
             display,
         }
@@ -101,6 +104,11 @@ impl<'a> NodeRef<'a> {
     /// The [`core::any::type_name`] of the node.
     pub fn type_name(&self) -> &'static str {
         self.type_name
+    }
+
+    /// The name of the node's variant, if the node is an enum.
+    pub fn variant_name(&self) -> Option<&'static str> {
+        self.variant_name
     }
 
     /// The node, if its type implements [`Spanned`].
@@ -1427,20 +1435,32 @@ mod tests {
         assert_eq!(visitor.relations, vec!["db1.v", "t"]);
     }
 
+    #[derive(Debug, PartialEq)]
+    struct Node {
+        depth: usize,
+        name: &'static str,
+        variant: Option<&'static str>,
+        spanned: bool,
+        display: Option<String>,
+    }
+
     #[derive(Default)]
     struct NodeVisitor {
         depth: usize,
-        nodes: Vec<(usize, &'static str, bool, Option<String>)>,
+        nodes: Vec<Node>,
     }
 
     impl Visitor for NodeVisitor {
         type Break = ();
 
         fn pre_visit_node(&mut self, node: NodeRef<'_>) -> ControlFlow<Self::Break> {
-            let name = node.type_name().rsplit("::").next().unwrap();
-            let display = node.display().map(|d| d.to_string());
-            self.nodes
-                .push((self.depth, name, node.spanned().is_some(), display));
+            self.nodes.push(Node {
+                depth: self.depth,
+                name: node.type_name().rsplit("::").next().unwrap(),
+                variant: node.variant_name(),
+                spanned: node.spanned().is_some(),
+                display: node.display().map(|d| d.to_string()),
+            });
             self.depth += 1;
             ControlFlow::Continue(())
         }
@@ -1464,22 +1484,30 @@ mod tests {
             visitor
                 .nodes
                 .iter()
-                .position(|(_, n, _, d)| *n == name && d.as_deref() == Some(display))
+                .position(|n| n.name == name && n.display.as_deref() == Some(display))
                 .unwrap_or_else(|| panic!("{name} `{display}` not visited"))
         };
 
-        let item = find("SelectItem", "CAST(a AS INT) AS x");
-        assert!(visitor.nodes[item].2);
+        let item = &visitor.nodes[find("SelectItem", "CAST(a AS INT) AS x")];
+        assert!(item.spanned);
+        assert_eq!(item.variant, Some("ExprWithAlias"));
 
-        let data_type = find("DataType", "INT");
-        assert!(!visitor.nodes[data_type].2);
+        let data_type = &visitor.nodes[find("DataType", "INT")];
+        assert!(!data_type.spanned);
+        assert_eq!(data_type.variant, Some("Int"));
 
         let join = find("Join", "JOIN u ON t.id = u.id");
-        assert!(visitor.nodes[join].2);
-        let (join_depth, ..) = visitor.nodes[join];
+        assert!(visitor.nodes[join].spanned);
+        assert_eq!(visitor.nodes[join].variant, None);
         assert_eq!(
             visitor.nodes[join + 1],
-            (join_depth + 1, "TableFactor", true, Some("u".to_string()))
+            Node {
+                depth: visitor.nodes[join].depth + 1,
+                name: "TableFactor",
+                variant: Some("Table"),
+                spanned: true,
+                display: Some("u".to_string()),
+            }
         );
     }
 }

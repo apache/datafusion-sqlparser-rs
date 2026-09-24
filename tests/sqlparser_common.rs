@@ -20221,3 +20221,45 @@ fn parse_alter_table_column_position() {
         assert!(dialects.parse_sql_statements(sql).is_err(), "{sql}");
     }
 }
+
+#[test]
+fn parse_placeholder_disallows_quoted_ident() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(SnowflakeDialect {}),
+        Box::new(SQLiteDialect {}),
+    ]);
+    // Valid placeholders roundtrip
+    dialects.verified_stmt("SELECT :x");
+
+    // Quoted identifiers are not valid placeholders
+    let err = dialects.parse_sql_statements("SELECT :`a`").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
+        err
+    );
+    let err = dialects.parse_sql_statements("SELECT :\"a\"").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
+        err
+    );
+    let err = dialects.parse_sql_statements("SELECT:` a` a").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: ` a`".to_string()),
+        err
+    );
+
+    let ansi = TestedDialects::new(vec![Box::new(AnsiDialect {})]);
+    ansi.verified_stmt("SELECT @x");
+    let err = ansi.parse_sql_statements("SELECT @`a`").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
+        err
+    );
+    let err = ansi.parse_sql_statements("SELECT @\"a\"").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
+        err
+    );
+}

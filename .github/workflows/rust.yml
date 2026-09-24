@@ -105,6 +105,22 @@ jobs:
     - name: Test
       run: cargo test --all-features
 
+  span-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust Toolchain
+        uses: ./.github/actions/setup-builder
+      - name: Record span findings
+        run: |
+          rm -rf target/span-oracle
+          SPAN_ORACLE=record cargo test --all-features
+      # Catches baseline lines whose input no test parses any more.
+      - name: Compare with tests/span_baseline.tsv
+        run: |
+          mkdir -p target/span-oracle
+          find target/span-oracle -name '*.tsv' -exec cat {} + | LC_ALL=C sort -u | diff - tests/span_baseline.tsv
+
   coverage:
     runs-on: ubuntu-latest
     steps:

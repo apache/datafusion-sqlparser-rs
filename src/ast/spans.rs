@@ -257,22 +257,38 @@ impl Spanned for Values {
 ///
 /// Missing spans:
 /// - [Statement::CopyIntoSnowflake]
-/// - [Statement::CreateSecret]
 /// - [Statement::CreateRole]
+/// - [Statement::CreateExtension]
+/// - [Statement::CreateCollation]
+/// - [Statement::DropExtension]
+/// - [Statement::DropOperator]
+/// - [Statement::DropOperatorFamily]
+/// - [Statement::DropOperatorClass]
+/// - [Statement::CreateSecret]
+/// - [Statement::CreateServer]
+/// - [Statement::CreateConnector]
+/// - [Statement::CreateOperator]
+/// - [Statement::CreateOperatorFamily]
+/// - [Statement::CreateOperatorClass]
+/// - [Statement::CreateTextSearch]
+/// - [Statement::AlterFunction]
 /// - [Statement::AlterType]
+/// - [Statement::AlterCollation]
 /// - [Statement::AlterOperator]
+/// - [Statement::AlterOperatorFamily]
+/// - [Statement::AlterOperatorClass]
+/// - [Statement::AlterTextSearch]
 /// - [Statement::AlterRole]
+/// - [Statement::AlterSession]
 /// - [Statement::AttachDatabase]
 /// - [Statement::AttachDuckDBDatabase]
 /// - [Statement::DetachDuckDBDatabase]
 /// - [Statement::Drop]
 /// - [Statement::DropFunction]
+/// - [Statement::DropDomain]
 /// - [Statement::DropProcedure]
 /// - [Statement::DropSecret]
 /// - [Statement::Declare]
-/// - [Statement::CreateExtension]
-/// - [Statement::CreateCollation]
-/// - [Statement::AlterCollation]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -285,6 +301,7 @@ impl Spanned for Values {
 /// - [Statement::ShowColumns]
 /// - [Statement::ShowTables]
 /// - [Statement::ShowCollation]
+/// - [Statement::ShowCharset]
 /// - [Statement::StartTransaction]
 /// - [Statement::Comment]
 /// - [Statement::Commit]
@@ -292,14 +309,17 @@ impl Spanned for Values {
 /// - [Statement::CreateSchema]
 /// - [Statement::CreateDatabase]
 /// - [Statement::CreateFunction]
+/// - [Statement::CreateDomain]
 /// - [Statement::CreateTrigger]
 /// - [Statement::DropTrigger]
 /// - [Statement::CreateProcedure]
 /// - [Statement::CreateMacro]
 /// - [Statement::CreateStage]
 /// - [Statement::CreateFileFormat]
+/// - [Statement::CreateWarehouse]
 /// - [Statement::Assert]
 /// - [Statement::Grant]
+/// - [Statement::Deny]
 /// - [Statement::Revoke]
 /// - [Statement::Deallocate]
 /// - [Statement::Execute]
@@ -319,6 +339,34 @@ impl Spanned for Values {
 /// - [Statement::UnlockTables]
 /// - [Statement::Unload]
 /// - [Statement::OptimizeTable]
+/// - [Statement::CreatePolicy]
+/// - [Statement::AlterPolicy]
+/// - [Statement::AlterConnector]
+/// - [Statement::DropPolicy]
+/// - [Statement::DropConnector]
+/// - [Statement::ShowCatalogs]
+/// - [Statement::ShowDatabases]
+/// - [Statement::ShowProcessList]
+/// - [Statement::ShowSchemas]
+/// - [Statement::ShowObjects]
+/// - [Statement::ShowViews]
+/// - [Statement::LISTEN]
+/// - [Statement::NOTIFY]
+/// - [Statement::LoadData]
+/// - [Statement::UNLISTEN]
+/// - [Statement::RenameTable]
+/// - [Statement::RaisError]
+/// - [Statement::Throw]
+/// - [Statement::Print]
+/// - [Statement::WaitFor]
+/// - [Statement::Return]
+/// - [Statement::List]
+/// - [Statement::Put]
+/// - [Statement::Remove]
+/// - [Statement::CreateUser]
+/// - [Statement::Vacuum]
+/// - [Statement::AlterUser]
+/// - [Statement::Reset]
 impl Spanned for Statement {
     fn span(&self) -> Span {
         match self {
@@ -2667,14 +2715,6 @@ pub mod tests {
             test.get_source(select_span),
             "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id"
         );
-
-        let join_span = query.from[0].joins[0].span();
-
-        // 'LEFT JOIN' missing
-        assert_eq!(
-            test.get_source(join_span),
-            "companies ON users.company_id = companies.id"
-        );
     }
 
     #[test]
@@ -2708,14 +2748,6 @@ pub mod tests {
         assert_eq!(
             test.get_source(select_span),
             "SELECT a FROM (SELECT a FROM postgres.public.source) AS b"
-        );
-
-        let subquery_span = query.from[0].span();
-
-        // left paren missing
-        assert_eq!(
-            test.get_source(subquery_span),
-            "SELECT a FROM postgres.public.source) AS b"
         );
     }
 

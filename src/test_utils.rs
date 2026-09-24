@@ -39,6 +39,10 @@ use crate::{ast::*, parser::ParserOptions};
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
+// Baseline keys hold node renderings, which `bigdecimal` changes, so the oracle runs in the recorded configuration only.
+#[cfg(all(feature = "std", feature = "visitor", feature = "bigdecimal"))]
+mod span_oracle;
+
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
 pub struct TestedDialects {
@@ -121,7 +125,7 @@ impl TestedDialects {
     /// Parses a single SQL string into multiple statements, ensuring
     /// the result is the same for all tested dialects.
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| {
+        let statements = self.one_of_identical_results(|dialect| {
             let mut tokenizer = Tokenizer::new(dialect, sql);
             if let Some(options) = &self.options {
                 tokenizer = tokenizer.with_unescape(options.unescape);
@@ -130,9 +134,20 @@ impl TestedDialects {
             self.new_parser(dialect)
                 .with_tokens(tokens)
                 .parse_statements()
-        })
+        });
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
+
+        #[cfg(all(feature = "std", feature = "visitor", feature = "bigdecimal"))]
+        if statements.is_ok() {
+            span_oracle::check(
+                &self.dialects,
+                self.options.as_ref(),
+                self.recursion_limit,
+                sql,
+            );
+        }
+        statements
     }
 
     /// Ensures that `sql` parses as a single [Statement] for all tested

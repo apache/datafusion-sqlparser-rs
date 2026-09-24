@@ -8871,9 +8871,7 @@ fn parse_alter_function_and_aggregate() {
 #[test]
 fn parse_create_text_search() {
     // CREATE: one per object type
-    let stmt =
-        pg_and_generic().verified_stmt("CREATE TEXT SEARCH DICTIONARY d (template = simple)");
-    assert_eq!(Span::empty(), stmt.span());
+    pg_and_generic().verified_stmt("CREATE TEXT SEARCH DICTIONARY d (template = simple)");
     pg_and_generic().verified_stmt("CREATE TEXT SEARCH CONFIGURATION c (copy = english)");
     pg_and_generic().verified_stmt("CREATE TEXT SEARCH TEMPLATE t (lexize = dsimple_lexize)");
     pg_and_generic().verified_stmt(
@@ -8897,13 +8895,7 @@ fn parse_create_text_search() {
 #[test]
 fn parse_alter_text_search() {
     // One test per operation kind.
-    let stmt = pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt = val)");
-    assert_eq!(Span::empty(), stmt.span());
-    if let Statement::AlterTextSearch(alter_text_search) = stmt {
-        assert_eq!(Span::empty(), alter_text_search.span());
-    } else {
-        unreachable!("expected ALTER TEXT SEARCH statement");
-    }
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt = val)");
     pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt)");
     pg_and_generic().verified_stmt("ALTER TEXT SEARCH CONFIGURATION c OWNER TO some_user");
     pg_and_generic().verified_stmt("ALTER TEXT SEARCH TEMPLATE t SET SCHEMA s");

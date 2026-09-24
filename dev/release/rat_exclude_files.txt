@@ -8,4 +8,5 @@ sqlparser_bench/img/flamegraph.svg
 filtered_rat.txt
 AGENTS.md
 fuzz/fuzz_seeds/*
+tests/span_baseline.tsv
 .github/PULL_REQUEST_TEMPLATE.md

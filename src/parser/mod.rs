@@ -9439,6 +9439,10 @@ impl<'a> Parser<'a> {
                 constraints.push(constraint);
             } else if let Token::Word(_) = &self.peek_token_ref().token {
                 columns.push(self.parse_column_def()?);
+            } else if matches!(&self.peek_token_ref().token, Token::SingleQuotedString(_))
+                && self.dialect.supports_string_literal_column_names()
+            {
+                columns.push(self.parse_column_def()?);
             } else {
                 return self.expected_ref(
                     "column name or constraint definition",

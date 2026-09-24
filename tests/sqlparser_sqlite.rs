@@ -957,6 +957,19 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn parse_create_table_string_column_names() {
+    sqlite().verified_stmt("CREATE TABLE t ('a')");
+    sqlite().verified_stmt(r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL)"#);
+    sqlite().verified_stmt(
+        r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL, 'name' TEXT NOT NULL, 'zip' INT UNSIGNED NULL)"#,
+    );
+    // Generic dialect does not support this
+    assert!(
+        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')").is_err()
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

@@ -122,6 +122,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_is_operator(&self) -> bool {
+        true
+    }
+
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }

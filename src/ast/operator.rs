@@ -332,6 +332,10 @@ pub enum BinaryOperator {
     /// ':=' Assignment Operator
     /// See <https://dev.mysql.com/doc/refman/8.4/en/assignment-operators.html#operator_assign-value>
     Assignment,
+    /// `IS` operator
+    Is,
+    /// `IS NOT` operator
+    IsNot,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -409,6 +413,8 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::At => f.write_str("@"),
             BinaryOperator::TildeEq => f.write_str("~="),
             BinaryOperator::Assignment => f.write_str(":="),
+            BinaryOperator::Is => f.write_str("IS"),
+            BinaryOperator::IsNot => f.write_str("IS NOT"),
         }
     }
 }

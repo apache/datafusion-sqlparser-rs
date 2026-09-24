@@ -107,7 +107,7 @@ Here is my vote:
 
 [1]: https://github.com/apache/datafusion-sqlparser-rs/tree/${release_hash}
 [2]: ${url}
-[3]: https://github.com/apache/datafusion-sqlparser-rs/blob/${release_hash}/CHANGELOG.md
+[3]: https://github.com/apache/datafusion-sqlparser-rs/blob/${release_hash}/changelog/${version}.md
 MAIL
 echo "---------------------------------------------------------"
 
@@ -116,6 +116,11 @@ echo "---------------------------------------------------------"
 # the files in the tarball are prefixed with {version} (e.g. 4.0.1)
 mkdir -p ${distdir}
 (cd "${SOURCE_TOP_DIR}" && git archive ${release_hash} --prefix ${release}/ | gzip > ${tarball})
+
+if tar -tf ${tarball} | grep -q 'fuzz/fuzz_seeds'; then
+    echo "Error: fuzz/fuzz_seeds found in release tarball ${tarball}"
+    exit 1
+fi
 
 echo "Running rat license checker on ${tarball}"
 ${SOURCE_DIR}/run-rat.sh ${tarball}

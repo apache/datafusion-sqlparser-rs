@@ -1913,8 +1913,8 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
 
-    /// `MATERIALIZE <expr>`
-    /// Syntax: `b INT MATERIALIZE (a + 1)`
+    /// `MATERIALIZED <expr>`
+    /// Syntax: `b INT MATERIALIZED (a + 1)`
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
     Materialized(Expr),
@@ -1939,7 +1939,7 @@ pub enum ColumnOption {
     /// [<constraint_characteristics>]
     /// `).
     ForeignKey(ForeignKeyConstraint),
-    /// `CHECK (<expr>)`
+    /// `CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`
     Check(CheckConstraint),
     /// Dialect-specific options, such as:
     /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`
@@ -4386,6 +4386,7 @@ pub struct CreateView {
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
     pub secure: bool,
     /// View name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
     /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
     /// Example:
@@ -4780,7 +4781,7 @@ impl fmt::Display for AlterTable {
         if self.only {
             write!(f, "ONLY ")?;
         }
-        write!(f, "{} ", &self.name)?;
+        write!(f, "{} ", self.name)?;
         if let Some(cluster) = &self.on_cluster {
             write!(f, "ON CLUSTER {cluster} ")?;
         }

@@ -1,0 +1,3 @@
+SELECT 1;
+UPDATE t SET a = 2;
+DELETE FROM t

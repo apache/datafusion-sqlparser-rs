@@ -542,3 +542,34 @@ fn test_partiql_from_alias_with_at_index() {
         _ => panic!("expected table factor"),
     }
 }
+
+#[test]
+fn parse_unpivot_expression() {
+    let dialects = all_dialects_where(|d| d.supports_unpivot_expr());
+
+    dialects.verified_stmt(
+        "SELECT t.id, k, v FROM test_colors AS t, UNPIVOT t.count_by_color AS v AT k",
+    );
+    dialects.verified_stmt("SELECT t.id, k, v FROM test_colors AS t, UNPIVOT t AS v AT k");
+}
+
+#[test]
+fn test_interval_as_column_name() {
+    redshift().verified_stmt("SELECT * FROM table_name WHERE interval = 78");
+}
+
+#[test]
+fn parse_approximate_percentile_disc() {
+    let supporting = all_dialects_where(|d| d.supports_approximate_percentile_disc());
+    supporting.verified_stmt(
+        "SELECT APPROXIMATE PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY totalprice)",
+    );
+
+    // Without dialect support, `APPROXIMATE` is just a column name and
+    // `PERCENTILE_DISC` its implicit alias.
+    let non_supporting = all_dialects_where(|d| !d.supports_approximate_percentile_disc());
+    non_supporting.one_statement_parses_to(
+        "SELECT APPROXIMATE PERCENTILE_DISC FROM t",
+        "SELECT APPROXIMATE AS PERCENTILE_DISC FROM t",
+    );
+}

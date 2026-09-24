@@ -461,6 +461,7 @@ impl Spanned for Statement {
             Statement::CreateMacro { .. } => Span::empty(),
             Statement::CreateStage { .. } => Span::empty(),
             Statement::CreateFileFormat { .. } => Span::empty(),
+            Statement::CreateWarehouse(..) => Span::empty(),
             Statement::Assert { .. } => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
             Statement::Deny { .. } => Span::empty(),
@@ -1353,6 +1354,7 @@ impl Spanned for Insert {
             table,
             table_alias,
             columns,
+            by_name: _,   // bool
             overwrite: _, // bool
             source,
             partitioned,
@@ -1495,6 +1497,12 @@ impl Spanned for Expr {
             Expr::IsNotNull(expr) => expr.span(),
             Expr::IsUnknown(expr) => expr.span(),
             Expr::IsNotUnknown(expr) => expr.span(),
+            Expr::IsJson {
+                expr,
+                kind: _,
+                unique_keys: _,
+                negated: _,
+            } => expr.span(),
             Expr::IsDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::IsNotDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::InList {
@@ -1605,7 +1613,6 @@ impl Spanned for Expr {
                 kind: _,
                 expr,
                 data_type: _,
-                array: _,
                 format: _,
             } => expr.span(),
             Expr::AtTimeZone {
@@ -1806,6 +1813,7 @@ impl Spanned for FunctionArgumentClause {
     fn span(&self) -> Span {
         match self {
             FunctionArgumentClause::IgnoreOrRespectNulls(_) => Span::empty(),
+            FunctionArgumentClause::Where(expr) => expr.span(),
             FunctionArgumentClause::OrderBy(vec) => union_spans(vec.iter().map(|i| i.expr.span())),
             FunctionArgumentClause::Limit(expr) => expr.span(),
             FunctionArgumentClause::OnOverflow(_) => Span::empty(),
@@ -2055,6 +2063,15 @@ impl Spanned for TableFactor {
                     .chain(core::iter::once(name.span))
                     .chain(columns.iter().map(|ilist| ilist.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
+            ),
+            TableFactor::UnpivotExpr {
+                expression,
+                value_alias,
+                attribute_alias,
+            } => union_spans(
+                core::iter::once(expression.span())
+                    .chain(core::iter::once(value_alias.span))
+                    .chain(attribute_alias.as_ref().map(|alias| alias.span)),
             ),
             TableFactor::MatchRecognize {
                 table,
@@ -2541,6 +2558,10 @@ impl Spanned for MergeAction {
             MergeAction::Insert(expr) => expr.span(),
             MergeAction::Update(expr) => expr.span(),
             MergeAction::Delete { delete_token } => delete_token.0.span,
+            MergeAction::DoNothing {
+                do_token,
+                nothing_token,
+            } => do_token.0.span.union(&nothing_token.0.span),
         }
     }
 }
@@ -2893,6 +2914,7 @@ WHERE id = 1
 
               WHEN MATCHED AND target_table.x != 'X' THEN   DELETE
         WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW
+        WHEN MATCHED THEN DO NOTHING
         "#;
 
         let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
@@ -2901,7 +2923,7 @@ WHERE id = 1
         // ~ assert the span of the whole statement
         let stmt_span = r[0].span();
         assert_eq!(stmt_span.start, (4, 9).into());
-        assert_eq!(stmt_span.end, (16, 67).into());
+        assert_eq!(stmt_span.end, (17, 37).into());
 
         // ~ individual tokens within the statement
         let Statement::Merge(Merge {
@@ -2921,7 +2943,7 @@ WHERE id = 1
             merge_token.0.span,
             Span::new(Location::new(4, 9), Location::new(4, 14))
         );
-        assert_eq!(clauses.len(), 4);
+        assert_eq!(clauses.len(), 5);
 
         // ~ the INSERT clause's TOKENs
         assert_eq!(
@@ -3001,6 +3023,31 @@ WHERE id = 1
             );
         } else {
             panic!("not a MERGE INSERT clause");
+        }
+
+        assert_eq!(
+            clauses[4].when_token.0.span,
+            Span::new(Location::new(17, 9), Location::new(17, 13))
+        );
+        if let MergeAction::DoNothing {
+            do_token,
+            nothing_token,
+        } = &clauses[4].action
+        {
+            assert_eq!(
+                do_token.0.span,
+                Span::new(Location::new(17, 27), Location::new(17, 29))
+            );
+            assert_eq!(
+                nothing_token.0.span,
+                Span::new(Location::new(17, 30), Location::new(17, 37))
+            );
+            assert_eq!(
+                clauses[4].action.span(),
+                Span::new(Location::new(17, 27), Location::new(17, 37))
+            );
+        } else {
+            panic!("not a MERGE DO NOTHING clause");
         }
 
         assert!(output.is_none());

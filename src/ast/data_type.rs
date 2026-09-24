@@ -720,6 +720,8 @@ impl fmt::Display for DataType {
                 ArrayElemTypeDef::SquareBracket(t, Some(size)) => write!(f, "{t}[{size}]"),
                 ArrayElemTypeDef::AngleBracket(t) => write!(f, "ARRAY<{t}>"),
                 ArrayElemTypeDef::Parenthesis(t) => write!(f, "Array({t})"),
+                ArrayElemTypeDef::Qualified(t, None) => write!(f, "{t} ARRAY"),
+                ArrayElemTypeDef::Qualified(t, Some(size)) => write!(f, "{t} ARRAY[{size}]"),
             },
             DataType::Custom(ty, modifiers) => {
                 if modifiers.is_empty() {
@@ -1163,6 +1165,8 @@ pub enum ArrayElemTypeDef {
     SquareBracket(Box<DataType>, Option<u64>),
     /// Parenthesis style, e.g. `Array(Int64)`.
     Parenthesis(Box<DataType>),
+    /// Qualified by a data type and optional size, e.g. `INT ARRAY` or `INT ARRAY[4]`.
+    Qualified(Box<DataType>, Option<u64>),
 }
 
 /// Represents different types of geometric shapes which are commonly used in

@@ -223,6 +223,7 @@ fn parse_create_table_auto_increment() {
                                 index_name: None,
                                 index_type: None,
                                 columns: vec![],
+                                include: vec![],
                                 index_options: vec![],
                                 characteristics: None,
                             }),
@@ -255,6 +256,7 @@ fn parse_create_table_primary_key_asc_desc() {
                     index_name: None,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics: None,
                 }),
@@ -921,6 +923,37 @@ fn test_drop_trigger() {
             assert!(option.is_none());
         }
         _ => unreachable!("Expected DROP TRIGGER statement"),
+    }
+}
+
+#[test]
+fn parse_pattern_operators_bind_at_like_precedence() {
+    fn where_operator(sql: &str) -> BinaryOperator {
+        let Statement::Query(query) = sqlite().verified_stmt(sql) else {
+            panic!("expected a query");
+        };
+        let SetExpr::Select(select) = *query.body else {
+            panic!("expected a select");
+        };
+        let Some(Expr::BinaryOp { op, .. }) = select.selection else {
+            panic!("expected a WHERE binary operator");
+        };
+        op
+    }
+
+    // Above AND, so the pattern does not swallow the rest of the expression.
+    for operator in ["REGEXP", "MATCH", "GLOB", "LIKE"] {
+        let sql = format!("SELECT 1 FROM t WHERE a {operator} 'p' AND b = 1");
+        assert_eq!(where_operator(&sql), BinaryOperator::And, "{operator}");
+    }
+    // Below string concatenation, so the pattern is not cut short either.
+    for (operator, expected) in [
+        ("REGEXP", BinaryOperator::Regexp),
+        ("MATCH", BinaryOperator::Match),
+        ("GLOB", BinaryOperator::Glob),
+    ] {
+        let sql = format!("SELECT 1 FROM t WHERE a {operator} 'p' || 'q'");
+        assert_eq!(where_operator(&sql), expected, "{operator}");
     }
 }
 

@@ -23,6 +23,11 @@ use crate::dialect::Dialect;
 pub struct AnsiDialect {}
 
 impl Dialect for AnsiDialect {
+    /// The SQL standard uses double quotes for delimited identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('"')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase()
     }

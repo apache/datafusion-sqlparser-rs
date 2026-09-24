@@ -655,6 +655,7 @@ fn parse_create_table_auto_increment() {
                                 index_name: None,
                                 index_type: None,
                                 columns: vec![],
+                                include: vec![],
                                 index_options: vec![],
                                 characteristics: None,
                             }),
@@ -706,6 +707,7 @@ fn table_constraint_unique_primary_ctor(
             index_type_display,
             index_type,
             columns,
+            include: vec![],
             index_options,
             characteristics,
             nulls_distinct: NullsDistinctOption::None,
@@ -716,6 +718,7 @@ fn table_constraint_unique_primary_ctor(
             index_name,
             index_type,
             columns,
+            include: vec![],
             index_options,
             characteristics,
         }
@@ -764,6 +767,7 @@ fn parse_create_table_primary_and_unique_key() {
                                         index_name: None,
                                         index_type: None,
                                         columns: vec![],
+                                        include: vec![],
                                         index_options: vec![],
                                         characteristics: None,
                                     }),
@@ -886,7 +890,6 @@ fn test_functional_key_part() {
                 )),
             }),
             data_type: DataType::Unsigned,
-            array: false,
             format: None,
         })),
     );
@@ -903,8 +906,10 @@ fn test_functional_key_part() {
                     Value::SingleQuotedString("$.fields".to_string()).with_empty_span()
                 )),
             }),
-            data_type: DataType::Unsigned,
-            array: true,
+            data_type: DataType::Array(ArrayElemTypeDef::Qualified(
+                Box::new(DataType::Unsigned),
+                None,
+            )),
             format: None,
         })),
     );
@@ -1435,6 +1440,7 @@ fn parse_quote_identifiers() {
                             index_name: None,
                             index_type: None,
                             columns: vec![],
+                            include: vec![],
                             index_options: vec![],
                             characteristics: None,
                         }),
@@ -3754,6 +3760,62 @@ fn parse_div_infix_propagates_parse_error() {
 }
 
 #[test]
+fn parse_div_precedence() {
+    let div = |left: Expr, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op: BinaryOperator::MyIntegerDivide,
+        right: Box::new(right),
+    };
+    let num = |n: &str| Expr::value(number(n));
+
+    // `DIV` shares the precedence of `*` and `/`, so `+` must end up at the root.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("7"), num("2"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(num("1")),
+        },
+        mysql().verified_expr("7 DIV 2 + 1")
+    );
+
+    // Equal precedence resolves left-associatively, both against `*` and against itself.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("9"), num("3"))),
+            op: BinaryOperator::Multiply,
+            right: Box::new(num("3")),
+        },
+        mysql().verified_expr("9 DIV 3 * 3")
+    );
+    assert_eq!(
+        div(div(num("10"), num("5")), num("2")),
+        mysql().verified_expr("10 DIV 5 DIV 2")
+    );
+
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(Expr::Identifier(Ident::new("a")), num("2"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(num("1")),
+        },
+        mysql().verified_expr("a DIV 2 = 1")
+    );
+
+    // Explicit parentheses still push the whole expression into the right operand.
+    assert_eq!(
+        div(
+            num("7"),
+            Expr::Nested(Box::new(Expr::BinaryOp {
+                left: Box::new(num("2")),
+                op: BinaryOperator::Plus,
+                right: Box::new(num("1")),
+            }))
+        ),
+        mysql().verified_expr("7 DIV (2 + 1)")
+    );
+}
+
+#[test]
 fn parse_drop_temporary_table() {
     let sql = "DROP TEMPORARY TABLE foo";
     match mysql().verified_stmt(sql) {
@@ -4007,6 +4069,7 @@ fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
     let stmt = mysql_and_generic().verified_stmt(sql);
     if let Statement::Revoke(Revoke {
+        grant_option_for: false,
         privileges,
         objects,
         grantees,
@@ -4278,10 +4341,45 @@ fn parse_cast_integers() {
 
 #[test]
 fn parse_cast_array() {
-    mysql().verified_expr("CAST(foo AS SIGNED ARRAY)");
+    // The element type may be any type accepted by CAST().
+    for ty in [
+        "SIGNED",
+        "UNSIGNED",
+        "CHAR",
+        "CHAR(10)",
+        "BINARY",
+        "BINARY(5)",
+        "DATE",
+        "TIME",
+        "DATETIME",
+        "DECIMAL",
+        "DECIMAL(10,2)",
+        "DOUBLE",
+        "FLOAT",
+        "YEAR",
+    ] {
+        mysql().verified_expr(&format!("CAST(foo AS {ty} ARRAY)"));
+    }
+
+    // `ARRAY` on its own is not a valid CAST target type.
     mysql()
         .run_parser_method("CAST(foo AS ARRAY)", |p| p.parse_expr())
         .expect_err("ARRAY alone is not a type");
+}
+
+#[test]
+fn parse_multi_valued_index() {
+    // `CAST(... AS <type> ARRAY)` key part in CREATE TABLE, CREATE INDEX, and
+    // ALTER TABLE. See https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+    mysql_and_generic().verified_stmt(
+        "CREATE TABLE customers (id BIGINT, custinfo JSON, INDEX zips ((CAST(custinfo -> '$.zipcode' AS UNSIGNED ARRAY))))",
+    );
+    mysql_and_generic().verified_stmt(
+        "CREATE INDEX zips ON customers((CAST(custinfo -> '$.zipcode' AS UNSIGNED ARRAY)))",
+    );
+    mysql_and_generic().verified_stmt(
+        "ALTER TABLE customers ADD INDEX zips ((CAST(custinfo -> '$.zipcode' AS UNSIGNED ARRAY)))",
+    );
 }
 
 #[test]
@@ -4904,4 +5002,124 @@ fn parse_adjacent_string_literal_concatenation() {
 #[test]
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
+}
+
+#[test]
+fn parse_table_partition_selection() {
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0, p2)");
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0) AS e");
+    mysql_and_generic().verified_stmt(
+        "SELECT * FROM employees PARTITION (p0) JOIN departments PARTITION (p1) ON employees.dept_id = departments.id",
+    );
+    mysql_and_generic().verified_stmt("UPDATE employees PARTITION (p0) SET salary = 1");
+    mysql_and_generic().verified_stmt("DELETE FROM employees PARTITION (p0) WHERE id = 1");
+
+    let err = mysql_and_generic()
+        .parse_sql_statements("SELECT * FROM employees PARTITION")
+        .expect_err("expected an error");
+    assert_matches!(err, ParserError::ParserError(_));
+}
+
+#[test]
+fn parse_is_distinct_from_json_arrow_precedence() {
+    // MySQL's `->` binds tighter than `IS [NOT] DISTINCT FROM`, so the JSON
+    // extraction must stay inside the right operand.
+    assert_eq!(
+        Expr::IsDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS DISTINCT FROM b -> 'k'")
+    );
+
+    assert_eq!(
+        Expr::IsNotDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::LongArrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS NOT DISTINCT FROM b ->> 'k'")
+    );
+}
+
+#[test]
+fn parse_bitstring_literal_escaping() {
+    mysql_and_generic().verified_stmt("SELECT B''''");
+    mysql_and_generic().verified_stmt("SELECT B'it''s'");
+}
+
+#[test]
+fn parse_alter_table_column_position() {
+    // MySQL makes the COLUMN keyword optional for ADD, CHANGE and MODIFY.
+    match alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab ADD c INT AFTER b")) {
+        AlterTableOperation::AddColumn {
+            column_keyword,
+            column_position,
+            ..
+        } => {
+            assert!(!column_keyword);
+            assert_eq!(
+                column_position,
+                Some(MySQLColumnPosition::After(Ident::new("b")))
+            );
+        }
+        _ => unreachable!(),
+    }
+    mysql_and_generic().verified_stmt("ALTER TABLE tab ADD c INT FIRST");
+    mysql_and_generic().one_statement_parses_to(
+        "ALTER TABLE tab CHANGE a b INT FIRST",
+        "ALTER TABLE tab CHANGE COLUMN a b INT FIRST",
+    );
+    mysql_and_generic().one_statement_parses_to(
+        "ALTER TABLE tab MODIFY c INT AFTER b",
+        "ALTER TABLE tab MODIFY COLUMN c INT AFTER b",
+    );
+
+    // The position follows the full column definition, options included.
+    mysql_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD COLUMN c VARCHAR(255) NOT NULL DEFAULT 'x' COMMENT 'c' AFTER b",
+    );
+    mysql_and_generic().verified_stmt(
+        "ALTER TABLE tab MODIFY COLUMN c INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST",
+    );
+
+    // The AFTER target is an identifier, so it may be quoted.
+    match alter_table_op(
+        mysql_and_generic().verified_stmt("ALTER TABLE tab ADD COLUMN c INT AFTER `order`"),
+    ) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::with_quote('`', "order")))
+        ),
+        _ => unreachable!(),
+    }
+
+    mysql_and_generic().verified_stmt("ALTER TABLE tab ADD COLUMN a INT FIRST, CHANGE COLUMN b c INT AFTER a, MODIFY COLUMN d INT AFTER c");
+
+    // FIRST and AFTER are mutually exclusive, and AFTER needs a target.
+    for sql in [
+        "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
+        "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
+        "ALTER TABLE tab ADD COLUMN c INT AFTER",
+        "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
+        "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+    ] {
+        assert!(
+            mysql_and_generic().parse_sql_statements(sql).is_err(),
+            "{sql}"
+        );
+    }
 }

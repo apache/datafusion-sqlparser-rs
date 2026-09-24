@@ -78,7 +78,7 @@ pub enum TableConstraint {
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
     /// }`).
     ForeignKey(ForeignKeyConstraint),
-    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`
+    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`
     Check(CheckConstraint),
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
     /// is restricted to MySQL, as no other dialects that support this syntax were found.
@@ -186,12 +186,15 @@ impl fmt::Display for TableConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// A `CHECK` constraint (`[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`).
+/// A `CHECK` constraint (`[ CONSTRAINT <name> ] CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`).
 pub struct CheckConstraint {
     /// Optional constraint name.
     pub name: Option<Ident>,
     /// The boolean expression the CHECK constraint enforces.
     pub expr: Box<Expr>,
+    /// PostgreSQL-specific `NO INHERIT` flag: child tables do not inherit the constraint.
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub no_inherit: bool,
     /// MySQL-specific `ENFORCED` / `NOT ENFORCED` flag.
     /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
     pub enforced: Option<bool>,
@@ -206,11 +209,13 @@ impl fmt::Display for CheckConstraint {
             display_constraint_name(&self.name),
             self.expr
         )?;
-        if let Some(b) = self.enforced {
-            write!(f, " {}", if b { "ENFORCED" } else { "NOT ENFORCED" })
-        } else {
-            Ok(())
+        if self.no_inherit {
+            write!(f, " NO INHERIT")?;
         }
+        if let Some(b) = self.enforced {
+            write!(f, " {}", if b { "ENFORCED" } else { "NOT ENFORCED" })?;
+        }
+        Ok(())
     }
 }
 
@@ -456,6 +461,8 @@ pub struct PrimaryKeyConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that form the primary key.
     pub columns: Vec<IndexColumn>,
+    /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub include: Vec<Ident>,
     /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
     /// Optional characteristics like `DEFERRABLE`.
@@ -473,6 +480,10 @@ impl fmt::Display for PrimaryKeyConstraint {
             display_option(" USING ", "", &self.index_type),
             display_comma_separated(&self.columns),
         )?;
+
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
 
         if !self.index_options.is_empty() {
             write!(f, " {}", display_separated(&self.index_options, " "))?;
@@ -495,6 +506,7 @@ impl crate::ast::Spanned for PrimaryKeyConstraint {
                 .map(|i| i.span)
                 .chain(self.index_name.iter().map(|i| i.span))
                 .chain(self.columns.iter().map(|i| i.span()))
+                .chain(self.include.iter().map(|i| i.span))
                 .chain(self.characteristics.iter().map(|i| i.span())),
         )
     }
@@ -519,6 +531,8 @@ pub struct UniqueConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that are unique.
     pub columns: Vec<IndexColumn>,
+    /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub include: Vec<Ident>,
     /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
     /// Optional characteristics like `DEFERRABLE`.
@@ -541,6 +555,10 @@ impl fmt::Display for UniqueConstraint {
             display_comma_separated(&self.columns),
         )?;
 
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+
         if !self.index_options.is_empty() {
             write!(f, " {}", display_separated(&self.index_options, " "))?;
         }
@@ -562,6 +580,7 @@ impl crate::ast::Spanned for UniqueConstraint {
                 .map(|i| i.span)
                 .chain(self.index_name.iter().map(|i| i.span))
                 .chain(self.columns.iter().map(|i| i.span()))
+                .chain(self.include.iter().map(|i| i.span))
                 .chain(self.characteristics.iter().map(|i| i.span())),
         )
     }

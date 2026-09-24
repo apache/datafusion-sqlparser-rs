@@ -1,0 +1,1 @@
+SELECT a, b AS bb, t.c, 1 + 2 * 3 AS expr, 'x' || 'y' AS cat FROM schema1.t

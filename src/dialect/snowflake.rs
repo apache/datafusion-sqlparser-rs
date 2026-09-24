@@ -140,6 +140,11 @@ impl Dialect for SnowflakeDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    /// See <https://docs.snowflake.com/en/sql-reference/identifiers-syntax>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('"')
+    }
+
     fn supports_projection_trailing_commas(&self) -> bool {
         true
     }
@@ -664,6 +669,10 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn supports_semantic_view_table_factor(&self) -> bool {
+        true
+    }
+
+    fn supports_stages(&self) -> bool {
         true
     }
 
@@ -1309,12 +1318,8 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
     let mut ident = String::new();
     while let Some(next_token) = parser.next_token_no_skip() {
         match &next_token.token {
-            Token::Whitespace(_) | Token::SemiColon => break,
-            Token::Period => {
-                parser.prev_token();
-                break;
-            }
-            Token::LParen | Token::RParen => {
+            Token::Whitespace(_) => break,
+            Token::Period | Token::Comma | Token::SemiColon | Token::LParen | Token::RParen => {
                 parser.prev_token();
                 break;
             }
@@ -1330,6 +1335,9 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Word(w) => ident.push_str(&w.to_string()),
             _ => return parser.expected_ref("stage name identifier", parser.peek_token_ref()),
         }
+    }
+    if ident.is_empty() || ident == "@" {
+        return parser.expected_ref("stage name identifier", parser.peek_token_ref());
     }
     Ok(Ident::new(ident))
 }
@@ -1866,6 +1874,7 @@ fn parse_multi_table_insert(
         table: TableObject::TableName(ObjectName(vec![])), // Not used for multi-table insert
         table_alias: None,
         columns: vec![],
+        by_name: false,
         overwrite,
         source: Some(source),
         assignments: vec![],

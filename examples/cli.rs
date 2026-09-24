@@ -71,9 +71,9 @@ $ cargo run --example cli - [--dialectname]
             .expect("failed to read from stdin");
         String::from_utf8(buf).expect("stdin content wasn't valid utf8")
     } else {
-        println!("Parsing from file '{}' using {:?}", &filename, dialect);
+        println!("Parsing from file '{}' using {:?}", filename, dialect);
         fs::read_to_string(&filename)
-            .unwrap_or_else(|_| panic!("Unable to read the file {}", &filename))
+            .unwrap_or_else(|_| panic!("Unable to read the file {}", filename))
     };
     let without_bom = if contents.chars().next().unwrap() as u64 != 0xfeff {
         contents.as_str()

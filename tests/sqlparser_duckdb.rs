@@ -388,7 +388,6 @@ fn test_duckdb_specific_int_types() {
                     Value::Number("123".parse().unwrap(), false).with_empty_span()
                 )),
                 data_type: data_type.clone(),
-                array: false,
                 format: None,
             },
             expr_from_projection(&select.projection[0])
@@ -902,6 +901,21 @@ fn test_duckdb_lambda_function() {
     // Test lambda with arrow syntax (also supported by DuckDB)
     let sql_arrow = "SELECT list_filter([1, 2, 3], x -> x > 1)";
     duckdb().verified_stmt(sql_arrow);
+
+    // Both readings of `->` print identically, so round-tripping cannot tell
+    // a lambda from JSON member access. Assert the shape instead.
+    let select = duckdb().verified_only_select(sql_arrow);
+    let Expr::Function(func) = expr_from_projection(only(&select.projection)) else {
+        panic!("expected a function call");
+    };
+    let FunctionArguments::List(args) = &func.args else {
+        panic!("expected an argument list");
+    };
+    let [_, FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Lambda(lambda)))] = &args.args[..]
+    else {
+        panic!("expected the second argument to be a lambda");
+    };
+    assert_eq!(LambdaSyntax::Arrow, lambda.syntax);
 
     // Test lambda with multiple parameters (with index)
     let sql_multi = "SELECT list_filter([1, 3, 1, 5], lambda x, i : x > i)";

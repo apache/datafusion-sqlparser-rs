@@ -31,6 +31,11 @@ impl Dialect for DatabricksDialect {
         matches!(ch, '`')
     }
 
+    /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-identifiers.html>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         matches!(ch, 'a'..='z' | 'A'..='Z' | '_')
     }
@@ -106,6 +111,26 @@ impl Dialect for DatabricksDialect {
     }
 
     fn supports_select_item_multi_column_alias(&self) -> bool {
+        true
+    }
+
+    fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        true
+    }
+
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
+
+    fn supports_from_first_select(&self) -> bool {
+        true
+    }
+
+    fn supports_pipe_operator(&self) -> bool {
         true
     }
 }

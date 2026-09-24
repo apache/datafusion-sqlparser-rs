@@ -439,7 +439,11 @@ mod nodes {
                         .collect(),
                 )
             };
-            let (source, rendered) = (tokens(source)?, tokens(rendered)?);
+            let (source, mut rendered) = (tokens(source)?, tokens(rendered)?);
+            // Spans exclude statement separators, which renderings of bodies keep.
+            while rendered.last() == Some(&Token::SemiColon) {
+                rendered.pop();
+            }
             let start = same_token(source.first()?, rendered.first()?);
             let end = same_token(source.last()?, rendered.last()?);
             match (start, end) {
@@ -909,6 +913,14 @@ mod tests {
         }
         let found = nodes::walk(&dialect, &options, sql, &statements);
         assert!(has(&found, "reparse", "inexact", "'ab'"));
+    }
+
+    #[test]
+    fn edges_ignore_a_rendered_statement_separator() {
+        let found = findings_of("IF 1 THEN SELECT 1; END IF");
+        assert!(!found
+            .iter()
+            .any(|f| f.check == "edges" && f.node == "ConditionalStatements::Sequence"));
     }
 
     #[test]

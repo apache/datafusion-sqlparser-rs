@@ -20263,3 +20263,35 @@ fn parse_placeholder_disallows_quoted_ident() {
         err
     );
 }
+
+#[test]
+fn parse_create_table_using() {
+    let sql = "CREATE TABLE t (id BIGINT) USING DELTA";
+    all_dialects_where(|d| d.supports_create_table_using()).verified_stmt(sql);
+
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_create_table_using());
+    assert!(unsupported_dialects.parse_sql_statements(sql).is_err());
+}
+
+#[test]
+fn parse_map_type_with_angle_brackets() {
+    let sql = "CREATE TABLE t (m MAP<STRING, INT>)";
+    all_dialects_where(|d| d.supports_map_literal_with_angle_brackets()).verified_stmt(sql);
+
+    let unsupported_dialects =
+        all_dialects_where(|d| !d.supports_map_literal_with_angle_brackets());
+    for dialect in unsupported_dialects.dialects {
+        assert!(TestedDialects::new(vec![dialect])
+            .parse_sql_statements(sql)
+            .is_err());
+    }
+}
+
+#[test]
+fn parse_long_type_as_bigint() {
+    all_dialects_where(|d| d.supports_long_type_as_bigint())
+        .one_statement_parses_to("CREATE TABLE t (id LONG)", "CREATE TABLE t (id BIGINT)");
+
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_long_type_as_bigint());
+    unsupported_dialects.verified_stmt("CREATE TABLE t (id LONG)");
+}

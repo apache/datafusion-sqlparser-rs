@@ -780,6 +780,16 @@ fn parse_create_table_with_nested_data_types() {
 }
 
 #[test]
+fn reject_angle_bracket_array_type() {
+    assert_eq!(
+        clickhouse()
+            .parse_sql_statements("CREATE TABLE t (a ARRAY<INT>)")
+            .unwrap_err(),
+        ParserError("Expected: (, found: <".to_string())
+    );
+}
+
+#[test]
 fn parse_create_table_with_primary_key() {
     match clickhouse_and_generic().verified_stmt(concat!(
         r#"CREATE TABLE db.table (`i` INT, `k` INT)"#,
@@ -1867,6 +1877,44 @@ fn parse_in_unparenthesized_dictionary_placeholder() {
     clickhouse().verified_expr("x IN ({ids: Array(UInt64)})");
     // Precedence: the trailing `AND` is not swallowed.
     clickhouse().verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
+}
+
+#[test]
+fn parse_alter_table_column_position() {
+    clickhouse().verified_stmt("ALTER TABLE t ADD COLUMN c Nullable(UInt8) FIRST");
+    clickhouse().verified_stmt("ALTER TABLE t ADD COLUMN c UInt8 DEFAULT 0 AFTER a");
+    clickhouse().verified_stmt("ALTER TABLE t ON CLUSTER cl ADD COLUMN c UInt8 AFTER a");
+    clickhouse().verified_stmt("ALTER TABLE t MODIFY COLUMN c UInt16 FIRST");
+    clickhouse().verified_stmt("ALTER TABLE t ADD COLUMN c UInt8 AFTER `order`");
+    clickhouse().verified_stmt(r#"ALTER TABLE t ADD COLUMN c UInt8 AFTER "order""#);
+
+    match clickhouse()
+        .verified_stmt("ALTER TABLE t ADD COLUMN c UInt8 FIRST, ADD COLUMN d UInt8 AFTER c")
+    {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            let positions: Vec<_> = operations
+                .into_iter()
+                .map(|op| match op {
+                    AlterTableOperation::AddColumn {
+                        column_position, ..
+                    } => column_position,
+                    _ => unreachable!(),
+                })
+                .collect();
+            assert_eq!(
+                positions,
+                vec![
+                    Some(MySQLColumnPosition::First),
+                    Some(MySQLColumnPosition::After(Ident::new("c"))),
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    assert!(clickhouse()
+        .parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER")
+        .is_err());
 }
 
 fn clickhouse() -> TestedDialects {

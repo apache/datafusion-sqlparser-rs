@@ -1,0 +1,1 @@
+SELECT AVG(UserID) FROM test.hits

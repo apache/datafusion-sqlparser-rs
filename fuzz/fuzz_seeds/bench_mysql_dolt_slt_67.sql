@@ -1,0 +1,1 @@
+INSERT INTO twocolumn(x, y) VALUES (44,51), (NULL,52), (42,53), (45,45)

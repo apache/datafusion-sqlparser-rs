@@ -3140,6 +3140,21 @@ impl<'a> Parser<'a> {
                 trim_where = Some(self.parse_trim_where()?);
             }
         }
+        if self.dialect.supports_comma_separated_trim() && self.parse_keyword(Keyword::FROM) {
+            let expr = self.parse_expr()?;
+            let trim_characters = if self.consume_token(&Token::Comma) {
+                Some(self.parse_comma_separated(Parser::parse_expr)?)
+            } else {
+                None
+            };
+            self.expect_token(&Token::RParen)?;
+            return Ok(Expr::Trim {
+                expr: Box::new(expr),
+                trim_where,
+                trim_what: None,
+                trim_characters,
+            });
+        }
         let expr = self.parse_expr()?;
         if self.parse_keyword(Keyword::FROM) {
             let trim_what = Box::new(expr);
@@ -3157,7 +3172,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             Ok(Expr::Trim {
                 expr: Box::new(expr),
-                trim_where: None,
+                trim_where,
                 trim_what: None,
                 trim_characters: Some(characters),
             })
@@ -13159,12 +13174,30 @@ impl<'a> Parser<'a> {
                 Keyword::ENUM16 => Ok(DataType::Enum(self.parse_enum_values()?, Some(16))),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
-                    if self.dialect.supports_array_typedef_without_element_type() {
+                    if self.dialect.supports_array_typedef_with_parentheses() {
+                        if self.peek_token_ref().token == Token::LParen {
+                            self.expect_token(&Token::LParen)?;
+                            let internal_type = self.parse_data_type()?;
+                            let not_null = self.dialect.supports_array_element_not_null()
+                                && self.parse_keywords(&[Keyword::NOT, Keyword::NULL]);
+                            self.expect_token(&Token::RParen)?;
+
+                            if not_null {
+                                Ok(DataType::Array(ArrayElemTypeDef::ParenthesisNotNull(
+                                    Box::new(internal_type),
+                                )))
+                            } else {
+                                Ok(DataType::Array(ArrayElemTypeDef::Parenthesis(Box::new(
+                                    internal_type,
+                                ))))
+                            }
+                        } else if self.dialect.supports_array_typedef_without_element_type() {
+                            Ok(DataType::Array(ArrayElemTypeDef::None))
+                        } else {
+                            self.expected("(", self.peek_token())
+                        }
+                    } else if self.dialect.supports_array_typedef_without_element_type() {
                         Ok(DataType::Array(ArrayElemTypeDef::None))
-                    } else if dialect_of!(self is ClickHouseDialect) {
-                        Ok(self.parse_sub_type(|internal_type| {
-                            DataType::Array(ArrayElemTypeDef::Parenthesis(internal_type))
-                        })?)
                     } else {
                         self.expect_token(&Token::Lt)?;
                         let (inside_type, _trailing_bracket) = self.parse_data_type_helper()?;

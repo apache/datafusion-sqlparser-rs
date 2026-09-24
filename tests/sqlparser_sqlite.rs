@@ -957,6 +957,17 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn test_non_bmp_identifiers() {
+    // SQLite tokenizer treats every byte >= 0x80 as an identifier character,
+    // so any Unicode code point above U+007F is a valid identifier start/part.
+    sqlite().verified_stmt("SELECT 󟿾");
+    sqlite().verified_stmt("SELECT 𒀀");
+    sqlite().verified_stmt("SELECT 𒀀𒀁");
+    // U+DFFFE is not alphabetic, so GenericDialect rejects it as an identifier.
+    assert!(sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "SELECT 󟿾").is_err());
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

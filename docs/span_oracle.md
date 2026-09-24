@@ -32,6 +32,7 @@ With `--all-features`, every SQL string a test parses through `TestedDialects` a
 | | | `invalid` | lies outside the input or is inverted |
 | | | `outside-parent` | not inside the nearest ancestor span |
 | `reparse` | `Statement`, `Query`, `Select`, `TableFactor`, `Expr`, `OrderByExpr`, `ValueWithSpan`, `Ident`, `ObjectName` | `inexact` | the source under the span does not parse back to the node |
+| `edges` | every other node that renders text | `start`, `end`, `both` | the source under the span starts or ends on a different token than the rendering |
 
 The oracle runs with `--all-features` only, because the baseline stores node renderings and `bigdecimal` changes how numbers render.
 

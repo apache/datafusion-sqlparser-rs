@@ -2941,3 +2941,8 @@ fn parse_bracket_quoted_function_argument_name() {
         }])
     );
 }
+
+#[test]
+fn parse_bracket_quoted_eq_alias_assignment() {
+    ms().one_statement_parses_to("SELECT a = [from] FROM t", "SELECT [from] AS a FROM t");
+}

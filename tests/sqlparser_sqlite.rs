@@ -25,6 +25,7 @@ mod test_utils;
 use sqlparser::keywords::Keyword;
 use test_utils::*;
 
+use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
@@ -480,27 +481,34 @@ fn parse_window_function_with_filter() {
         assert_eq!(select.to_string(), sql);
         assert_eq!(
             select.projection,
-            vec![SelectItem::UnnamedExpr(Expr::Function(Function {
-                name: ObjectName::from(vec![Ident::new(func_name)]),
-                uses_odbc_syntax: false,
-                parameters: FunctionArguments::None,
-                args: FunctionArguments::List(FunctionArgumentList {
-                    duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("x"))
-                    ))],
-                    clauses: vec![],
-                }),
-                null_treatment: None,
-                over: Some(WindowType::WindowSpec(WindowSpec {
-                    window_name: None,
-                    partition_by: vec![],
-                    order_by: vec![],
-                    window_frame: None,
-                })),
-                filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
-                within_group: vec![],
-            }))]
+            vec![SelectItem::UnnamedExpr(Expr::Function(
+                Function {
+                    name: ObjectName::from(vec![Ident::new(func_name)]),
+                    uses_odbc_syntax: false,
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(
+                        FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("x"))
+                            ))],
+                            clauses: vec![],
+                        }
+                        .into()
+                    ),
+                    null_treatment: None,
+                    over: Some(WindowType::WindowSpec(WindowSpec {
+                        window_name: None,
+                        partition_by: vec![],
+                        order_by: vec![],
+                        window_frame: None,
+                    })),
+                    filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
+                    within_group: vec![],
+                    end_token: AttachedToken::empty(),
+                }
+                .into()
+            ))]
         );
     }
 }

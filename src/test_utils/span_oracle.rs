@@ -769,7 +769,7 @@ mod tests {
 
     #[test]
     fn child_outside_parent_fails_structure() {
-        let found = findings_of("SELECT ROW_NUMBER() OVER (ORDER BY a) FROM t");
+        let found = findings_of("SELECT a FROM t WINDOW w AS (ORDER BY a)");
         assert!(has(&found, "structure", "outside-parent", "a"));
     }
 

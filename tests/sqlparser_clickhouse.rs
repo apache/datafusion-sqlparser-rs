@@ -194,20 +194,27 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
+        &Expr::Function(
+            Function {
+                name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(
+                    FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![],
+                        clauses: vec![],
+                    }
+                    .into()
+                ),
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+                end_token: AttachedToken::empty(),
+            }
+            .into()
+        ),
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
@@ -877,13 +884,16 @@ fn parse_create_table_with_primary_key() {
                 assert_eq!(actual.name, ObjectName::from(vec![Ident::new(name)]));
                 assert_eq!(
                     actual.args,
-                    FunctionArguments::List(FunctionArgumentList {
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
-                            Ident::new(arg)
-                        )),)],
-                        duplicate_treatment: None,
-                        clauses: vec![],
-                    })
+                    FunctionArguments::List(
+                        FunctionArgumentList {
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
+                                Ident::new(arg)
+                            )),)],
+                            duplicate_treatment: None,
+                            clauses: vec![],
+                        }
+                        .into()
+                    )
                 );
                 true
             }
@@ -934,20 +944,27 @@ fn parse_create_table_with_variant_default_expressions() {
                         data_type: DataType::Datetime(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Materialized(Expr::Function(Function {
-                                name: ObjectName::from(vec![Ident::new("now")]),
-                                uses_odbc_syntax: false,
-                                args: FunctionArguments::List(FunctionArgumentList {
-                                    args: vec![],
-                                    duplicate_treatment: None,
-                                    clauses: vec![],
-                                }),
-                                parameters: FunctionArguments::None,
-                                null_treatment: None,
-                                filter: None,
-                                over: None,
-                                within_group: vec![],
-                            }))
+                            option: ColumnOption::Materialized(Expr::Function(
+                                Function {
+                                    name: ObjectName::from(vec![Ident::new("now")]),
+                                    uses_odbc_syntax: false,
+                                    args: FunctionArguments::List(
+                                        FunctionArgumentList {
+                                            args: vec![],
+                                            duplicate_treatment: None,
+                                            clauses: vec![],
+                                        }
+                                        .into()
+                                    ),
+                                    parameters: FunctionArguments::None,
+                                    null_treatment: None,
+                                    filter: None,
+                                    over: None,
+                                    within_group: vec![],
+                                    end_token: AttachedToken::empty(),
+                                }
+                                .into()
+                            ))
                         }],
                     },
                     ColumnDef {
@@ -955,20 +972,27 @@ fn parse_create_table_with_variant_default_expressions() {
                         data_type: DataType::Datetime(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
-                                name: ObjectName::from(vec![Ident::new("now")]),
-                                uses_odbc_syntax: false,
-                                args: FunctionArguments::List(FunctionArgumentList {
-                                    args: vec![],
-                                    duplicate_treatment: None,
-                                    clauses: vec![],
-                                }),
-                                parameters: FunctionArguments::None,
-                                null_treatment: None,
-                                filter: None,
-                                over: None,
-                                within_group: vec![],
-                            })))
+                            option: ColumnOption::Ephemeral(Some(Expr::Function(
+                                Function {
+                                    name: ObjectName::from(vec![Ident::new("now")]),
+                                    uses_odbc_syntax: false,
+                                    args: FunctionArguments::List(
+                                        FunctionArgumentList {
+                                            args: vec![],
+                                            duplicate_treatment: None,
+                                            clauses: vec![],
+                                        }
+                                        .into()
+                                    ),
+                                    parameters: FunctionArguments::None,
+                                    null_treatment: None,
+                                    filter: None,
+                                    over: None,
+                                    within_group: vec![],
+                                    end_token: AttachedToken::empty(),
+                                }
+                                .into()
+                            )))
                         }],
                     },
                     ColumnDef {
@@ -984,22 +1008,29 @@ fn parse_create_table_with_variant_default_expressions() {
                         data_type: DataType::String(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Alias(Expr::Function(Function {
-                                name: ObjectName::from(vec![Ident::new("toString")]),
-                                uses_odbc_syntax: false,
-                                args: FunctionArguments::List(FunctionArgumentList {
-                                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                        Identifier(Ident::new("c"))
-                                    ))],
-                                    duplicate_treatment: None,
-                                    clauses: vec![],
-                                }),
-                                parameters: FunctionArguments::None,
-                                null_treatment: None,
-                                filter: None,
-                                over: None,
-                                within_group: vec![],
-                            }))
+                            option: ColumnOption::Alias(Expr::Function(
+                                Function {
+                                    name: ObjectName::from(vec![Ident::new("toString")]),
+                                    uses_odbc_syntax: false,
+                                    args: FunctionArguments::List(
+                                        FunctionArgumentList {
+                                            args: vec![FunctionArg::Unnamed(
+                                                FunctionArgExpr::Expr(Identifier(Ident::new("c")))
+                                            )],
+                                            duplicate_treatment: None,
+                                            clauses: vec![],
+                                        }
+                                        .into()
+                                    ),
+                                    parameters: FunctionArguments::None,
+                                    null_treatment: None,
+                                    filter: None,
+                                    over: None,
+                                    within_group: vec![],
+                                    end_token: AttachedToken::empty(),
+                                }
+                                .into()
+                            ))
                         }],
                     }
                 ]

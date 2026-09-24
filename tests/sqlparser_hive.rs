@@ -20,6 +20,7 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
+use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::{
     ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
     Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OrderByExpr,
@@ -507,20 +508,27 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
+        &Expr::Function(
+            Function {
+                name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(
+                    FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![],
+                        clauses: vec![],
+                    }
+                    .into()
+                ),
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+                end_token: AttachedToken::empty(),
+            }
+            .into()
+        ),
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {

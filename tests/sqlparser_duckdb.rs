@@ -675,35 +675,42 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
     let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
     let select = duckdb_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::new("FUN")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![
-                    FunctionArg::Named {
-                        name: Ident::new("a"),
-                        arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("1".to_owned())).with_empty_span()
-                        )),
-                        operator: FunctionArgOperator::Assignment
-                    },
-                    FunctionArg::Named {
-                        name: Ident::new("b"),
-                        arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("2".to_owned())).with_empty_span()
-                        )),
-                        operator: FunctionArgOperator::Assignment
-                    },
-                ],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
+        &Expr::Function(
+            Function {
+                name: ObjectName::from(vec![Ident::new("FUN")]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(
+                    FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Named {
+                                name: Ident::new("a"),
+                                arg: FunctionArgExpr::Expr(Expr::Value(
+                                    (Value::SingleQuotedString("1".to_owned())).with_empty_span()
+                                )),
+                                operator: FunctionArgOperator::Assignment
+                            },
+                            FunctionArg::Named {
+                                name: Ident::new("b"),
+                                arg: FunctionArgExpr::Expr(Expr::Value(
+                                    (Value::SingleQuotedString("2".to_owned())).with_empty_span()
+                                )),
+                                operator: FunctionArgOperator::Assignment
+                            },
+                        ],
+                        clauses: vec![],
+                    }
+                    .into()
+                ),
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+                end_token: AttachedToken::empty(),
+            }
+            .into()
+        ),
         expr_from_projection(only(&select.projection))
     );
 }

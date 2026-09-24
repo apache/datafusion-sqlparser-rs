@@ -1881,7 +1881,7 @@ impl Spanned for Array {
 
 /// # partial span
 ///
-/// The span of [FunctionArguments::None] is empty.
+/// The braces of an ODBC call such as `{fn f(1)}` are outside the span.
 impl Spanned for Function {
     fn span(&self) -> Span {
         let Function {
@@ -1893,6 +1893,7 @@ impl Spanned for Function {
             null_treatment: _, // enum
             over: _,           // todo
             within_group,
+            end_token,
         } = self;
 
         union_spans(
@@ -1902,7 +1903,8 @@ impl Spanned for Function {
                 .chain(iter::once(args.span()))
                 .chain(iter::once(parameters.span()))
                 .chain(filter.iter().map(|i| i.span()))
-                .chain(within_group.iter().map(|i| i.span())),
+                .chain(within_group.iter().map(|i| i.span()))
+                .chain(iter::once(end_token.0.span)),
         )
     }
 }
@@ -3226,6 +3228,39 @@ WHERE id = 1
         assert_eq!(
             stmt_span,
             Span::new(Location::new(2, 8), Location::new(4, 52))
+        );
+    }
+
+    #[test]
+    fn test_function_spans() {
+        for sql in [
+            "f(a, b)",
+            "COUNT(*) FILTER (WHERE i > 0)",
+            "ARRAY_AGG(x) WITHIN GROUP (ORDER BY x)",
+            "FIRST_VALUE(x) IGNORE NULLS",
+            "ROW_NUMBER() OVER (PARTITION BY a)",
+            "ARRAY(SELECT 1)",
+        ] {
+            let expr = Parser::new(&GenericDialect)
+                .try_with_sql(sql)
+                .unwrap()
+                .parse_expr()
+                .unwrap();
+            let end = Location::new(1, u64::try_from(sql.len()).unwrap() + 1);
+            assert_eq!(expr.span(), Span::new(Location::new(1, 1), end), "{sql}");
+        }
+
+        let Expr::Function(f) = Parser::new(&GenericDialect)
+            .try_with_sql("f(a, b)")
+            .unwrap()
+            .parse_expr()
+            .unwrap()
+        else {
+            panic!("not a function");
+        };
+        assert_eq!(
+            f.args.span(),
+            Span::new(Location::new(1, 2), Location::new(1, 8))
         );
     }
 }

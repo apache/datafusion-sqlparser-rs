@@ -282,6 +282,12 @@ impl<T> Parens<T> {
     }
 }
 
+impl<T> From<T> for Parens<T> {
+    fn from(content: T) -> Self {
+        Self::with_empty_span(content)
+    }
+}
+
 impl<T> Deref for Parens<T> {
     type Target = T;
 
@@ -1321,7 +1327,7 @@ pub enum Expr {
     /// as well as constants of other types (a non-standard PostgreSQL extension).
     TypedString(TypedString),
     /// Scalar function call e.g. `LEFT(foo, 5)`
-    Function(Function),
+    Function(Box<Function>),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -7904,6 +7910,8 @@ pub struct Function {
     pub null_treatment: Option<NullTreatment>,
     /// The `OVER` clause, indicating a window function call.
     pub over: Option<WindowType>,
+    /// The last token of the call.
+    pub end_token: AttachedToken,
 }
 
 impl fmt::Display for Function {
@@ -7953,18 +7961,18 @@ pub enum FunctionArguments {
     None,
     /// On some dialects, a subquery can be passed without surrounding
     /// parentheses if it's the sole argument to the function.
-    Subquery(Box<Query>),
+    Subquery(Parens<Box<Query>>),
     /// A normal function argument list, including any clauses within it such as
     /// `DISTINCT` or `ORDER BY`.
-    List(FunctionArgumentList),
+    List(Parens<FunctionArgumentList>),
 }
 
 impl fmt::Display for FunctionArguments {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FunctionArguments::None => Ok(()),
-            FunctionArguments::Subquery(query) => write!(f, "({query})"),
-            FunctionArguments::List(args) => write!(f, "({args})"),
+            FunctionArguments::Subquery(query) => write!(f, "({})", query.content),
+            FunctionArguments::List(args) => write!(f, "({})", args.content),
         }
     }
 }

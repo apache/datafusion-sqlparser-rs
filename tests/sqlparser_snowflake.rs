@@ -19,6 +19,7 @@
 //! Test SQL syntax specific to Snowflake. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
+use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionKind};
 use sqlparser::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageLoadSelectItemKind};
 use sqlparser::ast::*;
@@ -622,22 +623,29 @@ fn test_snowflake_create_table_cluster_by() {
                 Some(WrappedCollection::Parentheses(vec![
                     Expr::Identifier(Ident::new("a")),
                     Expr::Identifier(Ident::new("b")),
-                    Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("my_func")]),
-                        uses_odbc_syntax: false,
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c"))
-                            ))],
-                            duplicate_treatment: None,
-                            clauses: vec![],
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![],
-                    }),
+                    Expr::Function(
+                        Function {
+                            name: ObjectName::from(vec![Ident::new("my_func")]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(
+                                FunctionArgumentList {
+                                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::Identifier(Ident::new("c"))
+                                    ))],
+                                    duplicate_treatment: None,
+                                    clauses: vec![],
+                                }
+                                .into()
+                            ),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                            end_token: AttachedToken::empty(),
+                        }
+                        .into()
+                    ),
                 ])),
                 cluster_by
             )
@@ -1554,20 +1562,27 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            filter: None,
-            null_treatment: None,
-            over: None,
-            within_group: vec![],
-        }),
+        &Expr::Function(
+            Function {
+                name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(
+                    FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![],
+                        clauses: vec![],
+                    }
+                    .into()
+                ),
+                filter: None,
+                null_treatment: None,
+                over: None,
+                within_group: vec![],
+                end_token: AttachedToken::empty(),
+            }
+            .into()
+        ),
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
@@ -1772,22 +1787,29 @@ fn test_alter_table_clustering() {
                 [
                     Expr::Identifier(Ident::new("c1")),
                     Expr::Identifier(Ident::with_quote('"', "c2")),
-                    Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("TO_DATE")]),
-                        uses_odbc_syntax: false,
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c3"))
-                            ))],
-                            duplicate_treatment: None,
-                            clauses: vec![],
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![]
-                    })
+                    Expr::Function(
+                        Function {
+                            name: ObjectName::from(vec![Ident::new("TO_DATE")]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(
+                                FunctionArgumentList {
+                                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::Identifier(Ident::new("c3"))
+                                    ))],
+                                    duplicate_treatment: None,
+                                    clauses: vec![],
+                                }
+                                .into()
+                            ),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                            end_token: AttachedToken::empty(),
+                        }
+                        .into()
+                    )
                 ],
             );
         }
@@ -4977,17 +4999,21 @@ fn test_snowflake_identifier_function() {
         .verified_only_select("SELECT identifier('email') FROM customers")
         .projection[0]
     {
-        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
+        SelectItem::UnnamedExpr(Expr::Function(f)) => {
+            let Function { name, args, .. } = &**f;
             assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
             assert_eq!(
                 *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("email".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
+                FunctionArguments::List(
+                    FunctionArgumentList {
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("email".to_string()).into()
+                        )))],
+                        clauses: vec![],
+                        duplicate_treatment: None
+                    }
+                    .into()
+                )
             );
         }
         _ => unreachable!(),
@@ -4998,17 +5024,21 @@ fn test_snowflake_identifier_function() {
         .verified_only_select(r#"SELECT identifier('"Email"') FROM customers"#)
         .projection[0]
     {
-        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
+        SelectItem::UnnamedExpr(Expr::Function(f)) => {
+            let Function { name, args, .. } = &**f;
             assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
             assert_eq!(
                 *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("\"Email\"".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
+                FunctionArguments::List(
+                    FunctionArgumentList {
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("\"Email\"".to_string()).into()
+                        )))],
+                        clauses: vec![],
+                        duplicate_treatment: None
+                    }
+                    .into()
+                )
             );
         }
         _ => unreachable!(),
@@ -5020,19 +5050,23 @@ fn test_snowflake_identifier_function() {
         .projection[0]
     {
         SelectItem::QualifiedWildcard(
-            SelectItemQualifiedWildcardKind::Expr(Expr::Function(Function { name, args, .. })),
+            SelectItemQualifiedWildcardKind::Expr(Expr::Function(f)),
             _,
         ) => {
+            let Function { name, args, .. } = &**f;
             assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
             assert_eq!(
                 *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("alias1".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
+                FunctionArguments::List(
+                    FunctionArgumentList {
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("alias1".to_string()).into()
+                        )))],
+                        clauses: vec![],
+                        duplicate_treatment: None
+                    }
+                    .into()
+                )
             );
         }
         _ => unreachable!(),

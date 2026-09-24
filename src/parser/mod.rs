@@ -618,18 +618,16 @@ impl<'a> Parser<'a> {
 
     /// Records `start` and the last consumed token as the statement's first and last token.
     fn set_statement_tokens(&self, statement: &mut Statement, start: TokenWithSpan) {
-        if let Some(end) = self.last_statement_token() {
-            let (start_token, end_token) = statement.tokens_mut();
-            *start_token = AttachedToken(start);
-            *end_token = AttachedToken(end);
-        }
+        let end = self.last_consumed_token();
+        let (start_token, end_token) = statement.tokens_mut();
+        *start_token = AttachedToken(start);
+        *end_token = end;
     }
 
     /// The last consumed token that is not whitespace, a `;` or the end of input, which
-    /// some statement parsers consume while looking for optional clauses.
-    fn last_statement_token(&self) -> Option<TokenWithSpan> {
-        self.tokens
-            .get(..self.index.min(self.tokens.len()))?
+    /// some parsers consume while looking for optional clauses.
+    fn last_consumed_token(&self) -> AttachedToken {
+        self.tokens[..self.index.min(self.tokens.len())]
             .iter()
             .rev()
             .find(|t| {
@@ -638,7 +636,7 @@ impl<'a> Parser<'a> {
                     Token::Whitespace(_) | Token::SemiColon | Token::EOF
                 )
             })
-            .cloned()
+            .map_or_else(AttachedToken::empty, |t| AttachedToken(t.clone()))
     }
 
     fn parse_statement_body(&mut self) -> Result<Statement, ParserError> {
@@ -1608,7 +1606,8 @@ impl<'a> Parser<'a> {
                         filter: None,
                         over: None,
                         within_group: vec![],
-                    })))
+                        end_token: self.last_consumed_token(),
+                    }.into())))
                 }
             Keyword::CURRENT_TIMESTAMP
             | Keyword::CURRENT_TIME
@@ -1658,19 +1657,22 @@ impl<'a> Parser<'a> {
             if self.peek_token_ref().token == Token::LParen
                 && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
                 {
-                    self.expect_token(&Token::LParen)?;
-                    let query = self.parse_query()?;
-                    self.expect_token(&Token::RParen)?;
+                    let args = Parens {
+                        opening_token: self.expect_token(&Token::LParen)?.into(),
+                        content: self.parse_query()?,
+                        closing_token: self.expect_token(&Token::RParen)?.into(),
+                    };
                     Ok(Some(Expr::Function(Function {
                         name: ObjectName::from(vec![w.to_ident(w_span)]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
-                        args: FunctionArguments::Subquery(query),
+                        args: FunctionArguments::Subquery(args),
                         filter: None,
                         null_treatment: None,
                         over: None,
                         within_group: vec![],
-                    })))
+                        end_token: self.last_consumed_token(),
+                    }.into())))
                 }
             Keyword::NOT => Ok(Some(self.parse_not()?)),
             Keyword::MATCH if self.dialect.supports_match_against() => {
@@ -2577,7 +2579,7 @@ impl<'a> Parser<'a> {
             let fn_name = p.parse_object_name(false)?;
             let mut fn_call = p.parse_function_call(fn_name)?;
             fn_call.uses_odbc_syntax = true;
-            Ok(Expr::Function(fn_call))
+            Ok(Expr::Function(Box::new(fn_call)))
         })
     }
 
@@ -2600,17 +2602,21 @@ impl<'a> Parser<'a> {
 
     /// Parse a function call expression named by `name` and return it as an `Expr`.
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
-        self.parse_function_call(name).map(Expr::Function)
+        self.parse_function_call(name)
+            .map(|f| Expr::Function(Box::new(f)))
     }
 
     fn parse_function_call(&mut self, name: ObjectName) -> Result<Function, ParserError> {
-        self.expect_token(&Token::LParen)?;
+        let opening_token = self.expect_token(&Token::LParen)?;
 
         // Snowflake permits a subquery to be passed as an argument without
         // an enclosing set of parens if it's the only argument.
         if self.dialect.supports_subquery_as_function_arg() && self.peek_sub_query() {
-            let subquery = self.parse_query()?;
-            self.expect_token(&Token::RParen)?;
+            let subquery = Parens {
+                opening_token: opening_token.into(),
+                content: self.parse_query()?,
+                closing_token: self.expect_token(&Token::RParen)?.into(),
+            };
             return Ok(Function {
                 name,
                 uses_odbc_syntax: false,
@@ -2620,15 +2626,21 @@ impl<'a> Parser<'a> {
                 null_treatment: None,
                 over: None,
                 within_group: vec![],
+                end_token: self.last_consumed_token(),
             });
         }
 
-        let mut args = if self.dialect.supports_xml_expressions()
+        let content = if self.dialect.supports_xml_expressions()
             && Self::is_simple_unquoted_object_name(&name, "xmlparse")
         {
             self.parse_xmlparse_argument_list()?
         } else {
             self.parse_function_argument_list()?
+        };
+        let mut args = Parens {
+            opening_token: opening_token.into(),
+            content,
+            closing_token: self.get_current_token().clone().into(),
         };
         let mut parameters = FunctionArguments::None;
         // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
@@ -2636,8 +2648,13 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is ClickHouseDialect | GenericDialect)
             && self.consume_token(&Token::LParen)
         {
+            let opening_token = self.get_current_token().clone();
             parameters = FunctionArguments::List(args);
-            args = self.parse_function_argument_list()?;
+            args = Parens {
+                opening_token: opening_token.into(),
+                content: self.parse_function_argument_list()?,
+                closing_token: self.get_current_token().clone().into(),
+            };
         }
 
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
@@ -2694,6 +2711,7 @@ impl<'a> Parser<'a> {
             filter,
             over,
             within_group,
+            end_token: self.last_consumed_token(),
         })
     }
 
@@ -2716,20 +2734,29 @@ impl<'a> Parser<'a> {
     /// Parse time-related function `name` possibly followed by `(...)` arguments.
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         let args = if self.consume_token(&Token::LParen) {
-            FunctionArguments::List(self.parse_function_argument_list()?)
+            let opening_token = self.get_current_token().clone();
+            FunctionArguments::List(Parens {
+                opening_token: opening_token.into(),
+                content: self.parse_function_argument_list()?,
+                closing_token: self.get_current_token().clone().into(),
+            })
         } else {
             FunctionArguments::None
         };
-        Ok(Expr::Function(Function {
-            name,
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args,
-            filter: None,
-            over: None,
-            null_treatment: None,
-            within_group: vec![],
-        }))
+        Ok(Expr::Function(
+            Function {
+                name,
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args,
+                filter: None,
+                over: None,
+                null_treatment: None,
+                within_group: vec![],
+                end_token: self.last_consumed_token(),
+            }
+            .into(),
+        ))
     }
 
     /// Parse window frame `UNITS` clause: `ROWS`, `RANGE`, or `GROUPS`.
@@ -12091,7 +12118,7 @@ impl<'a> Parser<'a> {
         let object_name = self.parse_object_name(false)?;
         if self.peek_token_ref().token == Token::LParen {
             match self.parse_function(object_name)? {
-                Expr::Function(f) => Ok(Statement::Call(f.into())),
+                Expr::Function(f) => Ok(Statement::Call((*f).into())),
                 other => parser_err!(
                     format!("Expected a simple procedure call but found: {other}"),
                     self.peek_token_ref().span.start
@@ -12108,6 +12135,7 @@ impl<'a> Parser<'a> {
                     filter: None,
                     null_treatment: None,
                     within_group: vec![],
+                    end_token: self.last_consumed_token(),
                 }
                 .into(),
             ))
@@ -14976,7 +15004,10 @@ impl<'a> Parser<'a> {
                     let function_expr = self.parse_function(function_name)?;
                     if let Expr::Function(function) = function_expr {
                         let alias = self.parse_identifier_optional_alias()?;
-                        pipe_operators.push(PipeOperator::Call { function, alias });
+                        pipe_operators.push(PipeOperator::Call {
+                            function: *function,
+                            alias,
+                        });
                     } else {
                         return Err(ParserError::ParserError(
                             "Expected function call after CALL".to_string(),
@@ -17790,11 +17821,12 @@ impl<'a> Parser<'a> {
 
     /// Parses a plain function call with an optional alias for the `PIVOT` clause
     fn parse_pivot_aggregate_function(&mut self) -> Result<ExprWithAlias, ParserError> {
-        let function_name = match self.next_token().token {
-            Token::Word(w) => Ok(w.value),
+        let next_token = self.next_token();
+        let function_name = match next_token.token {
+            Token::Word(w) => Ok(Ident::with_span(next_token.span, w.value)),
             _ => self.expected_ref("a function identifier", self.peek_token_ref()),
         }?;
-        let expr = self.parse_function(ObjectName::from(vec![Ident::new(function_name)]))?;
+        let expr = self.parse_function(ObjectName::from(vec![function_name]))?;
         let alias = {
             fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
                 // ~ for a PIVOT aggregate function the alias must not be a "FOR"; in any dialect

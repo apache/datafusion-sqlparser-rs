@@ -915,20 +915,27 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
+        &Expr::Function(
+            Function {
+                name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(
+                    FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![],
+                        clauses: vec![],
+                    }
+                    .into()
+                ),
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+                end_token: AttachedToken::empty(),
+            }
+            .into()
+        ),
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
@@ -1008,47 +1015,54 @@ fn parse_mssql_json_object() {
         "SELECT JSON_OBJECT('user_name' : USER_NAME(), LOWER(@id_key) : @id_value, 'sid' : (SELECT @@SPID) ABSENT ON NULL)",
     );
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert!(matches!(
-                args[0],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(ValueWithSpan {
-                        value: Value::SingleQuotedString(_),
-                        span: _
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, clauses, .. },
+                        ..
                     }),
-                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert!(matches!(
-                args[1],
-                FunctionArg::ExprNamed {
-                    name: Expr::Function(_),
-                    arg: FunctionArgExpr::Expr(Expr::Identifier(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert!(matches!(
-                args[2],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(ValueWithSpan {
-                        value: Value::SingleQuotedString(_),
-                        span: _
-                    }),
-                    arg: FunctionArgExpr::Expr(Expr::Subquery(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::AbsentOnNull
-                )],
-                &clauses[..]
-            );
-        }
+                ..
+            } => {
+                assert!(matches!(
+                    args[0],
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(ValueWithSpan {
+                            value: Value::SingleQuotedString(_),
+                            span: _
+                        }),
+                        arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ));
+                assert!(matches!(
+                    args[1],
+                    FunctionArg::ExprNamed {
+                        name: Expr::Function(_),
+                        arg: FunctionArgExpr::Expr(Expr::Identifier(_)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ));
+                assert!(matches!(
+                    args[2],
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(ValueWithSpan {
+                            value: Value::SingleQuotedString(_),
+                            span: _
+                        }),
+                        arg: FunctionArgExpr::Expr(Expr::Subquery(_)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ));
+                assert_eq!(
+                    &[FunctionArgumentClause::JsonNullClause(
+                        JsonNullClause::AbsentOnNull
+                    )],
+                    &clauses[..]
+                );
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select(
@@ -1058,47 +1072,53 @@ fn parse_mssql_json_object() {
     );
     match &select.projection[1] {
         SelectItem::ExprWithAlias {
-            expr:
-                Expr::Function(Function {
-                    args: FunctionArguments::List(FunctionArgumentList { args, .. }),
-                    ..
-                }),
+            expr: Expr::Function(f),
             ..
-        } => {
-            assert!(matches!(
-                args[0],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(ValueWithSpan {
-                        value: Value::SingleQuotedString(_),
-                        span: _
+        } => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, .. },
+                        ..
                     }),
-                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert!(matches!(
-                args[1],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(ValueWithSpan {
-                        value: Value::SingleQuotedString(_),
-                        span: _
-                    }),
-                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert!(matches!(
-                args[2],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(ValueWithSpan {
-                        value: Value::SingleQuotedString(_),
-                        span: _
-                    }),
-                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-        }
+                ..
+            } => {
+                assert!(matches!(
+                    args[0],
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(ValueWithSpan {
+                            value: Value::SingleQuotedString(_),
+                            span: _
+                        }),
+                        arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ));
+                assert!(matches!(
+                    args[1],
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(ValueWithSpan {
+                            value: Value::SingleQuotedString(_),
+                            span: _
+                        }),
+                        arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ));
+                assert!(matches!(
+                    args[2],
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(ValueWithSpan {
+                            value: Value::SingleQuotedString(_),
+                            span: _
+                        }),
+                        arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ));
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
 }
@@ -1107,173 +1127,222 @@ fn parse_mssql_json_object() {
 fn parse_mssql_json_array() {
     let select = ms().verified_only_select("SELECT JSON_ARRAY('a', 1, NULL, 2 NULL ON NULL)");
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &[
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::SingleQuotedString("a".into())).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("1")).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::Null).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("2")).with_empty_span()
-                    ))),
-                ],
-                &args[..]
-            );
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::NullOnNull
-                )],
-                &clauses[..]
-            );
-        }
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, clauses, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert_eq!(
+                    &[
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (Value::SingleQuotedString("a".into())).with_empty_span()
+                        ))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (number("1")).with_empty_span()
+                        ))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (Value::Null).with_empty_span()
+                        ))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (number("2")).with_empty_span()
+                        ))),
+                    ],
+                    &args[..]
+                );
+                assert_eq!(
+                    &[FunctionArgumentClause::JsonNullClause(
+                        JsonNullClause::NullOnNull
+                    )],
+                    &clauses[..]
+                );
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select("SELECT JSON_ARRAY('a', 1, NULL, 2 ABSENT ON NULL)");
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &[
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::SingleQuotedString("a".into())).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("1")).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::Null).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("2")).with_empty_span()
-                    ))),
-                ],
-                &args[..]
-            );
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::AbsentOnNull
-                )],
-                &clauses[..]
-            );
-        }
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, clauses, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert_eq!(
+                    &[
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (Value::SingleQuotedString("a".into())).with_empty_span()
+                        ))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (number("1")).with_empty_span()
+                        ))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (Value::Null).with_empty_span()
+                        ))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (number("2")).with_empty_span()
+                        ))),
+                    ],
+                    &args[..]
+                );
+                assert_eq!(
+                    &[FunctionArgumentClause::JsonNullClause(
+                        JsonNullClause::AbsentOnNull
+                    )],
+                    &clauses[..]
+                );
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select("SELECT JSON_ARRAY(NULL ON NULL)");
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert!(args.is_empty());
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::NullOnNull
-                )],
-                &clauses[..]
-            );
-        }
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, clauses, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert!(args.is_empty());
+                assert_eq!(
+                    &[FunctionArgumentClause::JsonNullClause(
+                        JsonNullClause::NullOnNull
+                    )],
+                    &clauses[..]
+                );
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select("SELECT JSON_ARRAY(ABSENT ON NULL)");
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert!(args.is_empty());
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::AbsentOnNull
-                )],
-                &clauses[..]
-            );
-        }
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, clauses, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert!(args.is_empty());
+                assert_eq!(
+                    &[FunctionArgumentClause::JsonNullClause(
+                        JsonNullClause::AbsentOnNull
+                    )],
+                    &clauses[..]
+                );
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select(
         "SELECT JSON_ARRAY('a', JSON_OBJECT('name' : 'value', 'type' : 1) NULL ON NULL)",
     );
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (Value::SingleQuotedString("a".into())).with_empty_span()
-                ))),
-                &args[0]
-            );
-            assert!(matches!(
-                args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
-            ));
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::NullOnNull
-                )],
-                &clauses[..]
-            );
-        }
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, clauses, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert_eq!(
+                    &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (Value::SingleQuotedString("a".into())).with_empty_span()
+                    ))),
+                    &args[0]
+                );
+                assert!(matches!(
+                    args[1],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+                ));
+                assert_eq!(
+                    &[FunctionArgumentClause::JsonNullClause(
+                        JsonNullClause::NullOnNull
+                    )],
+                    &clauses[..]
+                );
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select(
         "SELECT JSON_ARRAY('a', JSON_OBJECT('name' : 'value', 'type' : 1), JSON_ARRAY(1, NULL, 2 NULL ON NULL))",
     );
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (Value::SingleQuotedString("a".into())).with_empty_span()
-                ))),
-                &args[0]
-            );
-            assert!(matches!(
-                args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
-            ));
-            assert!(matches!(
-                args[2],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
-            ));
-        }
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert_eq!(
+                    &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (Value::SingleQuotedString("a".into())).with_empty_span()
+                    ))),
+                    &args[0]
+                );
+                assert!(matches!(
+                    args[1],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+                ));
+                assert!(matches!(
+                    args[2],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+                ));
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select("SELECT JSON_ARRAY(1, @id_value, (SELECT @@SPID))");
     match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (number("1")).with_empty_span()
-                ))),
-                &args[0]
-            );
-            assert!(matches!(
-                args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(_)))
-            ));
-            assert!(matches!(
-                args[2],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Subquery(_)))
-            ));
-        }
+        Expr::Function(f) => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert_eq!(
+                    &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (number("1")).with_empty_span()
+                    ))),
+                    &args[0]
+                );
+                assert!(matches!(
+                    args[1],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(_)))
+                ));
+                assert!(matches!(
+                    args[2],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Subquery(_)))
+                ));
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let select = ms().verified_only_select(
@@ -1283,32 +1352,38 @@ fn parse_mssql_json_array() {
     );
     match &select.projection[1] {
         SelectItem::ExprWithAlias {
-            expr:
-                Expr::Function(Function {
-                    args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-                    ..
-                }),
+            expr: Expr::Function(f),
             ..
-        } => {
-            assert!(matches!(
-                args[0],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
-            ));
-            assert!(matches!(
-                args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
-            ));
-            assert!(matches!(
-                args[2],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
-            ));
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::NullOnNull
-                )],
-                &clauses[..]
-            );
-        }
+        } => match &**f {
+            Function {
+                args:
+                    FunctionArguments::List(Parens {
+                        content: FunctionArgumentList { args, clauses, .. },
+                        ..
+                    }),
+                ..
+            } => {
+                assert!(matches!(
+                    args[0],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+                ));
+                assert!(matches!(
+                    args[1],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+                ));
+                assert!(matches!(
+                    args[2],
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+                ));
+                assert_eq!(
+                    &[FunctionArgumentClause::JsonNullClause(
+                        JsonNullClause::NullOnNull
+                    )],
+                    &clauses[..]
+                );
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
 }
@@ -1968,13 +2043,15 @@ fn parse_create_table_with_valid_options() {
                                         ),
                                     ],
                                     clauses: vec![],
-                                },
+                                }
+                                .into(),
                             ),
                             filter: None,
                             null_treatment: None,
                             over: None,
                             within_group: vec![],
-                        },
+                            end_token: AttachedToken::empty(),
+                        }.into(),
                     ),
                 },
                 SqlOption::Ident("HEAP".into()),

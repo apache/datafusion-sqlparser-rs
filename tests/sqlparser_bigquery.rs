@@ -2957,3 +2957,30 @@ fn parse_from_first_select() {
     bigquery().verified_stmt("FROM t SELECT a, b");
     bigquery().verified_stmt("FROM t |> WHERE a > 1 |> SELECT a");
 }
+
+#[test]
+fn test_byte_and_raw_string_quote_escaping() {
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    generic.verified_stmt("SELECT B''''");
+    generic.verified_stmt("SELECT B'it''s'");
+    generic.verified_stmt("SELECT B\"\"\"\"");
+    generic.verified_stmt(r#"SELECT B"it""s""#);
+    generic.verified_stmt("SELECT R'it''s'");
+    generic.verified_stmt(r#"SELECT R"it""s""#);
+    generic.verified_stmt("SELECT COUNSELECT AS name, B''''");
+
+    bigquery_and_generic().verified_stmt("SELECT B'it''s'");
+    bigquery_and_generic().verified_stmt(r#"SELECT B"it""s""#);
+    bigquery_and_generic().verified_stmt("SELECT R'it''s'");
+    bigquery_and_generic().verified_stmt(r#"SELECT R"it""s""#);
+
+    let err = generic
+        .parse_sql_statements("SELECT B'unterminated")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 9".to_string(),
+        ),
+        err
+    );
+}

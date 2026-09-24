@@ -4993,3 +4993,74 @@ fn test_snowflake_pipe_result_scan() {
         _ => panic!("expected Query"),
     }
 }
+
+#[test]
+fn test_structured_array_type() {
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE t (a ARRAY(VARCHAR))",
+        "CREATE TABLE t (a Array(VARCHAR))",
+    );
+    snowflake().one_statement_parses_to(
+        "SELECT CAST(a AS ARRAY(NUMBER(10, 2))) FROM t",
+        "SELECT CAST(a AS Array(NUMBER(10, 2))) FROM t",
+    );
+    snowflake().verified_stmt("CREATE TABLE t (a ARRAY(VARCHAR NOT NULL))");
+    let select =
+        snowflake().verified_only_select("SELECT CAST(a AS ARRAY(VARCHAR NOT NULL)) FROM t");
+    let Expr::Cast { data_type, .. } = expr_from_projection(only(&select.projection)) else {
+        unreachable!();
+    };
+    assert_eq!(
+        data_type,
+        &DataType::Array(ArrayElemTypeDef::ParenthesisNotNull(Box::new(
+            DataType::Varchar(None)
+        )))
+    );
+}
+
+#[test]
+fn test_snowflake_stage_name_with_escaped_quotes() {
+    snowflake().verified_stmt("REMOVE @````");
+    snowflake().one_statement_parses_to("RM @````", "REMOVE @````");
+    snowflake().verified_stmt(r#"REMOVE @"stage""name""#);
+}
+
+#[test]
+fn test_stage_name_delimiters() {
+    snowflake().verified_stmt("SELECT * FROM @stage1, @stage2");
+    snowflake().verified_stmt("SELECT * FROM @stage, my_table");
+    snowflake().verified_stmt("SELECT * FROM my_table, @stage");
+    snowflake().verified_stmt("SELECT * FROM @namespace.stage_name, item");
+    snowflake().verified_stmt("SELECT * FROM @stage(file_format => 'myformat'), my_table");
+    snowflake().verified_stmt("SELECT * FROM @stage AS s, my_table");
+    snowflake().verified_stmt("SELECT * FROM @stage s, my_table");
+    let stmts = snowflake()
+        .parse_sql_statements("SELECT * FROM @stage; SELECT 1")
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: EOF".to_string()),
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @;")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: ;".to_string()),
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @, item")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: ,".to_string()),
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM @.stage")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
+    );
+}

@@ -720,6 +720,9 @@ impl fmt::Display for DataType {
                 ArrayElemTypeDef::SquareBracket(t, Some(size)) => write!(f, "{t}[{size}]"),
                 ArrayElemTypeDef::AngleBracket(t) => write!(f, "ARRAY<{t}>"),
                 ArrayElemTypeDef::Parenthesis(t) => write!(f, "Array({t})"),
+                ArrayElemTypeDef::ParenthesisNotNull(t) => {
+                    write!(f, "ARRAY({t} NOT NULL)")
+                }
                 ArrayElemTypeDef::Qualified(t, None) => write!(f, "{t} ARRAY"),
                 ArrayElemTypeDef::Qualified(t, Some(size)) => write!(f, "{t} ARRAY[{size}]"),
             },
@@ -1165,6 +1168,8 @@ pub enum ArrayElemTypeDef {
     SquareBracket(Box<DataType>, Option<u64>),
     /// Parenthesis style, e.g. `Array(Int64)`.
     Parenthesis(Box<DataType>),
+    /// Parenthesis style with a non-null element constraint, e.g. `ARRAY(INT NOT NULL)`.
+    ParenthesisNotNull(Box<DataType>),
     /// Qualified by a data type and optional size, e.g. `INT ARRAY` or `INT ARRAY[4]`.
     Qualified(Box<DataType>, Option<u64>),
 }

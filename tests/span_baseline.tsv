@@ -849,10 +849,6 @@
 087b8c1ba5b9ac9e	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	reparse	inexact	Query	0	SELECT * FROM tbl |> DROP id, name
 087b8c1ba5b9ac9e	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	structure	outside-parent	Ident	0	id
 087b8c1ba5b9ac9e	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	structure	outside-parent	Ident	0	name
-089a95abf7d08438	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1;
-089a95abf7d08438	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1;
-089a95abf7d08438	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1;
-089a95abf7d08438	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1;
 08ac38fee4d6dcdd	4edff8487059a4e8	GenericDialect,SnowflakeDialect,DatabricksDialect	edges	end	SelectItem::UnnamedExpr	0	a:b::INT
 08ac38fee4d6dcdd	4edff8487059a4e8	GenericDialect,SnowflakeDialect,DatabricksDialect	reparse	inexact	Expr::Cast	0	a:b::INT
 08ac38fee4d6dcdd	4edff8487059a4e8	GenericDialect,SnowflakeDialect,DatabricksDialect	reparse	inexact	Expr::JsonAccess	0	a:b
@@ -5507,11 +5503,6 @@
 38330b468a0c9cdd	fdaf9332c09858cf	DuckDbDialect	structure	empty	ColumnOptionDef	0	UNIQUE NOT DEFERRABLE INITIALLY DEFERRED NOT ENFORCED
 38330b468a0c9cdd	fdaf9332c09858cf	DuckDbDialect	structure	empty	ConstraintCharacteristics	0	NOT DEFERRABLE INITIALLY DEFERRED NOT ENFORCED
 38330b468a0c9cdd	fdaf9332c09858cf	DuckDbDialect	structure	empty	UniqueConstraint	0	UNIQUE () NOT DEFERRABLE INITIALLY DEFERRED NOT ENFORCED
-3834747f4ee25867	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT '2';
-3834747f4ee25867	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatementBlock	0	IF 1 = 1 SELECT '1';
-3834747f4ee25867	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT '1';
-3834747f4ee25867	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT '2';
-3834747f4ee25867	4edff8487059a4e8	MsSqlDialect	edges	end	IfStatement	0	IF 1 = 1 SELECT '1'; ELSE SELECT '2';
 383960823ec027db	4edff8487059a4e8	SnowflakeDialect,GenericDialect	extent	empty	Statement::Grant	0	GRANT READ SESSION ON ACCOUNT TO ROLE role1
 383a257927e98754	4edff8487059a4e8	PostgreSqlDialect	extent	empty	Statement::CreateOperator	0	CREATE OPERATOR + (FUNCTION = f, COMMUTATOR = >, NEGATOR = >=)
 383a257927e98754	4edff8487059a4e8	PostgreSqlDialect	structure	empty	CreateOperator	0	CREATE OPERATOR + (FUNCTION = f, COMMUTATOR = >, NEGATOR = >=)
@@ -8293,17 +8284,7 @@
 556f1db8bcf7ee39	4edff8487059a4e8	DatabricksDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE t (name STRING) PARTITIONED BY (year INT)
 556f1db8bcf7ee39	4edff8487059a4e8	DatabricksDialect	structure	outside-parent	ColumnDef	0	year INT
 5593ec0647c03e71	4edff8487059a4e8	OracleDialect	edges	both	TableObject::TableQuery	0	(SELECT foo_t.id, foo_t.val FROM foo_t)
-559e898bafa7d6d8	28e8091b31745699	MsSqlDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 2;
-559e898bafa7d6d8	28e8091b31745699	MsSqlDialect	edges	end	ConditionalStatementBlock	0	IF x = 1 SELECT 1;
-559e898bafa7d6d8	28e8091b31745699	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1;
-559e898bafa7d6d8	28e8091b31745699	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 2;
-559e898bafa7d6d8	28e8091b31745699	MsSqlDialect	edges	end	IfStatement	0	IF x = 1 SELECT 1; ELSE SELECT 2;
-55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 'No';
-55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatementBlock	0	IF (SELECT COUNT(*) FROM a.b WHERE c LIKE 'x%') > 1 SELECT 'yes';
-55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 'No';
-55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 'yes';
 55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	edges	end	Function	0	COUNT(*)
-55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	edges	end	IfStatement	0	IF (SELECT COUNT(*) FROM a.b WHERE c LIKE 'x%') > 1 SELECT 'yes'; ELSE SELECT 'No';
 55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	edges	end	SelectItem::UnnamedExpr	0	COUNT(*)
 55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	reparse	inexact	Expr::BinaryOp	0	(SELECT COUNT(*) FROM a.b WHERE c LIKE 'x%') > 1
 55afcd61dd9c8e68	4edff8487059a4e8	MsSqlDialect	reparse	inexact	Expr::Function	0	COUNT(*)
@@ -8583,16 +8564,11 @@
 57ef33bef946f8c0	fdaf9332c09858cf	DuckDbDialect	extent	empty	Statement::Unload	0	UNLOAD('SELECT 1') TO 's3://...' IAM_ROLE 'arn:aws:iam::123456789:role/role1' PARTITION BY (c1, c2, c3) INCLUDE MANIFEST VERBOSE HEADER FIXEDWIDTH 'col1:1,col2:2' ENCRYPTED
 57ef33bef946f8c0	fdaf9332c09858cf	DuckDbDialect	structure	empty	Ident	0	's3://...'
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	both	FunctionArguments::List	0	(weekday, GETDATE())
-580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 'Weekday';
-580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatementBlock	0	IF DATENAME(weekday, GETDATE()) IN (N'Saturday', N'Sunday') SELECT 'Weekend';
-580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 'Weekday';
-580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 'Weekend';
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	Function	0	DATENAME(weekday, GETDATE())
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	Function	0	GETDATE()
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	FunctionArg::Unnamed	0	GETDATE()
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	FunctionArgExpr::Expr	0	GETDATE()
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	FunctionArgumentList	0	weekday, GETDATE()
-580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	edges	end	IfStatement	0	IF DATENAME(weekday, GETDATE()) IN (N'Saturday', N'Sunday') SELECT 'Weekend'; ELSE SELECT 'Weekday';
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	reparse	inexact	Expr::Function	0	DATENAME(weekday, GETDATE())
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	reparse	inexact	Expr::Function	0	GETDATE()
 580ad6d8e8aa6c90	4edff8487059a4e8	MsSqlDialect	reparse	inexact	Expr::InList	0	DATENAME(weekday, GETDATE()) IN (N'Saturday', N'Sunday')
@@ -10075,10 +10051,6 @@
 692a5d239fcba6fc	4edff8487059a4e8	MySqlDialect,GenericDialect	edges	end	ColumnDef	0	id INT
 692a5d239fcba6fc	4edff8487059a4e8	MySqlDialect,GenericDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE tb (id INT, INDEX 'index' (id))
 692a5d239fcba6fc	4edff8487059a4e8	MySqlDialect,GenericDialect	structure	empty	Ident	0	'index'
-692a888d88555850	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-692a888d88555850	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-692a888d88555850	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-692a888d88555850	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
 692b288bbfdc061a	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	edges	both	SelectItem::UnnamedExpr	0	CAST('1 second' AS INTERVAL MINUTE TO SECOND)
 692b288bbfdc061a	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	edges	end	SetExpr::Select	0	SELECT CAST('1 second' AS INTERVAL MINUTE TO SECOND)
 692b288bbfdc061a	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	extent	inexact	Statement::Query	0	SELECT CAST('1 second' AS INTERVAL MINUTE TO SECOND)
@@ -12474,14 +12446,6 @@
 81a259b6c00d6b2b	fdaf9332c09858cf	DuckDbDialect	edges	end	SelectItemQualifiedWildcardKind::ObjectName	0	myschema.mytable.*
 81c494fa922792a8	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	extent	empty	Statement::DropOperatorFamily	0	DROP OPERATOR FAMILY IF EXISTS myschema.custom_ops USING btree CASCADE
 81c494fa922792a8	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	DropOperatorFamily	0	DROP OPERATOR FAMILY IF EXISTS myschema.custom_ops USING btree CASCADE
-81dc984ccc6b7eb1	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 3; SELECT 4;
-81dc984ccc6b7eb1	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2;
-81dc984ccc6b7eb1	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
-81dc984ccc6b7eb1	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3; SELECT 4;
-81dc984ccc6b7eb1	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 3; SELECT 4;
-81dc984ccc6b7eb1	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2;
-81dc984ccc6b7eb1	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
-81dc984ccc6b7eb1	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3; SELECT 4;
 81df209cd06f33d6	4edff8487059a4e8	HiveDialect	edges	both	CreateTable	0	CREATE TABLE tab (cola STRING, colb BIGINT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' ESCAPED BY '"' MAP KEYS TERMINATED BY '"'
 81df209cd06f33d6	4edff8487059a4e8	HiveDialect	edges	end	ColumnDef	0	cola STRING
 81df209cd06f33d6	4edff8487059a4e8	HiveDialect	edges	end	ColumnDef	0	colb BIGINT
@@ -12722,10 +12686,6 @@
 83dbcf7692116246	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	Ident	0	<
 83dbcf7692116246	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	ObjectName	0	<
 83dbcf7692116246	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	ObjectNamePart::Identifier	0	<
-83dd03a1d2546271	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2;
-83dd03a1d2546271	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
-83dd03a1d2546271	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2;
-83dd03a1d2546271	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
 83de531128238e8c	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	edges	both	CreateTable	0	CREATE TABLE t (i INTERVAL DAY TO MINUTE(2))
 83de531128238e8c	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	edges	end	ColumnDef	0	i INTERVAL DAY TO MINUTE(2)
 83de531128238e8c	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE t (i INTERVAL DAY TO MINUTE(2))
@@ -13495,22 +13455,6 @@
 8bedad5c42e63402	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	TableFactor::NestedJoin	0	(c NATURAL JOIN d NATURAL JOIN e)
 8bedad5c42e63402	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	TableFactor::NestedJoin	0	(f NATURAL JOIN (g NATURAL JOIN h))
 8bedad5c42e63402	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	TableFactor::NestedJoin	0	(g NATURAL JOIN h)
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 8; SELECT 9;
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 2 THEN SELECT 4; SELECT 5;
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 3 THEN SELECT 6; SELECT 7;
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2; SELECT 3;
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 4; SELECT 5;
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 6; SELECT 7;
-8c144a32607d7b24	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 8; SELECT 9;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 8; SELECT 9;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 2 THEN SELECT 4; SELECT 5;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 3 THEN SELECT 6; SELECT 7;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2; SELECT 3;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 4; SELECT 5;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 6; SELECT 7;
-8c144a32607d7b24	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 8; SELECT 9;
 8c4abfe74da2be55	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	SetExpr::Select	0	SELECT t1_id, t1_name FROM t1 WHERE t1_id IN (SELECT t2_id FROM t2 WHERE t1_name = t2_name LIMIT 10)
 8c4abfe74da2be55	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	start	LimitClause::LimitOffset	0	 LIMIT 10
 8c4abfe74da2be55	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	extent	inexact	Statement::Query	0	SELECT t1_id, t1_name FROM t1 WHERE t1_id IN (SELECT t2_id FROM t2 WHERE t1_name = t2_name LIMIT 10)
@@ -14459,18 +14403,6 @@
 94947270101b7e2a	4edff8487059a4e8	SnowflakeDialect	extent	empty	Statement::StartTransaction	0	BEGIN TRANSACTION
 94b936714c9d38dd	4edff8487059a4e8	SnowflakeDialect,GenericDialect	extent	empty	Statement::Grant	0	GRANT CREATE APPLICATION ON ACCOUNT TO ROLE role1
 94ba12b597198194	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,SnowflakeDialect,OracleDialect,TeradataDialect	extent	empty	Statement::Comment	0	COMMENT IF EXISTS ON SEQUENCE db.t0 IS 'comment'
-94f55bf9af291449	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 3;
-94f55bf9af291449	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 2 THEN SELECT 2;
-94f55bf9af291449	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1;
-94f55bf9af291449	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1;
-94f55bf9af291449	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 2;
-94f55bf9af291449	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3;
-94f55bf9af291449	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 3;
-94f55bf9af291449	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 2 THEN SELECT 2;
-94f55bf9af291449	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1;
-94f55bf9af291449	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1;
-94f55bf9af291449	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 2;
-94f55bf9af291449	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3;
 9503fe96bf6fbdd0	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	start	SelectItem::UnnamedExpr	0	-0
 9503fe96bf6fbdd0	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	reparse	inexact	Expr::UnaryOp	0	-0
 9503fe96bf6fbdd0	fdaf9332c09858cf	DuckDbDialect	edges	start	SelectItem::UnnamedExpr	0	-0
@@ -15267,10 +15199,6 @@
 9da840b78c99c775	4edff8487059a4e8	MySqlDialect,GenericDialect	edges	both	TableConstraint::FulltextOrSpatial	0	FULLTEXT potato (id)
 9da840b78c99c775	4edff8487059a4e8	MySqlDialect,GenericDialect	edges	end	ColumnDef	0	id INT
 9da840b78c99c775	4edff8487059a4e8	MySqlDialect,GenericDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE tb (id INT, FULLTEXT potato (id))
-9db1d616410cd4dc	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-9db1d616410cd4dc	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-9db1d616410cd4dc	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-9db1d616410cd4dc	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
 9dc9cec8a12aa3a2	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	edges	both	SelectItem::UnnamedExpr	0	CAST('1 second' AS INTERVAL MONTH(2))
 9dc9cec8a12aa3a2	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	edges	end	SetExpr::Select	0	SELECT CAST('1 second' AS INTERVAL MONTH(2))
 9dc9cec8a12aa3a2	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	extent	inexact	Statement::Query	0	SELECT CAST('1 second' AS INTERVAL MONTH(2))
@@ -16248,18 +16176,6 @@ a6f103070f11fd61	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDiale
 a6f103070f11fd61	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	reparse	inexact	Query	0	SELECT * FROM tbl |> INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)
 a6f103070f11fd61	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	structure	outside-parent	Query	0	SELECT * FROM admins
 a6f103070f11fd61	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	structure	outside-parent	Query	0	SELECT * FROM guests
-a6f5329314aaddf4	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 7; SELECT 8;
-a6f5329314aaddf4	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-a6f5329314aaddf4	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	WHEN b THEN SELECT 4; SELECT 5;
-a6f5329314aaddf4	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-a6f5329314aaddf4	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 4; SELECT 5;
-a6f5329314aaddf4	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 7; SELECT 8;
-a6f5329314aaddf4	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 7; SELECT 8;
-a6f5329314aaddf4	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-a6f5329314aaddf4	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	WHEN b THEN SELECT 4; SELECT 5;
-a6f5329314aaddf4	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-a6f5329314aaddf4	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 4; SELECT 5;
-a6f5329314aaddf4	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 7; SELECT 8;
 a6fe7c79fe30bbe1	4edff8487059a4e8	SnowflakeDialect	extent	empty	Statement::Declare	0	DECLARE profit TEXT DEFAULT 42
 a7105efd5adde3a0	4edff8487059a4e8	MySqlDialect	edges	end	ColumnDef	0	bar INT NOT NULL AUTO_INCREMENT
 a7105efd5adde3a0	4edff8487059a4e8	MySqlDialect	edges	start	CreateTable	0	CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT = 123
@@ -19495,7 +19411,6 @@ c3c3c055b3aa2a9a	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	edges	end	Col
 c3c3c055b3aa2a9a	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	extent	inexact	Statement::CreateTable	0	CREATE TABLE t (a INT, b INT, c INT, d INT, CONSTRAINT t_pk PRIMARY KEY (a, b) INCLUDE (c, d))
 c3d1d01afa4c93f4	4edff8487059a4e8	SnowflakeDialect,BigQueryDialect,OracleDialect,TeradataDialect	extent	empty	Statement::Execute	0	EXECUTE IMMEDIATE 'SELECT 1'
 c3e9b62f04987ba4	4edff8487059a4e8	MsSqlDialect	extent	empty	Statement::CreateFunction	0	CREATE FUNCTION some_inline_tvf(@foo INT, @bar VARCHAR(256)) RETURNS TABLE AS RETURN SELECT 1 AS col_1
-c3f02aba44ebbe05	4edff8487059a4e8	MsSqlDialect,GenericDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1;
 c3f02aba44ebbe05	4edff8487059a4e8	MsSqlDialect,GenericDialect	extent	empty	Statement::CreateProcedure	0	CREATE OR ALTER PROCEDURE foo AS SELECT 1;
 c40e61de9344aa22	4edff8487059a4e8	SnowflakeDialect,GenericDialect	extent	empty	Statement::Grant	0	GRANT ALL ON RESOURCE MONITOR obj1 TO ROLE role1 WITH GRANT OPTION
 c419b7ea77e7bb34	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	extent	inexact	Statement::Query	0	SELECT * FROM student WHERE id = '1' FOR SHARE
@@ -20413,14 +20328,6 @@ cca866ddcbe8ce26	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,
 cca866ddcbe8ce26	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	reparse	inexact	Expr::Floor	0	FLOOR(float_column)
 cca866ddcbe8ce26	fdaf9332c09858cf	DuckDbDialect	edges	both	SelectItem::UnnamedExpr	0	FLOOR(float_column)
 cca866ddcbe8ce26	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	Expr::Floor	0	FLOOR(float_column)
-ccb6e6bbb4b8a8e8	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-ccb6e6bbb4b8a8e8	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	WHEN b THEN SELECT 4; SELECT 5;
-ccb6e6bbb4b8a8e8	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-ccb6e6bbb4b8a8e8	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 4; SELECT 5;
-ccb6e6bbb4b8a8e8	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	WHEN a THEN SELECT 1; SELECT 2; SELECT 3;
-ccb6e6bbb4b8a8e8	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	WHEN b THEN SELECT 4; SELECT 5;
-ccb6e6bbb4b8a8e8	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-ccb6e6bbb4b8a8e8	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 4; SELECT 5;
 ccb70ef7012a0f7f	4edff8487059a4e8	SnowflakeDialect,GenericDialect	edges	start	AlterTable	0	ALTER TABLE tbl DROP CLUSTERING KEY
 ccb70ef7012a0f7f	4edff8487059a4e8	SnowflakeDialect,GenericDialect	extent	inexact	Statement::AlterTable	0	ALTER TABLE tbl DROP CLUSTERING KEY
 ccb70ef7012a0f7f	4edff8487059a4e8	SnowflakeDialect,GenericDialect	structure	empty	AlterTableOperation::DropClusteringKey	0	DROP CLUSTERING KEY
@@ -21098,11 +21005,7 @@ d47409d47f836975	fdaf9332c09858cf	DuckDbDialect	extent	inexact	Statement::Query	
 d47409d47f836975	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	Expr::Extract	0	EXTRACT(MONTH FROM d)
 d47409d47f836975	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	Query	0	SELECT EXTRACT(MONTH FROM d)
 d47409d47f836975	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	Select	0	SELECT EXTRACT(MONTH FROM d)
-d47e88564ddd7038	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	IF (1) THEN SELECT 1; SELECT 2;
-d47e88564ddd7038	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
 d47e88564ddd7038	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	reparse	inexact	Expr::Nested	0	(1)
-d47e88564ddd7038	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	IF (1) THEN SELECT 1; SELECT 2;
-d47e88564ddd7038	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
 d47e88564ddd7038	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	Expr::Nested	0	(1)
 d4852f83fc887633	4edff8487059a4e8	MySqlDialect	edges	both	CreateTable	0	CREATE TABLE foo (bar INT) COMMENT = 'baz'
 d4852f83fc887633	4edff8487059a4e8	MySqlDialect	edges	end	ColumnDef	0	bar INT
@@ -21336,14 +21239,6 @@ d7ab9ae581c243c8	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDiale
 d7ab9ae581c243c8	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	reparse	inexact	Query	0	SELECT * FROM tbl |> AS new_users
 d7ab9ae581c243c8	4edff8487059a4e8	GenericDialect,BigQueryDialect,DatabricksDialect	structure	outside-parent	Ident	0	new_users
 d7adf140351cb7d8	4edff8487059a4e8	PostgreSqlDialect	extent	empty	Statement::CreateSequence	0	CREATE TEMPORARY SEQUENCE name0
-d7b2cbeab3a6badb	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 2 THEN SELECT 3; SELECT 4;
-d7b2cbeab3a6badb	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2; SELECT 3;
-d7b2cbeab3a6badb	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-d7b2cbeab3a6badb	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3; SELECT 4;
-d7b2cbeab3a6badb	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSEIF 2 THEN SELECT 3; SELECT 4;
-d7b2cbeab3a6badb	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	IF 1 THEN SELECT 1; SELECT 2; SELECT 3;
-d7b2cbeab3a6badb	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2; SELECT 3;
-d7b2cbeab3a6badb	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3; SELECT 4;
 d7b68f66aa0ab825	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	start	Join	0	LEFT OUTER JOIN t2 ON c1 = c2
 d7b68f66aa0ab825	fdaf9332c09858cf	DuckDbDialect	edges	start	Join	0	LEFT OUTER JOIN t2 ON c1 = c2
 d7c4b02117f2455e	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	extent	empty	Statement::Deallocate	0	DEALLOCATE ALL
@@ -22857,14 +22752,6 @@ e533ef24221f7c4e	fdaf9332c09858cf	DuckDbDialect	edges	start	SelectItem::UnnamedE
 e533ef24221f7c4e	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	Expr::UnaryOp	0	+0
 e54e563b05f1353d	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	reparse	inexact	Expr::UnaryOp	0	NOT salary = ''
 e54e563b05f1353d	fdaf9332c09858cf	DuckDbDialect	reparse	inexact	Expr::UnaryOp	0	NOT salary = ''
-e5635a47f37bd6ae	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 3;
-e5635a47f37bd6ae	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatementBlock	0	WHEN 2 THEN SELECT 1; SELECT 2;
-e5635a47f37bd6ae	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
-e5635a47f37bd6ae	4edff8487059a4e8	GenericDialect,PostgreSqlDialect,MsSqlDialect,AnsiDialect,SnowflakeDialect,HiveDialect,RedshiftSqlDialect,MySqlDialect,BigQueryDialect,SQLiteDialect,DatabricksDialect,ClickHouseDialect,OracleDialect,TeradataDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3;
-e5635a47f37bd6ae	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	ELSE SELECT 3;
-e5635a47f37bd6ae	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatementBlock	0	WHEN 2 THEN SELECT 1; SELECT 2;
-e5635a47f37bd6ae	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 1; SELECT 2;
-e5635a47f37bd6ae	fdaf9332c09858cf	DuckDbDialect	edges	end	ConditionalStatements::Sequence	0	SELECT 3;
 e578f5a8dfdaaf29	4edff8487059a4e8	DatabricksDialect	extent	empty	Statement::OptimizeTable	0	OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1)
 e5af643191b12147	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	extent	empty	Statement::CreateServer	0	CREATE SERVER IF NOT EXISTS myserver TYPE 'server_type' VERSION 'server_version' FOREIGN DATA WRAPPER postgres_fdw
 e5af643191b12147	4edff8487059a4e8	PostgreSqlDialect,GenericDialect	structure	empty	Ident	0	'server_type'

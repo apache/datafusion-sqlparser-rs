@@ -1913,6 +1913,13 @@ pub trait Dialect: Debug + Any {
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect accepts `==` as an alternative to `=` in `UPDATE SET` assignments.
+    ///
+    /// See <https://www.sqlite.org/lang_update.html>
+    fn supports_double_eq_assignment(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

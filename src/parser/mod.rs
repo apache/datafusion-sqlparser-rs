@@ -18829,7 +18829,13 @@ impl<'a> Parser<'a> {
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
         let target = self.parse_assignment_target()?;
-        self.expect_token(&Token::Eq)?;
+        if self.dialect.supports_double_eq_assignment() {
+            if !self.consume_token(&Token::Eq) && !self.consume_token(&Token::DoubleEq) {
+                return self.expected("= or == (for assignment)", self.peek_token());
+            }
+        } else {
+            self.expect_token(&Token::Eq)?;
+        }
         let value = self.parse_expr()?;
         Ok(Assignment { target, value })
     }

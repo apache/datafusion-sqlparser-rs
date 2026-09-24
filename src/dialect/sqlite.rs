@@ -129,4 +129,8 @@ impl Dialect for SQLiteDialect {
     fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }
+
+    fn supports_double_eq_assignment(&self) -> bool {
+        true
+    }
 }

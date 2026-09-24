@@ -230,18 +230,21 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             databricks().verified_stmt(&format!("USE {object_name}")),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
-                object_name.to_string()
-            )])))
+            Statement::Use(
+                Use::Object(ObjectName::from(vec![Ident::new(object_name.to_string())])).into()
+            )
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
                 databricks().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
-                    quote,
-                    object_name.to_string(),
-                )])))
+                Statement::Use(
+                    Use::Object(ObjectName::from(vec![Ident::with_quote(
+                        quote,
+                        object_name.to_string(),
+                    )]))
+                    .into()
+                )
             );
         }
     }
@@ -250,43 +253,48 @@ fn parse_use() {
         // Test single identifier with keyword and different type of quotes
         assert_eq!(
             databricks().verified_stmt(&format!("USE CATALOG {quote}my_catalog{quote}")),
-            Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::with_quote(
-                quote,
-                "my_catalog".to_string(),
-            )])))
+            Statement::Use(
+                Use::Catalog(ObjectName::from(vec![Ident::with_quote(
+                    quote,
+                    "my_catalog".to_string(),
+                )]))
+                .into()
+            )
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE DATABASE {quote}my_database{quote}")),
-            Statement::Use(Use::Database(ObjectName::from(vec![Ident::with_quote(
-                quote,
-                "my_database".to_string(),
-            )])))
+            Statement::Use(
+                Use::Database(ObjectName::from(vec![Ident::with_quote(
+                    quote,
+                    "my_database".to_string(),
+                )]))
+                .into()
+            )
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE SCHEMA {quote}my_schema{quote}")),
-            Statement::Use(Use::Schema(ObjectName::from(vec![Ident::with_quote(
-                quote,
-                "my_schema".to_string(),
-            )])))
+            Statement::Use(
+                Use::Schema(ObjectName::from(vec![Ident::with_quote(
+                    quote,
+                    "my_schema".to_string(),
+                )]))
+                .into()
+            )
         );
     }
 
     // Test single identifier with keyword and no quotes
     assert_eq!(
         databricks().verified_stmt("USE CATALOG my_catalog"),
-        Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::new(
-            "my_catalog"
-        )])))
+        Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::new("my_catalog")])).into())
     );
     assert_eq!(
         databricks().verified_stmt("USE DATABASE my_schema"),
-        Statement::Use(Use::Database(ObjectName::from(vec![Ident::new(
-            "my_schema"
-        )])))
+        Statement::Use(Use::Database(ObjectName::from(vec![Ident::new("my_schema")])).into())
     );
     assert_eq!(
         databricks().verified_stmt("USE SCHEMA my_schema"),
-        Statement::Use(Use::Schema(ObjectName::from(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Schema(ObjectName::from(vec![Ident::new("my_schema")])).into())
     );
 
     // Test invalid syntax - missing identifier
@@ -311,10 +319,14 @@ fn parse_show_catalogs() {
     databricks().verified_stmt("SHOW CATALOGS HISTORY STARTS WITH 'pay'");
 
     match databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'") {
-        Statement::ShowCatalogs(ShowCatalogsStatement {
-            terse,
-            history,
-            show_options,
+        Statement::ShowCatalogs(SpannedObject {
+            content:
+                ShowCatalogsStatement {
+                    terse,
+                    history,
+                    show_options,
+                },
+            ..
         }) => {
             assert!(!terse);
             assert!(!history);
@@ -338,10 +350,14 @@ fn parse_show_catalogs_with_show_options() {
     databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT");
 
     match databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT") {
-        Statement::ShowCatalogs(ShowCatalogsStatement {
-            terse,
-            history,
-            show_options,
+        Statement::ShowCatalogs(SpannedObject {
+            content:
+                ShowCatalogsStatement {
+                    terse,
+                    history,
+                    show_options,
+                },
+            ..
         }) => {
             assert!(terse);
             assert!(history);
@@ -427,7 +443,10 @@ fn data_type_timestamp_ntz() {
 
     // Column definition
     match databricks().verified_stmt("CREATE TABLE foo (x TIMESTAMP_NTZ)") {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { columns, .. },
+            ..
+        }) => {
             assert_eq!(
                 columns,
                 vec![ColumnDef {
@@ -488,15 +507,19 @@ fn parse_optimize_table() {
     match databricks()
         .verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1, col2)")
     {
-        Statement::OptimizeTable(OptimizeTableStatement {
-            name,
-            has_table_keyword,
-            on_cluster,
-            partition,
-            include_final,
-            deduplicate,
-            predicate,
-            zorder,
+        Statement::OptimizeTable(SpannedObject {
+            content:
+                OptimizeTableStatement {
+                    name,
+                    has_table_keyword,
+                    on_cluster,
+                    partition,
+                    include_final,
+                    deduplicate,
+                    predicate,
+                    zorder,
+                },
+            ..
         }) => {
             assert_eq!(name.to_string(), "my_table");
             assert!(!has_table_keyword);
@@ -553,10 +576,14 @@ fn parse_create_table_partitioned_by() {
 
     // Verify AST structure for column without type
     match databricks().verified_stmt("CREATE TABLE t (col1 STRING) PARTITIONED BY (col1)") {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            hive_distribution,
+        Statement::CreateTable(SpannedObject {
+            content:
+                CreateTable {
+                    name,
+                    columns,
+                    hive_distribution,
+                    ..
+                },
             ..
         }) => {
             assert_eq!(name.to_string(), "t");
@@ -578,10 +605,14 @@ fn parse_create_table_partitioned_by() {
 
     // Verify AST structure for column with type
     match databricks().verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT)") {
-        Statement::CreateTable(CreateTable {
-            hive_distribution:
-                HiveDistributionStyle::PARTITIONED {
-                    columns: partition_cols,
+        Statement::CreateTable(SpannedObject {
+            content:
+                CreateTable {
+                    hive_distribution:
+                        HiveDistributionStyle::PARTITIONED {
+                            columns: partition_cols,
+                        },
+                    ..
                 },
             ..
         }) => {
@@ -636,7 +667,10 @@ fn parse_databricks_struct_type() {
         "CREATE TABLE t (col1 STRUCT<field1: STRING, field2: INT>)",
         "CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)",
     ) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { columns, .. },
+            ..
+        }) => {
             assert_eq!(columns.len(), 1);
             assert_eq!(columns[0].name.to_string(), "col1");
             match &columns[0].data_type {

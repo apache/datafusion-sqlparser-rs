@@ -23,8 +23,8 @@
 use sqlparser::ast::{
     ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
     Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OrderByExpr,
-    OrderByOptions, OrderBySort, SelectItem, Set, Statement, TableFactor, UnaryOperator, Use,
-    Value,
+    OrderByOptions, OrderBySort, SelectItem, Set, SpannedObject, Statement, TableFactor,
+    UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{AnsiDialect, GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
@@ -133,7 +133,10 @@ fn create_table_with_comment() {
         " INTO 4 BUCKETS"
     );
     match hive().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { comment, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { comment, .. },
+            ..
+        }) => {
             assert_eq!(
                 comment,
                 Some(CommentDef::WithoutEq("table comment".to_string()))
@@ -163,7 +166,10 @@ fn create_table_with_clustered_by() {
         " INTO 4 BUCKETS"
     );
     match hive_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { clustered_by, .. }) => {
+        Statement::CreateTable(SpannedObject {
+            content: CreateTable { clustered_by, .. },
+            ..
+        }) => {
             assert_eq!(
                 clustered_by.unwrap(),
                 ClusteredBy {
@@ -372,20 +378,23 @@ fn from_cte() {
 fn set_statement_with_minus() {
     assert_eq!(
         hive().verified_stmt("SET hive.tez.java.opts = -Xmx4g"),
-        Statement::Set(Set::SingleAssignment {
-            scope: None,
-            hivevar: false,
-            variable: ObjectName::from(vec![
-                Ident::new("hive"),
-                Ident::new("tez"),
-                Ident::new("java"),
-                Ident::new("opts")
-            ]),
-            values: vec![Expr::UnaryOp {
-                op: UnaryOperator::Minus,
-                expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
-            }],
-        })
+        Statement::Set(
+            Set::SingleAssignment {
+                scope: None,
+                hivevar: false,
+                variable: ObjectName::from(vec![
+                    Ident::new("hive"),
+                    Ident::new("tez"),
+                    Ident::new("java"),
+                    Ident::new("opts")
+                ]),
+                values: vec![Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
+                }],
+            }
+            .into()
+        )
     );
 
     assert_eq!(
@@ -400,11 +409,15 @@ fn set_statement_with_minus() {
 fn parse_create_function() {
     let sql = "CREATE TEMPORARY FUNCTION mydb.myfunc AS 'org.random.class.Name' USING JAR 'hdfs://somewhere.com:8020/very/far'";
     match hive().verified_stmt(sql) {
-        Statement::CreateFunction(CreateFunction {
-            temporary,
-            name,
-            function_body,
-            using,
+        Statement::CreateFunction(SpannedObject {
+            content:
+                CreateFunction {
+                    temporary,
+                    name,
+                    function_body,
+                    using,
+                    ..
+                },
             ..
         }) => {
             assert!(temporary);
@@ -531,25 +544,28 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             hive().verified_stmt(&format!("USE {object_name}")),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
-                object_name.to_string()
-            )])))
+            Statement::Use(
+                Use::Object(ObjectName::from(vec![Ident::new(object_name.to_string())])).into()
+            )
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
                 hive().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
-                    quote,
-                    object_name.to_string(),
-                )])))
+                Statement::Use(
+                    Use::Object(ObjectName::from(vec![Ident::with_quote(
+                        quote,
+                        object_name.to_string(),
+                    )]))
+                    .into()
+                )
             );
         }
     }
     // Test DEFAULT keyword that is special case in Hive
     assert_eq!(
         hive().verified_stmt("USE DEFAULT"),
-        Statement::Use(Use::Default)
+        Statement::Use(Use::Default.into())
     );
 }
 

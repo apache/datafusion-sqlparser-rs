@@ -676,7 +676,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
     // ownership.
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
-            Statement::CreateTable(create_table) => Ok(create_table.into()),
+            Statement::CreateTable(create_table) => Ok(create_table.content.into()),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
             ))),
@@ -782,11 +782,14 @@ mod tests {
 
     #[test]
     pub fn test_from_invalid_statement() {
-        let stmt = Statement::Commit(CommitStatement {
-            chain: false,
-            end: false,
-            modifier: None,
-        });
+        let stmt = Statement::Commit(
+            CommitStatement {
+                chain: false,
+                end: false,
+                modifier: None,
+            }
+            .into(),
+        );
 
         assert_eq!(
             CreateTableBuilder::try_from(stmt).unwrap_err(),

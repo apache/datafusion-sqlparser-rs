@@ -24,10 +24,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::CreateDatabaseStatement;
 use crate::ast::{
     CatalogSyncNamespaceMode, ContactEntry, ObjectName, Statement, StorageSerializationPolicy, Tag,
 };
+use crate::ast::{CreateDatabaseStatement, SpannedObject};
 use crate::parser::ParserError;
 
 /// Builder for create database statement variant ([1]).
@@ -279,30 +279,34 @@ impl CreateDatabaseBuilder {
 
     /// Build the `CREATE DATABASE` statement.
     pub fn build(self) -> Statement {
-        Statement::CreateDatabase(CreateDatabaseStatement {
-            db_name: self.db_name,
-            if_not_exists: self.if_not_exists,
-            managed_location: self.managed_location,
-            location: self.location,
-            or_replace: self.or_replace,
-            transient: self.transient,
-            clone: self.clone,
-            data_retention_time_in_days: self.data_retention_time_in_days,
-            max_data_extension_time_in_days: self.max_data_extension_time_in_days,
-            external_volume: self.external_volume,
-            catalog: self.catalog,
-            replace_invalid_characters: self.replace_invalid_characters,
-            default_ddl_collation: self.default_ddl_collation,
-            storage_serialization_policy: self.storage_serialization_policy,
-            comment: self.comment,
-            default_charset: self.default_charset,
-            default_collation: self.default_collation,
-            catalog_sync: self.catalog_sync,
-            catalog_sync_namespace_mode: self.catalog_sync_namespace_mode,
-            catalog_sync_namespace_flatten_delimiter: self.catalog_sync_namespace_flatten_delimiter,
-            with_tags: self.with_tags,
-            with_contacts: self.with_contacts,
-        })
+        Statement::CreateDatabase(
+            CreateDatabaseStatement {
+                db_name: self.db_name,
+                if_not_exists: self.if_not_exists,
+                managed_location: self.managed_location,
+                location: self.location,
+                or_replace: self.or_replace,
+                transient: self.transient,
+                clone: self.clone,
+                data_retention_time_in_days: self.data_retention_time_in_days,
+                max_data_extension_time_in_days: self.max_data_extension_time_in_days,
+                external_volume: self.external_volume,
+                catalog: self.catalog,
+                replace_invalid_characters: self.replace_invalid_characters,
+                default_ddl_collation: self.default_ddl_collation,
+                storage_serialization_policy: self.storage_serialization_policy,
+                comment: self.comment,
+                default_charset: self.default_charset,
+                default_collation: self.default_collation,
+                catalog_sync: self.catalog_sync,
+                catalog_sync_namespace_mode: self.catalog_sync_namespace_mode,
+                catalog_sync_namespace_flatten_delimiter: self
+                    .catalog_sync_namespace_flatten_delimiter,
+                with_tags: self.with_tags,
+                with_contacts: self.with_contacts,
+            }
+            .into(),
+        )
     }
 }
 
@@ -311,29 +315,33 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
 
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
-            Statement::CreateDatabase(CreateDatabaseStatement {
-                db_name,
-                if_not_exists,
-                location,
-                managed_location,
-                or_replace,
-                transient,
-                clone,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                external_volume,
-                catalog,
-                replace_invalid_characters,
-                default_ddl_collation,
-                storage_serialization_policy,
-                comment,
-                default_charset,
-                default_collation,
-                catalog_sync,
-                catalog_sync_namespace_mode,
-                catalog_sync_namespace_flatten_delimiter,
-                with_tags,
-                with_contacts,
+            Statement::CreateDatabase(SpannedObject {
+                content:
+                    CreateDatabaseStatement {
+                        db_name,
+                        if_not_exists,
+                        location,
+                        managed_location,
+                        or_replace,
+                        transient,
+                        clone,
+                        data_retention_time_in_days,
+                        max_data_extension_time_in_days,
+                        external_volume,
+                        catalog,
+                        replace_invalid_characters,
+                        default_ddl_collation,
+                        storage_serialization_policy,
+                        comment,
+                        default_charset,
+                        default_collation,
+                        catalog_sync,
+                        catalog_sync_namespace_mode,
+                        catalog_sync_namespace_flatten_delimiter,
+                        with_tags,
+                        with_contacts,
+                    },
+                ..
             }) => Ok(Self {
                 db_name,
                 if_not_exists,
@@ -382,11 +390,14 @@ mod tests {
 
     #[test]
     pub fn test_from_invalid_statement() {
-        let stmt = Statement::Commit(CommitStatement {
-            chain: false,
-            end: false,
-            modifier: None,
-        });
+        let stmt = Statement::Commit(
+            CommitStatement {
+                chain: false,
+                end: false,
+                modifier: None,
+            }
+            .into(),
+        );
 
         assert_eq!(
             CreateDatabaseBuilder::try_from(stmt).unwrap_err(),

@@ -295,14 +295,13 @@ impl fmt::Display for SetQuantifier {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
+/// A [`TABLE` command](https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// A (possibly schema-qualified) table reference used in `FROM` clauses.
 pub struct Table {
     /// Optional table name (absent for e.g. `TABLE` command without argument).
-    pub table_name: Option<String>,
+    pub table_name: Option<Ident>,
     /// Optional schema/catalog name qualifying the table.
-    pub schema_name: Option<String>,
+    pub schema_name: Option<Ident>,
 }
 
 impl fmt::Display for Table {
@@ -2194,6 +2193,8 @@ pub enum RepetitionQuantifier {
     AtMost(u32),
     /// `{n,m}
     Range(u32, u32),
+    /// A reluctant (non-greedy) quantifier, for example `*?` or `{n,m}?`.
+    Reluctant(Box<RepetitionQuantifier>),
 }
 
 impl fmt::Display for RepetitionQuantifier {
@@ -2207,6 +2208,7 @@ impl fmt::Display for RepetitionQuantifier {
             AtLeast(n) => write!(f, "{{{n},}}"),
             AtMost(n) => write!(f, "{{,{n}}}"),
             Range(n, m) => write!(f, "{{{n},{m}}}"),
+            Reluctant(quantifier) => write!(f, "{quantifier}?"),
         }
     }
 }

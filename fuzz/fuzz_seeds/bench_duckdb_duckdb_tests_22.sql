@@ -1,0 +1,1 @@
+SELECT list_sort(approx_top_k(even_groups, 10)) FROM integers

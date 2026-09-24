@@ -1,0 +1,1 @@
+SELECT "Odd Name", "with ""quote""" AS "Alias", t."col" FROM "Tbl" AS "t"

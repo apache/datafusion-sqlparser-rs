@@ -1,0 +1,1 @@
+INSERT INTO onecolumn_w(w) VALUES (42),(43)

@@ -3803,7 +3803,8 @@ fn parse_listagg() {
     verified_stmt("SELECT LISTAGG(dateid)");
     verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW ERROR)");
-    verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
+    all_dialects_where(|d| d.supports_national_string_literal())
+        .verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE X'deadbeef' WITH COUNT)");
 }
 
@@ -4848,7 +4849,7 @@ fn parse_create_table_as_table() {
     let expected_query1 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
+            table_name: Some(Ident::new("old_table")),
             schema_name: None,
         }))),
         order_by: None,
@@ -4874,8 +4875,8 @@ fn parse_create_table_as_table() {
     let expected_query2 = Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
-            schema_name: Some("schema_name".to_string()),
+            table_name: Some(Ident::new("old_table")),
+            schema_name: Some(Ident::new("schema_name")),
         }))),
         order_by: None,
         limit_clause: None,
@@ -6452,8 +6453,9 @@ fn parse_literal_decimal() {
 
 #[test]
 fn parse_literal_string() {
+    let national_string_dialects = all_dialects_where(|d| d.supports_national_string_literal());
     let sql = "SELECT 'one', N'national string', X'deadBEEF'";
-    let select = verified_only_select(sql);
+    let select = national_string_dialects.verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Value((Value::SingleQuotedString("one".to_string())).with_empty_span()),
@@ -6470,9 +6472,10 @@ fn parse_literal_string() {
         expr_from_projection(&select.projection[2])
     );
 
-    one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
-    one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
-    one_statement_parses_to(
+    all_dialects().one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
+    national_string_dialects
+        .one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
+    national_string_dialects.one_statement_parses_to(
         r#"SELECT n'Tu geres '';'' et ''"'' ?'"#,
         r#"SELECT N'Tu geres '';'' et ''"'' ?'"#,
     );
@@ -8528,12 +8531,23 @@ fn parse_trim() {
         expr_from_projection(only(&select.projection))
     );
 
+    dialects.one_statement_parses_to(
+        "SELECT TRIM(BOTH FROM 'yxTomxx', 'xyz')",
+        "SELECT TRIM(BOTH 'yxTomxx', 'xyz')",
+    );
+
     // dialects without comma-style TRIM syntax should fail
     let unsupported_dialects = all_dialects_where(|d| !d.supports_comma_separated_trim());
     assert_eq!(
         ParserError::ParserError("Expected: ), found: ,".to_owned()),
         unsupported_dialects
             .parse_sql_statements("SELECT TRIM('xyz', 'a')")
+            .unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: 'xyz'".to_owned()),
+        unsupported_dialects
+            .parse_sql_statements("SELECT TRIM(FROM 'xyz')")
             .unwrap_err()
     );
 }
@@ -13948,17 +13962,44 @@ fn test_match_recognize_patterns() {
         ]),
     );
 
-    // double repetition
+    // reluctant repetition
     check(
         "S2*?",
         Repetition(
-            Box::new(Repetition(
-                Box::new(Symbol(Named(Ident::new("S2")))),
-                ZeroOrMore,
-            )),
-            AtMostOne,
+            Box::new(Symbol(Named(Ident::new("S2")))),
+            Reluctant(Box::new(ZeroOrMore)),
         ),
     );
+
+    check(
+        "S1+? S2?? S3{2,4}?",
+        Concat(vec![
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S1")))),
+                Reluctant(Box::new(OneOrMore)),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S2")))),
+                Reluctant(Box::new(AtMostOne)),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S3")))),
+                Reluctant(Box::new(Range(2, 4))),
+            ),
+        ]),
+    );
+
+    for pattern in ["S1**", "S1+++", "S1???", "S1{2,4}+"] {
+        let sql = format!(
+            "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN ({pattern}) DEFINE DUMMY AS 1 = 1)"
+        );
+        assert!(
+            all_dialects_where(|d| d.supports_match_recognize())
+                .parse_sql_statements(&sql)
+                .is_err(),
+            "stacked quantifier should fail: {pattern}"
+        );
+    }
 
     // range quantifiers in an alternation
     check(
@@ -14000,11 +14041,8 @@ fn test_match_recognize_patterns() {
                 Symbol(Start),
                 Symbol(Named(Ident::new("S1"))),
                 Repetition(
-                    Box::new(Repetition(
-                        Box::new(Symbol(Named(Ident::new("S2")))),
-                        ZeroOrMore,
-                    )),
-                    AtMostOne,
+                    Box::new(Symbol(Named(Ident::new("S2")))),
+                    Reluctant(Box::new(ZeroOrMore)),
                 ),
                 Repetition(
                     Box::new(Group(Box::new(Concat(vec![
@@ -19469,11 +19507,7 @@ fn test_parse_alter_user() {
 
 #[test]
 fn parse_generic_unary_ops() {
-    let unary_ops = &[
-        ("~", UnaryOperator::BitwiseNot),
-        ("-", UnaryOperator::Minus),
-        ("+", UnaryOperator::Plus),
-    ];
+    let unary_ops = &[("-", UnaryOperator::Minus), ("+", UnaryOperator::Plus)];
     for (str_op, op) in unary_ops {
         let select = verified_only_select(&format!("SELECT {}expr", str_op));
         assert_eq!(
@@ -19484,6 +19518,16 @@ fn parse_generic_unary_ops() {
             select.projection[0]
         );
     }
+
+    let select = verified_only_select("SELECT ~ expr");
+    assert_eq!(
+        UnnamedExpr(UnaryOp {
+            op: UnaryOperator::BitwiseNot,
+            expr: Box::new(Identifier(Ident::new("expr"))),
+        }),
+        select.projection[0]
+    );
+    one_statement_parses_to("SELECT ~expr", "SELECT ~ expr");
 }
 
 #[test]
@@ -20014,4 +20058,208 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
 
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
+}
+
+#[test]
+fn parse_insert_by_name() {
+    verified_stmt("INSERT INTO target BY NAME SELECT 1 AS a");
+
+    match verified_stmt("INSERT INTO target (a) BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            by_name, columns, ..
+        }) => {
+            assert!(by_name);
+            assert_eq!(columns.len(), 1);
+        }
+        _ => unreachable!(),
+    }
+
+    let dialects = all_dialects_where(|d| !d.supports_insert_table_alias());
+    match dialects.verified_stmt("INSERT INTO TABLE target PARTITION (p = 1) BY NAME SELECT 1 AS a")
+    {
+        Statement::Insert(Insert {
+            by_name,
+            has_table_keyword,
+            partitioned,
+            ..
+        }) => {
+            assert!(by_name);
+            assert!(has_table_keyword);
+            assert_eq!(partitioned.unwrap().len(), 1);
+        }
+        _ => unreachable!(),
+    }
+
+    // `BY NAME` does not shadow a table alias in dialects supporting one.
+    let dialects = all_dialects_where(|d| d.supports_insert_table_alias());
+    match dialects.verified_stmt("INSERT INTO target AS t BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            by_name,
+            table_alias,
+            ..
+        }) => {
+            assert!(by_name);
+            assert_eq!(table_alias.unwrap().alias.value, "t");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_bitwise_not_renders_apart_from_operand() {
+    all_dialects().verified_stmt("SELECT ~ -1");
+    all_dialects().verified_stmt("SELECT ~ ~ 1");
+}
+
+#[test]
+fn parse_unary_minus_never_renders_line_comment() {
+    all_dialects().verified_stmt("SELECT - -1");
+    all_dialects().verified_stmt("SELECT - - -1");
+    all_dialects().verified_stmt("SELECT -1");
+    all_dialects().verified_stmt("SELECT -x");
+}
+
+#[test]
+fn parse_table_preserves_quotes_and_trailing_tokens() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(SnowflakeDialect {}),
+    ]);
+    dialects.verified_stmt(r#"CREATE TABLE new_table AS TABLE "old_table""#);
+    dialects.verified_stmt(r#"CREATE TABLE new_table AS TABLE "schema_name"."old_table""#);
+    dialects.verified_stmt("CREATE TABLE new_table AS TABLE old_table ORDER BY x");
+    dialects.verified_stmt("CREATE TABLE new_table AS TABLE old_table LIMIT 10");
+    dialects.verified_stmt("SELECT * FROM (TABLE old_table ORDER BY x)");
+
+    let backtick_dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(MySqlDialect {}),
+    ]);
+    backtick_dialects.verified_stmt("CREATE TABLE new_table AS TABLE `old_table`");
+    backtick_dialects.verified_stmt("CREATE TABLE new_table AS TABLE `%mpty`");
+    backtick_dialects.verified_stmt("INSERT INTO t TABLE `%mpty`");
+
+    let err = dialects
+        .parse_sql_statements("CREATE TABLE new_table AS TABLE %mpty")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: %".to_string()),
+        err
+    );
+
+    let err = backtick_dialects
+        .parse_sql_statements("CREATE TABLE new_table AS TABLE `x` ORE")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: ORE".to_string()),
+        err
+    );
+}
+
+#[test]
+fn parse_hex_string_literal_display_escaping() {
+    all_dialects().verified_stmt("SELECT X''''");
+    all_dialects().verified_stmt("SELECT X'ab''cd'");
+    all_dialects().one_statement_parses_to("SELECT x'''' N", "SELECT X'''' AS N");
+}
+
+#[test]
+fn parse_stage_table_factor() {
+    let supported = all_dialects_where(|d| d.supports_stages());
+    supported.verified_stmt("SELECT * FROM @stage");
+    supported.verified_stmt("SELECT * FROM @stage, my_table");
+
+    let unsupported = all_dialects_where(|d| !d.supports_stages() && !d.is_identifier_start('@'));
+    assert_eq!(
+        unsupported
+            .parse_sql_statements("SELECT * FROM @stage")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: @".to_string()),
+    );
+}
+
+#[test]
+fn parse_alter_table_column_position() {
+    let dialects = all_dialects_where(|d| d.supports_alter_column_position());
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT FIRST")) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(column_position, Some(MySQLColumnPosition::First)),
+        _ => unreachable!(),
+    }
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT AFTER b")) {
+        AlterTableOperation::AddColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::new("b")))
+        ),
+        _ => unreachable!(),
+    }
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab MODIFY COLUMN c INT AFTER b")) {
+        AlterTableOperation::ModifyColumn {
+            column_position, ..
+        } => assert_eq!(
+            column_position,
+            Some(MySQLColumnPosition::After(Ident::new("b")))
+        ),
+        _ => unreachable!(),
+    }
+    assert!(dialects
+        .parse_sql_statements("ALTER TABLE tab ADD COLUMN c INT AFTER")
+        .is_err());
+
+    let dialects = all_dialects_where(|d| !d.supports_alter_column_position());
+    for sql in [
+        "ALTER TABLE tab ADD COLUMN c INT FIRST",
+        "ALTER TABLE tab ADD COLUMN c INT AFTER b",
+    ] {
+        assert!(dialects.parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}
+
+#[test]
+fn parse_placeholder_disallows_quoted_ident() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(SnowflakeDialect {}),
+        Box::new(SQLiteDialect {}),
+    ]);
+    // Valid placeholders roundtrip
+    dialects.verified_stmt("SELECT :x");
+
+    // Quoted identifiers are not valid placeholders
+    let err = dialects.parse_sql_statements("SELECT :`a`").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
+        err
+    );
+    let err = dialects.parse_sql_statements("SELECT :\"a\"").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
+        err
+    );
+    let err = dialects.parse_sql_statements("SELECT:` a` a").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: ` a`".to_string()),
+        err
+    );
+
+    let ansi = TestedDialects::new(vec![Box::new(AnsiDialect {})]);
+    ansi.verified_stmt("SELECT @x");
+    let err = ansi.parse_sql_statements("SELECT @`a`").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
+        err
+    );
+    let err = ansi.parse_sql_statements("SELECT @\"a\"").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
+        err
+    );
 }

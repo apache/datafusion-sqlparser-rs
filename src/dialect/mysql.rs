@@ -179,6 +179,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/alter-table.html>
+    fn supports_alter_column_position(&self) -> bool {
+        true
+    }
+
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/update.html>
     fn supports_update_order_by(&self) -> bool {
         true
@@ -200,6 +205,11 @@ impl Dialect for MySqlDialect {
     /// Deprecated functionality by MySQL but still supported
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html#operator_binary>
     fn supports_binary_kw_as_cast(&self) -> bool {
+        true
+    }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/partitioning-selection.html>
+    fn supports_table_partitions(&self) -> bool {
         true
     }
 

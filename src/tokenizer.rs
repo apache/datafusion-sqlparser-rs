@@ -470,13 +470,7 @@ pub struct Word {
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.quote_style {
-            Some(s) if s == '"' || s == '[' || s == '`' => {
-                write!(f, "{}{}{}", s, self.value, Word::matching_end_quote(s))
-            }
-            None => f.write_str(&self.value),
-            _ => panic!("Unexpected quote_style!"),
-        }
+        crate::ast::fmt_ident(f, &self.value, self.quote_style)
     }
 }
 
@@ -1152,7 +1146,7 @@ impl<'a> Tokenizer<'a> {
                 n @ 'N' | n @ 'n' => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
-                        Some('\'') => {
+                        Some('\'') if self.dialect.supports_national_string_literal() => {
                             // N'...' - a <national character string literal>
                             let backslash_escape =
                                 self.dialect.supports_string_literal_backslash_escape();
@@ -4131,15 +4125,18 @@ mod tests {
 
     #[test]
     fn test_national_strings_backslash_escape_not_supported() {
-        all_dialects_where(|dialect| !dialect.supports_string_literal_backslash_escape())
-            .tokenizes_to(
-                "select n'''''\\'",
-                vec![
-                    Token::make_keyword("select"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::NationalStringLiteral("''\\".to_string()),
-                ],
-            );
+        all_dialects_where(|dialect| {
+            !dialect.supports_string_literal_backslash_escape()
+                && dialect.supports_national_string_literal()
+        })
+        .tokenizes_to(
+            "select n'''''\\'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::NationalStringLiteral("''\\".to_string()),
+            ],
+        );
     }
 
     #[test]
@@ -4550,6 +4547,37 @@ mod tests {
                 Token::Plus,
                 Token::make_word("b", None),
             ],
+        );
+    }
+
+    #[test]
+    fn test_word_display_quote_escaping() {
+        assert_eq!(
+            Word {
+                value: "a\"b".to_string(),
+                quote_style: Some('"'),
+                keyword: Keyword::NoKeyword,
+            }
+            .to_string(),
+            "\"a\"\"b\""
+        );
+        assert_eq!(
+            Word {
+                value: "a`b".to_string(),
+                quote_style: Some('`'),
+                keyword: Keyword::NoKeyword,
+            }
+            .to_string(),
+            "`a``b`"
+        );
+        assert_eq!(
+            Word {
+                value: "a b".to_string(),
+                quote_style: Some('['),
+                keyword: Keyword::NoKeyword,
+            }
+            .to_string(),
+            "[a b]"
         );
     }
 }

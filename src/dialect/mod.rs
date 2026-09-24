@@ -283,6 +283,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect tokenize `N'...'` as a national string literal?
+    ///
+    /// Dialects such as SQLite treat `N` as a plain identifier, so `N'foo'` is
+    /// the identifier `N` followed by a string literal, not a national string.
+    fn supports_national_string_literal(&self) -> bool {
+        true
+    }
+
     /// Determine whether the dialect strips the backslash when escaping LIKE wildcards (%, _).
     ///
     /// [MySQL] has a special case when escaping single quoted strings which leaves these unescaped
@@ -535,8 +543,32 @@ pub trait Dialect: Debug + Any {
     /// ```sql
     /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
     /// ```
+    ///
+    /// This enables both the `->` spelling above and the `LAMBDA` keyword
+    /// spelling gated by [`Self::supports_lambda_keyword_syntax`]. A dialect
+    /// that uses `->` as a binary operator should override only the latter.
     fn supports_lambda_functions(&self) -> bool {
         false
+    }
+
+    /// Returns true if the dialect supports the `LAMBDA` keyword spelling of
+    /// lambda functions, for example:
+    ///
+    /// ```sql
+    /// SELECT list_transform([1, 2, 3], lambda x : x + 1); -- returns [2, 3, 4]
+    /// ```
+    ///
+    /// This spelling does not claim the `->` token, so it can be enabled by
+    /// dialects that already give `->` a different meaning, such as JSON
+    /// member access.
+    ///
+    /// Defaults to [`Self::supports_lambda_functions`], so dialects supporting
+    /// the `->` spelling accept the `LAMBDA` spelling too unless they say
+    /// otherwise.
+    ///
+    /// See <https://duckdb.org/docs/stable/sql/functions/lambda>
+    fn supports_lambda_keyword_syntax(&self) -> bool {
+        self.supports_lambda_functions()
     }
 
     /// Returns true if the dialect supports multiple variable assignment
@@ -596,6 +628,12 @@ pub trait Dialect: Debug + Any {
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior
         None
+    }
+
+    /// Does the dialect support the `APPROXIMATE PERCENTILE_DISC` function syntax?
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_APPROXIMATE_PERCENTILE_DISC.html>
+    fn supports_approximate_percentile_disc(&self) -> bool {
+        false
     }
 
     /// Does the dialect support trailing commas around the query?
@@ -1083,6 +1121,22 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `ARRAY(element_type)` syntax.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a ARRAY(VARCHAR));
+    /// ```
+    fn supports_array_typedef_with_parentheses(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `NOT NULL` on an element type in
+    /// an `ARRAY(element_type)` definition.
+    fn supports_array_element_not_null(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports extra parentheses around
     /// lone table names or derived tables in the `FROM` clause.
     ///
@@ -1499,6 +1553,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports a `FIRST` or `AFTER col` column
+    /// position in `ALTER TABLE ... ADD | CHANGE | MODIFY COLUMN`.
+    /// Example:
+    ///  ```sql
+    ///  ALTER TABLE tbl ADD COLUMN c INT AFTER b
+    /// ```
+    fn supports_alter_column_position(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect considers the specified ident as a function
     /// that returns an identifier. Typically used to generate identifiers
     /// programmatically.
@@ -1575,6 +1639,13 @@ pub trait Dialect: Debug + Any {
     /// )
     /// ```
     fn supports_semantic_view_table_factor(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports Snowflake-style stages in table factors (e.g. `@stage`).
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/user-guide/querying-stage)
+    fn supports_stages(&self) -> bool {
         false
     }
 
@@ -1755,6 +1826,19 @@ pub trait Dialect: Debug + Any {
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select#settings-in-select-query)
     fn supports_settings(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `PARTITION` clause on a table factor,
+    /// restricting a query to an explicit list of partitions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM employees PARTITION (p0, p1)
+    /// ```
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/partitioning-selection.html)
+    fn supports_table_partitions(&self) -> bool {
         false
     }
 

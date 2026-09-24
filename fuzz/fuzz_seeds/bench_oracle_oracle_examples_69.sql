@@ -1,0 +1,1 @@
+select owner, count(*) from t group by owner order by 1

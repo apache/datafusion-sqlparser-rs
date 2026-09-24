@@ -412,6 +412,14 @@ pub enum AlterTableOperation {
         /// MySQL-specific column position (`FIRST`/`AFTER`).
         column_position: Option<MySQLColumnPosition>,
     },
+    /// `MODIFY ORDER BY <expr>`
+    ///
+    /// Note: this is a ClickHouse-specific operation.
+    /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/order-by)
+    ModifyOrderBy {
+        /// The new sorting key.
+        order_by: OneOrManyWithParens<Expr>,
+    },
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -962,6 +970,9 @@ impl fmt::Display for AlterTableOperation {
                 }
 
                 Ok(())
+            }
+            AlterTableOperation::ModifyOrderBy { order_by } => {
+                write!(f, "MODIFY ORDER BY {order_by}")
             }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 write!(f, "RENAME CONSTRAINT {old_name} TO {new_name}")

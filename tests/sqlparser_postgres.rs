@@ -7049,7 +7049,7 @@ fn parse_trigger_related_functions() {
             file_format: None,
             location: None,
             query: None,
-            sqlite_table_options: vec![],
+            sqlite_table_options: Default::default(),
             like: None,
             clone: None,
             comment: None,

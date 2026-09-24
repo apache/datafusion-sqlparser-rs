@@ -2931,6 +2931,18 @@ impl fmt::Display for SqliteTableOption {
     }
 }
 
+/// SQLite's `table-options` list of `CREATE TABLE`, empty when absent.
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SqliteTableOptions {
+    /// Whether a comma separates the list from the column definitions,
+    /// as in `(a INT), STRICT`.
+    pub leading_comma: bool,
+    /// The options, in source order.
+    pub options: Vec<SqliteTableOption>,
+}
+
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2978,8 +2990,8 @@ pub struct CreateTable {
     pub location: Option<String>,
     /// Query used to populate the table
     pub query: Option<Box<Query>>,
-    /// SQLite `table-options`, in source order
-    pub sqlite_table_options: Vec<SqliteTableOption>,
+    /// SQLite `table-options`
+    pub sqlite_table_options: SqliteTableOptions,
     /// `LIKE` clause
     pub like: Option<CreateTableLikeKind>,
     /// `CLONE` clause
@@ -3195,11 +3207,14 @@ impl fmt::Display for CreateTable {
             write!(f, " COMMENT '{comment}'")?;
         }
 
-        if !self.sqlite_table_options.is_empty() {
+        if !self.sqlite_table_options.options.is_empty() {
+            if self.sqlite_table_options.leading_comma {
+                f.write_str(",")?;
+            }
             write!(
                 f,
                 " {}",
-                display_comma_separated(&self.sqlite_table_options)
+                display_comma_separated(&self.sqlite_table_options.options)
             )?;
         }
 

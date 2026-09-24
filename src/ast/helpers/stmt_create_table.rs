@@ -28,7 +28,7 @@ use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions,
     DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
     InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
-    RowAccessPolicy, SqliteTableOption, Statement, StorageLifecyclePolicy,
+    RowAccessPolicy, SqliteTableOptions, Statement, StorageLifecyclePolicy,
     StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WithData, WrappedCollection,
 };
 
@@ -103,8 +103,8 @@ pub struct CreateTableBuilder {
     pub location: Option<String>,
     /// Optional `AS SELECT` query for the table.
     pub query: Option<Box<Query>>,
-    /// SQLite `table-options`, in source order.
-    pub sqlite_table_options: Vec<SqliteTableOption>,
+    /// SQLite `table-options`.
+    pub sqlite_table_options: SqliteTableOptions,
     /// Optional `LIKE` clause kind.
     pub like: Option<CreateTableLikeKind>,
     /// Optional `CLONE` source object name.
@@ -217,7 +217,7 @@ impl CreateTableBuilder {
             file_format: None,
             location: None,
             query: None,
-            sqlite_table_options: vec![],
+            sqlite_table_options: SqliteTableOptions::default(),
             like: None,
             clone: None,
             version: None,
@@ -354,7 +354,7 @@ impl CreateTableBuilder {
         self
     }
     /// Set the SQLite `table-options` list.
-    pub fn sqlite_table_options(mut self, sqlite_table_options: Vec<SqliteTableOption>) -> Self {
+    pub fn sqlite_table_options(mut self, sqlite_table_options: SqliteTableOptions) -> Self {
         self.sqlite_table_options = sqlite_table_options;
         self
     }

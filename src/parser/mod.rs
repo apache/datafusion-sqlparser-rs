@@ -8955,22 +8955,29 @@ impl<'a> Parser<'a> {
             .build())
     }
 
-    /// Parse SQLite's comma-separated `table-options` list, which may be empty.
+    /// Parse SQLite's `table-options` list, empty when absent, and the
+    /// optional comma before it.
     ///
     /// See <https://www.sqlite.org/lang_createtable.html>.
-    fn parse_sqlite_table_options(&mut self) -> Result<Vec<SqliteTableOption>, ParserError> {
-        let mut options = Vec::new();
+    fn parse_sqlite_table_options(&mut self) -> Result<SqliteTableOptions, ParserError> {
+        let leading_comma = self.consume_token(&Token::Comma);
         let Some(first) = self.maybe_parse_sqlite_table_option() else {
-            return Ok(options);
+            if leading_comma {
+                self.prev_token();
+            }
+            return Ok(SqliteTableOptions::default());
         };
-        options.push(first);
+        let mut options = vec![first];
         while self.consume_token(&Token::Comma) {
             match self.maybe_parse_sqlite_table_option() {
                 Some(option) => options.push(option),
                 None => return self.expected_ref("WITHOUT ROWID or STRICT", self.peek_token_ref()),
             }
         }
-        Ok(options)
+        Ok(SqliteTableOptions {
+            leading_comma,
+            options,
+        })
     }
 
     fn maybe_parse_sqlite_table_option(&mut self) -> Option<SqliteTableOption> {

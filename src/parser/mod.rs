@@ -8835,17 +8835,7 @@ impl<'a> Parser<'a> {
         };
 
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            if self.consume_token(&Token::LParen) {
-                let columns = if self.peek_token_ref().token != Token::RParen {
-                    self.parse_comma_separated(|p| p.parse_expr())?
-                } else {
-                    vec![]
-                };
-                self.expect_token(&Token::RParen)?;
-                Some(OneOrManyWithParens::Many(columns))
-            } else {
-                Some(OneOrManyWithParens::One(self.parse_expr()?))
-            }
+            Some(self.parse_sorting_key()?)
         } else {
             None
         };
@@ -10711,6 +10701,22 @@ impl<'a> Parser<'a> {
         Ok(AlterTableOperation::AlterSortKey { columns })
     }
 
+    /// Parse the expression(s) following ClickHouse `ORDER BY`: either a single
+    /// expression or a possibly empty parenthesized list.
+    fn parse_sorting_key(&mut self) -> Result<OneOrManyWithParens<Expr>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let columns = if self.peek_token_ref().token != Token::RParen {
+                self.parse_comma_separated(|p| p.parse_expr())?
+            } else {
+                vec![]
+            };
+            self.expect_token(&Token::RParen)?;
+            Ok(OneOrManyWithParens::Many(columns))
+        } else {
+            Ok(OneOrManyWithParens::One(self.parse_expr()?))
+        }
+    }
+
     /// Parse a single `ALTER TABLE` operation and return an `AlterTableOperation`.
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
@@ -10970,6 +10976,10 @@ impl<'a> Parser<'a> {
                 data_type,
                 options,
                 column_position,
+            }
+        } else if self.parse_keywords(&[Keyword::MODIFY, Keyword::ORDER, Keyword::BY]) {
+            AlterTableOperation::ModifyOrderBy {
+                order_by: self.parse_sorting_key()?,
             }
         } else if self.parse_keyword(Keyword::MODIFY) {
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]

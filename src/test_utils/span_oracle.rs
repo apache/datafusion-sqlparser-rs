@@ -237,12 +237,13 @@ mod nodes {
 
     use super::{slice, Finding, Occurrences};
     use crate::ast::{
-        Expr, GroupByExpr, Ident, NodeRef, ObjectName, OrderByExpr, Query, Select, Statement,
-        TableFactor, ValueWithSpan, Visit, Visitor, WildcardAdditionalOptions,
+        Expr, GroupByExpr, Ident, MergeInsertExpr, MergeUpdateExpr, NodeRef, ObjectName,
+        OrderByExpr, Query, Select, Statement, TableFactor, ValueWithSpan, Visit, Visitor,
+        WildcardAdditionalOptions,
     };
     use crate::dialect::Dialect;
     use crate::parser::{Parser, ParserError, ParserOptions};
-    use crate::tokenizer::{Span, Token};
+    use crate::tokenizer::{Span, Token, Tokenizer};
 
     pub(super) fn walk(
         dialect: &dyn Dialect,
@@ -324,28 +325,59 @@ mod nodes {
                     .then_some("outside-parent")
             };
             // A slice equal to the rendering is exact even where it cannot parse out of context.
-            let reparse = valid
-                && slice(self.sql, span) != text.as_deref()
-                && self.reparses(node, span) == Some(false);
+            let source = slice(self.sql, span).filter(|_| valid);
+            let exact = source.is_some() && source == text.as_deref();
+            let reparse = (source.is_some() && !exact && self.reparses(node, span) == Some(false))
+                .then_some("inexact");
+            let edges = match (source, text.as_deref()) {
+                (Some(source), Some(text))
+                    if !exact && parse_entry(node).is_none() && !renders_in_parent(node) =>
+                {
+                    self.edges(source, text)
+                }
+                _ => None,
+            };
 
             let text = text.unwrap_or_default();
-            if let Some(class) = structure {
-                self.found.push(Finding {
-                    check: "structure",
-                    class,
-                    node: label.clone(),
-                    occurrence,
-                    text: text.clone(),
-                });
+            for (check, class) in [
+                ("structure", structure),
+                ("reparse", reparse),
+                ("edges", edges),
+            ] {
+                if let Some(class) = class {
+                    self.found.push(Finding {
+                        check,
+                        class,
+                        node: label.clone(),
+                        occurrence,
+                        text: text.clone(),
+                    });
+                }
             }
-            if reparse {
-                self.found.push(Finding {
-                    check: "reparse",
-                    class: "inexact",
-                    node: label,
-                    occurrence,
-                    text,
-                });
+        }
+
+        /// Which end of `source` starts or ends on a different token than the rendering.
+        fn edges(&self, source: &str, rendered: &str) -> Option<&'static str> {
+            let tokens = |sql: &str| -> Option<Vec<Token>> {
+                let tokens = Tokenizer::new(self.dialect, sql)
+                    .with_unescape(self.options.unescape)
+                    .tokenize()
+                    .ok()?;
+                Some(
+                    tokens
+                        .into_iter()
+                        .filter(|t| !matches!(t, Token::Whitespace(_) | Token::EOF))
+                        .collect(),
+                )
+            };
+            let (source, rendered) = (tokens(source)?, tokens(rendered)?);
+            let start = same_token(source.first()?, rendered.first()?);
+            let end = same_token(source.last()?, rendered.last()?);
+            match (start, end) {
+                (true, true) => None,
+                (false, true) => Some("start"),
+                (true, false) => Some("end"),
+                (false, false) => Some("both"),
             }
         }
 
@@ -366,6 +398,51 @@ mod nodes {
                 }),
             )
         }
+    }
+
+    /// Unquoted words compare case-insensitively, because the rendering uppercases keywords.
+    fn same_token(source: &Token, rendered: &Token) -> bool {
+        match (source, rendered) {
+            (Token::Word(a), Token::Word(b))
+                if a.quote_style.is_none() && b.quote_style.is_none() =>
+            {
+                a.value.eq_ignore_ascii_case(&b.value)
+            }
+            (Token::Word(a), Token::Word(b)) => {
+                (&a.value, a.quote_style) == (&b.value, b.quote_style)
+            }
+            // Renderings normalize literals, and reparse checks the expressions that hold them.
+            _ if is_literal(source) && is_literal(rendered) => {
+                core::mem::discriminant(source) == core::mem::discriminant(rendered)
+            }
+            _ => source == rendered,
+        }
+    }
+
+    fn is_literal(token: &Token) -> bool {
+        matches!(
+            token,
+            Token::Number(..)
+                | Token::SingleQuotedString(_)
+                | Token::DoubleQuotedString(_)
+                | Token::TripleSingleQuotedString(_)
+                | Token::TripleDoubleQuotedString(_)
+                | Token::DollarQuotedString(_)
+                | Token::SingleQuotedByteStringLiteral(_)
+                | Token::DoubleQuotedByteStringLiteral(_)
+                | Token::TripleSingleQuotedByteStringLiteral(_)
+                | Token::TripleDoubleQuotedByteStringLiteral(_)
+                | Token::SingleQuotedRawStringLiteral(_)
+                | Token::DoubleQuotedRawStringLiteral(_)
+                | Token::TripleSingleQuotedRawStringLiteral(_)
+                | Token::TripleDoubleQuotedRawStringLiteral(_)
+                | Token::NationalStringLiteral(_)
+                | Token::QuoteDelimitedStringLiteral(_)
+                | Token::NationalQuoteDelimitedStringLiteral(_)
+                | Token::EscapedStringLiteral(_)
+                | Token::UnicodeStringLiteral(_)
+                | Token::HexStringLiteral(_)
+        )
     }
 
     type ParseEntry = fn(&mut Parser<'_>) -> Result<String, ParserError>;
@@ -412,9 +489,11 @@ mod nodes {
         )
     }
 
-    /// Nodes that own a token their parent renders, as `*` in [`WildcardAdditionalOptions`].
+    /// Nodes that own a leading token their parent renders, as `*` in [`WildcardAdditionalOptions`].
     fn renders_in_parent(node: NodeRef<'_>) -> bool {
         node.downcast_ref::<WildcardAdditionalOptions>().is_some()
+            || node.downcast_ref::<MergeInsertExpr>().is_some()
+            || node.downcast_ref::<MergeUpdateExpr>().is_some()
     }
 
     /// `Type::Variant` with module paths removed, as in `Expr::Cast` or `Parens<Expr>`.
@@ -583,6 +662,20 @@ mod tests {
     fn child_outside_parent_fails_structure() {
         let found = findings_of("SELECT ROW_NUMBER() OVER (ORDER BY a) FROM t");
         assert!(has(&found, "structure", "outside-parent", "a"));
+    }
+
+    #[test]
+    fn span_missing_leading_keywords_fails_edges() {
+        let found = findings_of("SELECT * FROM a LEFT JOIN b ON a.x = b.x");
+        assert!(has(&found, "edges", "start", "LEFT JOIN b ON a.x = b.x"));
+    }
+
+    #[test]
+    fn edges_ignore_keyword_case() {
+        let found = findings_of("select null as x from t");
+        assert!(!found
+            .iter()
+            .any(|f| f.check == "edges" && f.text == "NULL AS x"));
     }
 
     #[test]

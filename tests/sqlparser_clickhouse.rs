@@ -1945,7 +1945,9 @@ fn parse_alter_table_modify_order_by() {
     for sql in [
         "ALTER TABLE events MODIFY ORDER BY",
         "ALTER TABLE events MODIFY ORDER BY (a",
+        "ALTER TABLE events MODIFY ORDER BY (,)",
         "ALTER TABLE events MODIFY ORDER BY (a) b",
+        "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
     ] {
         assert!(
             clickhouse_and_generic().parse_sql_statements(sql).is_err(),

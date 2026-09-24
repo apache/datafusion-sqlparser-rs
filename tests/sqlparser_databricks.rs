@@ -311,11 +311,11 @@ fn parse_show_catalogs() {
     databricks().verified_stmt("SHOW CATALOGS HISTORY STARTS WITH 'pay'");
 
     match databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'") {
-        Statement::ShowCatalogs {
+        Statement::ShowCatalogs(ShowCatalogsStatement {
             terse,
             history,
             show_options,
-        } => {
+        }) => {
             assert!(!terse);
             assert!(!history);
             assert_eq!(show_options.show_in, None);
@@ -338,11 +338,11 @@ fn parse_show_catalogs_with_show_options() {
     databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT");
 
     match databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT") {
-        Statement::ShowCatalogs {
+        Statement::ShowCatalogs(ShowCatalogsStatement {
             terse,
             history,
             show_options,
-        } => {
+        }) => {
             assert!(terse);
             assert!(history);
             assert_eq!(show_options.filter_position, None);
@@ -488,7 +488,7 @@ fn parse_optimize_table() {
     match databricks()
         .verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1, col2)")
     {
-        Statement::OptimizeTable {
+        Statement::OptimizeTable(OptimizeTableStatement {
             name,
             has_table_keyword,
             on_cluster,
@@ -497,7 +497,7 @@ fn parse_optimize_table() {
             deduplicate,
             predicate,
             zorder,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_table");
             assert!(!has_table_keyword);
             assert!(on_cluster.is_none());

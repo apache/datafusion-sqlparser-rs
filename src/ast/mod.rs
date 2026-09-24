@@ -149,7 +149,9 @@ pub use table_constraints::{
 mod operator;
 mod query;
 mod spans;
+mod statements;
 pub use spans::Spanned;
+pub use statements::*;
 
 pub mod comments;
 mod trigger;
@@ -3630,31 +3632,14 @@ pub enum Statement {
     /// ```sql
     /// INSTALL
     /// ```
-    Install {
-        /// Only for DuckDB
-        extension_name: Ident,
-    },
+    Install(InstallStatement),
     /// ```sql
     /// LOAD
     /// ```
-    Load {
-        /// Only for DuckDB
-        extension_name: Ident,
-    },
+    Load(LoadStatement),
     // TODO: Support ROW FORMAT
     /// LOAD DATA from a directory or query source.
-    Directory {
-        /// Whether to overwrite existing files.
-        overwrite: bool,
-        /// Whether the directory is local to the server.
-        local: bool,
-        /// Path to the directory or files.
-        path: String,
-        /// Optional file format for the data.
-        file_format: Option<FileFormat>,
-        /// Source query providing data to load.
-        source: Box<Query>,
-    },
+    Directory(DirectoryStatement),
     /// A `CASE` statement.
     Case(CaseStatement),
     /// An `IF` statement.
@@ -3670,20 +3655,7 @@ pub enum Statement {
     /// ```sql
     /// COPY [TO | FROM] ...
     /// ```
-    Copy {
-        /// The source of 'COPY TO', or the target of 'COPY FROM'
-        source: CopySource,
-        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
-        to: bool,
-        /// The target of 'COPY TO', or the source of 'COPY FROM'
-        target: CopyTarget,
-        /// WITH options (from PostgreSQL version 9.0)
-        options: Vec<CopyOption>,
-        /// WITH options (before PostgreSQL version 9.0)
-        legacy_options: Vec<CopyLegacyOption>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
-    },
+    Copy(CopyStatement),
     /// ```sql
     /// COPY INTO <table> | <location>
     /// ```
@@ -3695,36 +3667,7 @@ pub enum Statement {
     /// Postgres. Although they share common prefix, it is reasonable to implement them
     /// in different enums. This can be refactored later once custom dialects
     /// are allowed to have custom Statements.
-    CopyIntoSnowflake {
-        /// Kind of COPY INTO operation (table or location).
-        kind: CopyIntoSnowflakeKind,
-        /// Target object for the COPY INTO operation.
-        into: ObjectName,
-        /// Optional list of target columns.
-        into_columns: Option<Vec<Ident>>,
-        /// Optional source object name (staged data).
-        from_obj: Option<ObjectName>,
-        /// Optional alias for the source object.
-        from_obj_alias: Option<Ident>,
-        /// Stage-specific parameters (e.g., credentials, path).
-        stage_params: StageParamsObject,
-        /// Optional list of transformations applied when loading.
-        from_transformations: Option<Vec<StageLoadSelectItemKind>>,
-        /// Optional source query instead of a staged object.
-        from_query: Option<Box<Query>>,
-        /// Optional list of specific file names to load.
-        files: Option<Vec<String>>,
-        /// Optional filename matching pattern.
-        pattern: Option<String>,
-        /// File format options.
-        file_format: KeyValueOptions,
-        /// Additional copy options.
-        copy_options: KeyValueOptions,
-        /// Optional validation mode string.
-        validation_mode: Option<String>,
-        /// Optional partition expression for loading.
-        partition: Option<Box<Expr>>,
-    },
+    CopyIntoSnowflake(CopyIntoSnowflakeStatement),
     /// ```sql
     /// OPEN cursor_name
     /// ```
@@ -3734,10 +3677,7 @@ pub enum Statement {
     /// CLOSE
     /// ```
     /// Closes the portal underlying an open cursor.
-    Close {
-        /// Cursor name
-        cursor: CloseCursor,
-    },
+    Close(CloseStatement),
     /// ```sql
     /// UPDATE
     /// ```
@@ -3758,17 +3698,7 @@ pub enum Statement {
     /// CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     /// ```
     /// Sqlite specific statement
-    CreateVirtualTable {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        /// Name of the virtual table module instance.
-        name: ObjectName,
-        /// `true` when `IF NOT EXISTS` was specified.
-        if_not_exists: bool,
-        /// Module name used by the virtual table.
-        module_name: Ident,
-        /// Arguments passed to the module.
-        module_args: Vec<Ident>,
-    },
+    CreateVirtualTable(CreateVirtualTableStatement),
     /// ```sql
     /// `CREATE INDEX`
     /// ```
@@ -3782,22 +3712,7 @@ pub enum Statement {
     /// CREATE SECRET
     /// ```
     /// See [DuckDB](https://duckdb.org/docs/sql/statements/create_secret.html)
-    CreateSecret {
-        /// `true` when `OR REPLACE` was specified.
-        or_replace: bool,
-        /// Optional `TEMPORARY` flag.
-        temporary: Option<bool>,
-        /// `true` when `IF NOT EXISTS` was present.
-        if_not_exists: bool,
-        /// Optional secret name.
-        name: Option<Ident>,
-        /// Optional storage specifier identifier.
-        storage_specifier: Option<Ident>,
-        /// The secret type identifier.
-        secret_type: Ident,
-        /// Additional secret options.
-        options: Vec<SecretOption>,
-    },
+    CreateSecret(CreateSecretStatement),
     /// A `CREATE SERVER` statement.
     CreateServer(CreateServerStatement),
     /// ```sql
@@ -3841,26 +3756,11 @@ pub enum Statement {
     /// ```sql
     /// ALTER INDEX
     /// ```
-    AlterIndex {
-        /// Name of the index to alter.
-        name: ObjectName,
-        /// The operation to perform on the index.
-        operation: AlterIndexOperation,
-    },
+    AlterIndex(AlterIndexStatement),
     /// ```sql
     /// ALTER VIEW
     /// ```
-    AlterView {
-        /// View name being altered.
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        /// Optional new column list for the view.
-        columns: Vec<Ident>,
-        /// Replacement query for the view definition.
-        query: Box<Query>,
-        /// Additional WITH options for the view.
-        with_options: Vec<SqlOption>,
-    },
+    AlterView(AlterViewStatement),
     /// ```sql
     /// ALTER FUNCTION
     /// ALTER AGGREGATE
@@ -3900,12 +3800,7 @@ pub enum Statement {
     /// ```sql
     /// ALTER ROLE
     /// ```
-    AlterRole {
-        /// Role name being altered.
-        name: Ident,
-        /// Operation to perform on the role.
-        operation: AlterRoleOperation,
-    },
+    AlterRole(AlterRoleStatement),
     /// ```sql
     /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
     /// ```
@@ -3919,94 +3814,34 @@ pub enum Statement {
     /// ALTER CONNECTOR connector_name SET OWNER [USER|ROLE] user_or_role;
     /// ```
     /// (Hive-specific)
-    AlterConnector {
-        /// Name of the connector to alter.
-        name: Ident,
-        /// Optional connector properties to set.
-        properties: Option<Vec<SqlOption>>,
-        /// Optional new URL for the connector.
-        url: Option<String>,
-        /// Optional new owner specification.
-        owner: Option<ddl::AlterConnectorOwner>,
-    },
+    AlterConnector(AlterConnectorStatement),
     /// ```sql
     /// ALTER SESSION SET sessionParam
     /// ALTER SESSION UNSET <param_name> [ , <param_name> , ... ]
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
-    AlterSession {
-        /// true is to set for the session parameters, false is to unset
-        set: bool,
-        /// The session parameters to set or unset
-        session_params: KeyValueOptions,
-    },
+    AlterSession(AlterSessionStatement),
     /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
     /// ```
     /// (SQLite-specific)
-    AttachDatabase {
-        /// The name to bind to the newly attached database
-        schema_name: Ident,
-        /// An expression that indicates the path to the database file
-        database_file_name: Expr,
-        /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
-        database: bool,
-    },
+    AttachDatabase(AttachDatabaseStatement),
     /// (DuckDB-specific)
     /// ```sql
     /// ATTACH 'sqlite_file.db' AS sqlite_db (READ_ONLY, TYPE SQLITE);
     /// ```
     /// See <https://duckdb.org/docs/sql/statements/attach.html>
-    AttachDuckDBDatabase {
-        /// `true` when `IF NOT EXISTS` was present.
-        if_not_exists: bool,
-        /// `true` if the syntax used `ATTACH DATABASE` rather than `ATTACH`.
-        database: bool,
-        /// The path identifier to the database file being attached.
-        database_path: Ident,
-        /// Optional alias assigned to the attached database.
-        database_alias: Option<Ident>,
-        /// Dialect-specific attach options (e.g., `READ_ONLY`).
-        attach_options: Vec<AttachDuckDBDatabaseOption>,
-    },
+    AttachDuckDBDatabase(AttachDuckDBDatabaseStatement),
     /// (DuckDB-specific)
     /// ```sql
     /// DETACH db_alias;
     /// ```
     /// See <https://duckdb.org/docs/sql/statements/attach.html>
-    DetachDuckDBDatabase {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// `true` if the syntax used `DETACH DATABASE` rather than `DETACH`.
-        database: bool,
-        /// Alias of the database to detach.
-        database_alias: Ident,
-    },
+    DetachDuckDBDatabase(DetachDuckDBDatabaseStatement),
     /// ```sql
     /// DROP [TABLE, VIEW, ...]
     /// ```
-    Drop {
-        /// The type of the object to drop: TABLE, VIEW, etc.
-        object_type: ObjectType,
-        /// An optional `IF EXISTS` clause. (Non-standard.)
-        if_exists: bool,
-        /// One or more objects to drop. (ANSI SQL requires exactly one.)
-        names: Vec<ObjectName>,
-        /// Whether `CASCADE` was specified. This will be `false` when
-        /// `RESTRICT` or no drop behavior at all was specified.
-        cascade: bool,
-        /// Whether `RESTRICT` was specified. This will be `false` when
-        /// `CASCADE` or no drop behavior at all was specified.
-        restrict: bool,
-        /// Hive allows you specify whether the table's stored data will be
-        /// deleted along with the dropped table
-        purge: bool,
-        /// MySQL-specific "TEMPORARY" keyword
-        temporary: bool,
-        /// MySQL-specific drop index syntax, which requires table specification
-        /// See <https://dev.mysql.com/doc/refman/8.4/en/drop-index.html>
-        table: Option<ObjectName>,
-    },
+    Drop(DropStatement),
     /// ```sql
     /// DROP FUNCTION
     /// ```
@@ -4022,27 +3857,11 @@ pub enum Statement {
     /// ```sql
     /// DROP PROCEDURE
     /// ```
-    DropProcedure {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// One or more functions/procedures to drop.
-        proc_desc: Vec<FunctionDesc>,
-        /// Optional drop behavior (`CASCADE` or `RESTRICT`).
-        drop_behavior: Option<DropBehavior>,
-    },
+    DropProcedure(DropProcedureStatement),
     /// ```sql
     /// DROP SECRET
     /// ```
-    DropSecret {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// Optional `TEMPORARY` marker.
-        temporary: Option<bool>,
-        /// Name of the secret to drop.
-        name: Ident,
-        /// Optional storage specifier identifier.
-        storage_specifier: Option<Ident>,
-    },
+    DropSecret(DropSecretStatement),
     ///```sql
     /// DROP POLICY
     /// ```
@@ -4052,12 +3871,7 @@ pub enum Statement {
     /// DROP CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
-    DropConnector {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// Name of the connector to drop.
-        name: Ident,
-    },
+    DropConnector(DropConnectorStatement),
     /// ```sql
     /// DECLARE
     /// ```
@@ -4065,10 +3879,7 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Declare {
-        /// Cursor declaration statements collected by `DECLARE`.
-        stmts: Vec<Declare>,
-    },
+    Declare(DeclareStatement),
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
     ///     [ WITH ] [ SCHEMA schema_name ]
@@ -4115,152 +3926,71 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Fetch {
-        /// Cursor name
-        name: Ident,
-        /// The fetch direction (e.g., `FORWARD`, `BACKWARD`).
-        direction: FetchDirection,
-        /// The fetch position (e.g., `ALL`, `NEXT`, `ABSOLUTE`).
-        position: FetchPosition,
-        /// Optional target table to fetch rows into.
-        into: Option<ObjectName>,
-    },
+    Fetch(FetchStatement),
     /// ```sql
     /// FLUSH [NO_WRITE_TO_BINLOG | LOCAL] flush_option [, flush_option] ... | tables_option
     /// ```
     ///
     /// Note: this is a Mysql-specific statement,
     /// but may also compatible with other SQL.
-    Flush {
-        /// The specific flush option or object to flush.
-        object_type: FlushType,
-        /// Optional flush location (dialect-specific).
-        location: Option<FlushLocation>,
-        /// Optional channel name used for flush operations.
-        channel: Option<String>,
-        /// Whether a read lock was requested.
-        read_lock: bool,
-        /// Whether this is an export flush operation.
-        export: bool,
-        /// Optional list of tables involved in the flush.
-        tables: Vec<ObjectName>,
-    },
+    Flush(FlushStatement),
     /// ```sql
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Discard {
-        /// The kind of object(s) to discard (ALL, PLANS, etc.).
-        object_type: DiscardObject,
-    },
+    Discard(DiscardStatement),
     /// `SHOW FUNCTIONS`
     ///
     /// Note: this is a Presto-specific statement.
-    ShowFunctions {
-        /// Optional filter for which functions to display.
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowFunctions(ShowFunctionsStatement),
     /// ```sql
     /// SHOW <variable>
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable {
-        /// Variable name as one or more identifiers.
-        variable: Vec<Ident>,
-    },
+    ShowVariable(ShowVariableStatement),
     /// ```sql
     /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowStatus {
-        /// Optional filter for which status entries to display.
-        filter: Option<ShowStatementFilter>,
-        /// `true` when `GLOBAL` scope was requested.
-        global: bool,
-        /// `true` when `SESSION` scope was requested.
-        session: bool,
-    },
+    ShowStatus(ShowStatusStatement),
     /// ```sql
     /// SHOW VARIABLES
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowVariables {
-        /// Optional filter for which variables to display.
-        filter: Option<ShowStatementFilter>,
-        /// `true` when `GLOBAL` scope was requested.
-        global: bool,
-        /// `true` when `SESSION` scope was requested.
-        session: bool,
-    },
+    ShowVariables(ShowVariablesStatement),
     /// ```sql
     /// SHOW CREATE TABLE
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCreate {
-        /// The kind of object being shown (TABLE, VIEW, etc.).
-        obj_type: ShowCreateObject,
-        /// The name of the object to show create statement for.
-        obj_name: ObjectName,
-    },
+    ShowCreate(ShowCreateStatement),
     /// ```sql
     /// SHOW COLUMNS
     /// ```
-    ShowColumns {
-        /// `true` when extended column information was requested.
-        extended: bool,
-        /// `true` when full column details were requested.
-        full: bool,
-        /// Additional options for `SHOW COLUMNS`.
-        show_options: ShowStatementOptions,
-    },
+    ShowColumns(ShowColumnsStatement),
     /// ```sql
     /// SHOW CATALOGS
     /// ```
-    ShowCatalogs {
-        /// `true` when terse output format was requested.
-        terse: bool,
-        /// `true` when history information was requested.
-        history: bool,
-        /// Additional options for `SHOW CATALOGS`.
-        show_options: ShowStatementOptions,
-    },
+    ShowCatalogs(ShowCatalogsStatement),
     /// ```sql
     /// SHOW DATABASES
     /// ```
-    ShowDatabases {
-        /// `true` when terse output format was requested.
-        terse: bool,
-        /// `true` when history information was requested.
-        history: bool,
-        /// Additional options for `SHOW DATABASES`.
-        show_options: ShowStatementOptions,
-    },
+    ShowDatabases(ShowDatabasesStatement),
     /// ```sql
     /// SHOW [FULL] PROCESSLIST
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowProcessList {
-        /// `true` when full process information was requested.
-        full: bool,
-    },
+    ShowProcessList(ShowProcessListStatement),
     /// ```sql
     /// SHOW SCHEMAS
     /// ```
-    ShowSchemas {
-        /// `true` when terse (compact) output was requested.
-        terse: bool,
-        /// `true` when history information was requested.
-        history: bool,
-        /// Additional options for `SHOW SCHEMAS`.
-        show_options: ShowStatementOptions,
-    },
+    ShowSchemas(ShowSchemasStatement),
     // ```sql
     // SHOW {CHARACTER SET | CHARSET}
     // ```
@@ -4277,40 +4007,17 @@ pub enum Statement {
     /// ```sql
     /// SHOW TABLES
     /// ```
-    ShowTables {
-        /// `true` when terse output format was requested (compact listing).
-        terse: bool,
-        /// `true` when history rows are requested.
-        history: bool,
-        /// `true` when extended information should be shown.
-        extended: bool,
-        /// `true` when a full listing was requested.
-        full: bool,
-        /// `true` when external tables should be included.
-        external: bool,
-        /// Additional options for `SHOW` statements.
-        show_options: ShowStatementOptions,
-    },
+    ShowTables(ShowTablesStatement),
     /// ```sql
     /// SHOW VIEWS
     /// ```
-    ShowViews {
-        /// `true` when terse output format was requested.
-        terse: bool,
-        /// `true` when materialized views should be included.
-        materialized: bool,
-        /// Additional options for `SHOW` statements.
-        show_options: ShowStatementOptions,
-    },
+    ShowViews(ShowViewsStatement),
     /// ```sql
     /// SHOW COLLATION
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCollation {
-        /// Optional filter for which collations to display.
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowCollation(ShowCollationStatement),
     /// ```sql
     /// `USE ...`
     /// ```
@@ -4324,57 +4031,13 @@ pub enum Statement {
     /// `BEGIN  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     /// ```
     /// If `begin` is true
-    StartTransaction {
-        /// Transaction modes such as `ISOLATION LEVEL` or `READ WRITE`.
-        modes: Vec<TransactionMode>,
-        /// `true` when this was parsed as `BEGIN` instead of `START`.
-        begin: bool,
-        /// Optional specific keyword used: `TRANSACTION` or `WORK`.
-        transaction: Option<BeginTransactionKind>,
-        /// Optional transaction modifier (e.g., `AND NO CHAIN`).
-        modifier: Option<TransactionModifier>,
-        /// List of statements belonging to the `BEGIN` block.
-        /// Example:
-        /// ```sql
-        /// BEGIN
-        ///     SELECT 1;
-        ///     SELECT 2;
-        /// END;
-        /// ```
-        statements: Vec<Statement>,
-        /// Exception handling with exception clauses.
-        /// Example:
-        /// ```sql
-        /// EXCEPTION
-        ///     WHEN EXCEPTION_1 THEN
-        ///         SELECT 2;
-        ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
-        ///         SELECT 3;
-        ///     WHEN OTHER THEN
-        ///         SELECT 4;
-        /// ```
-        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-        /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
-        exception: Option<Vec<ExceptionWhen>>,
-        /// TRUE if the statement has an `END` keyword.
-        has_end_keyword: bool,
-    },
+    StartTransaction(StartTransactionStatement),
     /// ```sql
     /// COMMENT ON ...
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Comment {
-        /// Type of object being commented (table, column, etc.).
-        object_type: CommentObject,
-        /// Name of the object the comment applies to.
-        object_name: ObjectName,
-        /// Optional comment text (None to remove comment).
-        comment: Option<String>,
-        /// An optional `IF EXISTS` clause. (Non-standard.)
-        /// See <https://docs.snowflake.com/en/sql-reference/sql/comment>
-        if_exists: bool,
-    },
+    Comment(CommentStatement),
     /// ```sql
     /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
     /// ```
@@ -4384,117 +4047,21 @@ pub enum Statement {
     /// END [ TRY | CATCH ]
     /// ```
     /// If `end` is true
-    Commit {
-        /// `true` when `AND [ NO ] CHAIN` was present.
-        chain: bool,
-        /// `true` when this `COMMIT` was parsed as an `END` block terminator.
-        end: bool,
-        /// Optional transaction modifier for commit semantics.
-        modifier: Option<TransactionModifier>,
-    },
+    Commit(CommitStatement),
     /// ```sql
     /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]
     /// ```
-    Rollback {
-        /// `true` when `AND [ NO ] CHAIN` was present.
-        chain: bool,
-        /// Optional savepoint name to roll back to.
-        savepoint: Option<Ident>,
-    },
+    Rollback(RollbackStatement),
     /// ```sql
     /// CREATE SCHEMA
     /// ```
-    CreateSchema {
-        /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
-        schema_name: SchemaName,
-        /// `true` when `OR REPLACE` was present.
-        or_replace: bool,
-        /// `true` when `IF NOT EXISTS` was present.
-        if_not_exists: bool,
-        /// Schema properties.
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema WITH (key1='value1');
-        /// ```
-        ///
-        /// [Trino](https://trino.io/docs/current/sql/create-schema.html)
-        with: Option<Vec<SqlOption>>,
-        /// Schema options.
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema OPTIONS(key1='value1');
-        /// ```
-        ///
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
-        options: Option<Vec<SqlOption>>,
-        /// Default collation specification for the schema.
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema DEFAULT COLLATE 'und:ci';
-        /// ```
-        ///
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
-        default_collate_spec: Option<Expr>,
-        /// Clones a schema
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema CLONE otherschema
-        /// ```
-        ///
-        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
-        clone: Option<ObjectName>,
-    },
+    CreateSchema(CreateSchemaStatement),
     /// ```sql
     /// CREATE DATABASE
     /// ```
     /// See:
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
-    CreateDatabase {
-        /// Database name.
-        db_name: ObjectName,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// Optional location URI.
-        location: Option<String>,
-        /// Optional managed location.
-        managed_location: Option<String>,
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// `TRANSIENT` flag.
-        transient: bool,
-        /// Optional clone source.
-        clone: Option<ObjectName>,
-        /// Optional data retention time in days.
-        data_retention_time_in_days: Option<u64>,
-        /// Optional maximum data extension time in days.
-        max_data_extension_time_in_days: Option<u64>,
-        /// Optional external volume identifier.
-        external_volume: Option<String>,
-        /// Optional catalog name.
-        catalog: Option<String>,
-        /// Whether to replace invalid characters.
-        replace_invalid_characters: Option<bool>,
-        /// Default DDL collation string.
-        default_ddl_collation: Option<String>,
-        /// Storage serialization policy.
-        storage_serialization_policy: Option<StorageSerializationPolicy>,
-        /// Optional comment.
-        comment: Option<String>,
-        /// Optional default character set (MySQL).
-        default_charset: Option<String>,
-        /// Optional default collation (MySQL).
-        default_collation: Option<String>,
-        /// Optional catalog sync identifier.
-        catalog_sync: Option<String>,
-        /// Catalog sync namespace mode.
-        catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
-        /// Optional flatten delimiter for namespace sync.
-        catalog_sync_namespace_flatten_delimiter: Option<String>,
-        /// Optional tags for the database.
-        with_tags: Option<Vec<Tag>>,
-        /// Optional contact entries for the database.
-        with_contacts: Option<Vec<ContactEntry>>,
-    },
+    CreateDatabase(CreateDatabaseStatement),
     /// ```sql
     /// CREATE FUNCTION
     /// ```
@@ -4512,82 +4079,26 @@ pub enum Statement {
     /// ```sql
     /// CREATE PROCEDURE
     /// ```
-    CreateProcedure {
-        /// `OR ALTER` flag.
-        or_alter: bool,
-        /// Procedure name.
-        name: ObjectName,
-        /// Optional procedure parameters.
-        params: Option<Vec<ProcedureParam>>,
-        /// Optional language identifier.
-        language: Option<Ident>,
-        /// Procedure body statements.
-        body: ConditionalStatements,
-    },
+    CreateProcedure(CreateProcedureStatement),
     /// ```sql
     /// CREATE MACRO
     /// ```
     ///
     /// Supported variants:
     /// 1. [DuckDB](https://duckdb.org/docs/sql/statements/create_macro)
-    CreateMacro {
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// Whether macro is temporary.
-        temporary: bool,
-        /// Macro name.
-        name: ObjectName,
-        /// Optional macro arguments.
-        args: Option<Vec<MacroArg>>,
-        /// Macro definition body.
-        definition: MacroDefinition,
-    },
+    CreateMacro(CreateMacroStatement),
     /// ```sql
     /// CREATE STAGE
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-stage>
-    CreateStage {
-        /// `OR REPLACE` flag for stage.
-        or_replace: bool,
-        /// Whether stage is temporary.
-        temporary: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// Stage name.
-        name: ObjectName,
-        /// Stage parameters.
-        stage_params: StageParamsObject,
-        /// Directory table parameters.
-        directory_table_params: KeyValueOptions,
-        /// File format options.
-        file_format: KeyValueOptions,
-        /// Copy options for stage.
-        copy_options: KeyValueOptions,
-        /// Optional comment.
-        comment: Option<String>,
-    },
+    CreateStage(CreateStageStatement),
     /// ```sql
     /// CREATE [ OR REPLACE ] [ { TEMP | TEMPORARY | VOLATILE } ] FILE FORMAT [ IF NOT EXISTS ] <name>
     ///   [ TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ]
     ///   [ COMMENT = '<string_literal>' ]
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-file-format>
-    CreateFileFormat {
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// Whether file format is temporary.
-        temporary: bool,
-        /// Whether file format is volatile.
-        volatile: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// File format name.
-        name: ObjectName,
-        /// Format type options (e.g. `TYPE`, `FIELD_DELIMITER`, `COMPRESSION`, ...).
-        options: KeyValueOptions,
-        /// Optional comment.
-        comment: Option<String>,
-    },
+    CreateFileFormat(CreateFileFormatStatement),
     /// ```sql
     /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
     ///   [ [ WITH ] <property> = <value> [ ... ] ]
@@ -4599,12 +4110,7 @@ pub enum Statement {
     /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
-    Assert {
-        /// Assertion condition expression.
-        condition: Expr,
-        /// Optional message expression.
-        message: Option<Expr>,
-    },
+    Assert(AssertStatement),
     /// ```sql
     /// GRANT privileges ON objects TO grantees
     /// ```
@@ -4622,12 +4128,7 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate {
-        /// Name to deallocate (or `ALL`).
-        name: Ident,
-        /// Whether `PREPARE` keyword was present.
-        prepare: bool,
-    },
+    Deallocate(DeallocateStatement),
     /// ```sql
     /// An `EXECUTE` statement
     /// ```
@@ -4636,110 +4137,38 @@ pub enum Statement {
     /// MSSQL: <https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/execute-a-stored-procedure>
     /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate>
     /// Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/execute-immediate>
-    Execute {
-        /// Optional function/procedure name.
-        name: Option<ObjectName>,
-        /// Parameter expressions passed to execute.
-        parameters: Vec<Expr>,
-        /// Whether parentheses were present around `parameters`.
-        has_parentheses: bool,
-        /// Is this an `EXECUTE IMMEDIATE`.
-        immediate: bool,
-        /// Identifiers to capture results into.
-        into: Vec<Ident>,
-        /// `USING` expressions with optional aliases.
-        using: Vec<ExprWithAlias>,
-        /// Whether the last parameter is the return value of the procedure
-        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#output>
-        output: bool,
-        /// Whether to invoke the procedure with the default parameter values
-        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#default>
-        default: bool,
-    },
+    Execute(ExecuteStatement),
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Prepare {
-        /// Name of the prepared statement.
-        name: Ident,
-        /// Optional data types for parameters.
-        data_types: Vec<DataType>,
-        /// Statement being prepared.
-        statement: Box<Statement>,
-    },
+    Prepare(PrepareStatement),
     /// ```sql
     /// KILL [CONNECTION | QUERY | MUTATION]
     /// ```
     ///
     /// See <https://clickhouse.com/docs/en/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
-    Kill {
-        /// Optional kill modifier (CONNECTION, QUERY, MUTATION).
-        modifier: Option<KillType>,
-        // processlist_id
-        /// The id of the process to kill.
-        id: u64,
-    },
+    Kill(KillStatement),
     /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE] TABLE
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
-    ExplainTable {
-        /// `EXPLAIN | DESC | DESCRIBE`
-        describe_alias: DescribeAlias,
-        /// Hive style `FORMATTED | EXTENDED`
-        hive_format: Option<HiveDescribeFormat>,
-        /// Snowflake and ClickHouse support `DESC|DESCRIBE TABLE <table_name>` syntax
-        ///
-        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/desc-table.html)
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/describe-table)
-        has_table_keyword: bool,
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-    },
+    ExplainTable(ExplainTableStatement),
     /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE]  <statement>
     /// ```
-    Explain {
-        /// `EXPLAIN | DESC | DESCRIBE`
-        describe_alias: DescribeAlias,
-        /// Carry out the command and show actual run times and other statistics.
-        analyze: bool,
-        /// Display additional information regarding the plan.
-        verbose: bool,
-        /// `EXPLAIN QUERY PLAN`
-        /// Display the query plan without running the query.
-        ///
-        /// [SQLite](https://sqlite.org/lang_explain.html)
-        query_plan: bool,
-        /// `EXPLAIN ESTIMATE`
-        /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/explain#explain-estimate)
-        estimate: bool,
-        /// A SQL query that specifies what to explain
-        statement: Box<Statement>,
-        /// Optional output format of explain
-        format: Option<AnalyzeFormatKind>,
-        /// Postgres style utility options, `(analyze, verbose true)`
-        options: Option<Vec<UtilityOption>>,
-    },
+    Explain(ExplainStatement),
     /// ```sql
     /// SAVEPOINT
     /// ```
     /// Define a new savepoint within the current transaction
-    Savepoint {
-        /// Name of the savepoint being defined.
-        name: Ident,
-    },
+    Savepoint(SavepointStatement),
     /// ```sql
     /// RELEASE [ SAVEPOINT ] savepoint_name
     /// ```
-    ReleaseSavepoint {
-        /// Name of the savepoint to release.
-        name: Ident,
-    },
+    ReleaseSavepoint(ReleaseSavepointStatement),
     /// A `MERGE` statement.
     ///
     /// ```sql
@@ -4756,69 +4185,26 @@ pub enum Statement {
     /// See [Spark SQL docs] for more details.
     ///
     /// [Spark SQL docs]: https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html
-    Cache {
-        /// Table flag
-        table_flag: Option<ObjectName>,
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// `true` if `AS` keyword was present before the query.
-        has_as: bool,
-        /// Table confs
-        options: Vec<SqlOption>,
-        /// Cache table as a Query
-        query: Option<Box<Query>>,
-    },
+    Cache(CacheStatement),
     /// ```sql
     /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
     /// ```
-    UNCache {
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-    },
+    UNCache(UNCacheStatement),
     /// ```sql
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
     /// ```
     /// Define a new sequence:
-    CreateSequence {
-        /// Whether the sequence is temporary.
-        temporary: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// Sequence name.
-        name: ObjectName,
-        /// Optional data type for the sequence.
-        data_type: Option<DataType>,
-        /// Sequence options (INCREMENT, MINVALUE, etc.).
-        sequence_options: Vec<SequenceOptions>,
-        /// Optional `OWNED BY` target.
-        owned_by: Option<ObjectName>,
-    },
+    CreateSequence(CreateSequenceStatement),
     /// A `CREATE DOMAIN` statement.
     CreateDomain(CreateDomain),
     /// ```sql
     /// CREATE TYPE <name>
     /// ```
-    CreateType {
-        /// Type name to create.
-        name: ObjectName,
-        /// Optional type representation details.
-        representation: Option<UserDefinedTypeRepresentation>,
-    },
+    CreateType(CreateTypeStatement),
     /// ```sql
     /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
     /// ```
-    Pragma {
-        /// Pragma name (possibly qualified).
-        name: ObjectName,
-        /// Optional pragma value.
-        value: Option<ValueWithSpan>,
-        /// Whether the pragma used `=`.
-        is_eq: bool,
-    },
+    Pragma(PragmaStatement),
     /// ```sql
     /// LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
     /// ```
@@ -4829,15 +4215,12 @@ pub enum Statement {
     /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    LockTables {
-        /// List of tables to lock with modes.
-        tables: Vec<LockTable>,
-    },
+    LockTables(LockTablesStatement),
     /// ```sql
     /// UNLOCK TABLES
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    UnlockTables,
+    UnlockTables(UnlockTablesStatement),
     /// Unloads the result of a query to file
     ///
     /// [Athena](https://docs.aws.amazon.com/athena/latest/ug/unload.html):
@@ -4849,20 +4232,7 @@ pub enum Statement {
     /// ```sql
     /// UNLOAD('statement') TO <destination> [ OPTIONS ]
     /// ```
-    Unload {
-        /// Optional query AST to unload.
-        query: Option<Box<Query>>,
-        /// Optional original query text.
-        query_text: Option<String>,
-        /// Destination identifier.
-        to: Ident,
-        /// Optional IAM role/auth information.
-        auth: Option<IamRoleKind>,
-        /// Additional `WITH` options.
-        with: Vec<SqlOption>,
-        /// Legacy copy-style options.
-        options: Vec<CopyLegacyOption>,
-    },
+    Unload(UnloadStatement),
     /// ClickHouse:
     /// ```sql
     /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
@@ -4874,62 +4244,28 @@ pub enum Statement {
     /// OPTIMIZE table_name [WHERE predicate] [ZORDER BY (col_name1 [, ...])]
     /// ```
     /// See Databricks <https://docs.databricks.com/en/sql/language-manual/delta-optimize.html>
-    OptimizeTable {
-        /// Table name to optimize.
-        name: ObjectName,
-        /// Whether the `TABLE` keyword was present (ClickHouse uses `OPTIMIZE TABLE`, Databricks uses `OPTIMIZE`).
-        has_table_keyword: bool,
-        /// Optional cluster identifier.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        on_cluster: Option<Ident>,
-        /// Optional partition spec.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        partition: Option<Partition>,
-        /// Whether `FINAL` was specified.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        include_final: bool,
-        /// Optional deduplication settings.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        deduplicate: Option<Deduplicate>,
-        /// Optional WHERE predicate.
-        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
-        predicate: Option<Expr>,
-        /// Optional ZORDER BY columns.
-        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
-        zorder: Option<Vec<Expr>>,
-    },
+    OptimizeTable(OptimizeTableStatement),
     /// ```sql
     /// LISTEN
     /// ```
     /// listen for a notification channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
-    LISTEN {
-        /// Notification channel identifier.
-        channel: Ident,
-    },
+    LISTEN(LISTENStatement),
     /// ```sql
     /// UNLISTEN
     /// ```
     /// stop listening for a notification
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-unlisten.html>
-    UNLISTEN {
-        /// Notification channel identifier.
-        channel: Ident,
-    },
+    UNLISTEN(UNLISTENStatement),
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
     /// send a notification event together with an optional "payload" string to channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
-    NOTIFY {
-        /// Notification channel identifier.
-        channel: Ident,
-        /// Optional payload string.
-        payload: Option<String>,
-    },
+    NOTIFY(NOTIFYStatement),
     /// ```sql
     /// LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO TABLE tablename
     /// [PARTITION (partcol1=val1, partcol2=val2 ...)]
@@ -4938,20 +4274,7 @@ pub enum Statement {
     /// Loading files into tables
     ///
     /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
-    LoadData {
-        /// Whether `LOCAL` is present.
-        local: bool,
-        /// Input path for files to load.
-        inpath: String,
-        /// Whether `OVERWRITE` was specified.
-        overwrite: bool,
-        /// Target table name to load into.
-        table_name: ObjectName,
-        /// Optional partition specification.
-        partitioned: Option<Vec<Expr>>,
-        /// Optional table format information.
-        table_format: Option<HiveLoadDataFormat>,
-    },
+    LoadData(LoadDataStatement),
     /// ```sql
     /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
     /// ```
@@ -4968,14 +4291,7 @@ pub enum Statement {
     /// ```
     /// Options include `PARALLEL`, `AUTO_COMPRESS`, `SOURCE_COMPRESSION`, `OVERWRITE`.
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/put>
-    Put {
-        /// Local source URI as written in the statement, e.g. `file:///tmp/data.csv`.
-        source: String,
-        /// Target internal stage (e.g. `@mystage`, `@~`, `@%table`).
-        stage: ObjectName,
-        /// Trailing options (`PARALLEL=4`, `AUTO_COMPRESS=TRUE`, ...).
-        options: KeyValueOptions,
-    },
+    Put(PutStatement),
     /// Snowflake `REMOVE`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
     Remove(FileStagingCommand),
@@ -4985,18 +4301,7 @@ pub enum Statement {
     /// [ , argument [ , ...n ] ] )
     /// [ WITH option [ , ...n ] ]
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/raiserror-transact-sql?view=sql-server-ver16>
-    RaisError {
-        /// Error message expression or identifier.
-        message: Box<Expr>,
-        /// Severity expression.
-        severity: Box<Expr>,
-        /// State expression.
-        state: Box<Expr>,
-        /// Substitution arguments for the message.
-        arguments: Vec<Expr>,
-        /// Additional `WITH` options for RAISERROR.
-        options: Vec<RaisErrorOption>,
-    },
+    RaisError(RaisErrorStatement),
     /// A MSSQL `THROW` statement.
     Throw(ThrowStatement),
     /// ```sql
@@ -5151,14 +4456,14 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Statement::Flush {
+            Statement::Flush(FlushStatement {
                 object_type,
                 location,
                 channel,
                 read_lock,
                 export,
                 tables,
-            } => {
+            }) => {
                 write!(f, "FLUSH")?;
                 if let Some(location) = location {
                     f.write_str(" ")?;
@@ -5182,7 +4487,7 @@ impl fmt::Display for Statement {
                     read = if *read_lock { " WITH READ LOCK" } else { "" }
                 )
             }
-            Statement::Kill { modifier, id } => {
+            Statement::Kill(KillStatement { modifier, id }) => {
                 write!(f, "KILL ")?;
 
                 if let Some(m) = modifier {
@@ -5191,12 +4496,12 @@ impl fmt::Display for Statement {
 
                 write!(f, "{id}")
             }
-            Statement::ExplainTable {
+            Statement::ExplainTable(ExplainTableStatement {
                 describe_alias,
                 hive_format,
                 has_table_keyword,
                 table_name,
-            } => {
+            }) => {
                 write!(f, "{describe_alias} ")?;
 
                 if let Some(format) = hive_format {
@@ -5208,7 +4513,7 @@ impl fmt::Display for Statement {
 
                 write!(f, "{table_name}")
             }
-            Statement::Explain {
+            Statement::Explain(ExplainStatement {
                 describe_alias,
                 verbose,
                 analyze,
@@ -5217,7 +4522,7 @@ impl fmt::Display for Statement {
                 statement,
                 format,
                 options,
-            } => {
+            }) => {
                 write!(f, "{describe_alias} ")?;
 
                 if *query_plan {
@@ -5245,16 +4550,16 @@ impl fmt::Display for Statement {
                 write!(f, "{statement}")
             }
             Statement::Query(s) => s.fmt(f),
-            Statement::Declare { stmts } => {
+            Statement::Declare(DeclareStatement { stmts }) => {
                 write!(f, "DECLARE ")?;
                 write!(f, "{}", display_separated(stmts, "; "))
             }
-            Statement::Fetch {
+            Statement::Fetch(FetchStatement {
                 name,
                 direction,
                 position,
                 into,
-            } => {
+            }) => {
                 write!(f, "FETCH {direction} {position} {name}")?;
 
                 if let Some(into) = into {
@@ -5263,13 +4568,13 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
-            Statement::Directory {
+            Statement::Directory(DirectoryStatement {
                 overwrite,
                 local,
                 path,
                 file_format,
                 source,
-            } => {
+            }) => {
                 write!(
                     f,
                     "INSERT{overwrite}{local} DIRECTORY '{path}'",
@@ -5296,21 +4601,21 @@ impl fmt::Display for Statement {
             Statement::Raise(stmt) => {
                 write!(f, "{stmt}")
             }
-            Statement::AttachDatabase {
+            Statement::AttachDatabase(AttachDatabaseStatement {
                 schema_name,
                 database_file_name,
                 database,
-            } => {
+            }) => {
                 let keyword = if *database { "DATABASE " } else { "" };
                 write!(f, "ATTACH {keyword}{database_file_name} AS {schema_name}")
             }
-            Statement::AttachDuckDBDatabase {
+            Statement::AttachDuckDBDatabase(AttachDuckDBDatabaseStatement {
                 if_not_exists,
                 database,
                 database_path,
                 database_alias,
                 attach_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "ATTACH{database}{if_not_exists} {database_path}",
@@ -5325,11 +4630,11 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DetachDuckDBDatabase {
+            Statement::DetachDuckDBDatabase(DetachDuckDBDatabaseStatement {
                 if_exists,
                 database,
                 database_alias,
-            } => {
+            }) => {
                 write!(
                     f,
                     "DETACH{database}{if_exists} {database_alias}",
@@ -5340,24 +4645,24 @@ impl fmt::Display for Statement {
             }
             Statement::Analyze(analyze) => analyze.fmt(f),
             Statement::Insert(insert) => insert.fmt(f),
-            Statement::Install {
+            Statement::Install(InstallStatement {
                 extension_name: name,
-            } => write!(f, "INSTALL {name}"),
+            }) => write!(f, "INSTALL {name}"),
 
-            Statement::Load {
+            Statement::Load(LoadStatement {
                 extension_name: name,
-            } => write!(f, "LOAD {name}"),
+            }) => write!(f, "LOAD {name}"),
 
             Statement::Call(function) => write!(f, "CALL {function}"),
 
-            Statement::Copy {
+            Statement::Copy(CopyStatement {
                 source,
                 to,
                 target,
                 options,
                 legacy_options,
                 values,
-            } => {
+            }) => {
                 write!(f, "COPY")?;
                 match source {
                     CopySource::Query(query) => write!(f, " ({query})")?,
@@ -5397,12 +4702,12 @@ impl fmt::Display for Statement {
             Statement::Update(update) => update.fmt(f),
             Statement::Delete(delete) => delete.fmt(f),
             Statement::Open(open) => open.fmt(f),
-            Statement::Close { cursor } => {
+            Statement::Close(CloseStatement { cursor }) => {
                 write!(f, "CLOSE {cursor}")?;
 
                 Ok(())
             }
-            Statement::CreateDatabase {
+            Statement::CreateDatabase(CreateDatabaseStatement {
                 db_name,
                 if_not_exists,
                 location,
@@ -5425,7 +4730,7 @@ impl fmt::Display for Statement {
                 catalog_sync_namespace_flatten_delimiter,
                 with_tags,
                 with_contacts,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_replace}{transient}DATABASE {if_not_exists}{name}",
@@ -5512,13 +4817,13 @@ impl fmt::Display for Statement {
             Statement::CreateDomain(create_domain) => create_domain.fmt(f),
             Statement::CreateTrigger(create_trigger) => create_trigger.fmt(f),
             Statement::DropTrigger(drop_trigger) => drop_trigger.fmt(f),
-            Statement::CreateProcedure {
+            Statement::CreateProcedure(CreateProcedureStatement {
                 name,
                 or_alter,
                 params,
                 language,
                 body,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_alter}PROCEDURE {name}",
@@ -5538,13 +4843,13 @@ impl fmt::Display for Statement {
 
                 write!(f, " AS {body}")
             }
-            Statement::CreateMacro {
+            Statement::CreateMacro(CreateMacroStatement {
                 or_replace,
                 temporary,
                 name,
                 args,
                 definition,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_replace}{temp}MACRO {name}",
@@ -5562,14 +4867,14 @@ impl fmt::Display for Statement {
             }
             Statement::CreateView(create_view) => create_view.fmt(f),
             Statement::CreateTable(create_table) => create_table.fmt(f),
-            Statement::LoadData {
+            Statement::LoadData(LoadDataStatement {
                 local,
                 inpath,
                 overwrite,
                 table_name,
                 partitioned,
                 table_format,
-            } => {
+            }) => {
                 write!(
                     f,
                     "LOAD DATA {local}INPATH '{inpath}' {overwrite}INTO TABLE {table_name}",
@@ -5592,12 +4897,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateVirtualTable {
+            Statement::CreateVirtualTable(CreateVirtualTableStatement {
                 name,
                 if_not_exists,
                 module_name,
                 module_args,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE VIRTUAL TABLE {if_not_exists}{name} USING {module_name}",
@@ -5622,7 +4927,7 @@ impl fmt::Display for Statement {
                 write!(f, "{drop_operator_class}")
             }
             Statement::CreateRole(create_role) => write!(f, "{create_role}"),
-            Statement::CreateSecret {
+            Statement::CreateSecret(CreateSecretStatement {
                 or_replace,
                 temporary,
                 if_not_exists,
@@ -5630,7 +4935,7 @@ impl fmt::Display for Statement {
                 storage_specifier,
                 secret_type,
                 options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_replace}",
@@ -5669,15 +4974,15 @@ impl fmt::Display for Statement {
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
             Statement::CreateTextSearch(create_text_search) => create_text_search.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
-            Statement::AlterIndex { name, operation } => {
+            Statement::AlterIndex(AlterIndexStatement { name, operation }) => {
                 write!(f, "ALTER INDEX {name} {operation}")
             }
-            Statement::AlterView {
+            Statement::AlterView(AlterViewStatement {
                 name,
                 columns,
                 query,
                 with_options,
-            } => {
+            }) => {
                 write!(f, "ALTER VIEW {name}")?;
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
@@ -5700,16 +5005,16 @@ impl fmt::Display for Statement {
                 write!(f, "{alter_operator_class}")
             }
             Statement::AlterTextSearch(alter_text_search) => write!(f, "{alter_text_search}"),
-            Statement::AlterRole { name, operation } => {
+            Statement::AlterRole(AlterRoleStatement { name, operation }) => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
             Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
-            Statement::AlterConnector {
+            Statement::AlterConnector(AlterConnectorStatement {
                 name,
                 properties,
                 url,
                 owner,
-            } => {
+            }) => {
                 write!(f, "ALTER CONNECTOR {name}")?;
                 if let Some(properties) = properties {
                     write!(
@@ -5726,10 +5031,10 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::AlterSession {
+            Statement::AlterSession(AlterSessionStatement {
                 set,
                 session_params,
-            } => {
+            }) => {
                 write!(
                     f,
                     "ALTER SESSION {set}",
@@ -5749,7 +5054,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Drop {
+            Statement::Drop(DropStatement {
                 object_type,
                 if_exists,
                 names,
@@ -5758,7 +5063,7 @@ impl fmt::Display for Statement {
                 purge,
                 temporary,
                 table,
-            } => {
+            }) => {
                 write!(
                     f,
                     "DROP {}{}{} {}{}{}{}",
@@ -5791,11 +5096,11 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropProcedure {
+            Statement::DropProcedure(DropProcedureStatement {
                 if_exists,
                 proc_desc,
                 drop_behavior,
-            } => {
+            }) => {
                 write!(
                     f,
                     "DROP PROCEDURE{} {}",
@@ -5807,12 +5112,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropSecret {
+            Statement::DropSecret(DropSecretStatement {
                 if_exists,
                 temporary,
                 name,
                 storage_specifier,
-            } => {
+            }) => {
                 write!(f, "DROP ")?;
                 if let Some(t) = temporary {
                     write!(f, "{}", if *t { "TEMPORARY " } else { "PERSISTENT " })?;
@@ -5828,7 +5133,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::DropPolicy(policy) => write!(f, "{policy}"),
-            Statement::DropConnector { if_exists, name } => {
+            Statement::DropConnector(DropConnectorStatement { if_exists, name }) => {
                 write!(
                     f,
                     "DROP CONNECTOR {if_exists}{name}",
@@ -5836,23 +5141,23 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::Discard { object_type } => {
+            Statement::Discard(DiscardStatement { object_type }) => {
                 write!(f, "DISCARD {object_type}")?;
                 Ok(())
             }
             Self::Set(set) => write!(f, "{set}"),
-            Statement::ShowVariable { variable } => {
+            Statement::ShowVariable(ShowVariableStatement { variable }) => {
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
                 }
                 Ok(())
             }
-            Statement::ShowStatus {
+            Statement::ShowStatus(ShowStatusStatement {
                 filter,
                 global,
                 session,
-            } => {
+            }) => {
                 write!(f, "SHOW")?;
                 if *global {
                     write!(f, " GLOBAL")?;
@@ -5866,11 +5171,11 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowVariables {
+            Statement::ShowVariables(ShowVariablesStatement {
                 filter,
                 global,
                 session,
-            } => {
+            }) => {
                 write!(f, "SHOW")?;
                 if *global {
                     write!(f, " GLOBAL")?;
@@ -5884,15 +5189,15 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowCreate { obj_type, obj_name } => {
+            Statement::ShowCreate(ShowCreateStatement { obj_type, obj_name }) => {
                 write!(f, "SHOW CREATE {obj_type} {obj_name}",)?;
                 Ok(())
             }
-            Statement::ShowColumns {
+            Statement::ShowColumns(ShowColumnsStatement {
                 extended,
                 full,
                 show_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "SHOW {extended}{full}COLUMNS{show_options}",
@@ -5901,11 +5206,11 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowDatabases {
+            Statement::ShowDatabases(ShowDatabasesStatement {
                 terse,
                 history,
                 show_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "SHOW {terse}DATABASES{history}{show_options}",
@@ -5914,11 +5219,11 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowCatalogs {
+            Statement::ShowCatalogs(ShowCatalogsStatement {
                 terse,
                 history,
                 show_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "SHOW {terse}CATALOGS{history}{show_options}",
@@ -5927,7 +5232,7 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowProcessList { full } => {
+            Statement::ShowProcessList(ShowProcessListStatement { full }) => {
                 write!(
                     f,
                     "SHOW {full}PROCESSLIST",
@@ -5935,11 +5240,11 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowSchemas {
+            Statement::ShowSchemas(ShowSchemasStatement {
                 terse,
                 history,
                 show_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "SHOW {terse}SCHEMAS{history}{show_options}",
@@ -5959,14 +5264,14 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowTables {
+            Statement::ShowTables(ShowTablesStatement {
                 terse,
                 history,
                 extended,
                 full,
                 external,
                 show_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "SHOW {terse}{extended}{full}{external}TABLES{history}{show_options}",
@@ -5978,11 +5283,11 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowViews {
+            Statement::ShowViews(ShowViewsStatement {
                 terse,
                 materialized,
                 show_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "SHOW {terse}{materialized}VIEWS{show_options}",
@@ -5991,7 +5296,7 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowFunctions { filter } => {
+            Statement::ShowFunctions(ShowFunctionsStatement { filter }) => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -5999,7 +5304,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Use(use_expr) => use_expr.fmt(f),
-            Statement::ShowCollation { filter } => {
+            Statement::ShowCollation(ShowCollationStatement { filter }) => {
                 write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -6007,7 +5312,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::ShowCharset(show_stm) => show_stm.fmt(f),
-            Statement::StartTransaction {
+            Statement::StartTransaction(StartTransactionStatement {
                 modes,
                 begin: syntax_begin,
                 transaction,
@@ -6015,7 +5320,7 @@ impl fmt::Display for Statement {
                 statements,
                 exception,
                 has_end_keyword,
-            } => {
+            }) => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
                         write!(f, "BEGIN {modifier}")?;
@@ -6046,11 +5351,11 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Commit {
+            Statement::Commit(CommitStatement {
                 chain,
                 end: end_syntax,
                 modifier,
-            } => {
+            }) => {
                 if *end_syntax {
                     write!(f, "END")?;
                     if let Some(modifier) = *modifier {
@@ -6064,7 +5369,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Rollback { chain, savepoint } => {
+            Statement::Rollback(RollbackStatement { chain, savepoint }) => {
                 write!(f, "ROLLBACK")?;
 
                 if *chain {
@@ -6077,7 +5382,7 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
-            Statement::CreateSchema {
+            Statement::CreateSchema(CreateSchemaStatement {
                 schema_name,
                 or_replace,
                 if_not_exists,
@@ -6085,7 +5390,7 @@ impl fmt::Display for Statement {
                 options,
                 default_collate_spec,
                 clone,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_replace}SCHEMA {if_not_exists}{name}",
@@ -6111,7 +5416,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Assert { condition, message } => {
+            Statement::Assert(AssertStatement { condition, message }) => {
                 write!(f, "ASSERT {condition}")?;
                 if let Some(m) = message {
                     write!(f, " AS {m}")?;
@@ -6121,13 +5426,13 @@ impl fmt::Display for Statement {
             Statement::Grant(grant) => write!(f, "{grant}"),
             Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke(revoke) => write!(f, "{revoke}"),
-            Statement::Deallocate { name, prepare } => write!(
+            Statement::Deallocate(DeallocateStatement { name, prepare }) => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",
                 prepare = if *prepare { "PREPARE " } else { "" },
                 name = name,
             ),
-            Statement::Execute {
+            Statement::Execute(ExecuteStatement {
                 name,
                 parameters,
                 has_parentheses,
@@ -6136,7 +5441,7 @@ impl fmt::Display for Statement {
                 using,
                 output,
                 default,
-            } => {
+            }) => {
                 let (open, close) = if *has_parentheses {
                     // Space before `(` only when there is no name directly preceding it.
                     (if name.is_some() { "(" } else { " (" }, ")")
@@ -6165,23 +5470,23 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Prepare {
+            Statement::Prepare(PrepareStatement {
                 name,
                 data_types,
                 statement,
-            } => {
+            }) => {
                 write!(f, "PREPARE {name} ")?;
                 if !data_types.is_empty() {
                     write!(f, "({}) ", display_comma_separated(data_types))?;
                 }
                 write!(f, "AS {statement}")
             }
-            Statement::Comment {
+            Statement::Comment(CommentStatement {
                 object_type,
                 object_name,
                 comment,
                 if_exists,
-            } => {
+            }) => {
                 write!(f, "COMMENT ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?
@@ -6193,21 +5498,21 @@ impl fmt::Display for Statement {
                     write!(f, "NULL")
                 }
             }
-            Statement::Savepoint { name } => {
+            Statement::Savepoint(SavepointStatement { name }) => {
                 write!(f, "SAVEPOINT ")?;
                 write!(f, "{name}")
             }
-            Statement::ReleaseSavepoint { name } => {
+            Statement::ReleaseSavepoint(ReleaseSavepointStatement { name }) => {
                 write!(f, "RELEASE SAVEPOINT {name}")
             }
             Statement::Merge(merge) => merge.fmt(f),
-            Statement::Cache {
+            Statement::Cache(CacheStatement {
                 table_name,
                 table_flag,
                 has_as,
                 options,
                 query,
-            } => {
+            }) => {
                 if let Some(table_flag) = table_flag {
                     write!(f, "CACHE {table_flag} TABLE {table_name}")?;
                 } else {
@@ -6225,24 +5530,24 @@ impl fmt::Display for Statement {
                     (false, None) => Ok(()),
                 }
             }
-            Statement::UNCache {
+            Statement::UNCache(UNCacheStatement {
                 table_name,
                 if_exists,
-            } => {
+            }) => {
                 if *if_exists {
                     write!(f, "UNCACHE TABLE IF EXISTS {table_name}")
                 } else {
                     write!(f, "UNCACHE TABLE {table_name}")
                 }
             }
-            Statement::CreateSequence {
+            Statement::CreateSequence(CreateSequenceStatement {
                 temporary,
                 if_not_exists,
                 name,
                 data_type,
                 sequence_options,
                 owned_by,
-            } => {
+            }) => {
                 let as_type: String = if let Some(dt) = data_type.as_ref() {
                     //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
                     // " AS ".to_owned() + &dt.to_string()
@@ -6266,7 +5571,7 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "")
             }
-            Statement::CreateStage {
+            Statement::CreateStage(CreateStageStatement {
                 or_replace,
                 temporary,
                 if_not_exists,
@@ -6277,7 +5582,7 @@ impl fmt::Display for Statement {
                 copy_options,
                 comment,
                 ..
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_replace}{temp}STAGE {if_not_exists}{name}{stage_params}",
@@ -6299,7 +5604,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateFileFormat {
+            Statement::CreateFileFormat(CreateFileFormatStatement {
                 or_replace,
                 temporary,
                 volatile,
@@ -6307,7 +5612,7 @@ impl fmt::Display for Statement {
                 name,
                 options,
                 comment,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_replace}{temp}{volatile}FILE FORMAT {if_not_exists}{name}",
@@ -6325,7 +5630,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateWarehouse(s) => write!(f, "{s}"),
-            Statement::CopyIntoSnowflake {
+            Statement::CopyIntoSnowflake(CopyIntoSnowflakeStatement {
                 kind,
                 into,
                 into_columns,
@@ -6340,7 +5645,7 @@ impl fmt::Display for Statement {
                 copy_options,
                 validation_mode,
                 partition,
-            } => {
+            }) => {
                 write!(f, "COPY INTO {into}")?;
                 if let Some(into_columns) = into_columns {
                     write!(f, " ({})", display_comma_separated(into_columns))?;
@@ -6396,17 +5701,17 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateType {
+            Statement::CreateType(CreateTypeStatement {
                 name,
                 representation,
-            } => {
+            }) => {
                 write!(f, "CREATE TYPE {name}")?;
                 if let Some(repr) = representation {
                     write!(f, " {repr}")?;
                 }
                 Ok(())
             }
-            Statement::Pragma { name, value, is_eq } => {
+            Statement::Pragma(PragmaStatement { name, value, is_eq }) => {
                 write!(f, "PRAGMA {name}")?;
                 if let Some(value) = value {
                     if *is_eq {
@@ -6418,20 +5723,20 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Lock(lock) => lock.fmt(f),
-            Statement::LockTables { tables } => {
+            Statement::LockTables(LockTablesStatement { tables }) => {
                 write!(f, "LOCK TABLES {}", display_comma_separated(tables))
             }
-            Statement::UnlockTables => {
+            Statement::UnlockTables(UnlockTablesStatement) => {
                 write!(f, "UNLOCK TABLES")
             }
-            Statement::Unload {
+            Statement::Unload(UnloadStatement {
                 query,
                 query_text,
                 to,
                 auth,
                 with,
                 options,
-            } => {
+            }) => {
                 write!(f, "UNLOAD(")?;
                 if let Some(query) = query {
                     write!(f, "{query}")?;
@@ -6451,7 +5756,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::OptimizeTable {
+            Statement::OptimizeTable(OptimizeTableStatement {
                 name,
                 has_table_keyword,
                 on_cluster,
@@ -6460,7 +5765,7 @@ impl fmt::Display for Statement {
                 deduplicate,
                 predicate,
                 zorder,
-            } => {
+            }) => {
                 write!(f, "OPTIMIZE")?;
                 if *has_table_keyword {
                     write!(f, " TABLE")?;
@@ -6486,15 +5791,15 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::LISTEN { channel } => {
+            Statement::LISTEN(LISTENStatement { channel }) => {
                 write!(f, "LISTEN {channel}")?;
                 Ok(())
             }
-            Statement::UNLISTEN { channel } => {
+            Statement::UNLISTEN(UNLISTENStatement { channel }) => {
                 write!(f, "UNLISTEN {channel}")?;
                 Ok(())
             }
-            Statement::NOTIFY { channel, payload } => {
+            Statement::NOTIFY(NOTIFYStatement { channel, payload }) => {
                 write!(f, "NOTIFY {channel}")?;
                 if let Some(payload) = payload {
                     write!(f, ", '{payload}'")?;
@@ -6504,13 +5809,13 @@ impl fmt::Display for Statement {
             Statement::RenameTable(rename_tables) => {
                 write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
             }
-            Statement::RaisError {
+            Statement::RaisError(RaisErrorStatement {
                 message,
                 severity,
                 state,
                 arguments,
                 options,
-            } => {
+            }) => {
                 write!(f, "RAISERROR({message}, {severity}, {state}")?;
                 if !arguments.is_empty() {
                     write!(f, ", {}", display_comma_separated(arguments))?;
@@ -6526,11 +5831,11 @@ impl fmt::Display for Statement {
             Statement::WaitFor(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
-            Statement::Put {
+            Statement::Put(PutStatement {
                 source,
                 stage,
                 options,
-            } => {
+            }) => {
                 write!(f, "PUT '{source}' {stage}")?;
                 if !options.options.is_empty() {
                     write!(f, " {options}")?;

@@ -65,84 +65,84 @@ fn parse_literal_string() {
 fn parse_flush() {
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH OPTIMIZER_COSTS"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::OptimizerCosts,
             channel: None,
             read_lock: false,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH BINARY LOGS"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::BinaryLogs,
             channel: None,
             read_lock: false,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH ENGINE LOGS"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::EngineLogs,
             channel: None,
             read_lock: false,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH ERROR LOGS"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::ErrorLogs,
             channel: None,
             read_lock: false,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH NO_WRITE_TO_BINLOG GENERAL LOGS"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: Some(FlushLocation::NoWriteToBinlog),
             object_type: FlushType::GeneralLogs,
             channel: None,
             read_lock: false,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH RELAY LOGS FOR CHANNEL test"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::RelayLogs,
             channel: Some("test".to_string()),
             read_lock: false,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH LOCAL SLOW LOGS"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: Some(FlushLocation::Local),
             object_type: FlushType::SlowLogs,
             channel: None,
             read_lock: false,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH TABLES `mek`.`table1`, table2"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::Tables,
             channel: None,
@@ -167,22 +167,22 @@ fn parse_flush() {
                     span: Span::empty(),
                 }])
             ]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH TABLES WITH READ LOCK"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::Tables,
             channel: None,
             read_lock: true,
             export: false,
             tables: vec![]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH TABLES `mek`.`table1`, table2 WITH READ LOCK"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::Tables,
             channel: None,
@@ -207,11 +207,11 @@ fn parse_flush() {
                     span: Span::empty(),
                 }])
             ]
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("FLUSH TABLES `mek`.`table1`, table2 FOR EXPORT"),
-        Statement::Flush {
+        Statement::Flush(FlushStatement {
             location: None,
             object_type: FlushType::Tables,
             channel: None,
@@ -236,7 +236,7 @@ fn parse_flush() {
                     span: Span::empty(),
                 }])
             ]
-        }
+        })
     );
 }
 
@@ -244,7 +244,7 @@ fn parse_flush() {
 fn parse_show_columns() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumnsStatement {
             extended: false,
             full: false,
             show_options: ShowStatementOptions {
@@ -258,11 +258,11 @@ fn parse_show_columns() {
                 limit: None,
                 starts_with: None,
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mydb.mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumnsStatement {
             extended: false,
             full: false,
             show_options: ShowStatementOptions {
@@ -279,11 +279,11 @@ fn parse_show_columns() {
                 limit: None,
                 starts_with: None,
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW EXTENDED COLUMNS FROM mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumnsStatement {
             extended: true,
             full: false,
             show_options: ShowStatementOptions {
@@ -297,11 +297,11 @@ fn parse_show_columns() {
                 limit: None,
                 starts_with: None,
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW FULL COLUMNS FROM mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumnsStatement {
             extended: false,
             full: true,
             show_options: ShowStatementOptions {
@@ -315,11 +315,11 @@ fn parse_show_columns() {
                 limit: None,
                 starts_with: None,
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable LIKE 'pattern'"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumnsStatement {
             extended: false,
             full: false,
             show_options: ShowStatementOptions {
@@ -335,11 +335,11 @@ fn parse_show_columns() {
                 limit: None,
                 starts_with: None,
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable WHERE 1 = 2"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumnsStatement {
             extended: false,
             full: false,
             show_options: ShowStatementOptions {
@@ -355,7 +355,7 @@ fn parse_show_columns() {
                 limit: None,
                 starts_with: None,
             }
-        }
+        })
     );
     mysql_and_generic()
         .one_statement_parses_to("SHOW FIELDS FROM mytable", "SHOW COLUMNS FROM mytable");
@@ -373,11 +373,11 @@ fn parse_show_columns() {
 fn parse_show_process_list() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW PROCESSLIST"),
-        Statement::ShowProcessList { full: false }
+        Statement::ShowProcessList(ShowProcessListStatement { full: false })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW FULL PROCESSLIST"),
-        Statement::ShowProcessList { full: true }
+        Statement::ShowProcessList(ShowProcessListStatement { full: true })
     );
 }
 
@@ -385,29 +385,29 @@ fn parse_show_process_list() {
 fn parse_show_status() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW SESSION STATUS LIKE 'ssl_cipher'"),
-        Statement::ShowStatus {
+        Statement::ShowStatus(ShowStatusStatement {
             filter: Some(ShowStatementFilter::Like("ssl_cipher".into())),
             session: true,
             global: false
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW GLOBAL STATUS LIKE 'ssl_cipher'"),
-        Statement::ShowStatus {
+        Statement::ShowStatus(ShowStatusStatement {
             filter: Some(ShowStatementFilter::Like("ssl_cipher".into())),
             session: false,
             global: true
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW STATUS WHERE value = 2"),
-        Statement::ShowStatus {
+        Statement::ShowStatus(ShowStatusStatement {
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("value = 2")
             )),
             session: false,
             global: false
-        }
+        })
     );
 }
 
@@ -415,7 +415,7 @@ fn parse_show_status() {
 fn parse_show_tables() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES"),
-        Statement::ShowTables {
+        Statement::ShowTables(ShowTablesStatement {
             terse: false,
             history: false,
             extended: false,
@@ -428,11 +428,11 @@ fn parse_show_tables() {
                 show_in: None,
                 filter_position: None
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES FROM mydb"),
-        Statement::ShowTables {
+        Statement::ShowTables(ShowTablesStatement {
             terse: false,
             history: false,
             extended: false,
@@ -449,11 +449,11 @@ fn parse_show_tables() {
                 }),
                 filter_position: None
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW EXTENDED TABLES"),
-        Statement::ShowTables {
+        Statement::ShowTables(ShowTablesStatement {
             terse: false,
             history: false,
             extended: true,
@@ -466,11 +466,11 @@ fn parse_show_tables() {
                 show_in: None,
                 filter_position: None
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW FULL TABLES"),
-        Statement::ShowTables {
+        Statement::ShowTables(ShowTablesStatement {
             terse: false,
             history: false,
             extended: false,
@@ -483,11 +483,11 @@ fn parse_show_tables() {
                 show_in: None,
                 filter_position: None
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES LIKE 'pattern'"),
-        Statement::ShowTables {
+        Statement::ShowTables(ShowTablesStatement {
             terse: false,
             history: false,
             extended: false,
@@ -502,11 +502,11 @@ fn parse_show_tables() {
                     ShowStatementFilter::Like("pattern".into())
                 ))
             }
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES WHERE 1 = 2"),
-        Statement::ShowTables {
+        Statement::ShowTables(ShowTablesStatement {
             terse: false,
             history: false,
             extended: false,
@@ -521,7 +521,7 @@ fn parse_show_tables() {
                     ShowStatementFilter::Where(mysql_and_generic().verified_expr("1 = 2"))
                 ))
             }
-        }
+        })
     );
     mysql_and_generic().verified_stmt("SHOW TABLES IN mydb");
     mysql_and_generic().verified_stmt("SHOW TABLES FROM mydb");
@@ -561,10 +561,10 @@ fn parse_show_create() {
     ] {
         assert_eq!(
             mysql_and_generic().verified_stmt(format!("SHOW CREATE {obj_type} myident").as_str()),
-            Statement::ShowCreate {
+            Statement::ShowCreate(ShowCreateStatement {
                 obj_type: *obj_type,
                 obj_name: obj_name.clone(),
-            }
+            })
         );
     }
 }
@@ -573,21 +573,21 @@ fn parse_show_create() {
 fn parse_show_collation() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLLATION"),
-        Statement::ShowCollation { filter: None }
+        Statement::ShowCollation(ShowCollationStatement { filter: None })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLLATION LIKE 'pattern'"),
-        Statement::ShowCollation {
+        Statement::ShowCollation(ShowCollationStatement {
             filter: Some(ShowStatementFilter::Like("pattern".into())),
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLLATION WHERE 1 = 2"),
-        Statement::ShowCollation {
+        Statement::ShowCollation(ShowCollationStatement {
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("1 = 2")
             )),
-        }
+        })
     );
 }
 
@@ -3452,28 +3452,28 @@ fn parse_kill() {
     let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
     assert_eq!(
         stmt,
-        Statement::Kill {
+        Statement::Kill(KillStatement {
             modifier: Some(KillType::Connection),
             id: 5,
-        }
+        })
     );
 
     let stmt = mysql_and_generic().verified_stmt("KILL QUERY 5");
     assert_eq!(
         stmt,
-        Statement::Kill {
+        Statement::Kill(KillStatement {
             modifier: Some(KillType::Query),
             id: 5,
-        }
+        })
     );
 
     let stmt = mysql_and_generic().verified_stmt("KILL 5");
     assert_eq!(
         stmt,
-        Statement::Kill {
+        Statement::Kill(KillStatement {
             modifier: None,
             id: 5,
-        }
+        })
     );
 }
 
@@ -3819,7 +3819,7 @@ fn parse_div_precedence() {
 fn parse_drop_temporary_table() {
     let sql = "DROP TEMPORARY TABLE foo";
     match mysql().verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists,
             names,
@@ -3827,7 +3827,7 @@ fn parse_drop_temporary_table() {
             purge: _,
             temporary,
             ..
-        } => {
+        }) => {
             assert!(!if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
@@ -4720,7 +4720,7 @@ fn mysql_foreign_key_with_index_name() {
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_name ON table_name";
     match mysql().verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists,
             names,
@@ -4729,7 +4729,7 @@ fn parse_drop_index() {
             purge,
             temporary,
             table,
-        } => {
+        }) => {
             assert!(!if_exists);
             assert_eq!(ObjectType::Index, object_type);
             assert_eq!(

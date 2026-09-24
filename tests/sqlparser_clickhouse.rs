@@ -147,10 +147,10 @@ fn parse_kill() {
     let stmt = clickhouse().verified_stmt("KILL MUTATION 5");
     assert_eq!(
         stmt,
-        Statement::Kill {
+        Statement::Kill(KillStatement {
             modifier: Some(KillType::Mutation),
             id: 5,
-        }
+        })
     );
 }
 
@@ -546,14 +546,14 @@ fn parse_optimize_table() {
     match clickhouse_and_generic().verified_stmt(
         "OPTIMIZE TABLE t0 ON CLUSTER cluster PARTITION ID '2024-07' FINAL DEDUPLICATE BY id",
     ) {
-        Statement::OptimizeTable {
+        Statement::OptimizeTable(OptimizeTableStatement {
             name,
             on_cluster,
             partition,
             include_final,
             deduplicate,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "t0");
             assert_eq!(on_cluster, Some(Ident::new("cluster")));
             assert_eq!(
@@ -1752,12 +1752,12 @@ fn explain_desc() {
 #[test]
 fn parse_explain_table() {
     match clickhouse().verified_stmt("EXPLAIN TABLE test_identifier") {
-        Statement::ExplainTable {
+        Statement::ExplainTable(ExplainTableStatement {
             describe_alias,
             hive_format,
             has_table_keyword,
             table_name,
-        } => {
+        }) => {
             pretty_assertions::assert_eq!(describe_alias, DescribeAlias::Explain);
             pretty_assertions::assert_eq!(hive_format, None);
             pretty_assertions::assert_eq!(has_table_keyword, true);

@@ -196,7 +196,7 @@ fn parse_div_infix() {
 #[test]
 fn test_create_macro() {
     let macro_ = duckdb().verified_stmt("CREATE MACRO schema.add(a, b) AS a + b");
-    let expected = Statement::CreateMacro {
+    let expected = Statement::CreateMacro(CreateMacroStatement {
         or_replace: false,
         temporary: false,
         name: ObjectName::from(vec![Ident::new("schema"), Ident::new("add")]),
@@ -206,14 +206,14 @@ fn test_create_macro() {
             op: BinaryOperator::Plus,
             right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
-    };
+    });
     assert_eq!(expected, macro_);
 }
 
 #[test]
 fn test_create_macro_default_args() {
     let macro_ = duckdb().verified_stmt("CREATE MACRO add_default(a, b := 5) AS a + b");
-    let expected = Statement::CreateMacro {
+    let expected = Statement::CreateMacro(CreateMacroStatement {
         or_replace: false,
         temporary: false,
         name: ObjectName::from(vec![Ident::new("add_default")]),
@@ -229,7 +229,7 @@ fn test_create_macro_default_args() {
             op: BinaryOperator::Plus,
             right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
-    };
+    });
     assert_eq!(expected, macro_);
 }
 
@@ -241,7 +241,7 @@ fn test_create_table_macro() {
             .to_string()
             + query),
     );
-    let expected = Statement::CreateMacro {
+    let expected = Statement::CreateMacro(CreateMacroStatement {
         or_replace: true,
         temporary: true,
         name: ObjectName::from(vec![Ident::new("dynamic_table")]),
@@ -250,7 +250,7 @@ fn test_create_table_macro() {
             MacroArg::new("col2_value"),
         ]),
         definition: MacroDefinition::Table(duckdb().verified_query(query).into()),
-    };
+    });
     assert_eq!(expected, macro_);
 }
 
@@ -344,13 +344,13 @@ fn test_duckdb_install() {
     let stmt = duckdb().verified_stmt("INSTALL tpch");
     assert_eq!(
         stmt,
-        Statement::Install {
+        Statement::Install(InstallStatement {
             extension_name: Ident {
                 value: "tpch".to_string(),
                 quote_style: None,
                 span: Span::empty()
             }
-        }
+        })
     );
 }
 
@@ -358,13 +358,13 @@ fn test_duckdb_install() {
 fn test_duckdb_load_extension() {
     let stmt = duckdb().verified_stmt("LOAD my_extension");
     assert_eq!(
-        Statement::Load {
+        Statement::Load(LoadStatement {
             extension_name: Ident {
                 value: "my_extension".to_string(),
                 quote_style: None,
                 span: Span::empty()
             }
-        },
+        }),
         stmt
     );
 }
@@ -492,7 +492,7 @@ fn test_create_secret() {
     let sql = r#"CREATE OR REPLACE PERSISTENT SECRET IF NOT EXISTS name IN storage ( TYPE type, key1 value1, key2 value2 )"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::CreateSecret {
+        Statement::CreateSecret(CreateSecretStatement {
             or_replace: true,
             temporary: Some(false),
             if_not_exists: true,
@@ -509,7 +509,7 @@ fn test_create_secret() {
                     value: Ident::new("value2"),
                 }
             ]
-        },
+        }),
         stmt
     );
 }
@@ -519,7 +519,7 @@ fn test_create_secret_simple() {
     let sql = r#"CREATE SECRET ( TYPE type )"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::CreateSecret {
+        Statement::CreateSecret(CreateSecretStatement {
             or_replace: false,
             temporary: None,
             if_not_exists: false,
@@ -527,7 +527,7 @@ fn test_create_secret_simple() {
             storage_specifier: None,
             secret_type: Ident::new("type"),
             options: vec![]
-        },
+        }),
         stmt
     );
 }
@@ -537,12 +537,12 @@ fn test_drop_secret() {
     let sql = r#"DROP PERSISTENT SECRET IF EXISTS secret FROM storage"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DropSecret {
+        Statement::DropSecret(DropSecretStatement {
             if_exists: true,
             temporary: Some(false),
             name: Ident::new("secret"),
             storage_specifier: Some(Ident::new("storage"))
-        },
+        }),
         stmt
     );
 }
@@ -552,12 +552,12 @@ fn test_drop_secret_simple() {
     let sql = r#"DROP SECRET secret"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DropSecret {
+        Statement::DropSecret(DropSecretStatement {
             if_exists: false,
             temporary: None,
             name: Ident::new("secret"),
             storage_specifier: None
-        },
+        }),
         stmt
     );
 }
@@ -567,7 +567,7 @@ fn test_attach_database() {
     let sql = r#"ATTACH DATABASE IF NOT EXISTS 'sqlite_file.db' AS sqlite_db (READ_ONLY false, TYPE SQLITE)"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::AttachDuckDBDatabase {
+        Statement::AttachDuckDBDatabase(AttachDuckDBDatabaseStatement {
             if_not_exists: true,
             database: true,
             database_path: Ident::with_quote('\'', "sqlite_file.db"),
@@ -576,7 +576,7 @@ fn test_attach_database() {
                 AttachDuckDBDatabaseOption::ReadOnly(Some(false)),
                 AttachDuckDBDatabaseOption::Type(Ident::new("SQLITE")),
             ]
-        },
+        }),
         stmt
     );
 }
@@ -586,7 +586,7 @@ fn test_attach_database_simple() {
     let sql = r#"ATTACH 'postgres://user.name:pass-word@some.url.com:5432/postgres'"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::AttachDuckDBDatabase {
+        Statement::AttachDuckDBDatabase(AttachDuckDBDatabaseStatement {
             if_not_exists: false,
             database: false,
             database_path: Ident::with_quote(
@@ -595,7 +595,7 @@ fn test_attach_database_simple() {
             ),
             database_alias: None,
             attach_options: vec![]
-        },
+        }),
         stmt
     );
 }
@@ -605,11 +605,11 @@ fn test_detach_database() {
     let sql = r#"DETACH DATABASE IF EXISTS db_name"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DetachDuckDBDatabase {
+        Statement::DetachDuckDBDatabase(DetachDuckDBDatabaseStatement {
             if_exists: true,
             database: true,
             database_alias: Ident::new("db_name"),
-        },
+        }),
         stmt
     );
 }
@@ -619,11 +619,11 @@ fn test_detach_database_simple() {
     let sql = r#"DETACH db_name"#;
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
-        Statement::DetachDuckDBDatabase {
+        Statement::DetachDuckDBDatabase(DetachDuckDBDatabaseStatement {
             if_exists: false,
             database: false,
             database_alias: Ident::new("db_name"),
-        },
+        }),
         stmt
     );
 }

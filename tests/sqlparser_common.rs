@@ -4701,10 +4701,10 @@ fn parse_assert() {
     let sql = "ASSERT (SELECT COUNT(*) FROM my_table) > 0";
     let ast = one_statement_parses_to(sql, "ASSERT (SELECT COUNT(*) FROM my_table) > 0");
     match ast {
-        Statement::Assert {
+        Statement::Assert(AssertStatement {
             condition: _condition,
             message,
-        } => {
+        }) => {
             assert_eq!(message, None);
         }
         _ => unreachable!(),
@@ -4720,10 +4720,10 @@ fn parse_assert_message() {
         "ASSERT (SELECT COUNT(*) FROM my_table) > 0 AS 'No rows in my_table'",
     );
     match ast {
-        Statement::Assert {
+        Statement::Assert(AssertStatement {
             condition: _condition,
             message: Some(message),
-        } => {
+        }) => {
             match message {
                 Expr::Value(ValueWithSpan {
                     value: Value::SingleQuotedString(s),
@@ -4741,7 +4741,7 @@ fn parse_create_schema() {
     let sql = "CREATE SCHEMA X";
 
     match verified_stmt(sql) {
-        Statement::CreateSchema { schema_name, .. } => {
+        Statement::CreateSchema(CreateSchemaStatement { schema_name, .. }) => {
             assert_eq!(schema_name.to_string(), "X".to_owned())
         }
         _ => unreachable!(),
@@ -4760,12 +4760,12 @@ fn parse_create_schema() {
 #[test]
 fn parse_create_or_replace_schema() {
     match verified_stmt("CREATE OR REPLACE SCHEMA X") {
-        Statement::CreateSchema {
+        Statement::CreateSchema(CreateSchemaStatement {
             schema_name,
             or_replace,
             if_not_exists,
             ..
-        } => {
+        }) => {
             assert_eq!(schema_name.to_string(), "X".to_owned());
             assert!(or_replace);
             assert!(!if_not_exists);
@@ -4781,7 +4781,7 @@ fn parse_create_schema_with_authorization() {
     let sql = "CREATE SCHEMA AUTHORIZATION Y";
 
     match verified_stmt(sql) {
-        Statement::CreateSchema { schema_name, .. } => {
+        Statement::CreateSchema(CreateSchemaStatement { schema_name, .. }) => {
             assert_eq!(schema_name.to_string(), "AUTHORIZATION Y".to_owned())
         }
         _ => unreachable!(),
@@ -4793,7 +4793,7 @@ fn parse_create_schema_with_name_and_authorization() {
     let sql = "CREATE SCHEMA X AUTHORIZATION Y";
 
     match verified_stmt(sql) {
-        Statement::CreateSchema { schema_name, .. } => {
+        Statement::CreateSchema(CreateSchemaStatement { schema_name, .. }) => {
             assert_eq!(schema_name.to_string(), "X AUTHORIZATION Y".to_owned())
         }
         _ => unreachable!(),
@@ -4805,7 +4805,9 @@ fn parse_drop_schema() {
     let sql = "DROP SCHEMA X";
 
     match verified_stmt(sql) {
-        Statement::Drop { object_type, .. } => assert_eq!(object_type, ObjectType::Schema),
+        Statement::Drop(DropStatement { object_type, .. }) => {
+            assert_eq!(object_type, ObjectType::Schema)
+        }
         _ => unreachable!(),
     }
 }
@@ -5355,10 +5357,10 @@ fn test_alter_table_with_on_cluster() {
 fn parse_alter_index() {
     let rename_index = "ALTER INDEX idx RENAME TO new_idx";
     match verified_stmt(rename_index) {
-        Statement::AlterIndex {
+        Statement::AlterIndex(AlterIndexStatement {
             name,
             operation: AlterIndexOperation::RenameIndex { index_name },
-        } => {
+        }) => {
             assert_eq!("idx", name.to_string());
             assert_eq!("new_idx", index_name.to_string())
         }
@@ -5370,12 +5372,12 @@ fn parse_alter_index() {
 fn parse_alter_view() {
     let sql = "ALTER VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterViewStatement {
             name,
             columns,
             query,
             with_options,
-        } => {
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -5389,7 +5391,7 @@ fn parse_alter_view() {
 fn parse_alter_view_with_options() {
     let sql = "ALTER VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::AlterView { with_options, .. } => {
+        Statement::AlterView(AlterViewStatement { with_options, .. }) => {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
@@ -5414,12 +5416,12 @@ fn parse_alter_view_with_options() {
 fn parse_alter_view_with_columns() {
     let sql = "ALTER VIEW v (has, cols) AS SELECT 1, 2";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterViewStatement {
             name,
             columns,
             query,
             with_options,
-        } => {
+        }) => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
             assert_eq!("SELECT 1, 2", query.to_string());
@@ -5696,7 +5698,7 @@ fn run_explain_analyze(
     expected_options: Option<Vec<UtilityOption>>,
 ) {
     match dialect.verified_stmt(query) {
-        Statement::Explain {
+        Statement::Explain(ExplainStatement {
             describe_alias: _,
             analyze,
             verbose,
@@ -5705,7 +5707,7 @@ fn run_explain_analyze(
             statement,
             format,
             options,
-        } => {
+        }) => {
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
@@ -5723,12 +5725,12 @@ fn parse_explain_table() {
     let validate_explain =
         |query: &str, expected_describe_alias: DescribeAlias, expected_table_keyword| {
             match verified_stmt(query) {
-                Statement::ExplainTable {
+                Statement::ExplainTable(ExplainTableStatement {
                     describe_alias,
                     hive_format,
                     has_table_keyword,
                     table_name,
-                } => {
+                }) => {
                     assert_eq!(describe_alias, expected_describe_alias);
                     assert_eq!(hive_format, None);
                     assert_eq!(has_table_keyword, expected_table_keyword);
@@ -5874,13 +5876,13 @@ fn parse_explain_analyze_with_simple_select() {
 #[test]
 fn parse_explain_query_plan() {
     match all_dialects().verified_stmt("EXPLAIN QUERY PLAN SELECT sqrt(id) FROM foo") {
-        Statement::Explain {
+        Statement::Explain(ExplainStatement {
             query_plan,
             analyze,
             verbose,
             statement,
             ..
-        } => {
+        }) => {
             assert!(query_plan);
             assert!(!analyze);
             assert!(!verbose);
@@ -5906,14 +5908,14 @@ fn parse_explain_estimate() {
     let statement = all_dialects().verified_stmt("EXPLAIN ESTIMATE SELECT sqrt(id) FROM foo");
 
     match &statement {
-        Statement::Explain {
+        Statement::Explain(ExplainStatement {
             query_plan,
             estimate,
             analyze,
             verbose,
             statement,
             ..
-        } => {
+        }) => {
             assert!(estimate);
             assert!(!query_plan);
             assert!(!analyze);
@@ -8587,14 +8589,14 @@ fn parse_exists_subquery() {
 fn parse_create_database() {
     let sql = "CREATE DATABASE mydb";
     match verified_stmt(sql) {
-        Statement::CreateDatabase {
+        Statement::CreateDatabase(CreateDatabaseStatement {
             db_name,
             if_not_exists,
             location,
             managed_location,
             clone,
             ..
-        } => {
+        }) => {
             assert_eq!("mydb", db_name.to_string());
             assert!(!if_not_exists);
             assert_eq!(None, location);
@@ -8605,14 +8607,14 @@ fn parse_create_database() {
     }
     let sql = "CREATE DATABASE mydb CLONE otherdb";
     match verified_stmt(sql) {
-        Statement::CreateDatabase {
+        Statement::CreateDatabase(CreateDatabaseStatement {
             db_name,
             if_not_exists,
             location,
             managed_location,
             clone,
             ..
-        } => {
+        }) => {
             assert_eq!("mydb", db_name.to_string());
             assert!(!if_not_exists);
             assert_eq!(None, location);
@@ -8630,14 +8632,14 @@ fn parse_create_database() {
 fn parse_create_database_ine() {
     let sql = "CREATE DATABASE IF NOT EXISTS mydb";
     match verified_stmt(sql) {
-        Statement::CreateDatabase {
+        Statement::CreateDatabase(CreateDatabaseStatement {
             db_name,
             if_not_exists,
             location,
             managed_location,
             clone,
             ..
-        } => {
+        }) => {
             assert_eq!("mydb", db_name.to_string());
             assert!(if_not_exists);
             assert_eq!(None, location);
@@ -8652,12 +8654,12 @@ fn parse_create_database_ine() {
 fn parse_drop_database() {
     let sql = "DROP DATABASE mycatalog.mydb";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names,
             object_type,
             if_exists,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 vec!["mycatalog.mydb"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -8673,11 +8675,11 @@ fn parse_drop_database() {
 fn parse_drop_database_if_exists() {
     let sql = "DROP DATABASE IF EXISTS mydb";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectType::Database, object_type);
             assert!(if_exists);
         }
@@ -9022,7 +9024,7 @@ fn parse_create_materialized_view_with_cluster_by() {
 fn parse_drop_table() {
     let sql = "DROP TABLE foo";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists,
             names,
@@ -9030,7 +9032,7 @@ fn parse_drop_table() {
             purge: _,
             temporary,
             ..
-        } => {
+        }) => {
             assert!(!if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
@@ -9045,7 +9047,7 @@ fn parse_drop_table() {
 
     let sql = "DROP TABLE IF EXISTS foo, bar CASCADE";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists,
             names,
@@ -9053,7 +9055,7 @@ fn parse_drop_table() {
             purge: _,
             temporary,
             ..
-        } => {
+        }) => {
             assert!(if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
@@ -9083,9 +9085,9 @@ fn parse_drop_table() {
 fn parse_drop_view() {
     let sql = "DROP VIEW myschema.myview";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names, object_type, ..
-        } => {
+        }) => {
             assert_eq!(
                 vec!["myschema.myview"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -9103,9 +9105,9 @@ fn parse_drop_view() {
 fn parse_drop_user() {
     let sql = "DROP USER u1";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names, object_type, ..
-        } => {
+        }) => {
             assert_eq!(
                 vec!["u1"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -9447,7 +9449,7 @@ fn parse_start_transaction() {
     match dialects
         .verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE")
     {
-        Statement::StartTransaction { modes, .. } => assert_eq!(
+        Statement::StartTransaction(StartTransactionStatement { modes, .. }) => assert_eq!(
             modes,
             vec![
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
@@ -9464,7 +9466,7 @@ fn parse_start_transaction() {
         "START TRANSACTION READ ONLY READ WRITE ISOLATION LEVEL SERIALIZABLE",
         "START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE",
     ) {
-        Statement::StartTransaction { modes, .. } => assert_eq!(
+        Statement::StartTransaction(StartTransactionStatement { modes, .. }) => assert_eq!(
             modes,
             vec![
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
@@ -9749,12 +9751,12 @@ fn parse_set_time_zone() {
 #[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
-        Statement::Commit { chain: false, .. } => (),
+        Statement::Commit(CommitStatement { chain: false, .. }) => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("COMMIT AND CHAIN") {
-        Statement::Commit { chain: true, .. } => (),
+        Statement::Commit(CommitStatement { chain: true, .. }) => (),
         _ => unreachable!(),
     }
 
@@ -9785,36 +9787,36 @@ fn parse_end() {
 #[test]
 fn parse_rollback() {
     match verified_stmt("ROLLBACK") {
-        Statement::Rollback {
+        Statement::Rollback(RollbackStatement {
             chain: false,
             savepoint: None,
-        } => (),
+        }) => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("ROLLBACK AND CHAIN") {
-        Statement::Rollback {
+        Statement::Rollback(RollbackStatement {
             chain: true,
             savepoint: None,
-        } => (),
+        }) => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("ROLLBACK TO SAVEPOINT test1") {
-        Statement::Rollback {
+        Statement::Rollback(RollbackStatement {
             chain: false,
             savepoint,
-        } => {
+        }) => {
             assert_eq!(savepoint, Some(Ident::new("test1")));
         }
         _ => unreachable!(),
     }
 
     match verified_stmt("ROLLBACK AND CHAIN TO SAVEPOINT test1") {
-        Statement::Rollback {
+        Statement::Rollback(RollbackStatement {
             chain: true,
             savepoint,
-        } => {
+        }) => {
             assert_eq!(savepoint, Some(Ident::new("test1")));
         }
         _ => unreachable!(),
@@ -10032,9 +10034,9 @@ fn parse_create_index_async() {
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_a";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names, object_type, ..
-        } => {
+        }) => {
             assert_eq!(
                 vec!["idx_a"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -10069,12 +10071,12 @@ fn parse_create_role() {
 fn parse_drop_role() {
     let sql = "DROP ROLE abc";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names,
             object_type,
             if_exists,
             ..
-        } => {
+        }) => {
             assert_eq_vec(&["abc"], &names);
             assert_eq!(ObjectType::Role, object_type);
             assert!(!if_exists);
@@ -10084,12 +10086,12 @@ fn parse_drop_role() {
 
     let sql = "DROP ROLE IF EXISTS def, magician, quaternion";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names,
             object_type,
             if_exists,
             ..
-        } => {
+        }) => {
             assert_eq_vec(&["def", "magician", "quaternion"], &names);
             assert_eq!(ObjectType::Role, object_type);
             assert!(if_exists);
@@ -11350,25 +11352,33 @@ fn parse_is_json_predicate_invalid() {
 fn parse_discard() {
     let sql = "DISCARD ALL";
     match verified_stmt(sql) {
-        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::ALL),
+        Statement::Discard(DiscardStatement { object_type, .. }) => {
+            assert_eq!(object_type, DiscardObject::ALL)
+        }
         _ => unreachable!(),
     }
 
     let sql = "DISCARD PLANS";
     match verified_stmt(sql) {
-        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::PLANS),
+        Statement::Discard(DiscardStatement { object_type, .. }) => {
+            assert_eq!(object_type, DiscardObject::PLANS)
+        }
         _ => unreachable!(),
     }
 
     let sql = "DISCARD SEQUENCES";
     match verified_stmt(sql) {
-        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::SEQUENCES),
+        Statement::Discard(DiscardStatement { object_type, .. }) => {
+            assert_eq!(object_type, DiscardObject::SEQUENCES)
+        }
         _ => unreachable!(),
     }
 
     let sql = "DISCARD TEMP";
     match verified_stmt(sql) {
-        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::TEMP),
+        Statement::Discard(DiscardStatement { object_type, .. }) => {
+            assert_eq!(object_type, DiscardObject::TEMP)
+        }
         _ => unreachable!(),
     }
 }
@@ -11377,7 +11387,7 @@ fn parse_discard() {
 fn parse_cursor() {
     let sql = r#"CLOSE my_cursor"#;
     match verified_stmt(sql) {
-        Statement::Close { cursor } => assert_eq!(
+        Statement::Close(CloseStatement { cursor }) => assert_eq!(
             cursor,
             CloseCursor::Specific {
                 name: Ident::new("my_cursor"),
@@ -11388,7 +11398,7 @@ fn parse_cursor() {
 
     let sql = r#"CLOSE ALL"#;
     match verified_stmt(sql) {
-        Statement::Close { cursor } => assert_eq!(cursor, CloseCursor::All),
+        Statement::Close(CloseStatement { cursor }) => assert_eq!(cursor, CloseCursor::All),
         _ => unreachable!(),
     }
 }
@@ -11397,9 +11407,9 @@ fn parse_cursor() {
 fn parse_show_functions() {
     assert_eq!(
         verified_stmt("SHOW FUNCTIONS LIKE 'pattern'"),
-        Statement::ShowFunctions {
+        Statement::ShowFunctions(ShowFunctionsStatement {
             filter: Some(ShowStatementFilter::Like("pattern".into())),
-        }
+        })
     );
 }
 
@@ -11412,24 +11422,24 @@ fn parse_cache_table() {
 
     assert_eq!(
         verified_stmt(format!("CACHE TABLE '{cache_table_name}'").as_str()),
-        Statement::Cache {
+        Statement::Cache(CacheStatement {
             table_flag: None,
             table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![],
             query: None,
-        }
+        })
     );
 
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}'").as_str()),
-        Statement::Cache {
+        Statement::Cache(CacheStatement {
             table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
             table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![],
             query: None,
-        }
+        })
     );
 
     assert_eq!(
@@ -11439,7 +11449,7 @@ fn parse_cache_table() {
             )
             .as_str()
         ),
-        Statement::Cache {
+        Statement::Cache(CacheStatement {
             table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
             table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
@@ -11454,7 +11464,7 @@ fn parse_cache_table() {
                 },
             ],
             query: None,
-        }
+        })
     );
 
     assert_eq!(
@@ -11464,7 +11474,7 @@ fn parse_cache_table() {
             )
                 .as_str()
         ),
-        Statement::Cache {
+        Statement::Cache(CacheStatement {
             table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
             table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
@@ -11479,7 +11489,7 @@ fn parse_cache_table() {
                 },
             ],
             query: Some(query.clone().into()),
-        }
+        })
     );
 
     assert_eq!(
@@ -11489,7 +11499,7 @@ fn parse_cache_table() {
             )
                 .as_str()
         ),
-        Statement::Cache {
+        Statement::Cache(CacheStatement {
             table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
             table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: true,
@@ -11504,29 +11514,29 @@ fn parse_cache_table() {
                 },
             ],
             query: Some(query.clone().into()),
-        }
+        })
     );
 
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' {sql}").as_str()),
-        Statement::Cache {
+        Statement::Cache(CacheStatement {
             table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
             table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![],
             query: Some(query.clone().into()),
-        }
+        })
     );
 
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' AS {sql}").as_str()),
-        Statement::Cache {
+        Statement::Cache(CacheStatement {
             table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
             table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: true,
             options: vec![],
             query: Some(query.into()),
-        }
+        })
     );
 
     let res = parse_sql_statements("CACHE TABLE 'table_name' foo");
@@ -11584,18 +11594,18 @@ fn parse_cache_table() {
 fn parse_uncache_table() {
     assert_eq!(
         verified_stmt("UNCACHE TABLE 'table_name'"),
-        Statement::UNCache {
+        Statement::UNCache(UNCacheStatement {
             table_name: ObjectName::from(vec![Ident::with_quote('\'', "table_name")]),
             if_exists: false,
-        }
+        })
     );
 
     assert_eq!(
         verified_stmt("UNCACHE TABLE IF EXISTS 'table_name'"),
-        Statement::UNCache {
+        Statement::UNCache(UNCacheStatement {
             table_name: ObjectName::from(vec![Ident::with_quote('\'', "table_name")]),
             if_exists: true,
-        }
+        })
     );
 
     let res = parse_sql_statements("UNCACHE TABLE 'table_name' foo");
@@ -12499,10 +12509,10 @@ fn parse_projection_trailing_comma() {
 #[test]
 fn parse_create_type() {
     match verified_stmt("CREATE TYPE mytype") {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "mytype");
             assert!(representation.is_none());
         }
@@ -12511,10 +12521,10 @@ fn parse_create_type() {
 
     match verified_stmt("CREATE TYPE address AS (street VARCHAR(100), city TEXT COLLATE \"en_US\")")
     {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "address");
             match representation {
                 Some(UserDefinedTypeRepresentation::Composite { attributes }) => {
@@ -12545,10 +12555,10 @@ fn parse_create_type() {
     verified_stmt("CREATE TYPE empty AS ()");
 
     match verified_stmt("CREATE TYPE mood AS ENUM ('happy', 'sad')") {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "mood");
             match representation {
                 Some(UserDefinedTypeRepresentation::Enum { labels }) => {
@@ -12563,10 +12573,10 @@ fn parse_create_type() {
     }
 
     match verified_stmt("CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, CANONICAL = fn1)") {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "int4range");
             match representation {
                 Some(UserDefinedTypeRepresentation::Range { options }) => {
@@ -12591,10 +12601,10 @@ fn parse_create_type() {
     match verified_stmt(
         "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops)",
     ) {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "int4range");
             match representation {
                 Some(UserDefinedTypeRepresentation::Range { options }) => {
@@ -12619,10 +12629,10 @@ fn parse_create_type() {
     match verified_stmt(
         "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_DIFF = int4range_subdiff)",
     ) {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "int4range");
             match representation {
                 Some(UserDefinedTypeRepresentation::Range { options }) => {
@@ -12647,10 +12657,10 @@ fn parse_create_type() {
     match verified_stmt(
         "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops, CANONICAL = int4range_canonical, SUBTYPE_DIFF = int4range_subdiff, MULTIRANGE_TYPE_NAME = int4multirange)",
     ) {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "int4range");
             match representation {
                 Some(UserDefinedTypeRepresentation::Range { options }) => {
@@ -12685,10 +12695,10 @@ fn parse_create_type() {
     match verified_stmt(
         "CREATE TYPE mytype (INPUT = in_fn, OUTPUT = out_fn, INTERNALLENGTH = 16, PASSEDBYVALUE)",
     ) {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "mytype");
             match representation {
                 Some(UserDefinedTypeRepresentation::SqlDefinition { options }) => {
@@ -12745,13 +12755,13 @@ fn parse_create_type() {
 fn parse_drop_type() {
     let sql = "DROP TYPE abc";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names,
             object_type,
             if_exists,
             cascade,
             ..
-        } => {
+        }) => {
             assert_eq_vec(&["abc"], &names);
             assert_eq!(ObjectType::Type, object_type);
             assert!(!if_exists);
@@ -12762,13 +12772,13 @@ fn parse_drop_type() {
 
     let sql = "DROP TYPE IF EXISTS def, magician, quaternion";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names,
             object_type,
             if_exists,
             cascade,
             ..
-        } => {
+        }) => {
             assert_eq_vec(&["def", "magician", "quaternion"], &names);
             assert_eq!(ObjectType::Type, object_type);
             assert!(if_exists);
@@ -12779,13 +12789,13 @@ fn parse_drop_type() {
 
     let sql = "DROP TYPE IF EXISTS my_type CASCADE";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names,
             object_type,
             if_exists,
             cascade,
             ..
-        } => {
+        }) => {
             assert_eq_vec(&["my_type"], &names);
             assert_eq!(ObjectType::Type, object_type);
             assert!(if_exists);
@@ -12824,7 +12834,7 @@ fn parse_call() {
 
 #[test]
 fn parse_execute_stored_procedure() {
-    let expected = Statement::Execute {
+    let expected = Statement::Execute(ExecuteStatement {
         name: Some(ObjectName::from(vec![
             Ident {
                 value: "my_schema".to_string(),
@@ -12847,7 +12857,7 @@ fn parse_execute_stored_procedure() {
         into: vec![],
         output: false,
         default: false,
-    };
+    });
     assert_eq!(
         // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
         ms_and_generic()
@@ -12862,13 +12872,13 @@ fn parse_execute_stored_procedure() {
         expected
     );
     match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 @ReturnVal = @X OUTPUT") {
-        Statement::Execute { output, .. } => {
+        Statement::Execute(ExecuteStatement { output, .. }) => {
             assert!(output);
         }
         _ => unreachable!(),
     }
     match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 DEFAULT") {
-        Statement::Execute { default, .. } => {
+        Statement::Execute(ExecuteStatement { default, .. }) => {
             assert!(default);
         }
         _ => unreachable!(),
@@ -12881,7 +12891,7 @@ fn parse_execute_stored_procedure() {
 fn parse_execute_immediate() {
     let dialects = all_dialects_where(|d| d.supports_execute_immediate());
 
-    let expected = Statement::Execute {
+    let expected = Statement::Execute(ExecuteStatement {
         parameters: vec![Expr::Value(
             (Value::SingleQuotedString("SELECT 1".to_string())).with_empty_span(),
         )],
@@ -12895,7 +12905,7 @@ fn parse_execute_immediate() {
         has_parentheses: false,
         output: false,
         default: false,
-    };
+    });
 
     let stmt = dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a USING 1 AS b");
     assert_eq!(expected, stmt);
@@ -12989,7 +12999,7 @@ fn parse_unload() {
     let unload = verified_stmt("UNLOAD(SELECT cola FROM tab) TO 's3://...' WITH (format = 'AVRO')");
     assert_eq!(
         unload,
-        Statement::Unload {
+        Statement::Unload(UnloadStatement {
             query: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
@@ -13048,7 +13058,7 @@ fn parse_unload() {
             query_text: None,
             auth: None,
             options: vec![],
-        }
+        })
     );
 
     one_statement_parses_to(
@@ -13163,7 +13173,7 @@ fn parse_unload() {
 #[test]
 fn test_savepoint() {
     match verified_stmt("SAVEPOINT test1") {
-        Statement::Savepoint { name } => {
+        Statement::Savepoint(SavepointStatement { name }) => {
             assert_eq!(Ident::new("test1"), name);
         }
         _ => unreachable!(),
@@ -13173,7 +13183,7 @@ fn test_savepoint() {
 #[test]
 fn test_release_savepoint() {
     match verified_stmt("RELEASE SAVEPOINT test1") {
-        Statement::ReleaseSavepoint { name } => {
+        Statement::ReleaseSavepoint(ReleaseSavepointStatement { name }) => {
             assert_eq!(Ident::new("test1"), name);
         }
         _ => unreachable!(),
@@ -15084,7 +15094,7 @@ fn test_create_connector() {
 fn test_drop_connector() {
     let dialects = all_dialects();
     match dialects.verified_stmt("DROP CONNECTOR IF EXISTS my_connector") {
-        Statement::DropConnector { if_exists, name } => {
+        Statement::DropConnector(DropConnectorStatement { if_exists, name }) => {
             assert_eq!(if_exists, true);
             assert_eq!(name.to_string(), "my_connector");
         }
@@ -15110,12 +15120,12 @@ fn test_alter_connector() {
     match dialects.verified_stmt(
         "ALTER CONNECTOR my_connector SET DCPROPERTIES('user' = 'root', 'password' = 'password')",
     ) {
-        Statement::AlterConnector {
+        Statement::AlterConnector(AlterConnectorStatement {
             name,
             properties,
             url,
             owner,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_connector");
             assert_eq!(
                 properties,
@@ -15143,12 +15153,12 @@ fn test_alter_connector() {
     match dialects
         .verified_stmt("ALTER CONNECTOR my_connector SET URL 'jdbc:mysql://localhost:3306/mydb'")
     {
-        Statement::AlterConnector {
+        Statement::AlterConnector(AlterConnectorStatement {
             name,
             properties,
             url,
             owner,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_connector");
             assert_eq!(properties, None);
             assert_eq!(url, Some("jdbc:mysql://localhost:3306/mydb".to_string()));
@@ -15158,12 +15168,12 @@ fn test_alter_connector() {
     }
 
     match dialects.verified_stmt("ALTER CONNECTOR my_connector SET OWNER USER 'root'") {
-        Statement::AlterConnector {
+        Statement::AlterConnector(AlterConnectorStatement {
             name,
             properties,
             url,
             owner,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_connector");
             assert_eq!(properties, None);
             assert_eq!(url, None);
@@ -15176,12 +15186,12 @@ fn test_alter_connector() {
     }
 
     match dialects.verified_stmt("ALTER CONNECTOR my_connector SET OWNER ROLE 'admin'") {
-        Statement::AlterConnector {
+        Statement::AlterConnector(AlterConnectorStatement {
             name,
             properties,
             url,
             owner,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_connector");
             assert_eq!(properties, None);
             assert_eq!(url, None);
@@ -15378,7 +15388,7 @@ fn parse_listen_channel() {
     let dialects = all_dialects_where(|d| d.supports_listen_notify());
 
     match dialects.verified_stmt("LISTEN test1") {
-        Statement::LISTEN { channel } => {
+        Statement::LISTEN(LISTENStatement { channel }) => {
             assert_eq!(Ident::new("test1"), channel);
         }
         _ => unreachable!(),
@@ -15402,14 +15412,14 @@ fn parse_unlisten_channel() {
     let dialects = all_dialects_where(|d| d.supports_listen_notify());
 
     match dialects.verified_stmt("UNLISTEN test1") {
-        Statement::UNLISTEN { channel } => {
+        Statement::UNLISTEN(UNLISTENStatement { channel }) => {
             assert_eq!(Ident::new("test1"), channel);
         }
         _ => unreachable!(),
     };
 
     match dialects.verified_stmt("UNLISTEN *") {
-        Statement::UNLISTEN { channel } => {
+        Statement::UNLISTEN(UNLISTENStatement { channel }) => {
             assert_eq!(Ident::new("*"), channel);
         }
         _ => unreachable!(),
@@ -15433,7 +15443,7 @@ fn parse_notify_channel() {
     let dialects = all_dialects_where(|d| d.supports_listen_notify());
 
     match dialects.verified_stmt("NOTIFY test1") {
-        Statement::NOTIFY { channel, payload } => {
+        Statement::NOTIFY(NOTIFYStatement { channel, payload }) => {
             assert_eq!(Ident::new("test1"), channel);
             assert_eq!(payload, None);
         }
@@ -15441,10 +15451,10 @@ fn parse_notify_channel() {
     };
 
     match dialects.verified_stmt("NOTIFY test1, 'this is a test notification'") {
-        Statement::NOTIFY {
+        Statement::NOTIFY(NOTIFYStatement {
             channel,
             payload: Some(payload),
-        } => {
+        }) => {
             assert_eq!(Ident::new("test1"), channel);
             assert_eq!("this is a test notification", payload);
         }
@@ -15486,14 +15496,14 @@ fn parse_load_data() {
 
     let sql = "LOAD DATA INPATH '/local/path/to/data.txt' INTO TABLE test.my_table";
     match dialects.verified_stmt(sql) {
-        Statement::LoadData {
+        Statement::LoadData(LoadDataStatement {
             local,
             inpath,
             overwrite,
             table_name,
             partitioned,
             table_format,
-        } => {
+        }) => {
             assert_eq!(false, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
@@ -15510,14 +15520,14 @@ fn parse_load_data() {
     // with OVERWRITE keyword
     let sql = "LOAD DATA INPATH '/local/path/to/data.txt' OVERWRITE INTO TABLE my_table";
     match dialects.verified_stmt(sql) {
-        Statement::LoadData {
+        Statement::LoadData(LoadDataStatement {
             local,
             inpath,
             overwrite,
             table_name,
             partitioned,
             table_format,
-        } => {
+        }) => {
             assert_eq!(false, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(true, overwrite);
@@ -15546,14 +15556,14 @@ fn parse_load_data() {
     // with LOCAL keyword
     let sql = "LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table";
     match dialects.verified_stmt(sql) {
-        Statement::LoadData {
+        Statement::LoadData(LoadDataStatement {
             local,
             inpath,
             overwrite,
             table_name,
             partitioned,
             table_format,
-        } => {
+        }) => {
             assert_eq!(true, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
@@ -15585,14 +15595,14 @@ fn parse_load_data() {
     // with PARTITION  clause
     let sql = "LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE my_table PARTITION (year = 2024, month = 11)";
     match dialects.verified_stmt(sql) {
-        Statement::LoadData {
+        Statement::LoadData(LoadDataStatement {
             local,
             inpath,
             overwrite,
             table_name,
             partitioned,
             table_format,
-        } => {
+        }) => {
             assert_eq!(true, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
@@ -15624,14 +15634,14 @@ fn parse_load_data() {
     // with PARTITION  clause
     let sql = "LOAD DATA LOCAL INPATH '/local/path/to/data.txt' OVERWRITE INTO TABLE good.my_table PARTITION (year = 2024, month = 11) INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat' SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'";
     match dialects.verified_stmt(sql) {
-        Statement::LoadData {
+        Statement::LoadData(LoadDataStatement {
             local,
             inpath,
             overwrite,
             table_name,
             partitioned,
             table_format,
-        } => {
+        }) => {
             assert_eq!(true, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(true, overwrite);
@@ -15696,7 +15706,7 @@ fn test_load_extension() {
     let sql = "LOAD my_extension";
 
     match dialects.verified_stmt(sql) {
-        Statement::Load { extension_name } => {
+        Statement::Load(LoadStatement { extension_name }) => {
             assert_eq!(Ident::new("my_extension"), extension_name);
         }
         _ => unreachable!(),
@@ -15714,7 +15724,7 @@ fn test_load_extension() {
     let sql = "LOAD 'filename'";
 
     match dialects.verified_stmt(sql) {
-        Statement::Load { extension_name } => {
+        Statement::Load(LoadStatement { extension_name }) => {
             assert_eq!(
                 Ident {
                     value: "filename".to_string(),
@@ -15855,12 +15865,12 @@ fn parse_comments() {
     match all_dialects_where(|d| d.supports_comment_on())
         .verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'")
     {
-        Statement::Comment {
+        Statement::Comment(CommentStatement {
             object_type,
             object_name,
             comment: Some(comment),
             if_exists,
-        } => {
+        }) => {
             assert_eq!("comment", comment);
             assert_eq!("tab.name", object_name.to_string());
             assert_eq!(CommentObject::Column, object_type);
@@ -15892,12 +15902,12 @@ fn parse_comments() {
         match all_dialects_where(|d| d.supports_comment_on())
             .verified_stmt(format!("COMMENT IF EXISTS ON {keyword} db.t0 IS 'comment'").as_str())
         {
-            Statement::Comment {
+            Statement::Comment(CommentStatement {
                 object_type,
                 object_name,
                 comment: Some(comment),
                 if_exists,
-            } => {
+            }) => {
                 assert_eq!("comment", comment);
                 assert_eq!("db.t0", object_name.to_string());
                 assert_eq!(*expected_object_type, object_type);
@@ -15910,12 +15920,12 @@ fn parse_comments() {
     match all_dialects_where(|d| d.supports_comment_on())
         .verified_stmt("COMMENT IF EXISTS ON TABLE public.tab IS NULL")
     {
-        Statement::Comment {
+        Statement::Comment(CommentStatement {
             object_type,
             object_name,
             comment: None,
             if_exists,
-        } => {
+        }) => {
             assert_eq!("public.tab", object_name.to_string());
             assert_eq!(CommentObject::Table, object_type);
             assert!(if_exists);
@@ -18216,13 +18226,13 @@ fn test_nested_join_without_parentheses() {
 fn parse_create_procedure_with_language() {
     let sql = r#"CREATE PROCEDURE test_proc LANGUAGE sql AS BEGIN SELECT 1; END"#;
     match verified_stmt(sql) {
-        Statement::CreateProcedure {
+        Statement::CreateProcedure(CreateProcedureStatement {
             or_alter,
             name,
             params,
             language,
             ..
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!(name.to_string(), "test_proc");
             assert_eq!(params, Some(vec![]));
@@ -18246,12 +18256,12 @@ fn parse_create_procedure_with_language() {
 fn parse_create_procedure_with_parameter_modes() {
     let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER, OUT b TEXT, INOUT c TIMESTAMP, d BOOL) AS BEGIN SELECT 1; END"#;
     match verified_stmt(sql) {
-        Statement::CreateProcedure {
+        Statement::CreateProcedure(CreateProcedureStatement {
             or_alter,
             name,
             params,
             ..
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!(name.to_string(), "test_proc");
             let fake_span = Span {
@@ -18310,12 +18320,12 @@ fn parse_create_procedure_with_parameter_modes() {
     // parameters with default values
     let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER = 1, OUT b TEXT = '2', INOUT c TIMESTAMP = NULL, d BOOL = 0) AS BEGIN SELECT 1; END"#;
     match verified_stmt(sql) {
-        Statement::CreateProcedure {
+        Statement::CreateProcedure(CreateProcedureStatement {
             or_alter,
             name,
             params,
             ..
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!(name.to_string(), "test_proc");
             assert_eq!(
@@ -18710,9 +18720,9 @@ fn key_value_option_statements_do_not_swallow_following_statement() {
 fn parse_drop_stream() {
     let sql = "DROP STREAM s1";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names, object_type, ..
-        } => {
+        }) => {
             assert_eq!(
                 vec!["s1"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -18884,7 +18894,7 @@ fn parse_copy_options() {
         r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE 'arn:aws:iam::123456789:role/role1' CSV IGNOREHEADER 1"#,
     );
     match copy {
-        Statement::Copy { legacy_options, .. } => {
+        Statement::Copy(CopyStatement { legacy_options, .. }) => {
             assert_eq!(
                 legacy_options,
                 vec![
@@ -18904,7 +18914,7 @@ fn parse_copy_options() {
         r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE DEFAULT CSV IGNOREHEADER 1"#,
     );
     match copy {
-        Statement::Copy { legacy_options, .. } => {
+        Statement::Copy(CopyStatement { legacy_options, .. }) => {
             assert_eq!(
                 legacy_options,
                 vec![

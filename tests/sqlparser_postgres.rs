@@ -1094,7 +1094,7 @@ fn parse_alter_collation() {
 fn parse_drop_and_comment_collation_ast() {
     assert_eq!(
         pg_and_generic().verified_stmt("DROP COLLATION test0"),
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type: ObjectType::Collation,
             if_exists: false,
             names: vec![ObjectName::from(vec![Ident::new("test0")])],
@@ -1103,12 +1103,12 @@ fn parse_drop_and_comment_collation_ast() {
             purge: false,
             temporary: false,
             table: None,
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP COLLATION IF EXISTS test0"),
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type: ObjectType::Collation,
             if_exists: true,
             names: vec![ObjectName::from(vec![Ident::new("test0")])],
@@ -1117,17 +1117,17 @@ fn parse_drop_and_comment_collation_ast() {
             purge: false,
             temporary: false,
             table: None,
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("COMMENT ON COLLATION test0 IS 'US English'"),
-        Statement::Comment {
+        Statement::Comment(CommentStatement {
             object_type: CommentObject::Collation,
             object_name: ObjectName::from(vec![Ident::new("test0")]),
             comment: Some("US English".to_string()),
             if_exists: false,
-        }
+        })
     );
 }
 
@@ -1410,11 +1410,11 @@ fn parse_create_schema_if_not_exists() {
     let sql = "CREATE SCHEMA IF NOT EXISTS schema_name";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateSchema {
+        Statement::CreateSchema(CreateSchemaStatement {
             if_not_exists: true,
             schema_name,
             ..
-        } => assert_eq!("schema_name", schema_name.to_string()),
+        }) => assert_eq!("schema_name", schema_name.to_string()),
         _ => unreachable!(),
     }
 }
@@ -1424,11 +1424,11 @@ fn parse_drop_schema_if_exists() {
     let sql = "DROP SCHEMA IF EXISTS schema_name";
     let ast = pg().verified_stmt(sql);
     match ast {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists: true,
             ..
-        } => assert_eq!(object_type, ObjectType::Schema),
+        }) => assert_eq!(object_type, ObjectType::Schema),
         _ => unreachable!(),
     }
 }
@@ -1463,7 +1463,7 @@ fn parse_copy_from_stdin_without_semicolon() {
     let stmt = pg().verified_stmt("COPY bitwise_test FROM STDIN NULL 'null'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["bitwise_test".into()]),
                 columns: vec![],
@@ -1473,7 +1473,7 @@ fn parse_copy_from_stdin_without_semicolon() {
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Null("null".into())],
             values: vec![],
-        }
+        })
     );
 }
 
@@ -1498,12 +1498,12 @@ fn parse_copy_from_stdin_without_semicolon_variants() {
 
     for sql in cases {
         match pg().verified_stmt(sql) {
-            Statement::Copy {
+            Statement::Copy(CopyStatement {
                 to: false,
                 target: CopyTarget::Stdin,
                 values,
                 ..
-            } => {
+            }) => {
                 assert!(
                     values.is_empty(),
                     "expected no inline COPY payload for `{sql}`"
@@ -1519,7 +1519,7 @@ fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1531,13 +1531,13 @@ fn test_copy_from() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ','");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1549,13 +1549,13 @@ fn test_copy_from() {
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ',' CSV HEADER");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1570,7 +1570,7 @@ fn test_copy_from() {
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
             values: vec![],
-        }
+        })
     );
 }
 
@@ -1579,7 +1579,7 @@ fn test_copy_to() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1591,13 +1591,13 @@ fn test_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ','");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1609,13 +1609,13 @@ fn test_copy_to() {
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ',' CSV HEADER");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1630,7 +1630,7 @@ fn test_copy_to() {
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
             values: vec![],
-        }
+        })
     )
 }
 
@@ -1656,7 +1656,7 @@ fn parse_copy_from() {
     )";
     assert_eq!(
         pg_and_generic().one_statement_parses_to(sql, ""),
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["table".into()]),
                 columns: vec!["a".into(), "b".into()],
@@ -1684,7 +1684,7 @@ fn parse_copy_from() {
             ],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 }
 
@@ -1702,7 +1702,7 @@ fn parse_copy_to() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1714,13 +1714,13 @@ fn parse_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY country TO STDOUT (DELIMITER '|')");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["country".into()]),
                 columns: vec![],
@@ -1730,14 +1730,14 @@ fn parse_copy_to() {
             options: vec![CopyOption::Delimiter('|')],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt =
         pg().verified_stmt("COPY country TO PROGRAM 'gzip > /usr1/proj/bray/sql/country_data.gz'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["country".into()]),
                 columns: vec![],
@@ -1749,13 +1749,13 @@ fn parse_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY (SELECT 42 AS a, 'hello' AS b) TO 'query.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Query(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
@@ -1819,7 +1819,7 @@ fn parse_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     )
 }
 
@@ -1828,7 +1828,7 @@ fn parse_copy_from_before_v9_0() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' BINARY DELIMITER ',' NULL 'null' CSV HEADER QUOTE '\"' ESCAPE '\\' FORCE NOT NULL column");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1850,14 +1850,14 @@ fn parse_copy_from_before_v9_0() {
                 ]),
             ],
             values: vec![],
-        }
+        })
     );
 
     // test 'AS' keyword
     let sql = "COPY users FROM 'data.csv' DELIMITER AS ',' NULL AS 'null' CSV QUOTE AS '\"' ESCAPE AS '\\'";
     assert_eq!(
         pg_and_generic().one_statement_parses_to(sql, ""),
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1876,7 +1876,7 @@ fn parse_copy_from_before_v9_0() {
                 ]),
             ],
             values: vec![],
-        }
+        })
     );
 }
 
@@ -1885,7 +1885,7 @@ fn parse_copy_to_before_v9_0() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' BINARY DELIMITER ',' NULL 'null' CSV HEADER QUOTE '\"' ESCAPE '\\' FORCE QUOTE column");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(CopyStatement {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1907,7 +1907,7 @@ fn parse_copy_to_before_v9_0() {
                 ]),
             ],
             values: vec![],
-        }
+        })
     )
 }
 
@@ -2082,17 +2082,17 @@ fn parse_show() {
     let stmt = pg_and_generic().verified_stmt("SHOW a a");
     assert_eq!(
         stmt,
-        Statement::ShowVariable {
+        Statement::ShowVariable(ShowVariableStatement {
             variable: vec!["a".into(), "a".into()]
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SHOW ALL ALL");
     assert_eq!(
         stmt,
-        Statement::ShowVariable {
+        Statement::ShowVariable(ShowVariableStatement {
             variable: vec!["ALL".into(), "ALL".into()]
-        }
+        })
     )
 }
 
@@ -2101,37 +2101,37 @@ fn parse_deallocate() {
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE a");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(DeallocateStatement {
             name: "a".into(),
             prepare: false,
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE ALL");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(DeallocateStatement {
             name: "ALL".into(),
             prepare: false,
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE a");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(DeallocateStatement {
             name: "a".into(),
             prepare: true,
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE ALL");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(DeallocateStatement {
             name: "ALL".into(),
             prepare: true,
-        }
+        })
     );
 }
 
@@ -2140,7 +2140,7 @@ fn parse_execute() {
     let stmt = pg_and_generic().verified_stmt("EXECUTE a");
     assert_eq!(
         stmt,
-        Statement::Execute {
+        Statement::Execute(ExecuteStatement {
             name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![],
             has_parentheses: false,
@@ -2149,13 +2149,13 @@ fn parse_execute() {
             into: vec![],
             output: false,
             default: false,
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("EXECUTE a(1, 't')");
     assert_eq!(
         stmt,
-        Statement::Execute {
+        Statement::Execute(ExecuteStatement {
             name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![
                 Expr::value(number("1")),
@@ -2167,14 +2167,14 @@ fn parse_execute() {
             into: vec![],
             output: false,
             default: false,
-        }
+        })
     );
 
     let stmt = pg_and_generic()
         .verified_stmt("EXECUTE a USING CAST(1337 AS SMALLINT), CAST(7331 AS SMALLINT)");
     assert_eq!(
         stmt,
-        Statement::Execute {
+        Statement::Execute(ExecuteStatement {
             name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![],
             has_parentheses: false,
@@ -2206,7 +2206,7 @@ fn parse_execute() {
             into: vec![],
             output: false,
             default: false,
-        }
+        })
     );
 }
 
@@ -2215,12 +2215,12 @@ fn parse_prepare() {
     let stmt =
         pg_and_generic().verified_stmt("PREPARE a AS INSERT INTO customers VALUES (a1, a2, a3)");
     let sub_stmt = match stmt {
-        Statement::Prepare {
+        Statement::Prepare(PrepareStatement {
             name,
             data_types,
             statement,
             ..
-        } => {
+        }) => {
             assert_eq!(name, "a".into());
             assert!(data_types.is_empty());
 
@@ -2256,12 +2256,12 @@ fn parse_prepare() {
     let stmt = pg_and_generic()
         .verified_stmt("PREPARE a (INT, TEXT) AS SELECT * FROM customers WHERE customers.id = a1");
     let sub_stmt = match stmt {
-        Statement::Prepare {
+        Statement::Prepare(PrepareStatement {
             name,
             data_types,
             statement,
             ..
-        } => {
+        }) => {
             assert_eq!(name, "a".into());
             assert_eq!(data_types, vec![DataType::Int(None), DataType::Text]);
 
@@ -4562,7 +4562,7 @@ fn parse_alter_role() {
     let sql = "ALTER ROLE old_name RENAME TO new_name";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "old_name".into(),
                 quote_style: None,
@@ -4575,13 +4575,13 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }
             },
-        }
+        })
     );
 
     let sql = "ALTER ROLE role_name WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 100 PASSWORD 'abcdef' VALID UNTIL '2025-01-01'";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4607,13 +4607,13 @@ fn parse_alter_role() {
                     ))
                 ]
             },
-        }
+        })
     );
 
     let sql = "ALTER ROLE role_name WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS PASSWORD NULL";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4631,13 +4631,13 @@ fn parse_alter_role() {
                     RoleOption::Password(Password::NullPassword),
                 ]
             },
-        }
+        })
     );
 
     let sql = "ALTER ROLE role_name SET maintenance_work_mem FROM CURRENT";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4652,13 +4652,13 @@ fn parse_alter_role() {
                 config_value: SetConfigValue::FromCurrent,
                 in_database: None
             },
-        }
+        })
     );
 
     let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem = 100000";
     assert_eq!(
         pg().parse_sql_statements(sql).unwrap(),
-        [Statement::AlterRole {
+        [Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4679,13 +4679,13 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }]))
             },
-        }]
+        })]
     );
 
     let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO 100000";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4706,13 +4706,13 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }]))
             },
-        }
+        })
     );
 
     let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO DEFAULT";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4731,13 +4731,13 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }]))
             },
-        }
+        })
     );
 
     let sql = "ALTER ROLE role_name RESET ALL";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4747,13 +4747,13 @@ fn parse_alter_role() {
                 config_name: ResetConfig::ALL,
                 in_database: None
             },
-        }
+        })
     );
 
     let sql = "ALTER ROLE role_name IN DATABASE database_name RESET maintenance_work_mem";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -4771,7 +4771,7 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }]))
             },
-        }
+        })
     );
 }
 
@@ -4781,12 +4781,12 @@ fn parse_alter_user() {
     let canonical = "ALTER ROLE old_name RENAME TO new_name";
     assert_eq!(
         pg().one_statement_parses_to("ALTER USER old_name RENAME TO new_name", canonical),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident::new("old_name"),
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident::new("new_name"),
             },
-        }
+        })
     );
 
     let canonical = "ALTER ROLE bob WITH SUPERUSER PASSWORD 'x' CONNECTION LIMIT 5";
@@ -4795,7 +4795,7 @@ fn parse_alter_user() {
             "ALTER USER bob WITH SUPERUSER PASSWORD 'x' CONNECTION LIMIT 5",
             canonical
         ),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident::new("bob"),
             operation: AlterRoleOperation::WithOptions {
                 options: vec![
@@ -4806,7 +4806,7 @@ fn parse_alter_user() {
                     RoleOption::ConnectionLimit(Expr::value(number("5"))),
                 ]
             },
-        }
+        })
     );
 
     assert_eq!(
@@ -4814,14 +4814,14 @@ fn parse_alter_user() {
             "ALTER USER bob SET search_path TO public",
             "ALTER ROLE bob SET search_path TO public"
         ),
-        Statement::AlterRole {
+        Statement::AlterRole(AlterRoleStatement {
             name: Ident::new("bob"),
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident::new("search_path")]),
                 config_value: SetConfigValue::Value(Expr::Identifier(Ident::new("public"))),
                 in_database: None,
             },
-        }
+        })
     );
 }
 
@@ -5489,7 +5489,7 @@ fn parse_drop_procedure() {
     let sql = "DROP PROCEDURE IF EXISTS test_proc";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropProcedure {
+        Statement::DropProcedure(DropProcedureStatement {
             if_exists: true,
             proc_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -5500,13 +5500,13 @@ fn parse_drop_procedure() {
                 args: None
             }],
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP PROCEDURE IF EXISTS test_proc(a INTEGER, IN b INTEGER = 1)";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropProcedure {
+        Statement::DropProcedure(DropProcedureStatement {
             if_exists: true,
             proc_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -5527,13 +5527,13 @@ fn parse_drop_procedure() {
                 ]),
             }],
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP PROCEDURE IF EXISTS test_proc1(a INTEGER, IN b INTEGER = 1), test_proc2(a VARCHAR, IN b INTEGER = 1)";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropProcedure {
+        Statement::DropProcedure(DropProcedureStatement {
             if_exists: true,
             proc_desc: vec![
                 FunctionDesc {
@@ -5574,7 +5574,7 @@ fn parse_drop_procedure() {
                 }
             ],
             drop_behavior: None
-        }
+        })
     );
 
     let res = pg().parse_sql_statements("DROP PROCEDURE testproc DROP");
@@ -7268,10 +7268,10 @@ fn parse_create_type_as_enum() {
     let sql = "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')";
     let statement = pg_and_generic().verified_stmt(sql);
     match statement {
-        Statement::CreateType {
+        Statement::CreateType(CreateTypeStatement {
             name,
             representation: Some(UserDefinedTypeRepresentation::Enum { labels }),
-        } => {
+        }) => {
             assert_eq!("public.my_type", name.to_string());
             assert_eq!(
                 vec!["label1", "label2", "label3", "label4"]

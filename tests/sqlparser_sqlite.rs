@@ -957,6 +957,18 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn test_cast_empty_type() {
+    // SQLite allows CAST(expr AS) with an empty type name (typetoken can be empty)
+    // See https://www.sqlite.org/lang_expr.html
+    sqlite().verified_stmt("SELECT CAST(a AS)");
+
+    // Rejected by dialects without the flag
+    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("SELECT CAST(a AS)")
+        .is_err());
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

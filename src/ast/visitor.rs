@@ -825,6 +825,7 @@ where
 /// # use sqlparser::parser::Parser;
 /// # use sqlparser::dialect::GenericDialect;
 /// # use sqlparser::ast::*;
+/// # use sqlparser::ast::helpers::attached_token::AttachedToken;
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT x, y FROM t";
 /// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
@@ -832,20 +833,21 @@ where
 /// visit_expressions_mut(&mut statements, |expr| {
 ///   if matches!(expr, Expr::Identifier(col_name) if col_name.value == "x") {
 ///     let old_expr = std::mem::replace(expr, Expr::value(Value::Null));
-///     *expr = Expr::Function(Function {
+///     *expr = Expr::Function(Box::new(Function {
 ///           name: ObjectName::from(vec![Ident::new("f")]),
 ///           uses_odbc_syntax: false,
 ///           args: FunctionArguments::List(FunctionArgumentList {
 ///               duplicate_treatment: None,
 ///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
 ///               clauses: vec![],
-///           }),
+///           }.into()),
 ///           null_treatment: None,
 ///           filter: None,
 ///           over: None,
 ///           parameters: FunctionArguments::None,
 ///           within_group: vec![],
-///      });
+///           end_token: AttachedToken::empty(),
+///      }));
 ///   }
 ///   ControlFlow::<()>::Continue(())
 /// });

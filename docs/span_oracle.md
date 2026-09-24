@@ -49,8 +49,8 @@ A test fails when a finding is missing from the baseline, and also when a baseli
 
 ```sh
 rm -rf target/span-oracle
-SPAN_ORACLE=record cargo test --all-features
-find target/span-oracle -name '*.tsv' -exec cat {} + | LC_ALL=C sort -u > tests/span_baseline.tsv
+SPAN_ORACLE=record cargo test --all-features &&
+  find target/span-oracle -name '*.tsv' -exec cat {} + | LC_ALL=C sort -u > tests/span_baseline.tsv
 ```
 
-CI runs the same recording and fails if the result differs from the committed file.
+Recording ignores the committed file, so a merge conflict in it is resolved by recording again. CI runs the same recording and fails if the result differs from the committed file.

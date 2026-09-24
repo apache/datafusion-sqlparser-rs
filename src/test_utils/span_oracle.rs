@@ -39,6 +39,7 @@ pub(super) fn check(
     recursion_limit: Option<usize>,
     sql: &str,
 ) {
+    let recording = std::env::var_os("SPAN_ORACLE").is_some_and(|mode| mode == "record");
     let input = format!("{:016x}", fnv64(sql));
     let mut grouped: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     let mut mismatches = String::new();
@@ -50,10 +51,13 @@ pub(super) fn check(
         let options = format!("{:016x}", fnv64(&format!("{options:?}")));
         let name = dialect_name(&**dialect);
         let actual: BTreeSet<String> = found.iter().map(ToString::to_string).collect();
-        let key = format!("{input}\t{options}\t{name}");
-        let expected = BASELINE_FINDINGS.get(&key).cloned().unwrap_or_default();
-        if let Some(mismatch) = mismatch(&expected, &actual) {
-            mismatches.push_str(&format!("\n{name}:{mismatch}"));
+        // Recording must not read the baseline, which may hold merge conflict markers.
+        if !recording {
+            let key = format!("{input}\t{options}\t{name}");
+            let expected = BASELINE_FINDINGS.get(&key).cloned().unwrap_or_default();
+            if let Some(mismatch) = mismatch(&expected, &actual) {
+                mismatches.push_str(&format!("\n{name}:{mismatch}"));
+            }
         }
         for finding in actual {
             grouped
@@ -63,7 +67,7 @@ pub(super) fn check(
         }
     }
 
-    if std::env::var_os("SPAN_ORACLE").is_some_and(|mode| mode == "record") {
+    if recording {
         record(grouped.into_iter().map(|((options, finding), names)| {
             format!("{input}\t{options}\t{}\t{finding}", names.join(","))
         }));

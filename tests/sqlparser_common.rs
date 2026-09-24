@@ -3803,7 +3803,8 @@ fn parse_listagg() {
     verified_stmt("SELECT LISTAGG(dateid)");
     verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW ERROR)");
-    verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
+    all_dialects_where(|d| d.supports_national_string_literal())
+        .verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE X'deadbeef' WITH COUNT)");
 }
 
@@ -6452,8 +6453,9 @@ fn parse_literal_decimal() {
 
 #[test]
 fn parse_literal_string() {
+    let national_string_dialects = all_dialects_where(|d| d.supports_national_string_literal());
     let sql = "SELECT 'one', N'national string', X'deadBEEF'";
-    let select = verified_only_select(sql);
+    let select = national_string_dialects.verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Value((Value::SingleQuotedString("one".to_string())).with_empty_span()),
@@ -6470,9 +6472,10 @@ fn parse_literal_string() {
         expr_from_projection(&select.projection[2])
     );
 
-    one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
-    one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
-    one_statement_parses_to(
+    all_dialects().one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
+    national_string_dialects
+        .one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
+    national_string_dialects.one_statement_parses_to(
         r#"SELECT n'Tu geres '';'' et ''"'' ?'"#,
         r#"SELECT N'Tu geres '';'' et ''"'' ?'"#,
     );

@@ -283,6 +283,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect tokenize `N'...'` as a national string literal?
+    ///
+    /// Dialects such as SQLite treat `N` as a plain identifier, so `N'foo'` is
+    /// the identifier `N` followed by a string literal, not a national string.
+    fn supports_national_string_literal(&self) -> bool {
+        true
+    }
+
     /// Determine whether the dialect strips the backslash when escaping LIKE wildcards (%, _).
     ///
     /// [MySQL] has a special case when escaping single quoted strings which leaves these unescaped

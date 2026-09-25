@@ -108,6 +108,28 @@ pub(crate) fn indented_list<T: fmt::Display>(f: &mut fmt::Formatter, items: &[T]
     Indent(DisplayCommaSeparated(items)).fmt(f)
 }
 
+/// The first char `value` displays, rendering only up to it.
+///
+/// The sink fails once it holds a char. Stopping there relies on every
+/// `Display` impl propagating the formatter's errors.
+pub(crate) fn first_char(value: &impl Display) -> Option<char> {
+    struct FirstChar(Option<char>);
+
+    impl Write for FirstChar {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            self.0 = self.0.or_else(|| s.chars().next());
+            match self.0 {
+                Some(_) => Err(fmt::Error),
+                None => Ok(()),
+            }
+        }
+    }
+
+    let mut first = FirstChar(None);
+    let _ = write!(first, "{value}");
+    first.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +153,24 @@ mod tests {
             "Only the alternate form should be indented"
         );
         assert_eq!(format!("{:#}", indent), "  line 1\n  line 2");
+    }
+
+    #[test]
+    fn test_first_char_stops_at_first_char() {
+        struct EmptyThenChars(core::cell::Cell<bool>);
+
+        impl Display for EmptyThenChars {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("")?;
+                f.write_str("ab")?;
+                self.0.set(true);
+                Ok(())
+            }
+        }
+
+        let value = EmptyThenChars(Default::default());
+        assert_eq!(first_char(&value), Some('a'));
+        assert!(!value.0.get(), "rendered past the first char");
+        assert_eq!(first_char(&""), None);
     }
 }

@@ -208,6 +208,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/partitioning-selection.html>
+    fn supports_table_partitions(&self) -> bool {
+        true
+    }
+
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }

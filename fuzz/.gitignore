@@ -1,3 +1,4 @@
 /artifacts
 /corpus
 /target
+/Cargo.lock

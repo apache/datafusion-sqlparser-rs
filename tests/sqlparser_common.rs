@@ -20306,3 +20306,67 @@ fn quoted_identifier_display_round_trips() {
         }
     }
 }
+
+#[test]
+fn quoted_identifier_display_escapes_only_its_delimiter() {
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('"'));
+    let select = dialects.verified_only_select(r#"SELECT "a`b'c[d]e""#);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('"', "a`b'c[d]e")),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('`'));
+    let select = dialects.verified_only_select(r#"SELECT `a"b'c[d]e`"#);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('`', r#"a"b'c[d]e"#)),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('['));
+    let select = dialects.verified_only_select(r#"SELECT [a"b'c`d]"#);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', r#"a"b'c`d"#)),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    assert_eq!(
+        Ident::with_quote('\'', r#"a'b"c`d[e]"#).to_string(),
+        r#"'a''b"c`d[e]'"#
+    );
+    assert_eq!(Ident::new(r#"a"b'c`d[e]"#).to_string(), r#"a"b'c`d[e]"#);
+    assert_eq!(Ident::with_quote('"', "").to_string(), r#""""#);
+}
+
+#[test]
+fn quoted_identifier_display_propagates_write_errors() {
+    use std::fmt::Write;
+
+    /// Accepts `budget` bytes, then fails every write.
+    struct Sink {
+        budget: usize,
+        written: String,
+    }
+    impl Write for Sink {
+        fn write_str(&mut self, s: &str) -> std::fmt::Result {
+            if self.written.len() + s.len() > self.budget {
+                return Err(std::fmt::Error);
+            }
+            self.written.push_str(s);
+            Ok(())
+        }
+    }
+
+    let ident = Ident::with_quote('"', r#"a"b"#);
+    let rendered = ident.to_string();
+    assert_eq!(rendered, r#""a""b""#);
+    for budget in 0..=rendered.len() {
+        let mut sink = Sink {
+            budget,
+            written: String::new(),
+        };
+        let result = write!(sink, "{ident}");
+        assert_eq!(result.is_ok(), budget == rendered.len(), "budget {budget}");
+        assert!(rendered.starts_with(&sink.written), "budget {budget}");
+    }
+}

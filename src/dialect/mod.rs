@@ -283,6 +283,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect tokenize `N'...'` as a national string literal?
+    ///
+    /// Dialects such as SQLite treat `N` as a plain identifier, so `N'foo'` is
+    /// the identifier `N` followed by a string literal, not a national string.
+    fn supports_national_string_literal(&self) -> bool {
+        true
+    }
+
     /// Determine whether the dialect strips the backslash when escaping LIKE wildcards (%, _).
     ///
     /// [MySQL] has a special case when escaping single quoted strings which leaves these unescaped
@@ -1119,6 +1127,22 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `ARRAY(element_type)` syntax.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a ARRAY(VARCHAR));
+    /// ```
+    fn supports_array_typedef_with_parentheses(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `NOT NULL` on an element type in
+    /// an `ARRAY(element_type)` definition.
+    fn supports_array_element_not_null(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports extra parentheses around
     /// lone table names or derived tables in the `FROM` clause.
     ///
@@ -1808,6 +1832,19 @@ pub trait Dialect: Debug + Any {
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select#settings-in-select-query)
     fn supports_settings(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `PARTITION` clause on a table factor,
+    /// restricting a query to an explicit list of partitions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM employees PARTITION (p0, p1)
+    /// ```
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/partitioning-selection.html)
+    fn supports_table_partitions(&self) -> bool {
         false
     }
 

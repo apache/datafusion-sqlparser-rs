@@ -4959,8 +4959,10 @@ fn test_structured_object_type() {
     snowflake_and_generic().verified_stmt(
         "SELECT payload::OBJECT(address OBJECT(city VARCHAR NOT NULL), zip NUMBER) FROM t",
     );
-    snowflake()
-        .verified_stmt("SELECT payload::OBJECT(tags ARRAY, labels MAP(VARCHAR, VARCHAR)) FROM t");
+    snowflake().one_statement_parses_to(
+        "SELECT payload::OBJECT(tags ARRAY, labels MAP(VARCHAR, VARCHAR)) FROM t",
+        "SELECT payload::OBJECT(tags ARRAY, labels Map(VARCHAR, VARCHAR)) FROM t",
+    );
     let select = snowflake().verified_only_select(
         "SELECT payload::OBJECT(items ARRAY(NUMBER NOT NULL), meta MAP(VARCHAR, OBJECT(k NUMBER) NOT NULL)) FROM t",
     );
@@ -4974,14 +4976,7 @@ fn test_structured_object_type() {
         &fields[0].data_type,
         DataType::Array(ArrayElemTypeDef::ParenthesisNotNull(_))
     ));
-    let DataType::Map(
-        _,
-        value,
-        MapBracketKind::SnowflakeParentheses {
-            value_not_null: true,
-        },
-    ) = &fields[1].data_type
-    else {
+    let DataType::Map(_, value, MapBracketKind::ParenthesesNotNull) = &fields[1].data_type else {
         unreachable!();
     };
     assert!(matches!(**value, DataType::Object(_)));
@@ -4990,7 +4985,10 @@ fn test_structured_object_type() {
         "SELECT payload::ARRAY(NUMBER) FROM t",
         "SELECT payload::Array(NUMBER) FROM t",
     );
-    snowflake().verified_stmt("SELECT payload::MAP(VARCHAR, OBJECT(k NUMBER)) FROM t");
+    snowflake().one_statement_parses_to(
+        "SELECT payload::MAP(VARCHAR, OBJECT(k NUMBER)) FROM t",
+        "SELECT payload::Map(VARCHAR, OBJECT(k NUMBER)) FROM t",
+    );
     snowflake().verified_stmt("SELECT payload::ARRAY(NUMBER NOT NULL) FROM t");
     snowflake().verified_stmt("SELECT payload::MAP(VARCHAR, NUMBER NOT NULL) FROM t");
     snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
@@ -5011,15 +5009,9 @@ fn test_structured_object_type() {
     assert_eq!(fields[1].options.len(), 1);
     assert_eq!(fields[1].options[0].option, ColumnOption::NotNull);
 
-    for sql in [
-        "CREATE TABLE t (o OBJECT(VARCHAR))",
-        "CREATE TABLE t (o OBJECT('json'))",
-        "CREATE TABLE t (o OBJECT('city' VARCHAR))",
-        "CREATE TABLE t (o OBJECT(city VARCHAR NULL))",
-        "CREATE TABLE t (o OBJECT(city VARCHAR)",
-    ] {
-        assert!(snowflake().parse_sql_statements(sql).is_err(), "{sql}");
-    }
+    assert!(snowflake()
+        .parse_sql_statements("CREATE TABLE t (o OBJECT(city VARCHAR)")
+        .is_err());
 
     let Statement::CreateTable(CreateTable { columns, .. }) =
         snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)")

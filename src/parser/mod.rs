@@ -3809,7 +3809,7 @@ impl<'a> Parser<'a> {
         let key_data_type = self.parse_data_type()?;
         self.expect_token(&Token::Comma)?;
         let value_data_type = self.parse_data_type()?;
-        let value_not_null = dialect_of!(self is SnowflakeDialect)
+        let value_not_null = self.dialect.supports_map_value_not_null()
             && self.parse_keywords(&[Keyword::NOT, Keyword::NULL]);
         self.expect_token(&Token::RParen)?;
 
@@ -13182,17 +13182,8 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
-                Keyword::OBJECT
-                    if self.peek_token_ref().token == Token::LParen
-                        && (dialect_is!(dialect is SnowflakeDialect)
-                            || !matches!(
-                                self.peek_nth_token_ref(1).token,
-                                Token::SingleQuotedString(_)
-                            )) =>
-                {
-                    if dialect_is!(dialect is SnowflakeDialect) {
-                        Ok(DataType::Object(self.parse_structured_object_type_def()?))
-                    } else if let Some(fields) =
+                Keyword::OBJECT if self.peek_token_ref().token == Token::LParen => {
+                    if let Some(fields) =
                         self.maybe_parse(|parser| parser.parse_structured_object_type_def())?
                     {
                         Ok(DataType::Object(fields))
@@ -13241,13 +13232,12 @@ impl<'a> Parser<'a> {
                         MapBracketKind::AngleBrackets,
                     ))
                 }
-                Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect | SnowflakeDialect) =>
-                {
+                Keyword::MAP if self.dialect.supports_map_typedef_with_parentheses() => {
                     self.prev_token();
                     let (key_data_type, value_data_type, value_not_null) =
                         self.parse_parenthesized_map_type_def()?;
-                    let bracket = if dialect_is!(dialect is SnowflakeDialect) {
-                        MapBracketKind::SnowflakeParentheses { value_not_null }
+                    let bracket = if value_not_null {
+                        MapBracketKind::ParenthesesNotNull
                     } else {
                         MapBracketKind::Parentheses
                     };

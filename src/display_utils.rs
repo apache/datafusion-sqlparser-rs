@@ -157,20 +157,34 @@ mod tests {
 
     #[test]
     fn test_first_char_stops_at_first_char() {
-        struct EmptyThenChars(core::cell::Cell<bool>);
+        struct Chunks(core::cell::Cell<usize>);
 
-        impl Display for EmptyThenChars {
+        impl Display for Chunks {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("")?;
-                f.write_str("ab")?;
-                self.0.set(true);
-                Ok(())
+                ["", "ab", "c"].iter().try_for_each(|chunk| {
+                    self.0.set(self.0.get() + 1);
+                    f.write_str(chunk)
+                })
             }
         }
 
-        let value = EmptyThenChars(Default::default());
-        assert_eq!(first_char(&value), Some('a'));
-        assert!(!value.0.get(), "rendered past the first char");
+        let chunks = Chunks(Default::default());
+        assert_eq!(first_char(&chunks), Some('a'));
+        assert_eq!(chunks.0.get(), 2, "rendered past the first char");
         assert_eq!(first_char(&""), None);
+    }
+
+    #[test]
+    fn test_first_char_keeps_first_char_when_errors_are_ignored() {
+        struct IgnoresErrors;
+
+        impl Display for IgnoresErrors {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let _ = f.write_str("a");
+                f.write_str("b")
+            }
+        }
+
+        assert_eq!(first_char(&IgnoresErrors), Some('a'));
     }
 }

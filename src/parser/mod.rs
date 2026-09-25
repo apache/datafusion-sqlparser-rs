@@ -13279,7 +13279,10 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let (mut data_type, trailing_bracket) = self.parse_data_type_helper()?;
-        if self.dialect.supports_data_type_collation() && self.parse_keyword(Keyword::COLLATE) {
+        if !trailing_bracket.0
+            && self.dialect.supports_data_type_collation()
+            && self.parse_keyword(Keyword::COLLATE)
+        {
             data_type = DataType::Collate(Box::new(data_type), self.parse_object_name(false)?);
         }
         Ok((data_type, trailing_bracket))

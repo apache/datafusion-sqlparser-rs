@@ -18,8 +18,8 @@
 use crate::{
     ast::{
         ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
-        ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
-        ExportData, Owner, TypedString,
+        ColumnOptions, CreateAggregate, CreateAggregateArgs, CreateAggregateOption, CreateOperator,
+        CreateOperatorClass, CreateOperatorFamily, CreateView, ExportData, Owner, TypedString,
     },
     tokenizer::TokenWithSpan,
 };
@@ -41,9 +41,9 @@ use super::{
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
-    PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
-    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
+    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
     SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
     TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
@@ -524,6 +524,7 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
     }
 }
@@ -2529,6 +2530,65 @@ impl Spanned for AlterTable {
                 .chain(self.on_cluster.iter().map(|i| i.span))
                 .chain(core::iter::once(self.end_token.0.span)),
         )
+    }
+}
+
+impl Spanned for CreateAggregate {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.name.span())
+                .chain(core::iter::once(self.args.span()))
+                .chain(self.options.iter().map(|option| option.span())),
+        )
+    }
+}
+
+impl Spanned for CreateAggregateArgs {
+    fn span(&self) -> Span {
+        match self {
+            CreateAggregateArgs::Legacy | CreateAggregateArgs::Star => Span::empty(),
+            CreateAggregateArgs::List(args) => union_spans(args.iter().map(|arg| arg.span())),
+        }
+    }
+}
+
+impl Spanned for OperateFunctionArg {
+    fn span(&self) -> Span {
+        union_spans(
+            self.name
+                .iter()
+                .map(|name| name.span)
+                .chain(self.default_expr.iter().map(|expr| expr.span())),
+        )
+    }
+}
+
+impl Spanned for CreateAggregateOption {
+    fn span(&self) -> Span {
+        match self {
+            CreateAggregateOption::StateTransitionFunction(name)
+            | CreateAggregateOption::FinalFunction(name)
+            | CreateAggregateOption::CombineFunction(name)
+            | CreateAggregateOption::SerialFunction(name)
+            | CreateAggregateOption::DeserialFunction(name)
+            | CreateAggregateOption::MovingStateTransitionFunction(name)
+            | CreateAggregateOption::MovingInverseTransitionFunction(name)
+            | CreateAggregateOption::MovingFinalFunction(name)
+            | CreateAggregateOption::SortOperator(name) => name.span(),
+            CreateAggregateOption::InitialCondition(value)
+            | CreateAggregateOption::MovingInitialCondition(value) => value.span,
+            CreateAggregateOption::StateDataType(_)
+            | CreateAggregateOption::StateDataSize(_)
+            | CreateAggregateOption::FinalFunctionExtra
+            | CreateAggregateOption::FinalFunctionModify(_)
+            | CreateAggregateOption::MovingStateDataType(_)
+            | CreateAggregateOption::MovingStateDataSize(_)
+            | CreateAggregateOption::MovingFinalFunctionExtra
+            | CreateAggregateOption::MovingFinalFunctionModify(_)
+            | CreateAggregateOption::Parallel(_)
+            | CreateAggregateOption::Hypothetical
+            | CreateAggregateOption::BaseType(_) => Span::empty(),
+        }
     }
 }
 

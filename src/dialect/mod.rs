@@ -1108,6 +1108,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a data type can carry a collation, including inside a
+    /// nested type such as `MAP<STRING COLLATE UTF8_BINARY, STRING>`.
+    fn supports_data_type_collation(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `ARRAY` type without
     /// specifying an element type.
     ///

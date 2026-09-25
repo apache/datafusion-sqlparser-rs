@@ -9653,6 +9653,102 @@ fn parse_lock_table() {
 }
 
 #[test]
+fn parse_create_foreign_table() {
+    // Each of these round-trips through Display, so verified_stmt already pins
+    // the name, columns, server and IF NOT EXISTS. Only the parsed shape that
+    // Display cannot show is asserted below.
+    for sql in [
+        "CREATE FOREIGN TABLE ft1 (id INTEGER, name TEXT) SERVER myserver",
+        "CREATE FOREIGN TABLE IF NOT EXISTS ft2 (col INTEGER) SERVER remoteserver",
+    ] {
+        assert!(matches!(
+            pg_and_generic().verified_stmt(sql),
+            Statement::CreateForeignTable(_)
+        ));
+    }
+
+    let sql =
+        "CREATE FOREIGN TABLE ft3 (col INTEGER) SERVER remoteserver OPTIONS (schema_name 'public')";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.options,
+        Some(vec![CreateServerOption {
+            key: "schema_name".into(),
+            value: Ident {
+                value: "public".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            },
+        }])
+    );
+}
+
+#[test]
+fn parse_create_foreign_table_requires_column_list() {
+    // Without the parens Display would invent a `()` the input never had.
+    assert!(matches!(
+        pg_and_generic().parse_sql_statements("CREATE FOREIGN TABLE ft SERVER s"),
+        Err(ParserError::ParserError(_))
+    ));
+
+    // An empty list is still legal PostgreSQL.
+    pg_and_generic().verified_stmt("CREATE FOREIGN TABLE ft () SERVER s");
+}
+
+#[test]
+fn parse_create_foreign_table_rejects_modifiers() {
+    // None of these has a field on CreateForeignTable, so accepting one would
+    // drop it silently on the way back out through Display.
+    for sql in [
+        "CREATE TEMPORARY FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE GLOBAL FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE LOCAL FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE TRANSIENT FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE VOLATILE FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE OR ALTER FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE MULTISET FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE SET FOREIGN TABLE ft (a INT) SERVER s",
+        "CREATE ALGORITHM = UNDEFINED FOREIGN TABLE ft (a INT) SERVER s",
+    ] {
+        let err = pg_and_generic().parse_sql_statements(sql).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("CREATE FOREIGN TABLE does not accept this modifier"),
+            "unexpected error for {sql}: {err}"
+        );
+    }
+
+    // OR REPLACE is caught by an earlier arm, so it never reaches the guard.
+    assert!(matches!(
+        pg_and_generic()
+            .parse_sql_statements("CREATE OR REPLACE FOREIGN TABLE ft (a INT) SERVER s"),
+        Err(ParserError::ParserError(_))
+    ));
+}
+
+#[test]
+fn parse_create_foreign_table_with_check_constraint() {
+    // PostgreSQL accepts table-level CHECK constraints in CREATE FOREIGN TABLE.
+    let sql =
+        "CREATE FOREIGN TABLE ft (id INTEGER, CONSTRAINT id_positive CHECK (id > 0)) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.columns.len(), 1);
+    assert_eq!(stmt.constraints.len(), 1);
+
+    // Zero columns with only a table-level constraint must not emit `(, CONSTRAINT ...)`.
+    let sql = "CREATE FOREIGN TABLE ft (CONSTRAINT c CHECK (id > 0)) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.columns.len(), 0);
+    assert_eq!(stmt.constraints.len(), 1);
+}
+
+#[test]
 fn exclude_as_column_name() {
     // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
     // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not

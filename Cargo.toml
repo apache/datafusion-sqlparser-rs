@@ -40,6 +40,9 @@ path = "src/lib.rs"
 [lints.rust]
 unsafe_code = "forbid"
 
+[workspace]
+members = ["sqlparser_bench"]
+
 [features]
 default = ["std", "recursive-protection"]
 std = []

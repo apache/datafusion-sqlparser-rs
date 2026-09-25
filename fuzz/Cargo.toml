@@ -70,3 +70,10 @@ path = "fuzz_targets/fuzz_duckdb_accepts.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_stage_cost"
+path = "fuzz_targets/fuzz_stage_cost.rs"
+test = false
+doc = false
+bench = false

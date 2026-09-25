@@ -20263,3 +20263,26 @@ fn parse_placeholder_disallows_quoted_ident() {
         err
     );
 }
+
+#[test]
+fn parse_quoted_identifier_with_backslash_before_quote() {
+    for q in ['"', '`'] {
+        let dialects = all_dialects_where(|d| d.is_delimited_identifier_start(q));
+
+        let select = dialects.verified_only_select(&format!("SELECT {q}a\\{q}{q}{q}"));
+        assert_eq!(
+            select.projection[0],
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote(q, format!("a\\{q}"))))
+        );
+
+        // A backslash does not escape the closing quote.
+        let err = dialects
+            .parse_sql_statements(&format!("SELECT {q}a\\{q}{q}"))
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains(&format!("Expected close delimiter '{q}' before EOF")),
+            "{err}"
+        );
+    }
+}

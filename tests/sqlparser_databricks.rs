@@ -763,4 +763,9 @@ fn parse_databricks_collated_data_types() {
     databricks().verified_stmt(
         "CREATE TABLE t (name STRING COLLATE UTF8_BINARY, values ARRAY<STRING COLLATE UTF8_LCASE>, attrs MAP<STRING COLLATE UTF8_BINARY, STRING COLLATE UTF8_LCASE>)",
     );
+    databricks().verified_stmt("CREATE TABLE t (s STRUCT<a STRING COLLATE UTF8_LCASE>)");
+    databricks().verified_stmt("CREATE TABLE t (c ARRAY<ARRAY<STRING>> COLLATE UTF8_LCASE)");
+    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("CREATE TABLE t (c ARRAY<STRING COLLATE UTF8_LCASE>)")
+        .is_err());
 }

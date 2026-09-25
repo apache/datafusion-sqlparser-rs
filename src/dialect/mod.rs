@@ -939,6 +939,7 @@ pub trait Dialect: Debug + Any {
             | Token::ExclamationMarkDoubleTilde
             | Token::ExclamationMarkDoubleTildeAsterisk
             | Token::Spaceship => Ok(p!(Eq)),
+            Token::Overlap if self.supports_double_ampersand_operator() => Ok(p!(And)),
             Token::Pipe
             | Token::QuestionMarkDash
             | Token::DoubleSharp

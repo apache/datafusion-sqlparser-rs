@@ -3671,7 +3671,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+        let (field_type, trailing_bracket) = self.parse_data_type_with_optional_collation()?;
 
         let options = self.maybe_parse_options(Keyword::OPTIONS)?;
         Ok((
@@ -13171,7 +13171,8 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Array(ArrayElemTypeDef::None))
                     } else {
                         self.expect_token(&Token::Lt)?;
-                        let (inside_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                        let (inside_type, _trailing_bracket) =
+                            self.parse_data_type_with_optional_collation()?;
                         trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
                         Ok(DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                             inside_type,
@@ -13206,9 +13207,17 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::MAP if self.dialect.supports_map_literal_with_angle_brackets() => {
                     self.expect_token(&Token::Lt)?;
-                    let key_data_type = self.parse_data_type()?;
+                    let (key_data_type, key_trailing_bracket) =
+                        self.parse_data_type_with_optional_collation()?;
+                    if key_trailing_bracket.0 {
+                        return parser_err!(
+                            format!("unmatched > after parsing data type {key_data_type}"),
+                            self.peek_token_ref()
+                        );
+                    }
                     self.expect_token(&Token::Comma)?;
-                    let (value_data_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                    let (value_data_type, _trailing_bracket) =
+                        self.parse_data_type_with_optional_collation()?;
                     trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
                     Ok(DataType::Map(
                         Box::new(key_data_type),
@@ -13307,6 +13316,19 @@ impl<'a> Parser<'a> {
         }
 
         Ok((data, trailing_bracket))
+    }
+
+    fn parse_data_type_with_optional_collation(
+        &mut self,
+    ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        let (mut data_type, trailing_bracket) = self.parse_data_type_helper()?;
+        if !trailing_bracket.0
+            && self.dialect.supports_data_type_collation()
+            && self.parse_keyword(Keyword::COLLATE)
+        {
+            data_type = DataType::Collate(Box::new(data_type), self.parse_object_name(false)?);
+        }
+        Ok((data_type, trailing_bracket))
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {

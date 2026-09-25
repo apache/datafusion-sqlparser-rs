@@ -3792,7 +3792,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse clickhouse [map]
+    /// Parse a parenthesized MAP type (ClickHouse or Snowflake).
     ///
     /// Syntax
     ///
@@ -3801,15 +3801,19 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [map]: https://clickhouse.com/docs/en/sql-reference/data-types/map
-    fn parse_click_house_map_def(&mut self) -> Result<(DataType, DataType), ParserError> {
+    fn parse_parenthesized_map_type_def(
+        &mut self,
+    ) -> Result<(DataType, DataType, bool), ParserError> {
         self.expect_keyword_is(Keyword::MAP)?;
         self.expect_token(&Token::LParen)?;
         let key_data_type = self.parse_data_type()?;
         self.expect_token(&Token::Comma)?;
         let value_data_type = self.parse_data_type()?;
+        let value_not_null = self.dialect.supports_map_value_not_null()
+            && self.parse_keywords(&[Keyword::NOT, Keyword::NULL]);
         self.expect_token(&Token::RParen)?;
 
-        Ok((key_data_type, value_data_type))
+        Ok((key_data_type, value_data_type, value_not_null))
     }
 
     /// Parse clickhouse [tuple]
@@ -13199,6 +13203,18 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
+                Keyword::OBJECT if self.peek_token_ref().token == Token::LParen => {
+                    if let Some(fields) =
+                        self.maybe_parse(|parser| parser.parse_structured_object_type_def())?
+                    {
+                        Ok(DataType::Object(fields))
+                    } else {
+                        self.prev_token();
+                        let type_name = self.parse_object_name(false)?;
+                        let modifiers = self.parse_optional_type_modifiers()?.unwrap_or_default();
+                        Ok(DataType::Custom(type_name, modifiers))
+                    }
+                }
                 Keyword::STRUCT if dialect_is!(dialect is DuckDbDialect) => {
                     self.prev_token();
                     let field_defs = self.parse_duckdb_struct_type_def()?;
@@ -13245,13 +13261,19 @@ impl<'a> Parser<'a> {
                         MapBracketKind::AngleBrackets,
                     ))
                 }
-                Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
+                Keyword::MAP if self.dialect.supports_map_typedef_with_parentheses() => {
                     self.prev_token();
-                    let (key_data_type, value_data_type) = self.parse_click_house_map_def()?;
+                    let (key_data_type, value_data_type, value_not_null) =
+                        self.parse_parenthesized_map_type_def()?;
+                    let bracket = if value_not_null {
+                        MapBracketKind::ParenthesesNotNull
+                    } else {
+                        MapBracketKind::Parentheses
+                    };
                     Ok(DataType::Map(
                         Box::new(key_data_type),
                         Box::new(value_data_type),
-                        MapBracketKind::Parentheses,
+                        bracket,
                     ))
                 }
                 Keyword::NESTED if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
@@ -14439,6 +14461,35 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    fn parse_structured_object_type_def(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        if self.consume_token(&Token::RParen) {
+            return Ok(vec![]);
+        }
+        let fields = self.parse_comma_separated(|parser| {
+            if matches!(parser.peek_token_ref().token, Token::SingleQuotedString(_)) {
+                return parser.expected("an object field identifier", parser.peek_token());
+            }
+            let name = parser.parse_identifier()?;
+            let data_type = parser.parse_data_type()?;
+            let options = if parser.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+                vec![ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                }]
+            } else {
+                vec![]
+            };
+            Ok(ColumnDef {
+                name,
+                data_type,
+                options,
+            })
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(fields)
     }
 
     /// Parse a parenthesized sub data type

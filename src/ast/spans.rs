@@ -3169,17 +3169,17 @@ WHERE id = 1
     }
 
     #[test]
-    fn test_create_foreign_table_span_includes_quoted_option_value() {
+    fn test_create_foreign_table_option_spans() {
         let dialect = &crate::dialect::PostgreSqlDialect {};
-        let sql = "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public')";
+        let sql = r#"CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ("schema_name" 'public')"#;
         let mut test = SpanTest::new(dialect, sql);
 
-        // Span reaches through the quoted value but not the closing paren.
-        let stmt = test.0.parse_statement().unwrap();
-        assert_eq!(
-            test.get_source(stmt.span()),
-            "ft (a INT) SERVER s OPTIONS (schema_name 'public'"
-        );
+        let options = match test.0.parse_statement().unwrap() {
+            Statement::CreateForeignTable(stmt) => stmt.options.unwrap(),
+            stmt => panic!("expected CREATE FOREIGN TABLE, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(options[0].key.span), r#""schema_name""#);
+        assert_eq!(test.get_source(options[0].value.span), "'public'");
     }
 
     #[test]

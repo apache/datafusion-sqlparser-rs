@@ -10138,3 +10138,34 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_join_using_alias() {
+    let sql = "SELECT * FROM t1 JOIN t2 USING (id) AS joined_cols";
+    let dialect = PostgreSqlDialect {};
+    let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    let statement = parser.parse_statement().unwrap();
+    let Statement::Query(query) = statement else {
+        panic!("Expected a query statement");
+    };
+    let SetExpr::Select(select) = *query.body else {
+        panic!("Expected a SELECT query");
+    };
+    let join = &select.from[0].joins[0];
+
+    assert_eq!(
+        JoinOperator::Join(JoinConstraint::UsingAlias(
+            vec![ObjectName::from(vec![Ident::new("id")])],
+            Ident::new("joined_cols"),
+        )),
+        join.join_operator
+    );
+    assert_eq!(
+        Span::new(Location::new(1, 33), Location::new(1, 51)),
+        join.join_operator.span()
+    );
+    assert_eq!(
+        "SELECT * FROM t1 JOIN t2 USING(id) AS joined_cols",
+        select.to_string()
+    );
+}

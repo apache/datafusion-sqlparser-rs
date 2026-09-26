@@ -254,6 +254,14 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_map_typedef_with_parentheses(&self) -> bool {
+        true
+    }
+
+    fn supports_map_value_not_null(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/from)
     fn supports_parens_around_table_factor(&self) -> bool {
         true

@@ -505,6 +505,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a period directly after an identifier starts a tuple
+    /// element access such as `t.1`, instead of the number `.1`.
+    fn supports_tuple_element_access(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports numbers containing underscores, e.g. `10_000_000`
     fn supports_numeric_literal_underscores(&self) -> bool {
         false

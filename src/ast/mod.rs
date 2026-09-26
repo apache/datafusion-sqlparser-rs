@@ -49,7 +49,7 @@ use crate::{
     tokenizer::{Span, Token},
 };
 use crate::{
-    display_utils::{Indent, NewLine},
+    display_utils::{first_char, Indent, NewLine},
     keywords::Keyword,
 };
 
@@ -1987,11 +1987,13 @@ impl fmt::Display for Expr {
                 | UnaryOperator::PGSquareRoot
                 | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
                 UnaryOperator::Minus | UnaryOperator::BangNot => {
+                    // Written before the check, so an enclosing
+                    // `starts_with_operator_char` stops at this operator.
+                    write!(f, "{op}")?;
                     if starts_with_operator_char(expr) {
-                        write!(f, "{op} {expr}")
-                    } else {
-                        write!(f, "{op}{expr}")
+                        f.write_str(" ")?;
                     }
+                    write!(f, "{expr}")
                 }
                 UnaryOperator::Plus | UnaryOperator::PGPrefixFactorial => write!(f, "{op}{expr}"),
             },
@@ -8115,14 +8117,9 @@ impl fmt::Display for FunctionArg {
 /// Whether `expr` renders with an operator character first. A prefix `-` or `!`
 /// must not abut one, since `--` starts a line comment and compound tokens
 /// like `!!` or `!~` alter the parsed AST or fail to parse.
-fn starts_with_operator_char(mut expr: &Expr) -> bool {
-    loop {
-        match expr {
-            Expr::UnaryOp { op, .. } => return !matches!(op, UnaryOperator::Not),
-            Expr::BinaryOp { left, .. } => expr = left,
-            _ => return false,
-        }
-    }
+fn starts_with_operator_char(expr: &Expr) -> bool {
+    const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
+    first_char(expr).is_some_and(|c| OPERATOR_CHARS.contains(c))
 }
 
 /// `FunctionArgOperator::Space` has no token of its own, so the name and the

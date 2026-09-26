@@ -2919,6 +2919,41 @@ impl fmt::Display for CreateIndex {
     }
 }
 
+/// An item of SQLite's `table-options` list, which follows the column
+/// definitions of `CREATE TABLE`.
+///
+/// See [SQLite documentation](https://www.sqlite.org/lang_createtable.html).
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SqliteTableOption {
+    /// `WITHOUT ROWID`
+    WithoutRowid,
+    /// `STRICT`
+    Strict,
+}
+
+impl fmt::Display for SqliteTableOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            SqliteTableOption::WithoutRowid => "WITHOUT ROWID",
+            SqliteTableOption::Strict => "STRICT",
+        })
+    }
+}
+
+/// SQLite's `table-options` list of `CREATE TABLE`, empty when absent.
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SqliteTableOptions {
+    /// Whether a comma separates the list from the column definitions,
+    /// as in `(a INT), STRICT`.
+    pub leading_comma: bool,
+    /// The options, in source order.
+    pub options: Vec<SqliteTableOption>,
+}
+
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2966,8 +3001,8 @@ pub struct CreateTable {
     pub location: Option<String>,
     /// Query used to populate the table
     pub query: Option<Box<Query>>,
-    /// If the table should be created without a rowid (SQLite)
-    pub without_rowid: bool,
+    /// SQLite `table-options`
+    pub sqlite_table_options: SqliteTableOptions,
     /// `LIKE` clause
     pub like: Option<CreateTableLikeKind>,
     /// `CLONE` clause
@@ -3015,10 +3050,6 @@ pub struct CreateTable {
     /// PostgreSQL partition bound specification for PARTITION OF.
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
     pub for_values: Option<ForValues>,
-    /// SQLite "STRICT" clause.
-    /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
-    /// then strict typing rules apply to that table.
-    pub strict: bool,
     /// Snowflake "COPY GRANTS" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub copy_grants: bool,
@@ -3187,11 +3218,6 @@ impl fmt::Display for CreateTable {
             write!(f, " COMMENT '{comment}'")?;
         }
 
-        // Only for SQLite
-        if self.without_rowid {
-            write!(f, " WITHOUT ROWID")?;
-        }
-
         if let Some(CreateTableLikeKind::Plain(like)) = &self.like {
             write!(f, " {like}")?;
         }
@@ -3202,6 +3228,17 @@ impl fmt::Display for CreateTable {
 
         if let Some(version) = &self.version {
             write!(f, " {version}")?;
+        }
+
+        if !self.sqlite_table_options.options.is_empty() {
+            if self.sqlite_table_options.leading_comma {
+                f.write_str(",")?;
+            }
+            write!(
+                f,
+                " {}",
+                display_comma_separated(&self.sqlite_table_options.options)
+            )?;
         }
 
         match &self.hive_distribution {
@@ -3418,9 +3455,6 @@ impl fmt::Display for CreateTable {
                 None => "",
             };
             write!(f, " {on_commit}")?;
-        }
-        if self.strict {
-            write!(f, " STRICT")?;
         }
         if let Some(backup) = self.backup {
             write!(f, " BACKUP {}", if backup { "YES" } else { "NO" })?;

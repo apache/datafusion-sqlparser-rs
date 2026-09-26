@@ -8840,8 +8840,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
-        let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
+        let sqlite_table_options = self.parse_sqlite_table_options()?;
 
         let hive_distribution = self.parse_hive_distribution()?;
         let clustered_by = self.parse_optional_clustered_by()?;
@@ -8881,8 +8880,6 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
-        let strict = self.parse_keyword(Keyword::STRICT);
 
         // Redshift: BACKUP YES|NO
         let backup = if self.parse_keyword(Keyword::BACKUP) {
@@ -8949,7 +8946,7 @@ impl<'a> Parser<'a> {
             .hive_formats(hive_formats)
             .global(global)
             .query(query)
-            .without_rowid(without_rowid)
+            .sqlite_table_options(sqlite_table_options)
             .like(like)
             .clone_clause(clone)
             .comment_after_column_def(comment_after_column_def)
@@ -8965,12 +8962,46 @@ impl<'a> Parser<'a> {
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
             .with_data(with_data)
-            .strict(strict)
             .backup(backup)
             .diststyle(diststyle)
             .distkey(distkey)
             .sortkey(sortkey)
             .build())
+    }
+
+    /// Parse SQLite's `table-options` list, empty when absent, and the
+    /// optional comma before it.
+    ///
+    /// See <https://www.sqlite.org/lang_createtable.html>.
+    fn parse_sqlite_table_options(&mut self) -> Result<SqliteTableOptions, ParserError> {
+        let leading_comma = self.consume_token(&Token::Comma);
+        let Some(first) = self.maybe_parse_sqlite_table_option() else {
+            if leading_comma {
+                self.prev_token();
+            }
+            return Ok(SqliteTableOptions::default());
+        };
+        let mut options = vec![first];
+        while self.consume_token(&Token::Comma) {
+            match self.maybe_parse_sqlite_table_option() {
+                Some(option) => options.push(option),
+                None => return self.expected_ref("WITHOUT ROWID or STRICT", self.peek_token_ref()),
+            }
+        }
+        Ok(SqliteTableOptions {
+            leading_comma,
+            options,
+        })
+    }
+
+    fn maybe_parse_sqlite_table_option(&mut self) -> Option<SqliteTableOption> {
+        if self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]) {
+            Some(SqliteTableOption::WithoutRowid)
+        } else if self.parse_keyword(Keyword::STRICT) {
+            Some(SqliteTableOption::Strict)
+        } else {
+            None
+        }
     }
 
     /// Parse `MULTISET` table-kind prefix on `CREATE TABLE`.

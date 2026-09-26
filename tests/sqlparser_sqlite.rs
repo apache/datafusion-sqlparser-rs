@@ -132,9 +132,13 @@ fn parse_create_table_without_rowid() {
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
-            without_rowid: true,
+            sqlite_table_options,
             ..
         }) => {
+            assert_eq!(
+                sqlite_table_options.options,
+                vec![SqliteTableOption::WithoutRowid]
+            );
             assert_eq!("t", name.to_string());
         }
         _ => unreachable!(),
@@ -389,9 +393,17 @@ fn test_placeholder() {
 #[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
-    if let Statement::CreateTable(CreateTable { name, strict, .. }) = sqlite().verified_stmt(sql) {
+    if let Statement::CreateTable(CreateTable {
+        name,
+        sqlite_table_options,
+        ..
+    }) = sqlite().verified_stmt(sql)
+    {
         assert_eq!(name.to_string(), "Fruits");
-        assert!(strict);
+        assert_eq!(
+            sqlite_table_options.options,
+            vec![SqliteTableOption::Strict]
+        );
     }
 }
 
@@ -967,6 +979,71 @@ fn parse_n_prefix_not_national_string() {
 
     // Other dialects still tokenize N'...' as a national string literal.
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
+}
+
+#[test]
+fn parse_create_table_options_list() {
+    use SqliteTableOption::{Strict, WithoutRowid};
+    for (suffix, leading_comma, options) in [
+        (" WITHOUT ROWID, STRICT", false, vec![WithoutRowid, Strict]),
+        (" STRICT, WITHOUT ROWID", false, vec![Strict, WithoutRowid]),
+        (" STRICT, STRICT", false, vec![Strict, Strict]),
+        (", STRICT", true, vec![Strict]),
+        (", WITHOUT ROWID, STRICT", true, vec![WithoutRowid, Strict]),
+    ] {
+        let sql = format!("CREATE TABLE t (a INT){suffix}");
+        match sqlite_and_generic().verified_stmt(&sql) {
+            Statement::CreateTable(CreateTable {
+                sqlite_table_options,
+                ..
+            }) => assert_eq!(
+                sqlite_table_options,
+                SqliteTableOptions {
+                    leading_comma,
+                    options
+                },
+                "{sql}"
+            ),
+            _ => unreachable!(),
+        }
+    }
+    sqlite_and_generic().one_statement_parses_to(
+        "CREATE TABLE t (a INT) , STRICT",
+        "CREATE TABLE t (a INT), STRICT",
+    );
+
+    for (suffix, error) in [
+        (
+            " WITHOUT ROWID STRICT",
+            "Expected: end of statement, found: STRICT",
+        ),
+        (
+            " STRICT WITHOUT ROWID",
+            "Expected: end of statement, found: WITHOUT",
+        ),
+        (" STRICT,", "Expected: WITHOUT ROWID or STRICT, found: EOF"),
+        (
+            " STRICT, WITHOUT",
+            "Expected: WITHOUT ROWID or STRICT, found: WITHOUT",
+        ),
+        (",", "Expected: end of statement, found: ,"),
+        (", , STRICT", "Expected: end of statement, found: ,"),
+    ] {
+        let sql = format!("CREATE TABLE t (a INT){suffix}");
+        let actual = sqlite_and_generic().parse_sql_statements(&sql).unwrap_err();
+        assert!(actual.to_string().contains(error), "{sql}: {actual}");
+    }
+}
+
+#[test]
+fn parse_create_table_options_after_like_and_clone() {
+    for sql in [
+        "CREATE TABLE t LIKE x STRICT",
+        "CREATE TABLE t LIKE x WITHOUT ROWID, STRICT",
+        "CREATE TABLE t CLONE x WITHOUT ROWID",
+    ] {
+        sqlite_and_generic().verified_stmt(sql);
+    }
 }
 
 fn sqlite() -> TestedDialects {

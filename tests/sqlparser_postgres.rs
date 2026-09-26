@@ -1455,7 +1455,10 @@ Kwara & Kogi
 PHP	₱ USD $
 \N  Some other value
 \\."#;
-    pg_and_generic().one_statement_parses_to(sql, "");
+    // The payload survives printing unchanged, so the only difference from the
+    // input is the normalized `STDIN` keyword.
+    let canonical = sql.replacen("FROM stdin;", "FROM STDIN;", 1);
+    pg_and_generic().one_statement_parses_to(sql, &canonical);
 }
 
 #[test]
@@ -1472,7 +1475,7 @@ fn parse_copy_from_stdin_without_semicolon() {
             target: CopyTarget::Stdin,
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Null("null".into())],
-            values: vec![],
+            payload: None,
         }
     );
 }
@@ -1501,11 +1504,11 @@ fn parse_copy_from_stdin_without_semicolon_variants() {
             Statement::Copy {
                 to: false,
                 target: CopyTarget::Stdin,
-                values,
+                payload,
                 ..
             } => {
                 assert!(
-                    values.is_empty(),
+                    payload.is_none(),
                     "expected no inline COPY payload for `{sql}`"
                 );
             }
@@ -1530,7 +1533,7 @@ fn test_copy_from() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1548,7 +1551,7 @@ fn test_copy_from() {
             },
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1569,7 +1572,7 @@ fn test_copy_from() {
                 CopyLegacyOption::Delimiter(','),
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
-            values: vec![],
+            payload: None,
         }
     );
 }
@@ -1590,7 +1593,7 @@ fn test_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1608,7 +1611,7 @@ fn test_copy_to() {
             },
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1629,7 +1632,7 @@ fn test_copy_to() {
                 CopyLegacyOption::Delimiter(','),
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
-            values: vec![],
+            payload: None,
         }
     )
 }
@@ -1683,7 +1686,7 @@ fn parse_copy_from() {
                 CopyOption::Encoding("utf8".into()),
             ],
             legacy_options: vec![],
-            values: vec![],
+            payload: None,
         }
     );
 }
@@ -1713,7 +1716,7 @@ fn parse_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1729,7 +1732,7 @@ fn parse_copy_to() {
             target: CopyTarget::Stdout,
             options: vec![CopyOption::Delimiter('|')],
             legacy_options: vec![],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1748,7 +1751,7 @@ fn parse_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1818,7 +1821,7 @@ fn parse_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            payload: None,
         }
     )
 }
@@ -1849,7 +1852,7 @@ fn parse_copy_from_before_v9_0() {
                     CopyLegacyCsvOption::ForceNotNull(vec!["column".into()]),
                 ]),
             ],
-            values: vec![],
+            payload: None,
         }
     );
 
@@ -1875,7 +1878,7 @@ fn parse_copy_from_before_v9_0() {
                     CopyLegacyCsvOption::Escape('\\'),
                 ]),
             ],
-            values: vec![],
+            payload: None,
         }
     );
 }
@@ -1906,7 +1909,7 @@ fn parse_copy_to_before_v9_0() {
                     CopyLegacyCsvOption::ForceQuote(vec!["column".into()]),
                 ]),
             ],
-            values: vec![],
+            payload: None,
         }
     )
 }
@@ -10137,4 +10140,69 @@ fn parse_stage_table_factor_rejected() {
 fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_is_captured_as_written() {
+    // Reported symptoms: the payload arrived as a flat list of fields with no
+    // row separator, so two rows of two columns came back as six values, and
+    // printing a parsed statement never reproduced its input.
+    let check = |sql: &str, printed: &str, expected: Option<&str>| match pg_and_generic()
+        .one_statement_parses_to(sql, printed)
+    {
+        Statement::Copy { payload, .. } => {
+            assert_eq!(payload.as_deref(), expected, "for {sql:?}")
+        }
+        other => panic!("expected COPY, got {other:?}"),
+    };
+
+    // Tabs, newlines and the `\N` null marker are all left uninterpreted.
+    let rows = "COPY t (a, b) FROM STDIN;\n1\t\\N\n2\ty\n\\.";
+    check(rows, rows, Some("1\t\\N\n2\ty\n"));
+
+    // Only the keyword casing is normalized.
+    check(
+        "COPY t (a, b) FROM stdin;\n1\t\\N\n2\ty\n\\.",
+        rows,
+        Some("1\t\\N\n2\ty\n"),
+    );
+
+    // An empty payload is still a payload, distinct from a `COPY` that carries
+    // no inline data at all.
+    let empty = "COPY t (a, b) FROM STDIN;\n\\.";
+    check(empty, empty, Some(""));
+
+    // A statement delimiter with nothing behind it is not a payload, so
+    // printing must not invent data and a `\.` terminator.
+    check(
+        "COPY t (a, b) FROM STDIN;",
+        "COPY t (a, b) FROM STDIN",
+        None,
+    );
+    check(
+        "COPY t (a, b) FROM STDIN;\n",
+        "COPY t (a, b) FROM STDIN",
+        None,
+    );
+
+    // A payload cut short keeps the rows it does have, and printing restores
+    // the terminator the input was missing.
+    check(
+        "COPY t (a, b) FROM STDIN;\n1\t2\n",
+        "COPY t (a, b) FROM STDIN;\n1\t2\n\\.",
+        Some("1\t2\n"),
+    );
+
+    // The declared format does not change how the payload is captured.
+    let csv = "COPY t (a, b) FROM STDIN (FORMAT CSV);\na,b\n1,\"x y\"\n\\.";
+    check(csv, csv, Some("a,b\n1,\"x y\"\n"));
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_with_comment_marker() {
+    // A `--` in the payload is data, but the tokenizer still reports it as a
+    // comment, and printing that token appends a newline the tokenizer already
+    // emitted separately.
+    pg_and_generic().verified_stmt("COPY t (a, b) FROM STDIN;\n1\t-- not a comment\n2\ty\n\\.");
+    pg_and_generic().verified_stmt("COPY t (a, b) FROM STDIN;\n1\t/* nor is this */\n\\.");
 }

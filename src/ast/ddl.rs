@@ -6056,6 +6056,60 @@ impl fmt::Display for CreateForeignTable {
     }
 }
 
+/// The handler/validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ForeignDataWrapperRoutineClause {
+    /// A named function, e.g. `HANDLER myhandler` or `VALIDATOR myvalidator`.
+    Function(ObjectName),
+    /// The `NO HANDLER` / `NO VALIDATOR` form.
+    Absent,
+}
+
+impl ForeignDataWrapperRoutineClause {
+    fn fmt_with_label(&self, f: &mut fmt::Formatter<'_>, label: &str) -> fmt::Result {
+        match self {
+            ForeignDataWrapperRoutineClause::Function(name) => write!(f, " {label} {name}"),
+            ForeignDataWrapperRoutineClause::Absent => write!(f, " NO {label}"),
+        }
+    }
+}
+
+/// A `CREATE FOREIGN DATA WRAPPER` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateForeignDataWrapper {
+    /// The name of the foreign-data wrapper. Per PostgreSQL this is a bare
+    /// identifier and cannot be schema-qualified.
+    pub name: Ident,
+    /// Optional `HANDLER handler_function` or `NO HANDLER` clause.
+    pub handler: Option<ForeignDataWrapperRoutineClause>,
+    /// Optional `VALIDATOR validator_function` or `NO VALIDATOR` clause.
+    pub validator: Option<ForeignDataWrapperRoutineClause>,
+    /// Optional `OPTIONS (key 'value', ...)` clause.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateForeignDataWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CREATE FOREIGN DATA WRAPPER {}", self.name)?;
+        if let Some(handler) = &self.handler {
+            handler.fmt_with_label(f, "HANDLER")?;
+        }
+        if let Some(validator) = &self.validator {
+            validator.fmt_with_label(f, "VALIDATOR")?;
+        }
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
 impl From<CreateForeignTable> for crate::ast::Statement {
     fn from(v: CreateForeignTable) -> Self {
         crate::ast::Statement::CreateForeignTable(v)
@@ -6069,6 +6123,32 @@ impl Spanned for CreateForeignTable {
                 .chain(self.columns.iter().map(|column| column.span()))
                 .chain(self.constraints.iter().map(|constraint| constraint.span()))
                 .chain(core::iter::once(self.server_name.span))
+                .chain(
+                    self.options
+                        .iter()
+                        .flatten()
+                        .flat_map(|option| [option.key.span, option.value.span]),
+                ),
+        )
+    }
+}
+
+impl From<CreateForeignDataWrapper> for crate::ast::Statement {
+    fn from(v: CreateForeignDataWrapper) -> Self {
+        crate::ast::Statement::CreateForeignDataWrapper(v)
+    }
+}
+
+impl Spanned for CreateForeignDataWrapper {
+    fn span(&self) -> Span {
+        let routine_span = |clause: &Option<ForeignDataWrapperRoutineClause>| match clause {
+            Some(ForeignDataWrapperRoutineClause::Function(name)) => Some(name.span()),
+            _ => None,
+        };
+        Span::union_iter(
+            core::iter::once(self.name.span)
+                .chain(routine_span(&self.handler))
+                .chain(routine_span(&self.validator))
                 .chain(
                     self.options
                         .iter()

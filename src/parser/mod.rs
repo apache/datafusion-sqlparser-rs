@@ -5400,6 +5400,8 @@ impl<'a> Parser<'a> {
                 );
             }
             self.parse_create_foreign_table().map(Into::into)
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
+            self.parse_create_foreign_data_wrapper().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -20601,6 +20603,53 @@ impl<'a> Parser<'a> {
             columns,
             constraints,
             server_name,
+            options,
+        })
+    }
+
+    /// Parse a `CREATE FOREIGN DATA WRAPPER` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html>
+    pub fn parse_create_foreign_data_wrapper(
+        &mut self,
+    ) -> Result<CreateForeignDataWrapper, ParserError> {
+        let name = self.parse_identifier()?;
+
+        // PostgreSQL accepts HANDLER and VALIDATOR in either order, so they are
+        // consumed in a loop rather than positionally.
+        let mut handler = None;
+        let mut validator = None;
+        loop {
+            let loc = self.peek_token_ref().span.start;
+            let (slot, clause) = if self.parse_keyword(Keyword::HANDLER) {
+                (
+                    &mut handler,
+                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::HANDLER]) {
+                (&mut handler, ForeignDataWrapperRoutineClause::Absent)
+            } else if self.parse_keyword(Keyword::VALIDATOR) {
+                (
+                    &mut validator,
+                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::VALIDATOR]) {
+                (&mut validator, ForeignDataWrapperRoutineClause::Absent)
+            } else {
+                break;
+            };
+            if slot.is_some() {
+                return parser_err!("conflicting or redundant options", loc);
+            }
+            *slot = Some(clause);
+        }
+
+        let options = self.parse_pg_options_clause()?;
+
+        Ok(CreateForeignDataWrapper {
+            name,
+            handler,
+            validator,
             options,
         })
     }

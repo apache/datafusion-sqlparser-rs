@@ -7540,9 +7540,7 @@ impl<'a> Parser<'a> {
         let args = if self.consume_token(&Token::Mul) {
             CreateAggregateArgs::Star
         } else {
-            CreateAggregateArgs::List(
-                self.parse_comma_separated0(Parser::parse_function_arg, Token::RParen)?,
-            )
+            CreateAggregateArgs::List(self.parse_comma_separated(Parser::parse_function_arg)?)
         };
         self.expect_token(&Token::RParen)?;
         Ok(args)
@@ -7678,7 +7676,17 @@ impl<'a> Parser<'a> {
             Keyword::MINITCOND => {
                 CreateAggregateOption::MovingInitialCondition(self.parse_value()?)
             }
-            Keyword::SORTOP => CreateAggregateOption::SortOperator(self.parse_operator_name()?),
+            Keyword::SORTOP => {
+                let operator = if self.parse_keyword(Keyword::OPERATOR) {
+                    self.expect_token(&Token::LParen)?;
+                    let operator = self.parse_operator_name()?;
+                    self.expect_token(&Token::RParen)?;
+                    operator
+                } else {
+                    self.parse_operator_name()?
+                };
+                CreateAggregateOption::SortOperator(operator)
+            }
             Keyword::PARALLEL => CreateAggregateOption::Parallel(self.parse_function_parallel()?),
             Keyword::BASETYPE => CreateAggregateOption::BaseType(self.parse_data_type()?),
             _ => {

@@ -9746,15 +9746,14 @@ fn parse_create_aggregate_star_args() {
 }
 
 #[test]
-fn parse_create_aggregate_empty_args() {
-    let stmt = pg_and_generic()
-        .verified_stmt("CREATE AGGREGATE my_agg () (SFUNC = my_sfunc, STYPE = INT)");
-    match stmt {
-        Statement::CreateAggregate(agg) => {
-            assert_eq!(agg.args, CreateAggregateArgs::List(vec![]));
-        }
-        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
-    }
+fn parse_create_aggregate_rejects_empty_args() {
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("CREATE AGGREGATE my_agg () (SFUNC = my_sfunc, STYPE = INT)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: a data type name, found: )"
+    );
 }
 
 #[test]
@@ -9782,7 +9781,7 @@ fn parse_create_aggregate_additional_options() {
         "CREATE AGGREGATE my_min (INT) (SFUNC = my_sfunc, STYPE = INT, SSPACE = 128, SORTOP = <)",
     );
     pg_and_generic().verified_stmt(
-        "CREATE AGGREGATE my_min2 (INT) (SFUNC = my_sfunc, STYPE = INT, SORTOP = pg_catalog.<)",
+        "CREATE AGGREGATE my_min2 (INT) (SFUNC = my_sfunc, STYPE = INT, SORTOP = OPERATOR(pg_catalog.<))",
     );
     pg_and_generic().verified_stmt(
         "CREATE AGGREGATE my_sum (INT) (SFUNC = my_sfunc, STYPE = internal, COMBINEFUNC = my_combine, SERIALFUNC = my_serial, DESERIALFUNC = my_deserial)",

@@ -6123,7 +6123,7 @@ pub enum CreateAggregateArgs {
     /// The wildcard form `(*)`, used by zero-argument aggregates such as
     /// `count(*)`.
     Star,
-    /// An explicit argument list, possibly empty: `()`, `(NUMERIC)`,
+    /// An explicit argument list: `(NUMERIC)`,
     /// `(input INT, VARIADIC tail TEXT)`.
     List(Vec<OperateFunctionArg>),
 }
@@ -6208,6 +6208,9 @@ impl fmt::Display for CreateAggregateOption {
             Self::MovingFinalFunctionExtra => write!(f, "MFINALFUNC_EXTRA"),
             Self::MovingFinalFunctionModify(kind) => write!(f, "MFINALFUNC_MODIFY = {kind}"),
             Self::MovingInitialCondition(cond) => write!(f, "MINITCOND = {cond}"),
+            Self::SortOperator(name) if name.0.len() > 1 => {
+                write!(f, "SORTOP = OPERATOR({name})")
+            }
             Self::SortOperator(name) => write!(f, "SORTOP = {name}"),
             Self::Parallel(parallel) => write!(f, "PARALLEL = {}", parallel.as_str()),
             Self::Hypothetical => write!(f, "HYPOTHETICAL"),

@@ -1918,6 +1918,111 @@ fn parse_alter_table_column_position() {
 }
 
 #[test]
+fn parse_alter_table_modify_order_by() {
+    clickhouse().verified_stmt("ALTER TABLE events MODIFY ORDER BY (region, user.id)");
+    clickhouse_and_generic().verified_stmt("ALTER TABLE events MODIFY ORDER BY region");
+    clickhouse_and_generic().verified_stmt("ALTER TABLE events MODIFY ORDER BY ()");
+    clickhouse_and_generic().verified_stmt("ALTER TABLE events MODIFY ORDER BY tuple()");
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE events ON CLUSTER c MODIFY ORDER BY (a, toDate(ts))");
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE events ADD COLUMN b UInt8, MODIFY ORDER BY (a, b)");
+    // A column named `order` is still handled by MODIFY COLUMN.
+    clickhouse_and_generic().verified_stmt("ALTER TABLE events MODIFY COLUMN `order` UInt8");
+
+    match clickhouse_and_generic().verified_stmt("ALTER TABLE events MODIFY ORDER BY (a)") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ModifyOrderBy {
+                    order_by: OneOrManyWithParens::Many(vec![Expr::Identifier(Ident::new("a"))]),
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for sql in [
+        "ALTER TABLE events MODIFY ORDER BY",
+        "ALTER TABLE events MODIFY ORDER BY (a",
+        "ALTER TABLE events MODIFY ORDER BY (,)",
+        "ALTER TABLE events MODIFY ORDER BY (a) b",
+        "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
+    ] {
+        assert!(
+            clickhouse_and_generic().parse_sql_statements(sql).is_err(),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_object_type_parameter() {
+    for dialects in [
+        clickhouse(),
+        TestedDialects::new(vec![Box::new(GenericDialect {})]),
+    ] {
+        let statements = dialects
+            .parse_sql_statements("CREATE TABLE t (o Object('json'))")
+            .unwrap();
+        let [Statement::CreateTable(CreateTable { columns, .. })] = statements.as_slice() else {
+            unreachable!();
+        };
+
+        assert_eq!(
+            columns[0].data_type,
+            DataType::Custom(
+                ObjectName::from(vec![Ident::new("Object")]),
+                vec!["json".to_string()]
+            )
+        );
+
+        let formatted = statements[0].to_string();
+        assert_eq!(
+            dialects.parse_sql_statements(&formatted).unwrap(),
+            statements
+        );
+    }
+
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT(city VARCHAR NOT NULL))");
+
+    for (sql, modifiers) in [
+        ("CREATE TABLE t (o OBJECT(10))", vec!["10"]),
+        ("CREATE TABLE t (o OBJECT(foo))", vec!["foo"]),
+        ("CREATE TABLE t (o OBJECT(foo, bar))", vec!["foo", "bar"]),
+    ] {
+        for dialects in [
+            clickhouse(),
+            TestedDialects::new(vec![Box::new(GenericDialect {})]),
+        ] {
+            let statements = dialects.parse_sql_statements(sql).unwrap();
+            let [Statement::CreateTable(CreateTable { columns, .. })] = statements.as_slice()
+            else {
+                unreachable!();
+            };
+
+            assert_eq!(
+                columns[0].data_type,
+                DataType::Custom(
+                    ObjectName::from(vec![Ident::new("OBJECT")]),
+                    modifiers
+                        .iter()
+                        .map(|modifier| (*modifier).to_owned())
+                        .collect(),
+                )
+            );
+
+            let formatted = statements[0].to_string();
+            assert_eq!(
+                dialects.parse_sql_statements(&formatted).unwrap(),
+                statements
+            );
+        }
+    }
+}
+
+#[test]
 fn parse_tuple_element_access() {
     clickhouse().verified_stmt("SELECT t.1 FROM t");
     clickhouse().verified_stmt("SELECT t.1 AS a, t.2 AS b FROM (SELECT (1, 'x') AS t)");

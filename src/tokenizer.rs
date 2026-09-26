@@ -1146,7 +1146,7 @@ impl<'a> Tokenizer<'a> {
                 n @ 'N' | n @ 'n' => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
-                        Some('\'') => {
+                        Some('\'') if self.dialect.supports_national_string_literal() => {
                             // N'...' - a <national character string literal>
                             let backslash_escape =
                                 self.dialect.supports_string_literal_backslash_escape();
@@ -4126,15 +4126,18 @@ mod tests {
 
     #[test]
     fn test_national_strings_backslash_escape_not_supported() {
-        all_dialects_where(|dialect| !dialect.supports_string_literal_backslash_escape())
-            .tokenizes_to(
-                "select n'''''\\'",
-                vec![
-                    Token::make_keyword("select"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::NationalStringLiteral("''\\".to_string()),
-                ],
-            );
+        all_dialects_where(|dialect| {
+            !dialect.supports_string_literal_backslash_escape()
+                && dialect.supports_national_string_literal()
+        })
+        .tokenizes_to(
+            "select n'''''\\'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::NationalStringLiteral("''\\".to_string()),
+            ],
+        );
     }
 
     #[test]

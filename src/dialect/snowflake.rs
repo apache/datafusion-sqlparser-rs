@@ -153,6 +153,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/order-by#syntax>
+    fn supports_order_by_all(&self) -> bool {
+        true
+    }
+
     // Snowflake supports double-dot notation when the schema name is not specified
     // In this case the default PUBLIC schema is used
     //
@@ -246,6 +251,14 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn supports_array_element_not_null(&self) -> bool {
+        true
+    }
+
+    fn supports_map_typedef_with_parentheses(&self) -> bool {
+        true
+    }
+
+    fn supports_map_value_not_null(&self) -> bool {
         true
     }
 
@@ -1614,10 +1627,14 @@ fn parse_select_item_for_data_load(
         }
     }
 
-    // A trailing `::` means this is a cast expression (e.g.
-    // `$1:"col"::NUMBER(38,0)`), not a stage-load-select-item.
-    if matches!(parser.peek_token_ref().token, Token::DoubleColon) {
-        return parser.expected("stage load select item", parser.peek_token());
+    // More complex paths and casts must fall back to the standard expression
+    // parser so it can preserve the complete JsonAccess / Cast expression.
+    if matches!(
+        parser.peek_token_ref().token,
+        Token::Colon | Token::Period | Token::LBracket | Token::DoubleColon
+    ) {
+        let token = parser.next_token();
+        return parser.expected("end of simple staged field", token);
     }
 
     // as

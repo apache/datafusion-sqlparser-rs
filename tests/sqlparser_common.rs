@@ -3803,7 +3803,8 @@ fn parse_listagg() {
     verified_stmt("SELECT LISTAGG(dateid)");
     verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW ERROR)");
-    verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
+    all_dialects_where(|d| d.supports_national_string_literal())
+        .verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE X'deadbeef' WITH COUNT)");
 }
 
@@ -6452,8 +6453,9 @@ fn parse_literal_decimal() {
 
 #[test]
 fn parse_literal_string() {
+    let national_string_dialects = all_dialects_where(|d| d.supports_national_string_literal());
     let sql = "SELECT 'one', N'national string', X'deadBEEF'";
-    let select = verified_only_select(sql);
+    let select = national_string_dialects.verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Value((Value::SingleQuotedString("one".to_string())).with_empty_span()),
@@ -6470,9 +6472,10 @@ fn parse_literal_string() {
         expr_from_projection(&select.projection[2])
     );
 
-    one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
-    one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
-    one_statement_parses_to(
+    all_dialects().one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
+    national_string_dialects
+        .one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
+    national_string_dialects.one_statement_parses_to(
         r#"SELECT n'Tu geres '';'' et ''"'' ?'"#,
         r#"SELECT N'Tu geres '';'' et ''"'' ?'"#,
     );
@@ -13959,17 +13962,44 @@ fn test_match_recognize_patterns() {
         ]),
     );
 
-    // double repetition
+    // reluctant repetition
     check(
         "S2*?",
         Repetition(
-            Box::new(Repetition(
-                Box::new(Symbol(Named(Ident::new("S2")))),
-                ZeroOrMore,
-            )),
-            AtMostOne,
+            Box::new(Symbol(Named(Ident::new("S2")))),
+            Reluctant(Box::new(ZeroOrMore)),
         ),
     );
+
+    check(
+        "S1+? S2?? S3{2,4}?",
+        Concat(vec![
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S1")))),
+                Reluctant(Box::new(OneOrMore)),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S2")))),
+                Reluctant(Box::new(AtMostOne)),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S3")))),
+                Reluctant(Box::new(Range(2, 4))),
+            ),
+        ]),
+    );
+
+    for pattern in ["S1**", "S1+++", "S1???", "S1{2,4}+"] {
+        let sql = format!(
+            "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN ({pattern}) DEFINE DUMMY AS 1 = 1)"
+        );
+        assert!(
+            all_dialects_where(|d| d.supports_match_recognize())
+                .parse_sql_statements(&sql)
+                .is_err(),
+            "stacked quantifier should fail: {pattern}"
+        );
+    }
 
     // range quantifiers in an alternation
     check(
@@ -14011,11 +14041,8 @@ fn test_match_recognize_patterns() {
                 Symbol(Start),
                 Symbol(Named(Ident::new("S1"))),
                 Repetition(
-                    Box::new(Repetition(
-                        Box::new(Symbol(Named(Ident::new("S2")))),
-                        ZeroOrMore,
-                    )),
-                    AtMostOne,
+                    Box::new(Symbol(Named(Ident::new("S2")))),
+                    Reluctant(Box::new(ZeroOrMore)),
                 ),
                 Repetition(
                     Box::new(Group(Box::new(Concat(vec![
@@ -20193,4 +20220,46 @@ fn parse_alter_table_column_position() {
     ] {
         assert!(dialects.parse_sql_statements(sql).is_err(), "{sql}");
     }
+}
+
+#[test]
+fn parse_placeholder_disallows_quoted_ident() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(AnsiDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(SnowflakeDialect {}),
+        Box::new(SQLiteDialect {}),
+    ]);
+    // Valid placeholders roundtrip
+    dialects.verified_stmt("SELECT :x");
+
+    // Quoted identifiers are not valid placeholders
+    let err = dialects.parse_sql_statements("SELECT :`a`").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
+        err
+    );
+    let err = dialects.parse_sql_statements("SELECT :\"a\"").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
+        err
+    );
+    let err = dialects.parse_sql_statements("SELECT:` a` a").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: ` a`".to_string()),
+        err
+    );
+
+    let ansi = TestedDialects::new(vec![Box::new(AnsiDialect {})]);
+    ansi.verified_stmt("SELECT @x");
+    let err = ansi.parse_sql_statements("SELECT @`a`").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
+        err
+    );
+    let err = ansi.parse_sql_statements("SELECT @\"a\"").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
+        err
+    );
 }

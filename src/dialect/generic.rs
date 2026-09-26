@@ -24,6 +24,10 @@ use crate::dialect::Dialect;
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
+    fn supports_map_typedef_with_parentheses(&self) -> bool {
+        true
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }
@@ -282,6 +286,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_settings(&self) -> bool {
+        true
+    }
+
+    fn supports_table_partitions(&self) -> bool {
         true
     }
 

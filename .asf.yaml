@@ -24,6 +24,7 @@ notifications:
   commits: commits@datafusion.apache.org
   issues: github@datafusion.apache.org
   pullrequests: github@datafusion.apache.org
+  discussions: github@datafusion.apache.org
 github:
   description: "Extensible SQL Lexer and Parser for Rust"
   labels:
@@ -36,6 +37,7 @@ github:
     rebase: false
   features:
     issues: true
+    discussions: true
   protected_branches:
     main:
       required_status_checks:

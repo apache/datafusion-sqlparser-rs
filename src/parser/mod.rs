@@ -3673,7 +3673,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+        let (field_type, trailing_bracket) = self.parse_data_type_with_optional_collation()?;
 
         let options = self.maybe_parse_options(Keyword::OPTIONS)?;
         Ok((
@@ -3794,7 +3794,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse clickhouse [map]
+    /// Parse a parenthesized MAP type (ClickHouse or Snowflake).
     ///
     /// Syntax
     ///
@@ -3803,15 +3803,19 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [map]: https://clickhouse.com/docs/en/sql-reference/data-types/map
-    fn parse_click_house_map_def(&mut self) -> Result<(DataType, DataType), ParserError> {
+    fn parse_parenthesized_map_type_def(
+        &mut self,
+    ) -> Result<(DataType, DataType, bool), ParserError> {
         self.expect_keyword_is(Keyword::MAP)?;
         self.expect_token(&Token::LParen)?;
         let key_data_type = self.parse_data_type()?;
         self.expect_token(&Token::Comma)?;
         let value_data_type = self.parse_data_type()?;
+        let value_not_null = self.dialect.supports_map_value_not_null()
+            && self.parse_keywords(&[Keyword::NOT, Keyword::NULL]);
         self.expect_token(&Token::RParen)?;
 
-        Ok((key_data_type, value_data_type))
+        Ok((key_data_type, value_data_type, value_not_null))
     }
 
     /// Parse clickhouse [tuple]
@@ -5274,6 +5278,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        let modifier_loc = self.peek_token_ref().span.start;
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
         let multiset = self.maybe_parse_multiset();
@@ -5376,6 +5381,25 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
+            // `or_replace` cannot reach here today, since the arm above catches it.
+            // It stays so that reordering the arms cannot make it fall through.
+            if or_replace
+                || or_alter
+                || temporary
+                || global.is_some()
+                || transient
+                || volatile
+                || multiset.is_some()
+                || persistent
+                || create_view_params.is_some()
+            {
+                return parser_err!(
+                    "CREATE FOREIGN TABLE does not accept this modifier",
+                    modifier_loc
+                );
+            }
+            self.parse_create_foreign_table().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -8838,17 +8862,7 @@ impl<'a> Parser<'a> {
         };
 
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            if self.consume_token(&Token::LParen) {
-                let columns = if self.peek_token_ref().token != Token::RParen {
-                    self.parse_comma_separated(|p| p.parse_expr())?
-                } else {
-                    vec![]
-                };
-                self.expect_token(&Token::RParen)?;
-                Some(OneOrManyWithParens::Many(columns))
-            } else {
-                Some(OneOrManyWithParens::One(self.parse_expr()?))
-            }
+            Some(self.parse_sorting_key()?)
         } else {
             None
         };
@@ -10682,6 +10696,22 @@ impl<'a> Parser<'a> {
         Ok(AlterTableOperation::AlterSortKey { columns })
     }
 
+    /// Parse the expression(s) following ClickHouse `ORDER BY`: either a single
+    /// expression or a possibly empty parenthesized list.
+    fn parse_sorting_key(&mut self) -> Result<OneOrManyWithParens<Expr>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let columns = if self.peek_token_ref().token != Token::RParen {
+                self.parse_comma_separated(|p| p.parse_expr())?
+            } else {
+                vec![]
+            };
+            self.expect_token(&Token::RParen)?;
+            Ok(OneOrManyWithParens::Many(columns))
+        } else {
+            Ok(OneOrManyWithParens::One(self.parse_expr()?))
+        }
+    }
+
     /// Parse a single `ALTER TABLE` operation and return an `AlterTableOperation`.
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
@@ -10941,6 +10971,10 @@ impl<'a> Parser<'a> {
                 data_type,
                 options,
                 column_position,
+            }
+        } else if self.parse_keywords(&[Keyword::MODIFY, Keyword::ORDER, Keyword::BY]) {
+            AlterTableOperation::ModifyOrderBy {
+                order_by: self.parse_sorting_key()?,
             }
         } else if self.parse_keyword(Keyword::MODIFY) {
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
@@ -12545,7 +12579,7 @@ impl<'a> Parser<'a> {
                 //    without any whitespace in between
                 let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
                 let ident = match next_token.token {
-                    Token::Word(w) => Ok(w.into_ident(next_token.span)),
+                    Token::Word(w) if w.quote_style.is_none() => Ok(w.into_ident(next_token.span)),
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
@@ -13163,11 +13197,24 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Array(ArrayElemTypeDef::None))
                     } else {
                         self.expect_token(&Token::Lt)?;
-                        let (inside_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                        let (inside_type, _trailing_bracket) =
+                            self.parse_data_type_with_optional_collation()?;
                         trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
                         Ok(DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                             inside_type,
                         ))))
+                    }
+                }
+                Keyword::OBJECT if self.peek_token_ref().token == Token::LParen => {
+                    if let Some(fields) =
+                        self.maybe_parse(|parser| parser.parse_structured_object_type_def())?
+                    {
+                        Ok(DataType::Object(fields))
+                    } else {
+                        self.prev_token();
+                        let type_name = self.parse_object_name(false)?;
+                        let modifiers = self.parse_optional_type_modifiers()?.unwrap_or_default();
+                        Ok(DataType::Custom(type_name, modifiers))
                     }
                 }
                 Keyword::STRUCT if dialect_is!(dialect is DuckDbDialect) => {
@@ -13198,9 +13245,17 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::MAP if self.dialect.supports_map_literal_with_angle_brackets() => {
                     self.expect_token(&Token::Lt)?;
-                    let key_data_type = self.parse_data_type()?;
+                    let (key_data_type, key_trailing_bracket) =
+                        self.parse_data_type_with_optional_collation()?;
+                    if key_trailing_bracket.0 {
+                        return parser_err!(
+                            format!("unmatched > after parsing data type {key_data_type}"),
+                            self.peek_token_ref()
+                        );
+                    }
                     self.expect_token(&Token::Comma)?;
-                    let (value_data_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                    let (value_data_type, _trailing_bracket) =
+                        self.parse_data_type_with_optional_collation()?;
                     trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
                     Ok(DataType::Map(
                         Box::new(key_data_type),
@@ -13208,13 +13263,19 @@ impl<'a> Parser<'a> {
                         MapBracketKind::AngleBrackets,
                     ))
                 }
-                Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
+                Keyword::MAP if self.dialect.supports_map_typedef_with_parentheses() => {
                     self.prev_token();
-                    let (key_data_type, value_data_type) = self.parse_click_house_map_def()?;
+                    let (key_data_type, value_data_type, value_not_null) =
+                        self.parse_parenthesized_map_type_def()?;
+                    let bracket = if value_not_null {
+                        MapBracketKind::ParenthesesNotNull
+                    } else {
+                        MapBracketKind::Parentheses
+                    };
                     Ok(DataType::Map(
                         Box::new(key_data_type),
                         Box::new(value_data_type),
-                        MapBracketKind::Parentheses,
+                        bracket,
                     ))
                 }
                 Keyword::NESTED if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
@@ -13299,6 +13360,19 @@ impl<'a> Parser<'a> {
         }
 
         Ok((data, trailing_bracket))
+    }
+
+    fn parse_data_type_with_optional_collation(
+        &mut self,
+    ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        let (mut data_type, trailing_bracket) = self.parse_data_type_helper()?;
+        if !trailing_bracket.0
+            && self.dialect.supports_data_type_collation()
+            && self.parse_keyword(Keyword::COLLATE)
+        {
+            data_type = DataType::Collate(Box::new(data_type), self.parse_object_name(false)?);
+        }
+        Ok((data_type, trailing_bracket))
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
@@ -13907,8 +13981,12 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(w) => Ok(w.into_ident(next_token.span)),
-            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
-            Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
+            Token::SingleQuotedString(s) => {
+                Ok(Ident::with_quote_and_span('\'', next_token.span, s))
+            }
+            Token::DoubleQuotedString(s) => {
+                Ok(Ident::with_quote_and_span('\"', next_token.span, s))
+            }
             _ => self.expected("identifier", next_token),
         }
     }
@@ -14385,6 +14463,35 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    fn parse_structured_object_type_def(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        if self.consume_token(&Token::RParen) {
+            return Ok(vec![]);
+        }
+        let fields = self.parse_comma_separated(|parser| {
+            if matches!(parser.peek_token_ref().token, Token::SingleQuotedString(_)) {
+                return parser.expected("an object field identifier", parser.peek_token());
+            }
+            let name = parser.parse_identifier()?;
+            let data_type = parser.parse_data_type()?;
+            let options = if parser.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+                vec![ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                }]
+            } else {
+                vec![]
+            };
+            Ok(ColumnDef {
+                name,
+                data_type,
+                options,
+            })
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(fields)
     }
 
     /// Parse a parenthesized sub data type
@@ -16760,7 +16867,7 @@ impl<'a> Parser<'a> {
                 _ => None,
             };
 
-            let partitions: Vec<Ident> = if dialect_of!(self is MySqlDialect | GenericDialect)
+            let partitions: Vec<Ident> = if self.dialect.supports_table_partitions()
                 && self.parse_keyword(Keyword::PARTITION)
             {
                 self.parse_parenthesized_identifiers()?
@@ -17329,58 +17436,61 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_repetition_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
-        let mut pattern = self.parse_base_pattern()?;
-        loop {
-            let token = self.next_token();
-            let quantifier = match token.token {
-                Token::Mul => RepetitionQuantifier::ZeroOrMore,
-                Token::Plus => RepetitionQuantifier::OneOrMore,
-                Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
-                Token::LBrace => {
-                    // quantifier is a range like {n} or {n,} or {,m} or {n,m}
-                    let token = self.next_token();
-                    match token.token {
-                        Token::Comma => {
-                            let next_token = self.next_token();
-                            let Token::Number(n, _) = next_token.token else {
-                                return self.expected("literal number", next_token);
-                            };
-                            self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::AtMost(Self::parse(n, token.span.start)?)
-                        }
-                        Token::Number(n, _) if self.consume_token(&Token::Comma) => {
-                            let next_token = self.next_token();
-                            match next_token.token {
-                                Token::Number(m, _) => {
-                                    self.expect_token(&Token::RBrace)?;
-                                    RepetitionQuantifier::Range(
-                                        Self::parse(n, token.span.start)?,
-                                        Self::parse(m, token.span.start)?,
-                                    )
-                                }
-                                Token::RBrace => {
-                                    RepetitionQuantifier::AtLeast(Self::parse(n, token.span.start)?)
-                                }
-                                _ => {
-                                    return self.expected("} or upper bound", next_token);
-                                }
-                            }
-                        }
-                        Token::Number(n, _) => {
-                            self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::Exactly(Self::parse(n, token.span.start)?)
-                        }
-                        _ => return self.expected("quantifier range", token),
+        let pattern = self.parse_base_pattern()?;
+        let token = self.next_token();
+        let quantifier = match token.token {
+            Token::Mul => RepetitionQuantifier::ZeroOrMore,
+            Token::Plus => RepetitionQuantifier::OneOrMore,
+            Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
+            Token::LBrace => {
+                // quantifier is a range like {n} or {n,} or {,m} or {n,m}
+                let token = self.next_token();
+                match token.token {
+                    Token::Comma => {
+                        let next_token = self.next_token();
+                        let Token::Number(n, _) = next_token.token else {
+                            return self.expected("literal number", next_token);
+                        };
+                        self.expect_token(&Token::RBrace)?;
+                        RepetitionQuantifier::AtMost(Self::parse(n, token.span.start)?)
                     }
+                    Token::Number(n, _) if self.consume_token(&Token::Comma) => {
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::Number(m, _) => {
+                                self.expect_token(&Token::RBrace)?;
+                                RepetitionQuantifier::Range(
+                                    Self::parse(n, token.span.start)?,
+                                    Self::parse(m, token.span.start)?,
+                                )
+                            }
+                            Token::RBrace => {
+                                RepetitionQuantifier::AtLeast(Self::parse(n, token.span.start)?)
+                            }
+                            _ => return self.expected("} or upper bound", next_token),
+                        }
+                    }
+                    Token::Number(n, _) => {
+                        self.expect_token(&Token::RBrace)?;
+                        RepetitionQuantifier::Exactly(Self::parse(n, token.span.start)?)
+                    }
+                    _ => return self.expected("quantifier range", token),
                 }
-                _ => {
-                    self.prev_token();
-                    break;
-                }
-            };
-            pattern = MatchRecognizePattern::Repetition(Box::new(pattern), quantifier);
-        }
-        Ok(pattern)
+            }
+            _ => {
+                self.prev_token();
+                return Ok(pattern);
+            }
+        };
+        let quantifier = if self.consume_token(&Token::Placeholder("?".into())) {
+            RepetitionQuantifier::Reluctant(Box::new(quantifier))
+        } else {
+            quantifier
+        };
+        Ok(MatchRecognizePattern::Repetition(
+            Box::new(pattern),
+            quantifier,
+        ))
     }
 
     fn parse_concat_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
@@ -20438,16 +20548,7 @@ impl<'a> Parser<'a> {
         self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
         let foreign_data_wrapper = self.parse_object_name(false)?;
 
-        let mut options = None;
-        if self.parse_keyword(Keyword::OPTIONS) {
-            self.expect_token(&Token::LParen)?;
-            options = Some(self.parse_comma_separated(|p| {
-                let key = p.parse_identifier()?;
-                let value = p.parse_identifier()?;
-                Ok(CreateServerOption { key, value })
-            })?);
-            self.expect_token(&Token::RParen)?;
-        }
+        let options = self.parse_pg_options_clause()?;
 
         Ok(Statement::CreateServer(CreateServerStatement {
             name,
@@ -20457,6 +20558,51 @@ impl<'a> Parser<'a> {
             foreign_data_wrapper,
             options,
         }))
+    }
+
+    /// Parse an optional Postgres `OPTIONS ( key value [, ...] )` clause.
+    fn parse_pg_options_clause(&mut self) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
+        if !self.parse_keyword(Keyword::OPTIONS) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| {
+            let key = p.parse_identifier()?;
+            let value = p.parse_identifier()?;
+            Ok(CreateServerOption { key, value })
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Some(options))
+    }
+
+    /// Parse a `CREATE FOREIGN TABLE` statement.
+    ///
+    /// Per-column `OPTIONS ( ... )`, `INHERITS`, and the `PARTITION OF` form are
+    /// not parsed yet.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
+    pub fn parse_create_foreign_table(&mut self) -> Result<CreateForeignTable, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+        if self.peek_token_ref().token != Token::LParen {
+            return self.expected_ref(
+                "'(' before the column list of CREATE FOREIGN TABLE",
+                self.peek_token_ref(),
+            );
+        }
+        let (columns, constraints) = self.parse_columns()?;
+        self.expect_keyword_is(Keyword::SERVER)?;
+        let server_name = self.parse_identifier()?;
+        let options = self.parse_pg_options_clause()?;
+
+        Ok(CreateForeignTable {
+            name,
+            if_not_exists,
+            columns,
+            constraints,
+            server_name,
+            options,
+        })
     }
 
     /// The index of the first unprocessed token.

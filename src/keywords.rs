@@ -1024,6 +1024,7 @@ define_keywords!(
     SUBTYPE_OPCLASS,
     SUCCEEDS,
     SUM,
+    SUMMARIZE,
     SUPER,
     SUPERUSER,
     SUPPORT,

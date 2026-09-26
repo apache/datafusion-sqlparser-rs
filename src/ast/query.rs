@@ -177,6 +177,32 @@ pub enum SetExpr {
     Merge(Statement),
     /// `TABLE` command
     Table(Box<Table>),
+    /// DuckDB `SUMMARIZE` query.
+    Summarize(SummarizeTarget),
+}
+
+/// The relation or query summarized by DuckDB's `SUMMARIZE` syntax.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SummarizeTarget {
+    /// A named table.
+    Table {
+        /// Table name.
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        name: ObjectName,
+    },
+    /// A query whose output should be summarized.
+    Query(Box<Query>),
+}
+
+impl fmt::Display for SummarizeTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SummarizeTarget::Table { name } => name.fmt(f),
+            SummarizeTarget::Query(query) => query.fmt(f),
+        }
+    }
 }
 
 impl SetExpr {
@@ -205,6 +231,7 @@ impl fmt::Display for SetExpr {
             SetExpr::Delete(v) => v.fmt(f),
             SetExpr::Merge(v) => v.fmt(f),
             SetExpr::Table(t) => t.fmt(f),
+            SetExpr::Summarize(target) => write!(f, "SUMMARIZE {target}"),
             SetExpr::SetOperation {
                 left,
                 right,

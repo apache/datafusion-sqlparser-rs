@@ -2,3 +2,4 @@
 /corpus
 /target
 /Cargo.lock
+/fuzz-*.log

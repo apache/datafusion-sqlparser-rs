@@ -1143,6 +1143,17 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `MAP(key_type, value_type)` syntax.
+    fn supports_map_typedef_with_parentheses(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `NOT NULL` on the value type in
+    /// a `MAP(key_type, value_type)` definition.
+    fn supports_map_value_not_null(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports extra parentheses around
     /// lone table names or derived tables in the `FROM` clause.
     ///

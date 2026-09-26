@@ -454,6 +454,10 @@ pub enum DataType {
     ///
     /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nested-data-structures/nested
     Nested(Vec<ColumnDef>),
+    /// Structured object type, see [Snowflake].
+    ///
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/data-types-structured#structured-object-types
+    Object(Vec<ColumnDef>),
     /// Enum type.
     Enum(Vec<EnumMember>, Option<u8>),
     /// Set type.
@@ -800,6 +804,9 @@ impl fmt::Display for DataType {
                 MapBracketKind::Parentheses => {
                     write!(f, "Map({key_data_type}, {value_data_type})")
                 }
+                MapBracketKind::ParenthesesNotNull => {
+                    write!(f, "MAP({key_data_type}, {value_data_type} NOT NULL)")
+                }
                 MapBracketKind::AngleBrackets => {
                     write!(f, "MAP<{key_data_type}, {value_data_type}>")
                 }
@@ -809,6 +816,9 @@ impl fmt::Display for DataType {
             }
             DataType::Nested(fields) => {
                 write!(f, "Nested({})", display_comma_separated(fields))
+            }
+            DataType::Object(fields) => {
+                write!(f, "OBJECT({})", display_comma_separated(fields))
             }
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
@@ -927,6 +937,8 @@ pub enum StructBracketKind {
 pub enum MapBracketKind {
     /// Example: `Map(String, UInt16)`
     Parentheses,
+    /// Example: `MAP(VARCHAR, NUMBER NOT NULL)`
+    ParenthesesNotNull,
     /// Example: `MAP<STRING, INT>`
     AngleBrackets,
 }

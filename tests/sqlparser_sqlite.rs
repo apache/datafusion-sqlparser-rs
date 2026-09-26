@@ -983,3 +983,54 @@ fn sqlite_and_generic() -> TestedDialects {
         Box::new(GenericDialect {}),
     ])
 }
+
+#[test]
+fn parse_sqlite_variable_tokens() {
+    for sql in [
+        "SELECT #a",
+        "SELECT @a",
+        "SELECT :a",
+        "SELECT $a",
+        "SELECT @2t",
+        "SELECT :9c",
+        "SELECT @a$",
+        "SELECT :a$",
+        "SELECT :a()",
+        "SELECT :a(x)",
+        "SELECT @a()",
+        "SELECT :::6",
+        "SELECT :a::b",
+        "SELECT $a::b",
+        "SELECT @::b",
+        "SELECT #::b",
+        "SELECT ($$::)",
+        "SELECT @\u{00e9}",
+        "SELECT :\u{00e9}",
+        "SELECT #\u{00e9}",
+        "SELECT :::\u{00e9}",
+    ] {
+        sqlite().verified_stmt(sql);
+    }
+    sqlite().one_statement_parses_to("SELECT @2t i", "SELECT @2t AS i");
+
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    for sql in ["SELECT :::6", "SELECT ($$::)"] {
+        assert!(generic.parse_sql_statements(sql).is_err(), "{sql}");
+    }
+    // SQLite ends a subscript at whitespace and rejects the token
+    assert!(sqlite().parse_sql_statements("SELECT $a(x y)").is_err());
+}
+
+#[test]
+fn parse_colon_is_not_an_operator() {
+    for sql in [
+        "SELECT b : c",
+        "SELECT a / b : c",
+        "SELECT b : c.d",
+        "SELECT b : \"c\"",
+        "SELECT b :c",
+    ] {
+        assert!(sqlite().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+    sqlite().verified_stmt("SELECT a FROM t WHERE b = :c");
+}

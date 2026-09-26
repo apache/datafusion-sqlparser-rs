@@ -186,6 +186,7 @@ impl Spanned for With {
             with_token,
             recursive: _, // bool
             cte_tables,
+            xml_namespaces: _, // handled separately; no span tracking needed
         } = self;
 
         union_spans(

@@ -384,7 +384,25 @@ pub(crate) fn fmt_ident(
     quote_style: Option<char>,
 ) -> fmt::Result {
     match quote_style {
-        Some('[') => write!(f, "[{value}]"),
+        Some('[') => {
+            if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+                // Redshift's nested quoted identifier form (`["a b"]`) keeps
+                // the inner quotes in the value, where `]` is literal.
+                write!(f, "[{value}]")
+            } else {
+                // Each `]` is doubled. `escape_quoted_string` can't be reused:
+                // it skips a quote that is already doubled, which corrupts a
+                // value containing `]]`.
+                f.write_str("[")?;
+                for (i, part) in value.split(']').enumerate() {
+                    if i > 0 {
+                        f.write_str("]]")?;
+                    }
+                    f.write_str(part)?;
+                }
+                f.write_str("]")
+            }
+        }
         Some(q) => {
             let escaped = value::escape_quoted_string(value, q);
             write!(f, "{q}{escaped}{q}")

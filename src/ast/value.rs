@@ -75,6 +75,7 @@ use sqlparser_derive::{Visit, VisitMut};
     derive(Visit, VisitMut),
     visit(with = "visit_value")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ValueWithSpan {
     /// The wrapped `Value`.
     pub value: Value,
@@ -136,6 +137,7 @@ impl DerefMut for ValueWithSpan {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
@@ -304,6 +306,7 @@ impl fmt::Display for Value {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DollarQuotedString {
     /// Inner string contents.
     pub value: String,
@@ -331,6 +334,7 @@ impl fmt::Display for DollarQuotedString {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct QuoteDelimitedString {
     /// the quote start character; i.e. the character _after_ the opening `Q'`
     pub start_quote: char,
@@ -354,6 +358,7 @@ impl fmt::Display for QuoteDelimitedString {
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DateTimeField {
     /// `YEAR`
     Year,
@@ -516,6 +521,7 @@ impl fmt::Display for DateTimeField {
 /// certain distinctions between visually or functionally identical characters.
 ///
 /// See [Unicode Normalization Forms](https://unicode.org/reports/tr15/) for details.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum NormalizationForm {
     /// Canonical Decomposition, followed by Canonical Composition.
     NFC,
@@ -538,6 +544,7 @@ impl fmt::Display for NormalizationForm {
     }
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct EscapeQuotedString<'a> {
     string: &'a str,
     quote: char,
@@ -618,6 +625,7 @@ pub fn escape_double_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\"')
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct EscapeEscapedStringLiteral<'a>(&'a str);
 
 impl fmt::Display for EscapeEscapedStringLiteral<'_> {
@@ -654,6 +662,7 @@ pub fn escape_escaped_string(s: &str) -> EscapeEscapedStringLiteral<'_> {
     EscapeEscapedStringLiteral(s)
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct EscapeUnicodeStringLiteral<'a>(&'a str);
 
 impl fmt::Display for EscapeUnicodeStringLiteral<'_> {
@@ -697,6 +706,7 @@ pub fn escape_unicode_string(s: &str) -> EscapeUnicodeStringLiteral<'_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TrimWhereField {
     /// `BOTH` (trim from both ends)
     Both,

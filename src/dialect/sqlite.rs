@@ -63,7 +63,7 @@ impl Dialect for SQLiteDialect {
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ch.is_ascii_digit()
+        self.is_identifier_start(ch) || ch.is_ascii_digit() || ch == '$'
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

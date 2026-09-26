@@ -29,7 +29,7 @@ use test_utils::*;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::dialect::{AnsiDialect, GenericDialect, SQLiteDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
 
@@ -982,4 +982,19 @@ fn sqlite_and_generic() -> TestedDialects {
         Box::new(SQLiteDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+#[test]
+fn test_dollar_sign_in_identifier() {
+    // SQLite allows $ anywhere after the first character of an identifier
+    sqlite().verified_stmt("SELECT a$ FROM t");
+    sqlite().verified_stmt("SELECT 1 AS a$");
+    sqlite().one_statement_parses_to("CREATE TABLE t(a$ INT)", "CREATE TABLE t (a$ INT)");
+    sqlite().verified_stmt("INSERT INTO t$ VALUES (1)");
+    // AS$ is parsed as the alias name
+    sqlite().one_statement_parses_to("SELECT a AS$", "SELECT a AS AS$");
+    // Dialects without $ as an identifier character still reject these identifiers
+    assert!(TestedDialects::new(vec![Box::new(AnsiDialect {})])
+        .parse_sql_statements("SELECT a$ FROM t")
+        .is_err());
 }

@@ -16727,6 +16727,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::XmlTable { alias, .. }
                         | TableFactor::OpenJsonTable { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
+                        | TableFactor::RowsFrom { alias, .. }
                         | TableFactor::Pivot { alias, .. }
                         | TableFactor::Unpivot { alias, .. }
                         | TableFactor::MatchRecognize { alias, .. }
@@ -16794,42 +16795,23 @@ impl<'a> Parser<'a> {
                 alias,
                 sample: None,
             })
+        } else if self.dialect.supports_rows_from_table_factor()
+            && self.parse_keywords(&[Keyword::ROWS, Keyword::FROM])
+        {
+            self.expect_token(&Token::LParen)?;
+            let table_functions = self.parse_comma_separated(Parser::parse_rows_from_function)?;
+            self.expect_token(&Token::RParen)?;
+            let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
+            let alias = self.maybe_parse_table_alias()?;
+            Ok(TableFactor::RowsFrom {
+                table_functions,
+                with_ordinality,
+                alias,
+            })
         } else if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
             && self.parse_keyword(Keyword::UNNEST)
         {
-            self.expect_token(&Token::LParen)?;
-            let array_exprs = self.parse_comma_separated(Parser::parse_expr)?;
-            self.expect_token(&Token::RParen)?;
-
-            let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
-            let alias = match self.maybe_parse_table_alias() {
-                Ok(Some(alias)) => Some(alias),
-                Ok(None) => None,
-                Err(e) => return Err(e),
-            };
-
-            let with_offset = match self.expect_keywords(&[Keyword::WITH, Keyword::OFFSET]) {
-                Ok(()) => true,
-                Err(_) => false,
-            };
-
-            let with_offset_alias = if with_offset {
-                match self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS) {
-                    Ok(Some(alias)) => Some(alias),
-                    Ok(None) => None,
-                    Err(e) => return Err(e),
-                }
-            } else {
-                None
-            };
-
-            Ok(TableFactor::UNNEST {
-                alias,
-                array_exprs,
-                with_offset,
-                with_offset_alias,
-                with_ordinality,
-            })
+            self.parse_unnest_table_factor()
         } else if self.dialect.supports_unpivot_expr() && self.peek_keyword(Keyword::UNPIVOT) {
             self.parse_unpivot_expr_table_factor()
         } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
@@ -16955,6 +16937,67 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    fn parse_rows_from_function(&mut self) -> Result<TableFactor, ParserError> {
+        if self.parse_keyword(Keyword::UNNEST) {
+            return self.parse_unnest_table_factor();
+        }
+
+        let name = self.parse_object_name(true)?;
+        self.expect_token(&Token::LParen)?;
+        let args = Some(self.parse_table_function_args()?);
+        let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
+        let alias = self.maybe_parse_table_alias()?;
+
+        Ok(TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints: vec![],
+            version: None,
+            partitions: vec![],
+            with_ordinality,
+            json_path: None,
+            sample: None,
+            index_hints: vec![],
+        })
+    }
+
+    fn parse_unnest_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let array_exprs = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+
+        let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
+        let alias = match self.maybe_parse_table_alias() {
+            Ok(Some(alias)) => Some(alias),
+            Ok(None) => None,
+            Err(e) => return Err(e),
+        };
+
+        let with_offset = match self.expect_keywords(&[Keyword::WITH, Keyword::OFFSET]) {
+            Ok(()) => true,
+            Err(_) => false,
+        };
+
+        let with_offset_alias = if with_offset {
+            match self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS) {
+                Ok(Some(alias)) => Some(alias),
+                Ok(None) => None,
+                Err(e) => return Err(e),
+            }
+        } else {
+            None
+        };
+
+        Ok(TableFactor::UNNEST {
+            alias,
+            array_exprs,
+            with_offset,
+            with_offset_alias,
+            with_ordinality,
+        })
     }
 
     /// Parse a Snowflake stage reference as a table factor.

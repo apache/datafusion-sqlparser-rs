@@ -2005,6 +2005,16 @@ impl Spanned for TableFactor {
             TableFactor::TableFunction { expr, alias } => expr
                 .span()
                 .union_opt(&alias.as_ref().map(|alias| alias.span())),
+            TableFactor::RowsFrom {
+                table_functions,
+                with_ordinality: _,
+                alias,
+            } => union_spans(
+                table_functions
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(alias.as_ref().map(|alias| alias.span())),
+            ),
             TableFactor::UNNEST {
                 alias,
                 with_offset: _,

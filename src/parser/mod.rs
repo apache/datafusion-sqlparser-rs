@@ -355,6 +355,10 @@ pub struct Parser<'a> {
     /// `parse_table_factor`. See [`Parser::parse_table_factor`] for the 2^N
     /// pattern this guards.
     failed_derived_table_factor_positions: BTreeSet<usize>,
+    /// Cached failures from the speculative subquery arm of [`Parser::parse_in`],
+    /// which `IN` lists nested in a leading subquery would otherwise retry at
+    /// every level, taking 2^N time.
+    failed_in_subquery_positions: BTreeSet<usize>,
 }
 
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
@@ -401,6 +405,7 @@ impl<'a> Parser<'a> {
             failed_prefix_positions: BTreeMap::new(),
             failed_reserved_word_prefix_positions: BTreeMap::new(),
             failed_derived_table_factor_positions: BTreeSet::new(),
+            failed_in_subquery_positions: BTreeSet::new(),
         }
     }
 
@@ -469,6 +474,7 @@ impl<'a> Parser<'a> {
         self.failed_prefix_positions.clear();
         self.failed_reserved_word_prefix_positions.clear();
         self.failed_derived_table_factor_positions.clear();
+        self.failed_in_subquery_positions.clear();
         self
     }
 
@@ -4456,24 +4462,34 @@ impl<'a> Parser<'a> {
             });
         }
         self.expect_token(&Token::LParen)?;
-        let in_op = match self.maybe_parse(|p| p.parse_query())? {
-            Some(subquery) => Expr::InSubquery {
-                expr: Box::new(expr),
-                subquery,
-                negated,
-            },
-            None => Expr::InList {
-                expr: Box::new(expr),
-                list: if self.dialect.supports_in_empty_list() {
-                    self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?
-                } else {
-                    self.parse_comma_separated(Parser::parse_expr)?
-                },
-                negated,
-            },
+        // A leading query is the whole subquery only when `)` follows it,
+        // otherwise it is the first item of a list, as in `IN ((SELECT 1), 2)`.
+        let start = self.index;
+        if !self.failed_in_subquery_positions.contains(&start) {
+            if let Some(subquery) = self.maybe_parse(|p| {
+                let subquery = p.parse_query()?;
+                p.expect_token(&Token::RParen)?;
+                Ok(subquery)
+            })? {
+                return Ok(Expr::InSubquery {
+                    expr: Box::new(expr),
+                    subquery,
+                    negated,
+                });
+            }
+            self.failed_in_subquery_positions.insert(start);
+        }
+        let list = if self.dialect.supports_in_empty_list() {
+            self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?
+        } else {
+            self.parse_comma_separated(Parser::parse_expr)?
         };
         self.expect_token(&Token::RParen)?;
-        Ok(in_op)
+        Ok(Expr::InList {
+            expr: Box::new(expr),
+            list,
+            negated,
+        })
     }
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.

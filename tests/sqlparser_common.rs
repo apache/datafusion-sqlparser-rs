@@ -20263,3 +20263,104 @@ fn parse_placeholder_disallows_quoted_ident() {
         err
     );
 }
+
+#[test]
+fn parse_in_list_leading_subquery() {
+    let x = || Box::new(Expr::Identifier(Ident::new("x")));
+    let subquery = || Expr::Subquery(Box::new(verified_query("SELECT a FROM u")));
+
+    let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u), 1)");
+    assert_eq!(
+        Expr::InList {
+            expr: x(),
+            list: vec![subquery(), Expr::value(number("1"))],
+            negated: false,
+        },
+        select.selection.unwrap()
+    );
+
+    let select = verified_only_select("SELECT * FROM t WHERE x NOT IN (((SELECT a FROM u)), 1)");
+    assert_eq!(
+        Expr::InList {
+            expr: x(),
+            list: vec![Expr::Nested(Box::new(subquery())), Expr::value(number("1"))],
+            negated: true,
+        },
+        select.selection.unwrap()
+    );
+
+    let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u) + 1, 2)");
+    assert_eq!(
+        Expr::InList {
+            expr: x(),
+            list: vec![
+                Expr::BinaryOp {
+                    left: Box::new(subquery()),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(Expr::value(number("1"))),
+                },
+                Expr::value(number("2"))
+            ],
+            negated: false,
+        },
+        select.selection.unwrap()
+    );
+
+    let select = pg_and_generic()
+        .verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u)[1], 2)");
+    assert_matches!(
+        select.selection,
+        Some(Expr::InList { ref list, .. })
+            if matches!(&list[0], Expr::CompoundFieldAccess { root, .. } if **root == subquery())
+    );
+
+    let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u))");
+    assert_eq!(
+        Expr::InSubquery {
+            expr: x(),
+            subquery: Box::new(verified_query("(SELECT a FROM u)")),
+            negated: false,
+        },
+        select.selection.unwrap()
+    );
+
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: 1".to_string()),
+        parse_sql_statements("SELECT * FROM t WHERE x IN ((SELECT a FROM u) 1)").unwrap_err()
+    );
+}
+
+/// Hang guard for `IN` lists nested in the leading subquery of an enclosing
+/// `IN` list, where every level is first tried as the whole subquery and then
+/// read again as a list item.
+#[test]
+fn parse_in_list_nested_leading_subquery_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    for level in [
+        "x IN ((SELECT {}), 1)",
+        "x IN ((SELECT {}) + 1, 2)",
+        "x IN (((SELECT {}) + 1), 2)",
+    ] {
+        let sql = format!(
+            "SELECT {}",
+            (0..30).fold("1".to_string(), |inner, _| level.replace("{}", &inner))
+        );
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let result = Parser::new(&GenericDialect {})
+                .with_recursion_limit(1000)
+                .try_with_sql(&sql)
+                .and_then(|mut parser| parser.parse_statements());
+            let _ = tx.send(result.is_ok());
+        });
+
+        let parsed = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("parser should handle this quickly, not loop exponentially");
+        assert!(parsed, "{level} nested 30 deep should parse");
+    }
+}

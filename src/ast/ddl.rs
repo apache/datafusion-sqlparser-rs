@@ -3218,17 +3218,6 @@ impl fmt::Display for CreateTable {
             write!(f, " COMMENT '{comment}'")?;
         }
 
-        if !self.sqlite_table_options.options.is_empty() {
-            if self.sqlite_table_options.leading_comma {
-                f.write_str(",")?;
-            }
-            write!(
-                f,
-                " {}",
-                display_comma_separated(&self.sqlite_table_options.options)
-            )?;
-        }
-
         if let Some(CreateTableLikeKind::Plain(like)) = &self.like {
             write!(f, " {like}")?;
         }
@@ -3239,6 +3228,17 @@ impl fmt::Display for CreateTable {
 
         if let Some(version) = &self.version {
             write!(f, " {version}")?;
+        }
+
+        if !self.sqlite_table_options.options.is_empty() {
+            if self.sqlite_table_options.leading_comma {
+                f.write_str(",")?;
+            }
+            write!(
+                f,
+                " {}",
+                display_comma_separated(&self.sqlite_table_options.options)
+            )?;
         }
 
         match &self.hive_distribution {

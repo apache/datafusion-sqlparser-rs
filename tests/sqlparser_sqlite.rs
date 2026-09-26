@@ -1035,6 +1035,17 @@ fn parse_create_table_options_list() {
     }
 }
 
+#[test]
+fn parse_create_table_options_after_like_and_clone() {
+    for sql in [
+        "CREATE TABLE t LIKE x STRICT",
+        "CREATE TABLE t LIKE x WITHOUT ROWID, STRICT",
+        "CREATE TABLE t CLONE x WITHOUT ROWID",
+    ] {
+        sqlite_and_generic().verified_stmt(sql);
+    }
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::dialect::{Dialect, Precedence};
+use crate::dialect::{BindPlaceholderStyle, Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -75,6 +75,10 @@ const OR_PREC: u8 = 10;
 impl Dialect for PostgreSqlDialect {
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
+    }
+
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::DollarNumbered)
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

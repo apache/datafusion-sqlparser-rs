@@ -2047,6 +2047,13 @@ fn parse_tuple_element_access() {
     clickhouse().verified_stmt("SELECT 1.5, 1 + 0.5");
 
     assert!(clickhouse().parse_sql_statements("SELECT t.").is_err());
+
+    let unsupported = all_dialects_where(|d| !d.supports_tuple_element_access());
+    for dialect in unsupported.dialects {
+        assert!(TestedDialects::new(vec![dialect])
+            .parse_sql_statements("SELECT t.1 FROM t")
+            .is_err());
+    }
 }
 
 fn clickhouse() -> TestedDialects {

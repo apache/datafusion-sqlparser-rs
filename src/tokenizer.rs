@@ -1357,6 +1357,7 @@ impl<'a> Tokenizer<'a> {
                     // A period directly after an identifier, `)` or `]` starts a
                     // field access such as `t.1` or `(1, 2).1`, never a float.
                     if ch == '.'
+                        && self.dialect.supports_tuple_element_access()
                         && matches!(
                             prev_token,
                             Some(Token::Word(_) | Token::RParen | Token::RBracket)
@@ -1379,6 +1380,17 @@ impl<'a> Tokenizer<'a> {
                     if let Some('.') = chars.peek() {
                         s.push('.');
                         chars.next();
+                    }
+
+                    // If the dialect supports identifiers that start with a numeric prefix
+                    // and we have now consumed a dot, check if the previous token was a Word.
+                    // If so, what follows is definitely not part of a decimal number and
+                    // we should yield the dot as a dedicated token so compound identifiers
+                    // starting with digits can be parsed correctly.
+                    if s == "." && self.dialect.supports_numeric_prefix() {
+                        if let Some(Token::Word(_)) = prev_token {
+                            return Ok(Some(Token::Period));
+                        }
                     }
 
                     // Consume fractional digits.
@@ -4584,7 +4596,7 @@ mod tests {
 
     #[test]
     fn tokenize_period_before_digits_after_identifier_or_bracket() {
-        let dialect = GenericDialect {};
+        let dialect = ClickHouseDialect {};
         for (sql, expected) in [
             (
                 "t.1",
@@ -4628,5 +4640,16 @@ mod tests {
             let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
             compare(expected, tokens);
         }
+
+        let tokens = Tokenizer::new(&GenericDialect {}, "t.1")
+            .tokenize()
+            .unwrap();
+        compare(
+            vec![
+                Token::make_word("t", None),
+                Token::Number(".1".to_string(), false),
+            ],
+            tokens,
+        );
     }
 }

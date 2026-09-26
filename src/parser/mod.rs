@@ -1361,7 +1361,7 @@ impl<'a> Parser<'a> {
                             ));
                         }
                         // A field index such as `t.1` is parsed as an expression.
-                        Token::Number(..) => break,
+                        Token::Number(..) if self.dialect.supports_tuple_element_access() => break,
                         _ => {
                             return self.expected("an identifier or a '*' after '.'", next_token);
                         }

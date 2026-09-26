@@ -307,6 +307,18 @@ fn long_numerics() {
 }
 
 #[test]
+fn parse_numeric_prefix_identifier_round_trip() {
+    let sql = "SELECT [dbo]. 1te_sk = 1";
+    let statement = hive().parse_sql_statements(sql).unwrap().pop().unwrap();
+    let displayed = statement.to_string();
+    assert_eq!(displayed, "SELECT [dbo] . 1te_sk = 1");
+    assert_eq!(
+        hive().parse_sql_statements(&displayed).unwrap(),
+        vec![statement]
+    );
+}
+
+#[test]
 fn decimal_precision() {
     let query = "SELECT CAST(a AS DECIMAL(18,2)) FROM db.table";
     hive().verified_stmt(query);

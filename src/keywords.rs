@@ -820,6 +820,7 @@ define_keywords!(
     PRINT,
     PRIOR,
     PRIVILEGES,
+    PROC,
     PROCEDURE,
     PROCESSLIST,
     PROFILE,

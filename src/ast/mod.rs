@@ -3590,7 +3590,6 @@ impl fmt::Display for Analyze {
 }
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -3603,19 +3602,19 @@ pub enum Statement {
     /// ANALYZE
     /// ```
     /// Analyze (Hive)
-    Analyze(Analyze),
+    Analyze(Box<Analyze>),
     /// `SET` statements (session, transaction, timezone, etc.).
-    Set(Set),
+    Set(Box<Set>),
     /// ```sql
     /// TRUNCATE
     /// ```
     /// Truncate (Hive)
-    Truncate(Truncate),
+    Truncate(Box<Truncate>),
     /// ```sql
     /// MSCK
     /// ```
     /// Msck (Hive)
-    Msck(Msck),
+    Msck(Box<Msck>),
     /// ```sql
     /// SELECT
     /// ```
@@ -3623,64 +3622,34 @@ pub enum Statement {
     /// ```sql
     /// INSERT
     /// ```
-    Insert(Insert),
+    Insert(Box<Insert>),
     /// ```sql
     /// INSTALL
     /// ```
-    Install {
-        /// Only for DuckDB
-        extension_name: Ident,
-    },
+    Install(Box<Install>),
     /// ```sql
     /// LOAD
     /// ```
-    Load {
-        /// Only for DuckDB
-        extension_name: Ident,
-    },
+    Load(Box<Load>),
     // TODO: Support ROW FORMAT
     /// LOAD DATA from a directory or query source.
-    Directory {
-        /// Whether to overwrite existing files.
-        overwrite: bool,
-        /// Whether the directory is local to the server.
-        local: bool,
-        /// Path to the directory or files.
-        path: String,
-        /// Optional file format for the data.
-        file_format: Option<FileFormat>,
-        /// Source query providing data to load.
-        source: Box<Query>,
-    },
+    Directory(Box<Directory>),
     /// A `CASE` statement.
-    Case(CaseStatement),
+    Case(Box<CaseStatement>),
     /// An `IF` statement.
-    If(IfStatement),
+    If(Box<IfStatement>),
     /// A `WHILE` statement.
-    While(WhileStatement),
+    While(Box<WhileStatement>),
     /// A `RAISE` statement.
-    Raise(RaiseStatement),
+    Raise(Box<RaiseStatement>),
     /// ```sql
     /// CALL <function>
     /// ```
-    Call(Function),
+    Call(Box<Function>),
     /// ```sql
     /// COPY [TO | FROM] ...
     /// ```
-    Copy {
-        /// The source of 'COPY TO', or the target of 'COPY FROM'
-        source: CopySource,
-        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
-        to: bool,
-        /// The target of 'COPY TO', or the source of 'COPY FROM'
-        target: CopyTarget,
-        /// WITH options (from PostgreSQL version 9.0)
-        options: Vec<CopyOption>,
-        /// WITH options (before PostgreSQL version 9.0)
-        legacy_options: Vec<CopyLegacyOption>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
-    },
+    Copy(Box<CopyStatement>),
     /// ```sql
     /// COPY INTO <table> | <location>
     /// ```
@@ -3692,227 +3661,150 @@ pub enum Statement {
     /// Postgres. Although they share common prefix, it is reasonable to implement them
     /// in different enums. This can be refactored later once custom dialects
     /// are allowed to have custom Statements.
-    CopyIntoSnowflake {
-        /// Kind of COPY INTO operation (table or location).
-        kind: CopyIntoSnowflakeKind,
-        /// Target object for the COPY INTO operation.
-        into: ObjectName,
-        /// Optional list of target columns.
-        into_columns: Option<Vec<Ident>>,
-        /// Optional source object name (staged data).
-        from_obj: Option<ObjectName>,
-        /// Optional alias for the source object.
-        from_obj_alias: Option<Ident>,
-        /// Stage-specific parameters (e.g., credentials, path).
-        stage_params: StageParamsObject,
-        /// Optional list of transformations applied when loading.
-        from_transformations: Option<Vec<StageLoadSelectItemKind>>,
-        /// Optional source query instead of a staged object.
-        from_query: Option<Box<Query>>,
-        /// Optional list of specific file names to load.
-        files: Option<Vec<String>>,
-        /// Optional filename matching pattern.
-        pattern: Option<String>,
-        /// File format options.
-        file_format: KeyValueOptions,
-        /// Additional copy options.
-        copy_options: KeyValueOptions,
-        /// Optional validation mode string.
-        validation_mode: Option<String>,
-        /// Optional partition expression for loading.
-        partition: Option<Box<Expr>>,
-    },
+    CopyIntoSnowflake(Box<CopyIntoSnowflake>),
     /// ```sql
     /// OPEN cursor_name
     /// ```
     /// Opens a cursor.
-    Open(OpenStatement),
+    Open(Box<OpenStatement>),
     /// ```sql
     /// CLOSE
     /// ```
     /// Closes the portal underlying an open cursor.
-    Close {
-        /// Cursor name
-        cursor: CloseCursor,
-    },
+    Close(Box<Close>),
     /// ```sql
     /// UPDATE
     /// ```
-    Update(Update),
+    Update(Box<Update>),
     /// ```sql
     /// DELETE
     /// ```
-    Delete(Delete),
+    Delete(Box<Delete>),
     /// ```sql
     /// CREATE VIEW
     /// ```
-    CreateView(CreateView),
+    CreateView(Box<CreateView>),
     /// ```sql
     /// CREATE TABLE
     /// ```
-    CreateTable(CreateTable),
+    CreateTable(Box<CreateTable>),
     /// ```sql
     /// CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     /// ```
     /// Sqlite specific statement
-    CreateVirtualTable {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        /// Name of the virtual table module instance.
-        name: ObjectName,
-        /// `true` when `IF NOT EXISTS` was specified.
-        if_not_exists: bool,
-        /// Module name used by the virtual table.
-        module_name: Ident,
-        /// Arguments passed to the module.
-        module_args: Vec<Ident>,
-    },
+    CreateVirtualTable(Box<CreateVirtualTable>),
     /// ```sql
     /// `CREATE INDEX`
     /// ```
-    CreateIndex(CreateIndex),
+    CreateIndex(Box<CreateIndex>),
     /// ```sql
     /// CREATE ROLE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrole.html)
-    CreateRole(CreateRole),
+    CreateRole(Box<CreateRole>),
     /// ```sql
     /// CREATE SECRET
     /// ```
     /// See [DuckDB](https://duckdb.org/docs/sql/statements/create_secret.html)
-    CreateSecret {
-        /// `true` when `OR REPLACE` was specified.
-        or_replace: bool,
-        /// Optional `TEMPORARY` flag.
-        temporary: Option<bool>,
-        /// `true` when `IF NOT EXISTS` was present.
-        if_not_exists: bool,
-        /// Optional secret name.
-        name: Option<Ident>,
-        /// Optional storage specifier identifier.
-        storage_specifier: Option<Ident>,
-        /// The secret type identifier.
-        secret_type: Ident,
-        /// Additional secret options.
-        options: Vec<SecretOption>,
-    },
+    CreateSecret(Box<CreateSecret>),
     /// A `CREATE SERVER` statement.
-    CreateServer(CreateServerStatement),
+    CreateServer(Box<CreateServerStatement>),
     /// ```sql
     /// CREATE FOREIGN TABLE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
-    CreateForeignTable(CreateForeignTable),
+    CreateForeignTable(Box<CreateForeignTable>),
     /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-    CreatePolicy(CreatePolicy),
+    CreatePolicy(Box<CreatePolicy>),
     /// ```sql
     /// CREATE CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
-    CreateConnector(CreateConnector),
+    CreateConnector(Box<CreateConnector>),
     /// ```sql
     /// CREATE OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createoperator.html)
-    CreateOperator(CreateOperator),
+    CreateOperator(Box<CreateOperator>),
     /// ```sql
     /// CREATE OPERATOR FAMILY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopfamily.html)
-    CreateOperatorFamily(CreateOperatorFamily),
+    CreateOperatorFamily(Box<CreateOperatorFamily>),
     /// ```sql
     /// CREATE OPERATOR CLASS
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopclass.html)
-    CreateOperatorClass(CreateOperatorClass),
+    CreateOperatorClass(Box<CreateOperatorClass>),
     /// A `CREATE TEXT SEARCH` statement.
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html)
-    CreateTextSearch(CreateTextSearch),
+    CreateTextSearch(Box<CreateTextSearch>),
     /// ```sql
     /// ALTER TABLE
     /// ```
-    AlterTable(AlterTable),
+    AlterTable(Box<AlterTable>),
     /// ```sql
     /// ALTER SCHEMA
     /// ```
     /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
-    AlterSchema(AlterSchema),
+    AlterSchema(Box<AlterSchema>),
     /// ```sql
     /// ALTER INDEX
     /// ```
-    AlterIndex {
-        /// Name of the index to alter.
-        name: ObjectName,
-        /// The operation to perform on the index.
-        operation: AlterIndexOperation,
-    },
+    AlterIndex(Box<AlterIndex>),
     /// ```sql
     /// ALTER VIEW
     /// ```
-    AlterView {
-        /// View name being altered.
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        /// Optional new column list for the view.
-        columns: Vec<Ident>,
-        /// Replacement query for the view definition.
-        query: Box<Query>,
-        /// Additional WITH options for the view.
-        with_options: Vec<SqlOption>,
-    },
+    AlterView(Box<AlterView>),
     /// ```sql
     /// ALTER FUNCTION
     /// ALTER AGGREGATE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterfunction.html)
     /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteraggregate.html)
-    AlterFunction(AlterFunction),
+    AlterFunction(Box<AlterFunction>),
     /// ```sql
     /// ALTER TYPE
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertype.html)
     /// ```
-    AlterType(AlterType),
+    AlterType(Box<AlterType>),
     /// ```sql
     /// ALTER COLLATION
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
-    AlterCollation(AlterCollation),
+    AlterCollation(Box<AlterCollation>),
     /// ```sql
     /// ALTER OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteroperator.html)
-    AlterOperator(AlterOperator),
+    AlterOperator(Box<AlterOperator>),
     /// ```sql
     /// ALTER OPERATOR FAMILY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropfamily.html)
-    AlterOperatorFamily(AlterOperatorFamily),
+    AlterOperatorFamily(Box<AlterOperatorFamily>),
     /// ```sql
     /// ALTER OPERATOR CLASS
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropclass.html)
-    AlterOperatorClass(AlterOperatorClass),
+    AlterOperatorClass(Box<AlterOperatorClass>),
     /// An `ALTER TEXT SEARCH` statement.
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-configuration.html)
-    AlterTextSearch(AlterTextSearch),
+    AlterTextSearch(Box<AlterTextSearch>),
     /// ```sql
     /// ALTER ROLE
     /// ```
-    AlterRole {
-        /// Role name being altered.
-        name: Ident,
-        /// Operation to perform on the role.
-        operation: AlterRoleOperation,
-    },
+    AlterRole(Box<AlterRole>),
     /// ```sql
     /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
     /// ```
     /// (Postgresql-specific)
-    AlterPolicy(AlterPolicy),
+    AlterPolicy(Box<AlterPolicy>),
     /// ```sql
     /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
     /// or
@@ -3921,98 +3813,38 @@ pub enum Statement {
     /// ALTER CONNECTOR connector_name SET OWNER [USER|ROLE] user_or_role;
     /// ```
     /// (Hive-specific)
-    AlterConnector {
-        /// Name of the connector to alter.
-        name: Ident,
-        /// Optional connector properties to set.
-        properties: Option<Vec<SqlOption>>,
-        /// Optional new URL for the connector.
-        url: Option<String>,
-        /// Optional new owner specification.
-        owner: Option<ddl::AlterConnectorOwner>,
-    },
+    AlterConnector(Box<AlterConnector>),
     /// ```sql
     /// ALTER SESSION SET sessionParam
     /// ALTER SESSION UNSET <param_name> [ , <param_name> , ... ]
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
-    AlterSession {
-        /// true is to set for the session parameters, false is to unset
-        set: bool,
-        /// The session parameters to set or unset
-        session_params: KeyValueOptions,
-    },
+    AlterSession(Box<AlterSession>),
     /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
     /// ```
     /// (SQLite-specific)
-    AttachDatabase {
-        /// The name to bind to the newly attached database
-        schema_name: Ident,
-        /// An expression that indicates the path to the database file
-        database_file_name: Expr,
-        /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
-        database: bool,
-    },
+    AttachDatabase(Box<AttachDatabase>),
     /// (DuckDB-specific)
     /// ```sql
     /// ATTACH 'sqlite_file.db' AS sqlite_db (READ_ONLY, TYPE SQLITE);
     /// ```
     /// See <https://duckdb.org/docs/sql/statements/attach.html>
-    AttachDuckDBDatabase {
-        /// `true` when `IF NOT EXISTS` was present.
-        if_not_exists: bool,
-        /// `true` if the syntax used `ATTACH DATABASE` rather than `ATTACH`.
-        database: bool,
-        /// The path identifier to the database file being attached.
-        database_path: Ident,
-        /// Optional alias assigned to the attached database.
-        database_alias: Option<Ident>,
-        /// Dialect-specific attach options (e.g., `READ_ONLY`).
-        attach_options: Vec<AttachDuckDBDatabaseOption>,
-    },
+    AttachDuckDBDatabase(Box<AttachDuckDBDatabase>),
     /// (DuckDB-specific)
     /// ```sql
     /// DETACH db_alias;
     /// ```
     /// See <https://duckdb.org/docs/sql/statements/attach.html>
-    DetachDuckDBDatabase {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// `true` if the syntax used `DETACH DATABASE` rather than `DETACH`.
-        database: bool,
-        /// Alias of the database to detach.
-        database_alias: Ident,
-    },
+    DetachDuckDBDatabase(Box<DetachDuckDBDatabase>),
     /// ```sql
     /// DROP [TABLE, VIEW, ...]
     /// ```
-    Drop {
-        /// The type of the object to drop: TABLE, VIEW, etc.
-        object_type: ObjectType,
-        /// An optional `IF EXISTS` clause. (Non-standard.)
-        if_exists: bool,
-        /// One or more objects to drop. (ANSI SQL requires exactly one.)
-        names: Vec<ObjectName>,
-        /// Whether `CASCADE` was specified. This will be `false` when
-        /// `RESTRICT` or no drop behavior at all was specified.
-        cascade: bool,
-        /// Whether `RESTRICT` was specified. This will be `false` when
-        /// `CASCADE` or no drop behavior at all was specified.
-        restrict: bool,
-        /// Hive allows you specify whether the table's stored data will be
-        /// deleted along with the dropped table
-        purge: bool,
-        /// MySQL-specific "TEMPORARY" keyword
-        temporary: bool,
-        /// MySQL-specific drop index syntax, which requires table specification
-        /// See <https://dev.mysql.com/doc/refman/8.4/en/drop-index.html>
-        table: Option<ObjectName>,
-    },
+    Drop(Box<DropStatement>),
     /// ```sql
     /// DROP FUNCTION
     /// ```
-    DropFunction(DropFunction),
+    DropFunction(Box<DropFunction>),
     /// ```sql
     /// DROP DOMAIN
     /// ```
@@ -4020,46 +3852,25 @@ pub enum Statement {
     ///
     /// DROP DOMAIN [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     ///
-    DropDomain(DropDomain),
+    DropDomain(Box<DropDomain>),
     /// ```sql
     /// DROP PROCEDURE
     /// ```
-    DropProcedure {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// One or more functions/procedures to drop.
-        proc_desc: Vec<FunctionDesc>,
-        /// Optional drop behavior (`CASCADE` or `RESTRICT`).
-        drop_behavior: Option<DropBehavior>,
-    },
+    DropProcedure(Box<DropProcedure>),
     /// ```sql
     /// DROP SECRET
     /// ```
-    DropSecret {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// Optional `TEMPORARY` marker.
-        temporary: Option<bool>,
-        /// Name of the secret to drop.
-        name: Ident,
-        /// Optional storage specifier identifier.
-        storage_specifier: Option<Ident>,
-    },
+    DropSecret(Box<DropSecret>),
     ///```sql
     /// DROP POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
-    DropPolicy(DropPolicy),
+    DropPolicy(Box<DropPolicy>),
     /// ```sql
     /// DROP CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
-    DropConnector {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// Name of the connector to drop.
-        name: Ident,
-    },
+    DropConnector(Box<DropConnector>),
     /// ```sql
     /// DECLARE
     /// ```
@@ -4067,10 +3878,7 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Declare {
-        /// Cursor declaration statements collected by `DECLARE`.
-        stmts: Vec<Declare>,
-    },
+    Declare(Box<DeclareStatement>),
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
     ///     [ WITH ] [ SCHEMA schema_name ]
@@ -4079,37 +3887,37 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
-    CreateExtension(CreateExtension),
+    CreateExtension(Box<CreateExtension>),
     /// ```sql
     /// CREATE COLLATION
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
-    CreateCollation(CreateCollation),
+    CreateCollation(Box<CreateCollation>),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropextension.html>
-    DropExtension(DropExtension),
+    DropExtension(Box<DropExtension>),
     /// ```sql
     /// DROP OPERATOR [ IF EXISTS ] name ( { left_type | NONE } , right_type ) [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropoperator.html>
-    DropOperator(DropOperator),
+    DropOperator(Box<DropOperator>),
     /// ```sql
     /// DROP OPERATOR FAMILY [ IF EXISTS ] name USING index_method [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropopfamily.html>
-    DropOperatorFamily(DropOperatorFamily),
+    DropOperatorFamily(Box<DropOperatorFamily>),
     /// ```sql
     /// DROP OPERATOR CLASS [ IF EXISTS ] name USING index_method [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-dropopclass.html>
-    DropOperatorClass(DropOperatorClass),
+    DropOperatorClass(Box<DropOperatorClass>),
     /// ```sql
     /// FETCH
     /// ```
@@ -4117,206 +3925,102 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Fetch {
-        /// Cursor name
-        name: Ident,
-        /// The fetch direction (e.g., `FORWARD`, `BACKWARD`).
-        direction: FetchDirection,
-        /// The fetch position (e.g., `ALL`, `NEXT`, `ABSOLUTE`).
-        position: FetchPosition,
-        /// Optional target table to fetch rows into.
-        into: Option<ObjectName>,
-    },
+    Fetch(Box<FetchStatement>),
     /// ```sql
     /// FLUSH [NO_WRITE_TO_BINLOG | LOCAL] flush_option [, flush_option] ... | tables_option
     /// ```
     ///
     /// Note: this is a Mysql-specific statement,
     /// but may also compatible with other SQL.
-    Flush {
-        /// The specific flush option or object to flush.
-        object_type: FlushType,
-        /// Optional flush location (dialect-specific).
-        location: Option<FlushLocation>,
-        /// Optional channel name used for flush operations.
-        channel: Option<String>,
-        /// Whether a read lock was requested.
-        read_lock: bool,
-        /// Whether this is an export flush operation.
-        export: bool,
-        /// Optional list of tables involved in the flush.
-        tables: Vec<ObjectName>,
-    },
+    Flush(Box<Flush>),
     /// ```sql
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Discard {
-        /// The kind of object(s) to discard (ALL, PLANS, etc.).
-        object_type: DiscardObject,
-    },
+    Discard(Box<Discard>),
     /// `SHOW FUNCTIONS`
     ///
     /// Note: this is a Presto-specific statement.
-    ShowFunctions {
-        /// Optional filter for which functions to display.
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowFunctions(Box<ShowFunctions>),
     /// ```sql
     /// SHOW <variable>
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable {
-        /// Variable name as one or more identifiers.
-        variable: Vec<Ident>,
-    },
+    ShowVariable(Box<ShowVariable>),
     /// ```sql
     /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowStatus {
-        /// Optional filter for which status entries to display.
-        filter: Option<ShowStatementFilter>,
-        /// `true` when `GLOBAL` scope was requested.
-        global: bool,
-        /// `true` when `SESSION` scope was requested.
-        session: bool,
-    },
+    ShowStatus(Box<ShowStatus>),
     /// ```sql
     /// SHOW VARIABLES
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowVariables {
-        /// Optional filter for which variables to display.
-        filter: Option<ShowStatementFilter>,
-        /// `true` when `GLOBAL` scope was requested.
-        global: bool,
-        /// `true` when `SESSION` scope was requested.
-        session: bool,
-    },
+    ShowVariables(Box<ShowVariables>),
     /// ```sql
     /// SHOW CREATE TABLE
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCreate {
-        /// The kind of object being shown (TABLE, VIEW, etc.).
-        obj_type: ShowCreateObject,
-        /// The name of the object to show create statement for.
-        obj_name: ObjectName,
-    },
+    ShowCreate(Box<ShowCreate>),
     /// ```sql
     /// SHOW COLUMNS
     /// ```
-    ShowColumns {
-        /// `true` when extended column information was requested.
-        extended: bool,
-        /// `true` when full column details were requested.
-        full: bool,
-        /// Additional options for `SHOW COLUMNS`.
-        show_options: ShowStatementOptions,
-    },
+    ShowColumns(Box<ShowColumns>),
     /// ```sql
     /// SHOW CATALOGS
     /// ```
-    ShowCatalogs {
-        /// `true` when terse output format was requested.
-        terse: bool,
-        /// `true` when history information was requested.
-        history: bool,
-        /// Additional options for `SHOW CATALOGS`.
-        show_options: ShowStatementOptions,
-    },
+    ShowCatalogs(Box<ShowCatalogs>),
     /// ```sql
     /// SHOW DATABASES
     /// ```
-    ShowDatabases {
-        /// `true` when terse output format was requested.
-        terse: bool,
-        /// `true` when history information was requested.
-        history: bool,
-        /// Additional options for `SHOW DATABASES`.
-        show_options: ShowStatementOptions,
-    },
+    ShowDatabases(Box<ShowDatabases>),
     /// ```sql
     /// SHOW [FULL] PROCESSLIST
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowProcessList {
-        /// `true` when full process information was requested.
-        full: bool,
-    },
+    ShowProcessList(Box<ShowProcessList>),
     /// ```sql
     /// SHOW SCHEMAS
     /// ```
-    ShowSchemas {
-        /// `true` when terse (compact) output was requested.
-        terse: bool,
-        /// `true` when history information was requested.
-        history: bool,
-        /// Additional options for `SHOW SCHEMAS`.
-        show_options: ShowStatementOptions,
-    },
+    ShowSchemas(Box<ShowSchemas>),
     // ```sql
     // SHOW {CHARACTER SET | CHARSET}
     // ```
     // [MySQL]:
     // <https://dev.mysql.com/doc/refman/8.4/en/show.html#:~:text=SHOW%20%7BCHARACTER%20SET%20%7C%20CHARSET%7D%20%5Blike_or_where%5D>
     /// Show the available character sets (alias `CHARSET`).
-    ShowCharset(ShowCharset),
+    ShowCharset(Box<ShowCharset>),
     /// ```sql
     /// SHOW OBJECTS LIKE 'line%' IN mydb.public
     /// ```
     /// Snowflake-specific statement
     /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
-    ShowObjects(ShowObjects),
+    ShowObjects(Box<ShowObjects>),
     /// ```sql
     /// SHOW TABLES
     /// ```
-    ShowTables {
-        /// `true` when terse output format was requested (compact listing).
-        terse: bool,
-        /// `true` when history rows are requested.
-        history: bool,
-        /// `true` when extended information should be shown.
-        extended: bool,
-        /// `true` when a full listing was requested.
-        full: bool,
-        /// `true` when external tables should be included.
-        external: bool,
-        /// Additional options for `SHOW` statements.
-        show_options: ShowStatementOptions,
-    },
+    ShowTables(Box<ShowTables>),
     /// ```sql
     /// SHOW VIEWS
     /// ```
-    ShowViews {
-        /// `true` when terse output format was requested.
-        terse: bool,
-        /// `true` when materialized views should be included.
-        materialized: bool,
-        /// Additional options for `SHOW` statements.
-        show_options: ShowStatementOptions,
-    },
+    ShowViews(Box<ShowViews>),
     /// ```sql
     /// SHOW COLLATION
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCollation {
-        /// Optional filter for which collations to display.
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowCollation(Box<ShowCollation>),
     /// ```sql
     /// `USE ...`
     /// ```
-    Use(Use),
+    Use(Box<Use>),
     /// ```sql
     /// START  [ TRANSACTION | WORK ] | START TRANSACTION } ...
     /// ```
@@ -4326,57 +4030,13 @@ pub enum Statement {
     /// `BEGIN  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     /// ```
     /// If `begin` is true
-    StartTransaction {
-        /// Transaction modes such as `ISOLATION LEVEL` or `READ WRITE`.
-        modes: Vec<TransactionMode>,
-        /// `true` when this was parsed as `BEGIN` instead of `START`.
-        begin: bool,
-        /// Optional specific keyword used: `TRANSACTION` or `WORK`.
-        transaction: Option<BeginTransactionKind>,
-        /// Optional transaction modifier (e.g., `AND NO CHAIN`).
-        modifier: Option<TransactionModifier>,
-        /// List of statements belonging to the `BEGIN` block.
-        /// Example:
-        /// ```sql
-        /// BEGIN
-        ///     SELECT 1;
-        ///     SELECT 2;
-        /// END;
-        /// ```
-        statements: Vec<Statement>,
-        /// Exception handling with exception clauses.
-        /// Example:
-        /// ```sql
-        /// EXCEPTION
-        ///     WHEN EXCEPTION_1 THEN
-        ///         SELECT 2;
-        ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
-        ///         SELECT 3;
-        ///     WHEN OTHER THEN
-        ///         SELECT 4;
-        /// ```
-        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-        /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
-        exception: Option<Vec<ExceptionWhen>>,
-        /// TRUE if the statement has an `END` keyword.
-        has_end_keyword: bool,
-    },
+    StartTransaction(Box<StartTransaction>),
     /// ```sql
     /// COMMENT ON ...
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Comment {
-        /// Type of object being commented (table, column, etc.).
-        object_type: CommentObject,
-        /// Name of the object the comment applies to.
-        object_name: ObjectName,
-        /// Optional comment text (None to remove comment).
-        comment: Option<String>,
-        /// An optional `IF EXISTS` clause. (Non-standard.)
-        /// See <https://docs.snowflake.com/en/sql-reference/sql/comment>
-        if_exists: bool,
-    },
+    Comment(Box<CommentStatement>),
     /// ```sql
     /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
     /// ```
@@ -4386,117 +4046,21 @@ pub enum Statement {
     /// END [ TRY | CATCH ]
     /// ```
     /// If `end` is true
-    Commit {
-        /// `true` when `AND [ NO ] CHAIN` was present.
-        chain: bool,
-        /// `true` when this `COMMIT` was parsed as an `END` block terminator.
-        end: bool,
-        /// Optional transaction modifier for commit semantics.
-        modifier: Option<TransactionModifier>,
-    },
+    Commit(Box<Commit>),
     /// ```sql
     /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]
     /// ```
-    Rollback {
-        /// `true` when `AND [ NO ] CHAIN` was present.
-        chain: bool,
-        /// Optional savepoint name to roll back to.
-        savepoint: Option<Ident>,
-    },
+    Rollback(Box<Rollback>),
     /// ```sql
     /// CREATE SCHEMA
     /// ```
-    CreateSchema {
-        /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
-        schema_name: SchemaName,
-        /// `true` when `OR REPLACE` was present.
-        or_replace: bool,
-        /// `true` when `IF NOT EXISTS` was present.
-        if_not_exists: bool,
-        /// Schema properties.
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema WITH (key1='value1');
-        /// ```
-        ///
-        /// [Trino](https://trino.io/docs/current/sql/create-schema.html)
-        with: Option<Vec<SqlOption>>,
-        /// Schema options.
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema OPTIONS(key1='value1');
-        /// ```
-        ///
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
-        options: Option<Vec<SqlOption>>,
-        /// Default collation specification for the schema.
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema DEFAULT COLLATE 'und:ci';
-        /// ```
-        ///
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
-        default_collate_spec: Option<Expr>,
-        /// Clones a schema
-        ///
-        /// ```sql
-        /// CREATE SCHEMA myschema CLONE otherschema
-        /// ```
-        ///
-        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
-        clone: Option<ObjectName>,
-    },
+    CreateSchema(Box<CreateSchema>),
     /// ```sql
     /// CREATE DATABASE
     /// ```
     /// See:
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
-    CreateDatabase {
-        /// Database name.
-        db_name: ObjectName,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// Optional location URI.
-        location: Option<String>,
-        /// Optional managed location.
-        managed_location: Option<String>,
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// `TRANSIENT` flag.
-        transient: bool,
-        /// Optional clone source.
-        clone: Option<ObjectName>,
-        /// Optional data retention time in days.
-        data_retention_time_in_days: Option<u64>,
-        /// Optional maximum data extension time in days.
-        max_data_extension_time_in_days: Option<u64>,
-        /// Optional external volume identifier.
-        external_volume: Option<String>,
-        /// Optional catalog name.
-        catalog: Option<String>,
-        /// Whether to replace invalid characters.
-        replace_invalid_characters: Option<bool>,
-        /// Default DDL collation string.
-        default_ddl_collation: Option<String>,
-        /// Storage serialization policy.
-        storage_serialization_policy: Option<StorageSerializationPolicy>,
-        /// Optional comment.
-        comment: Option<String>,
-        /// Optional default character set (MySQL).
-        default_charset: Option<String>,
-        /// Optional default collation (MySQL).
-        default_collation: Option<String>,
-        /// Optional catalog sync identifier.
-        catalog_sync: Option<String>,
-        /// Catalog sync namespace mode.
-        catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
-        /// Optional flatten delimiter for namespace sync.
-        catalog_sync_namespace_flatten_delimiter: Option<String>,
-        /// Optional tags for the database.
-        with_tags: Option<Vec<Tag>>,
-        /// Optional contact entries for the database.
-        with_contacts: Option<Vec<ContactEntry>>,
-    },
+    CreateDatabase(Box<CreateDatabase>),
     /// ```sql
     /// CREATE FUNCTION
     /// ```
@@ -4506,90 +4070,34 @@ pub enum Statement {
     /// 2. [PostgreSQL](https://www.postgresql.org/docs/15/sql-createfunction.html)
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
     /// 4. [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
-    CreateFunction(CreateFunction),
+    CreateFunction(Box<CreateFunction>),
     /// CREATE TRIGGER statement. See struct [CreateTrigger] for details.
-    CreateTrigger(CreateTrigger),
+    CreateTrigger(Box<CreateTrigger>),
     /// DROP TRIGGER statement. See struct [DropTrigger] for details.
-    DropTrigger(DropTrigger),
+    DropTrigger(Box<DropTrigger>),
     /// ```sql
     /// CREATE PROCEDURE
     /// ```
-    CreateProcedure {
-        /// `OR ALTER` flag.
-        or_alter: bool,
-        /// Procedure name.
-        name: ObjectName,
-        /// Optional procedure parameters.
-        params: Option<Vec<ProcedureParam>>,
-        /// Optional language identifier.
-        language: Option<Ident>,
-        /// Procedure body statements.
-        body: ConditionalStatements,
-    },
+    CreateProcedure(Box<CreateProcedure>),
     /// ```sql
     /// CREATE MACRO
     /// ```
     ///
     /// Supported variants:
     /// 1. [DuckDB](https://duckdb.org/docs/sql/statements/create_macro)
-    CreateMacro {
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// Whether macro is temporary.
-        temporary: bool,
-        /// Macro name.
-        name: ObjectName,
-        /// Optional macro arguments.
-        args: Option<Vec<MacroArg>>,
-        /// Macro definition body.
-        definition: MacroDefinition,
-    },
+    CreateMacro(Box<CreateMacro>),
     /// ```sql
     /// CREATE STAGE
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-stage>
-    CreateStage {
-        /// `OR REPLACE` flag for stage.
-        or_replace: bool,
-        /// Whether stage is temporary.
-        temporary: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// Stage name.
-        name: ObjectName,
-        /// Stage parameters.
-        stage_params: StageParamsObject,
-        /// Directory table parameters.
-        directory_table_params: KeyValueOptions,
-        /// File format options.
-        file_format: KeyValueOptions,
-        /// Copy options for stage.
-        copy_options: KeyValueOptions,
-        /// Optional comment.
-        comment: Option<String>,
-    },
+    CreateStage(Box<CreateStage>),
     /// ```sql
     /// CREATE [ OR REPLACE ] [ { TEMP | TEMPORARY | VOLATILE } ] FILE FORMAT [ IF NOT EXISTS ] <name>
     ///   [ TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ]
     ///   [ COMMENT = '<string_literal>' ]
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-file-format>
-    CreateFileFormat {
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// Whether file format is temporary.
-        temporary: bool,
-        /// Whether file format is volatile.
-        volatile: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// File format name.
-        name: ObjectName,
-        /// Format type options (e.g. `TYPE`, `FIELD_DELIMITER`, `COMPRESSION`, ...).
-        options: KeyValueOptions,
-        /// Optional comment.
-        comment: Option<String>,
-    },
+    CreateFileFormat(Box<CreateFileFormat>),
     /// ```sql
     /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
     ///   [ [ WITH ] <property> = <value> [ ... ] ]
@@ -4597,39 +4105,29 @@ pub enum Statement {
     /// Snowflake-specific statement to create a virtual warehouse.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
-    CreateWarehouse(CreateWarehouse),
+    CreateWarehouse(Box<CreateWarehouse>),
     /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
-    Assert {
-        /// Assertion condition expression.
-        condition: Expr,
-        /// Optional message expression.
-        message: Option<Expr>,
-    },
+    Assert(Box<Assert>),
     /// ```sql
     /// GRANT privileges ON objects TO grantees
     /// ```
-    Grant(Grant),
+    Grant(Box<Grant>),
     /// ```sql
     /// DENY privileges ON object TO grantees
     /// ```
-    Deny(DenyStatement),
+    Deny(Box<DenyStatement>),
     /// ```sql
     /// REVOKE privileges ON objects FROM grantees
     /// ```
-    Revoke(Revoke),
+    Revoke(Box<Revoke>),
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate {
-        /// Name to deallocate (or `ALL`).
-        name: Ident,
-        /// Whether `PREPARE` keyword was present.
-        prepare: bool,
-    },
+    Deallocate(Box<Deallocate>),
     /// ```sql
     /// An `EXECUTE` statement
     /// ```
@@ -4638,110 +4136,38 @@ pub enum Statement {
     /// MSSQL: <https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/execute-a-stored-procedure>
     /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate>
     /// Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/execute-immediate>
-    Execute {
-        /// Optional function/procedure name.
-        name: Option<ObjectName>,
-        /// Parameter expressions passed to execute.
-        parameters: Vec<Expr>,
-        /// Whether parentheses were present around `parameters`.
-        has_parentheses: bool,
-        /// Is this an `EXECUTE IMMEDIATE`.
-        immediate: bool,
-        /// Identifiers to capture results into.
-        into: Vec<Ident>,
-        /// `USING` expressions with optional aliases.
-        using: Vec<ExprWithAlias>,
-        /// Whether the last parameter is the return value of the procedure
-        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#output>
-        output: bool,
-        /// Whether to invoke the procedure with the default parameter values
-        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#default>
-        default: bool,
-    },
+    Execute(Box<Execute>),
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Prepare {
-        /// Name of the prepared statement.
-        name: Ident,
-        /// Optional data types for parameters.
-        data_types: Vec<DataType>,
-        /// Statement being prepared.
-        statement: Box<Statement>,
-    },
+    Prepare(Box<Prepare>),
     /// ```sql
     /// KILL [CONNECTION | QUERY | MUTATION]
     /// ```
     ///
     /// See <https://clickhouse.com/docs/en/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
-    Kill {
-        /// Optional kill modifier (CONNECTION, QUERY, MUTATION).
-        modifier: Option<KillType>,
-        // processlist_id
-        /// The id of the process to kill.
-        id: u64,
-    },
+    Kill(Box<Kill>),
     /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE] TABLE
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
-    ExplainTable {
-        /// `EXPLAIN | DESC | DESCRIBE`
-        describe_alias: DescribeAlias,
-        /// Hive style `FORMATTED | EXTENDED`
-        hive_format: Option<HiveDescribeFormat>,
-        /// Snowflake and ClickHouse support `DESC|DESCRIBE TABLE <table_name>` syntax
-        ///
-        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/desc-table.html)
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/describe-table)
-        has_table_keyword: bool,
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-    },
+    ExplainTable(Box<ExplainTable>),
     /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE]  <statement>
     /// ```
-    Explain {
-        /// `EXPLAIN | DESC | DESCRIBE`
-        describe_alias: DescribeAlias,
-        /// Carry out the command and show actual run times and other statistics.
-        analyze: bool,
-        /// Display additional information regarding the plan.
-        verbose: bool,
-        /// `EXPLAIN QUERY PLAN`
-        /// Display the query plan without running the query.
-        ///
-        /// [SQLite](https://sqlite.org/lang_explain.html)
-        query_plan: bool,
-        /// `EXPLAIN ESTIMATE`
-        /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/explain#explain-estimate)
-        estimate: bool,
-        /// A SQL query that specifies what to explain
-        statement: Box<Statement>,
-        /// Optional output format of explain
-        format: Option<AnalyzeFormatKind>,
-        /// Postgres style utility options, `(analyze, verbose true)`
-        options: Option<Vec<UtilityOption>>,
-    },
+    Explain(Box<Explain>),
     /// ```sql
     /// SAVEPOINT
     /// ```
     /// Define a new savepoint within the current transaction
-    Savepoint {
-        /// Name of the savepoint being defined.
-        name: Ident,
-    },
+    Savepoint(Box<Savepoint>),
     /// ```sql
     /// RELEASE [ SAVEPOINT ] savepoint_name
     /// ```
-    ReleaseSavepoint {
-        /// Name of the savepoint to release.
-        name: Ident,
-    },
+    ReleaseSavepoint(Box<ReleaseSavepoint>),
     /// A `MERGE` statement.
     ///
     /// ```sql
@@ -4750,7 +4176,7 @@ pub enum Statement {
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
     /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql?view=sql-server-ver16)
-    Merge(Merge),
+    Merge(Box<Merge>),
     /// ```sql
     /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
     /// ```
@@ -4758,83 +4184,37 @@ pub enum Statement {
     /// See [Spark SQL docs] for more details.
     ///
     /// [Spark SQL docs]: https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html
-    Cache {
-        /// Table flag
-        table_flag: Option<ObjectName>,
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// `true` if `AS` keyword was present before the query.
-        has_as: bool,
-        /// Table confs
-        options: Vec<SqlOption>,
-        /// Cache table as a Query
-        query: Option<Box<Query>>,
-    },
+    Cache(Box<Cache>),
     /// ```sql
     /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
     /// ```
-    UNCache {
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-    },
+    UNCache(Box<UNCache>),
     /// ```sql
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
     /// ```
     /// Define a new sequence:
-    CreateSequence {
-        /// Whether the sequence is temporary.
-        temporary: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// Sequence name.
-        name: ObjectName,
-        /// Optional data type for the sequence.
-        data_type: Option<DataType>,
-        /// Sequence options (INCREMENT, MINVALUE, etc.).
-        sequence_options: Vec<SequenceOptions>,
-        /// Optional `OWNED BY` target.
-        owned_by: Option<ObjectName>,
-    },
+    CreateSequence(Box<CreateSequence>),
     /// A `CREATE DOMAIN` statement.
-    CreateDomain(CreateDomain),
+    CreateDomain(Box<CreateDomain>),
     /// ```sql
     /// CREATE TYPE <name>
     /// ```
-    CreateType {
-        /// Type name to create.
-        name: ObjectName,
-        /// Optional type representation details.
-        representation: Option<UserDefinedTypeRepresentation>,
-    },
+    CreateType(Box<CreateType>),
     /// ```sql
     /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
     /// ```
-    Pragma {
-        /// Pragma name (possibly qualified).
-        name: ObjectName,
-        /// Optional pragma value.
-        value: Option<ValueWithSpan>,
-        /// Whether the pragma used `=`.
-        is_eq: bool,
-    },
+    Pragma(Box<Pragma>),
     /// ```sql
     /// LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
     /// ```
     ///
     /// See <https://www.postgresql.org/docs/current/sql-lock.html>
-    Lock(Lock),
+    Lock(Box<Lock>),
     /// ```sql
     /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    LockTables {
-        /// List of tables to lock with modes.
-        tables: Vec<LockTable>,
-    },
+    LockTables(Box<LockTables>),
     /// ```sql
     /// UNLOCK TABLES
     /// ```
@@ -4851,20 +4231,7 @@ pub enum Statement {
     /// ```sql
     /// UNLOAD('statement') TO <destination> [ OPTIONS ]
     /// ```
-    Unload {
-        /// Optional query AST to unload.
-        query: Option<Box<Query>>,
-        /// Optional original query text.
-        query_text: Option<String>,
-        /// Destination identifier.
-        to: Ident,
-        /// Optional IAM role/auth information.
-        auth: Option<IamRoleKind>,
-        /// Additional `WITH` options.
-        with: Vec<SqlOption>,
-        /// Legacy copy-style options.
-        options: Vec<CopyLegacyOption>,
-    },
+    Unload(Box<Unload>),
     /// ClickHouse:
     /// ```sql
     /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
@@ -4876,62 +4243,28 @@ pub enum Statement {
     /// OPTIMIZE table_name [WHERE predicate] [ZORDER BY (col_name1 [, ...])]
     /// ```
     /// See Databricks <https://docs.databricks.com/en/sql/language-manual/delta-optimize.html>
-    OptimizeTable {
-        /// Table name to optimize.
-        name: ObjectName,
-        /// Whether the `TABLE` keyword was present (ClickHouse uses `OPTIMIZE TABLE`, Databricks uses `OPTIMIZE`).
-        has_table_keyword: bool,
-        /// Optional cluster identifier.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        on_cluster: Option<Ident>,
-        /// Optional partition spec.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        partition: Option<Partition>,
-        /// Whether `FINAL` was specified.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        include_final: bool,
-        /// Optional deduplication settings.
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
-        deduplicate: Option<Deduplicate>,
-        /// Optional WHERE predicate.
-        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
-        predicate: Option<Expr>,
-        /// Optional ZORDER BY columns.
-        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
-        zorder: Option<Vec<Expr>>,
-    },
+    OptimizeTable(Box<OptimizeTable>),
     /// ```sql
     /// LISTEN
     /// ```
     /// listen for a notification channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
-    LISTEN {
-        /// Notification channel identifier.
-        channel: Ident,
-    },
+    LISTEN(Box<Listen>),
     /// ```sql
     /// UNLISTEN
     /// ```
     /// stop listening for a notification
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-unlisten.html>
-    UNLISTEN {
-        /// Notification channel identifier.
-        channel: Ident,
-    },
+    UNLISTEN(Box<Unlisten>),
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
     /// send a notification event together with an optional "payload" string to channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
-    NOTIFY {
-        /// Notification channel identifier.
-        channel: Ident,
-        /// Optional payload string.
-        payload: Option<String>,
-    },
+    NOTIFY(Box<Notify>),
     /// ```sql
     /// LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO TABLE tablename
     /// [PARTITION (partcol1=val1, partcol2=val2 ...)]
@@ -4940,83 +4273,52 @@ pub enum Statement {
     /// Loading files into tables
     ///
     /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
-    LoadData {
-        /// Whether `LOCAL` is present.
-        local: bool,
-        /// Input path for files to load.
-        inpath: String,
-        /// Whether `OVERWRITE` was specified.
-        overwrite: bool,
-        /// Target table name to load into.
-        table_name: ObjectName,
-        /// Optional partition specification.
-        partitioned: Option<Vec<Expr>>,
-        /// Optional table format information.
-        table_format: Option<HiveLoadDataFormat>,
-    },
+    LoadData(Box<LoadData>),
     /// ```sql
     /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
     /// ```
     /// Renames one or more tables
     ///
     /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
-    RenameTable(Vec<RenameTable>),
+    RenameTable(Box<Vec<RenameTable>>),
     /// Snowflake `LIST`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/list>
-    List(FileStagingCommand),
+    List(Box<FileStagingCommand>),
     /// Snowflake `PUT`
     /// ```sql
     /// PUT 'file://<path>' <internalStage> [ <option> = <value> ... ]
     /// ```
     /// Options include `PARALLEL`, `AUTO_COMPRESS`, `SOURCE_COMPRESSION`, `OVERWRITE`.
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/put>
-    Put {
-        /// Local source URI as written in the statement, e.g. `file:///tmp/data.csv`.
-        source: String,
-        /// Target internal stage (e.g. `@mystage`, `@~`, `@%table`).
-        stage: ObjectName,
-        /// Trailing options (`PARALLEL=4`, `AUTO_COMPRESS=TRUE`, ...).
-        options: KeyValueOptions,
-    },
+    Put(Box<Put>),
     /// Snowflake `REMOVE`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
-    Remove(FileStagingCommand),
+    Remove(Box<FileStagingCommand>),
     /// RaiseError (MSSQL)
     /// RAISERROR ( { msg_id | msg_str | @local_variable }
     /// { , severity , state }
     /// [ , argument [ , ...n ] ] )
     /// [ WITH option [ , ...n ] ]
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/raiserror-transact-sql?view=sql-server-ver16>
-    RaisError {
-        /// Error message expression or identifier.
-        message: Box<Expr>,
-        /// Severity expression.
-        severity: Box<Expr>,
-        /// State expression.
-        state: Box<Expr>,
-        /// Substitution arguments for the message.
-        arguments: Vec<Expr>,
-        /// Additional `WITH` options for RAISERROR.
-        options: Vec<RaisErrorOption>,
-    },
+    RaisError(Box<RaisError>),
     /// A MSSQL `THROW` statement.
-    Throw(ThrowStatement),
+    Throw(Box<ThrowStatement>),
     /// ```sql
     /// PRINT msg_str | @local_variable | string_expr
     /// ```
     ///
     /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/print-transact-sql>
-    Print(PrintStatement),
+    Print(Box<PrintStatement>),
     /// MSSQL `WAITFOR` statement.
     ///
     /// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
-    WaitFor(WaitForStatement),
+    WaitFor(Box<WaitForStatement>),
     /// ```sql
     /// RETURN [ expression ]
     /// ```
     ///
     /// See [ReturnStatement]
-    Return(ReturnStatement),
+    Return(Box<ReturnStatement>),
     /// Export data statement
     ///
     /// Example:
@@ -5025,24 +4327,24 @@ pub enum Statement {
     /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
     /// ```
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/export-statements)
-    ExportData(ExportData),
+    ExportData(Box<ExportData>),
     /// ```sql
     /// CREATE [OR REPLACE] USER <user> [IF NOT EXISTS]
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
-    CreateUser(CreateUser),
+    CreateUser(Box<CreateUser>),
     /// ```sql
     /// ALTER USER \[ IF EXISTS \] \[ <name> \]
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
-    AlterUser(AlterUser),
+    AlterUser(Box<AlterUser>),
     /// Re-sorts rows and reclaims space in either a specified table or all tables in the current database
     ///
     /// ```sql
     /// VACUUM tbl
     /// ```
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
-    Vacuum(VacuumStatement),
+    Vacuum(Box<VacuumStatement>),
     /// Restore the value of a run-time parameter to the default value.
     ///
     /// ```sql
@@ -5050,30 +4352,1147 @@ pub enum Statement {
     /// RESET ALL;
     /// ```
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reset.html)
-    Reset(ResetStatement),
+    Reset(Box<ResetStatement>),
+}
+
+/// Payload of [`Statement::Install`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Install {
+    /// Only for DuckDB
+    pub extension_name: Ident,
+}
+
+/// Payload of [`Statement::Load`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Load {
+    /// Only for DuckDB
+    pub extension_name: Ident,
+}
+
+/// Payload of [`Statement::Directory`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Directory {
+    /// Whether to overwrite existing files.
+    pub overwrite: bool,
+    /// Whether the directory is local to the server.
+    pub local: bool,
+    /// Path to the directory or files.
+    pub path: String,
+    /// Optional file format for the data.
+    pub file_format: Option<FileFormat>,
+    /// Source query providing data to load.
+    pub source: Box<Query>,
+}
+
+/// Payload of [`Statement::Copy`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CopyStatement {
+    /// The source of 'COPY TO', or the target of 'COPY FROM'
+    pub source: CopySource,
+    /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
+    pub to: bool,
+    /// The target of 'COPY TO', or the source of 'COPY FROM'
+    pub target: CopyTarget,
+    /// WITH options (from PostgreSQL version 9.0)
+    pub options: Vec<CopyOption>,
+    /// WITH options (before PostgreSQL version 9.0)
+    pub legacy_options: Vec<CopyLegacyOption>,
+    /// VALUES a vector of values to be copied
+    pub values: Vec<Option<String>>,
+}
+
+/// Payload of [`Statement::CopyIntoSnowflake`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CopyIntoSnowflake {
+    /// Kind of COPY INTO operation (table or location).
+    pub kind: CopyIntoSnowflakeKind,
+    /// Target object for the COPY INTO operation.
+    pub into: ObjectName,
+    /// Optional list of target columns.
+    pub into_columns: Option<Vec<Ident>>,
+    /// Optional source object name (staged data).
+    pub from_obj: Option<ObjectName>,
+    /// Optional alias for the source object.
+    pub from_obj_alias: Option<Ident>,
+    /// Stage-specific parameters (e.g., credentials, path).
+    pub stage_params: StageParamsObject,
+    /// Optional list of transformations applied when loading.
+    pub from_transformations: Option<Vec<StageLoadSelectItemKind>>,
+    /// Optional source query instead of a staged object.
+    pub from_query: Option<Box<Query>>,
+    /// Optional list of specific file names to load.
+    pub files: Option<Vec<String>>,
+    /// Optional filename matching pattern.
+    pub pattern: Option<String>,
+    /// File format options.
+    pub file_format: KeyValueOptions,
+    /// Additional copy options.
+    pub copy_options: KeyValueOptions,
+    /// Optional validation mode string.
+    pub validation_mode: Option<String>,
+    /// Optional partition expression for loading.
+    pub partition: Option<Box<Expr>>,
+}
+
+/// Payload of [`Statement::Close`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Close {
+    /// Cursor name
+    pub cursor: CloseCursor,
+}
+
+/// Payload of [`Statement::CreateVirtualTable`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateVirtualTable {
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    /// Name of the virtual table module instance.
+    pub name: ObjectName,
+    /// `true` when `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// Module name used by the virtual table.
+    pub module_name: Ident,
+    /// Arguments passed to the module.
+    pub module_args: Vec<Ident>,
+}
+
+/// Payload of [`Statement::CreateSecret`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateSecret {
+    /// `true` when `OR REPLACE` was specified.
+    pub or_replace: bool,
+    /// Optional `TEMPORARY` flag.
+    pub temporary: Option<bool>,
+    /// `true` when `IF NOT EXISTS` was present.
+    pub if_not_exists: bool,
+    /// Optional secret name.
+    pub name: Option<Ident>,
+    /// Optional storage specifier identifier.
+    pub storage_specifier: Option<Ident>,
+    /// The secret type identifier.
+    pub secret_type: Ident,
+    /// Additional secret options.
+    pub options: Vec<SecretOption>,
+}
+
+/// Payload of [`Statement::AlterIndex`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterIndex {
+    /// Name of the index to alter.
+    pub name: ObjectName,
+    /// The operation to perform on the index.
+    pub operation: AlterIndexOperation,
+}
+
+/// Payload of [`Statement::AlterView`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterView {
+    /// View name being altered.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Optional new column list for the view.
+    pub columns: Vec<Ident>,
+    /// Replacement query for the view definition.
+    pub query: Box<Query>,
+    /// Additional WITH options for the view.
+    pub with_options: Vec<SqlOption>,
+}
+
+/// Payload of [`Statement::AlterRole`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterRole {
+    /// Role name being altered.
+    pub name: Ident,
+    /// Operation to perform on the role.
+    pub operation: AlterRoleOperation,
+}
+
+/// Payload of [`Statement::AlterConnector`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterConnector {
+    /// Name of the connector to alter.
+    pub name: Ident,
+    /// Optional connector properties to set.
+    pub properties: Option<Vec<SqlOption>>,
+    /// Optional new URL for the connector.
+    pub url: Option<String>,
+    /// Optional new owner specification.
+    pub owner: Option<ddl::AlterConnectorOwner>,
+}
+
+/// Payload of [`Statement::AlterSession`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterSession {
+    /// true is to set for the session parameters, false is to unset
+    pub set: bool,
+    /// The session parameters to set or unset
+    pub session_params: KeyValueOptions,
+}
+
+/// Payload of [`Statement::AttachDatabase`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AttachDatabase {
+    /// The name to bind to the newly attached database
+    pub schema_name: Ident,
+    /// An expression that indicates the path to the database file
+    pub database_file_name: Expr,
+    /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
+    pub database: bool,
+}
+
+/// Payload of [`Statement::AttachDuckDBDatabase`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AttachDuckDBDatabase {
+    /// `true` when `IF NOT EXISTS` was present.
+    pub if_not_exists: bool,
+    /// `true` if the syntax used `ATTACH DATABASE` rather than `ATTACH`.
+    pub database: bool,
+    /// The path identifier to the database file being attached.
+    pub database_path: Ident,
+    /// Optional alias assigned to the attached database.
+    pub database_alias: Option<Ident>,
+    /// Dialect-specific attach options (e.g., `READ_ONLY`).
+    pub attach_options: Vec<AttachDuckDBDatabaseOption>,
+}
+
+/// Payload of [`Statement::DetachDuckDBDatabase`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DetachDuckDBDatabase {
+    /// `true` when `IF EXISTS` was present.
+    pub if_exists: bool,
+    /// `true` if the syntax used `DETACH DATABASE` rather than `DETACH`.
+    pub database: bool,
+    /// Alias of the database to detach.
+    pub database_alias: Ident,
+}
+
+/// Payload of [`Statement::Drop`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropStatement {
+    /// The type of the object to drop: TABLE, VIEW, etc.
+    pub object_type: ObjectType,
+    /// An optional `IF EXISTS` clause. (Non-standard.)
+    pub if_exists: bool,
+    /// One or more objects to drop. (ANSI SQL requires exactly one.)
+    pub names: Vec<ObjectName>,
+    /// Whether `CASCADE` was specified. This will be `false` when
+    /// `RESTRICT` or no drop behavior at all was specified.
+    pub cascade: bool,
+    /// Whether `RESTRICT` was specified. This will be `false` when
+    /// `CASCADE` or no drop behavior at all was specified.
+    pub restrict: bool,
+    /// Hive allows you specify whether the table's stored data will be
+    /// deleted along with the dropped table
+    pub purge: bool,
+    /// MySQL-specific "TEMPORARY" keyword
+    pub temporary: bool,
+    /// MySQL-specific drop index syntax, which requires table specification
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/drop-index.html>
+    pub table: Option<ObjectName>,
+}
+
+/// Payload of [`Statement::DropProcedure`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropProcedure {
+    /// `true` when `IF EXISTS` was present.
+    pub if_exists: bool,
+    /// One or more functions/procedures to drop.
+    pub proc_desc: Vec<FunctionDesc>,
+    /// Optional drop behavior (`CASCADE` or `RESTRICT`).
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+/// Payload of [`Statement::DropSecret`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropSecret {
+    /// `true` when `IF EXISTS` was present.
+    pub if_exists: bool,
+    /// Optional `TEMPORARY` marker.
+    pub temporary: Option<bool>,
+    /// Name of the secret to drop.
+    pub name: Ident,
+    /// Optional storage specifier identifier.
+    pub storage_specifier: Option<Ident>,
+}
+
+/// Payload of [`Statement::DropConnector`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropConnector {
+    /// `true` when `IF EXISTS` was present.
+    pub if_exists: bool,
+    /// Name of the connector to drop.
+    pub name: Ident,
+}
+
+/// Payload of [`Statement::Declare`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DeclareStatement {
+    /// Cursor declaration statements collected by `DECLARE`.
+    pub stmts: Vec<Declare>,
+}
+
+/// Payload of [`Statement::Fetch`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FetchStatement {
+    /// Cursor name
+    pub name: Ident,
+    /// The fetch direction (e.g., `FORWARD`, `BACKWARD`).
+    pub direction: FetchDirection,
+    /// The fetch position (e.g., `ALL`, `NEXT`, `ABSOLUTE`).
+    pub position: FetchPosition,
+    /// Optional target table to fetch rows into.
+    pub into: Option<ObjectName>,
+}
+
+/// Payload of [`Statement::Flush`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Flush {
+    /// The specific flush option or object to flush.
+    pub object_type: FlushType,
+    /// Optional flush location (dialect-specific).
+    pub location: Option<FlushLocation>,
+    /// Optional channel name used for flush operations.
+    pub channel: Option<String>,
+    /// Whether a read lock was requested.
+    pub read_lock: bool,
+    /// Whether this is an export flush operation.
+    pub export: bool,
+    /// Optional list of tables involved in the flush.
+    pub tables: Vec<ObjectName>,
+}
+
+/// Payload of [`Statement::Discard`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Discard {
+    /// The kind of object(s) to discard (ALL, PLANS, etc.).
+    pub object_type: DiscardObject,
+}
+
+/// Payload of [`Statement::ShowFunctions`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowFunctions {
+    /// Optional filter for which functions to display.
+    pub filter: Option<ShowStatementFilter>,
+}
+
+/// Payload of [`Statement::ShowVariable`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowVariable {
+    /// Variable name as one or more identifiers.
+    pub variable: Vec<Ident>,
+}
+
+/// Payload of [`Statement::ShowStatus`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowStatus {
+    /// Optional filter for which status entries to display.
+    pub filter: Option<ShowStatementFilter>,
+    /// `true` when `GLOBAL` scope was requested.
+    pub global: bool,
+    /// `true` when `SESSION` scope was requested.
+    pub session: bool,
+}
+
+/// Payload of [`Statement::ShowVariables`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowVariables {
+    /// Optional filter for which variables to display.
+    pub filter: Option<ShowStatementFilter>,
+    /// `true` when `GLOBAL` scope was requested.
+    pub global: bool,
+    /// `true` when `SESSION` scope was requested.
+    pub session: bool,
+}
+
+/// Payload of [`Statement::ShowCreate`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowCreate {
+    /// The kind of object being shown (TABLE, VIEW, etc.).
+    pub obj_type: ShowCreateObject,
+    /// The name of the object to show create statement for.
+    pub obj_name: ObjectName,
+}
+
+/// Payload of [`Statement::ShowColumns`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowColumns {
+    /// `true` when extended column information was requested.
+    pub extended: bool,
+    /// `true` when full column details were requested.
+    pub full: bool,
+    /// Additional options for `SHOW COLUMNS`.
+    pub show_options: ShowStatementOptions,
+}
+
+/// Payload of [`Statement::ShowCatalogs`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowCatalogs {
+    /// `true` when terse output format was requested.
+    pub terse: bool,
+    /// `true` when history information was requested.
+    pub history: bool,
+    /// Additional options for `SHOW CATALOGS`.
+    pub show_options: ShowStatementOptions,
+}
+
+/// Payload of [`Statement::ShowDatabases`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowDatabases {
+    /// `true` when terse output format was requested.
+    pub terse: bool,
+    /// `true` when history information was requested.
+    pub history: bool,
+    /// Additional options for `SHOW DATABASES`.
+    pub show_options: ShowStatementOptions,
+}
+
+/// Payload of [`Statement::ShowProcessList`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowProcessList {
+    /// `true` when full process information was requested.
+    pub full: bool,
+}
+
+/// Payload of [`Statement::ShowSchemas`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowSchemas {
+    /// `true` when terse (compact) output was requested.
+    pub terse: bool,
+    /// `true` when history information was requested.
+    pub history: bool,
+    /// Additional options for `SHOW SCHEMAS`.
+    pub show_options: ShowStatementOptions,
+}
+
+/// Payload of [`Statement::ShowTables`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowTables {
+    /// `true` when terse output format was requested (compact listing).
+    pub terse: bool,
+    /// `true` when history rows are requested.
+    pub history: bool,
+    /// `true` when extended information should be shown.
+    pub extended: bool,
+    /// `true` when a full listing was requested.
+    pub full: bool,
+    /// `true` when external tables should be included.
+    pub external: bool,
+    /// Additional options for `SHOW` statements.
+    pub show_options: ShowStatementOptions,
+}
+
+/// Payload of [`Statement::ShowViews`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowViews {
+    /// `true` when terse output format was requested.
+    pub terse: bool,
+    /// `true` when materialized views should be included.
+    pub materialized: bool,
+    /// Additional options for `SHOW` statements.
+    pub show_options: ShowStatementOptions,
+}
+
+/// Payload of [`Statement::ShowCollation`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowCollation {
+    /// Optional filter for which collations to display.
+    pub filter: Option<ShowStatementFilter>,
+}
+
+/// Payload of [`Statement::StartTransaction`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct StartTransaction {
+    /// Transaction modes such as `ISOLATION LEVEL` or `READ WRITE`.
+    pub modes: Vec<TransactionMode>,
+    /// `true` when this was parsed as `BEGIN` instead of `START`.
+    pub begin: bool,
+    /// Optional specific keyword used: `TRANSACTION` or `WORK`.
+    pub transaction: Option<BeginTransactionKind>,
+    /// Optional transaction modifier (e.g., `AND NO CHAIN`).
+    pub modifier: Option<TransactionModifier>,
+    /// List of statements belonging to the `BEGIN` block.
+    /// Example:
+    /// ```sql
+    /// BEGIN
+    ///     SELECT 1;
+    ///     SELECT 2;
+    /// END;
+    /// ```
+    pub statements: Vec<Statement>,
+    /// Exception handling with exception clauses.
+    /// Example:
+    /// ```sql
+    /// EXCEPTION
+    ///     WHEN EXCEPTION_1 THEN
+    ///         SELECT 2;
+    ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+    ///         SELECT 3;
+    ///     WHEN OTHER THEN
+    ///         SELECT 4;
+    /// ```
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+    /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+    pub exception: Option<Vec<ExceptionWhen>>,
+    /// TRUE if the statement has an `END` keyword.
+    pub has_end_keyword: bool,
+}
+
+/// Payload of [`Statement::Comment`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CommentStatement {
+    /// Type of object being commented (table, column, etc.).
+    pub object_type: CommentObject,
+    /// Name of the object the comment applies to.
+    pub object_name: ObjectName,
+    /// Optional comment text (None to remove comment).
+    pub comment: Option<String>,
+    /// An optional `IF EXISTS` clause. (Non-standard.)
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/comment>
+    pub if_exists: bool,
+}
+
+/// Payload of [`Statement::Commit`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Commit {
+    /// `true` when `AND [ NO ] CHAIN` was present.
+    pub chain: bool,
+    /// `true` when this `COMMIT` was parsed as an `END` block terminator.
+    pub end: bool,
+    /// Optional transaction modifier for commit semantics.
+    pub modifier: Option<TransactionModifier>,
+}
+
+/// Payload of [`Statement::Rollback`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Rollback {
+    /// `true` when `AND [ NO ] CHAIN` was present.
+    pub chain: bool,
+    /// Optional savepoint name to roll back to.
+    pub savepoint: Option<Ident>,
+}
+
+/// Payload of [`Statement::CreateSchema`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateSchema {
+    /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
+    pub schema_name: SchemaName,
+    /// `true` when `OR REPLACE` was present.
+    pub or_replace: bool,
+    /// `true` when `IF NOT EXISTS` was present.
+    pub if_not_exists: bool,
+    /// Schema properties.
+    ///
+    /// ```sql
+    /// CREATE SCHEMA myschema WITH (key1='value1');
+    /// ```
+    ///
+    /// [Trino](https://trino.io/docs/current/sql/create-schema.html)
+    pub with: Option<Vec<SqlOption>>,
+    /// Schema options.
+    ///
+    /// ```sql
+    /// CREATE SCHEMA myschema OPTIONS(key1='value1');
+    /// ```
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
+    pub options: Option<Vec<SqlOption>>,
+    /// Default collation specification for the schema.
+    ///
+    /// ```sql
+    /// CREATE SCHEMA myschema DEFAULT COLLATE 'und:ci';
+    /// ```
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
+    pub default_collate_spec: Option<Expr>,
+    /// Clones a schema
+    ///
+    /// ```sql
+    /// CREATE SCHEMA myschema CLONE otherschema
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
+    pub clone: Option<ObjectName>,
+}
+
+/// Payload of [`Statement::CreateDatabase`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateDatabase {
+    /// Database name.
+    pub db_name: ObjectName,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// Optional location URI.
+    pub location: Option<String>,
+    /// Optional managed location.
+    pub managed_location: Option<String>,
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// `TRANSIENT` flag.
+    pub transient: bool,
+    /// Optional clone source.
+    pub clone: Option<ObjectName>,
+    /// Optional data retention time in days.
+    pub data_retention_time_in_days: Option<u64>,
+    /// Optional maximum data extension time in days.
+    pub max_data_extension_time_in_days: Option<u64>,
+    /// Optional external volume identifier.
+    pub external_volume: Option<String>,
+    /// Optional catalog name.
+    pub catalog: Option<String>,
+    /// Whether to replace invalid characters.
+    pub replace_invalid_characters: Option<bool>,
+    /// Default DDL collation string.
+    pub default_ddl_collation: Option<String>,
+    /// Storage serialization policy.
+    pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Optional default character set (MySQL).
+    pub default_charset: Option<String>,
+    /// Optional default collation (MySQL).
+    pub default_collation: Option<String>,
+    /// Optional catalog sync identifier.
+    pub catalog_sync: Option<String>,
+    /// Catalog sync namespace mode.
+    pub catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
+    /// Optional flatten delimiter for namespace sync.
+    pub catalog_sync_namespace_flatten_delimiter: Option<String>,
+    /// Optional tags for the database.
+    pub with_tags: Option<Vec<Tag>>,
+    /// Optional contact entries for the database.
+    pub with_contacts: Option<Vec<ContactEntry>>,
+}
+
+/// Payload of [`Statement::CreateProcedure`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateProcedure {
+    /// `OR ALTER` flag.
+    pub or_alter: bool,
+    /// Procedure name.
+    pub name: ObjectName,
+    /// Optional procedure parameters.
+    pub params: Option<Vec<ProcedureParam>>,
+    /// Optional language identifier.
+    pub language: Option<Ident>,
+    /// Procedure body statements.
+    pub body: ConditionalStatements,
+}
+
+/// Payload of [`Statement::CreateMacro`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateMacro {
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// Whether macro is temporary.
+    pub temporary: bool,
+    /// Macro name.
+    pub name: ObjectName,
+    /// Optional macro arguments.
+    pub args: Option<Vec<MacroArg>>,
+    /// Macro definition body.
+    pub definition: MacroDefinition,
+}
+
+/// Payload of [`Statement::CreateStage`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateStage {
+    /// `OR REPLACE` flag for stage.
+    pub or_replace: bool,
+    /// Whether stage is temporary.
+    pub temporary: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// Stage name.
+    pub name: ObjectName,
+    /// Stage parameters.
+    pub stage_params: StageParamsObject,
+    /// Directory table parameters.
+    pub directory_table_params: KeyValueOptions,
+    /// File format options.
+    pub file_format: KeyValueOptions,
+    /// Copy options for stage.
+    pub copy_options: KeyValueOptions,
+    /// Optional comment.
+    pub comment: Option<String>,
+}
+
+/// Payload of [`Statement::CreateFileFormat`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateFileFormat {
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// Whether file format is temporary.
+    pub temporary: bool,
+    /// Whether file format is volatile.
+    pub volatile: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// File format name.
+    pub name: ObjectName,
+    /// Format type options (e.g. `TYPE`, `FIELD_DELIMITER`, `COMPRESSION`, ...).
+    pub options: KeyValueOptions,
+    /// Optional comment.
+    pub comment: Option<String>,
+}
+
+/// Payload of [`Statement::Assert`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Assert {
+    /// Assertion condition expression.
+    pub condition: Expr,
+    /// Optional message expression.
+    pub message: Option<Expr>,
+}
+
+/// Payload of [`Statement::Deallocate`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Deallocate {
+    /// Name to deallocate (or `ALL`).
+    pub name: Ident,
+    /// Whether `PREPARE` keyword was present.
+    pub prepare: bool,
+}
+
+/// Payload of [`Statement::Execute`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Execute {
+    /// Optional function/procedure name.
+    pub name: Option<ObjectName>,
+    /// Parameter expressions passed to execute.
+    pub parameters: Vec<Expr>,
+    /// Whether parentheses were present around `parameters`.
+    pub has_parentheses: bool,
+    /// Is this an `EXECUTE IMMEDIATE`.
+    pub immediate: bool,
+    /// Identifiers to capture results into.
+    pub into: Vec<Ident>,
+    /// `USING` expressions with optional aliases.
+    pub using: Vec<ExprWithAlias>,
+    /// Whether the last parameter is the return value of the procedure
+    /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#output>
+    pub output: bool,
+    /// Whether to invoke the procedure with the default parameter values
+    /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#default>
+    pub default: bool,
+}
+
+/// Payload of [`Statement::Prepare`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Prepare {
+    /// Name of the prepared statement.
+    pub name: Ident,
+    /// Optional data types for parameters.
+    pub data_types: Vec<DataType>,
+    /// Statement being prepared.
+    pub statement: Box<Statement>,
+}
+
+/// Payload of [`Statement::Kill`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Kill {
+    /// Optional kill modifier (CONNECTION, QUERY, MUTATION).
+    pub modifier: Option<KillType>,
+    // processlist_id
+    /// The id of the process to kill.
+    pub id: u64,
+}
+
+/// Payload of [`Statement::ExplainTable`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExplainTable {
+    /// `EXPLAIN | DESC | DESCRIBE`
+    pub describe_alias: DescribeAlias,
+    /// Hive style `FORMATTED | EXTENDED`
+    pub hive_format: Option<HiveDescribeFormat>,
+    /// Snowflake and ClickHouse support `DESC|DESCRIBE TABLE <table_name>` syntax
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/desc-table.html)
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/describe-table)
+    pub has_table_keyword: bool,
+    /// Table name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+}
+
+/// Payload of [`Statement::Explain`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Explain {
+    /// `EXPLAIN | DESC | DESCRIBE`
+    pub describe_alias: DescribeAlias,
+    /// Carry out the command and show actual run times and other statistics.
+    pub analyze: bool,
+    /// Display additional information regarding the plan.
+    pub verbose: bool,
+    /// `EXPLAIN QUERY PLAN`
+    /// Display the query plan without running the query.
+    ///
+    /// [SQLite](https://sqlite.org/lang_explain.html)
+    pub query_plan: bool,
+    /// `EXPLAIN ESTIMATE`
+    /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/explain#explain-estimate)
+    pub estimate: bool,
+    /// A SQL query that specifies what to explain
+    pub statement: Box<Statement>,
+    /// Optional output format of explain
+    pub format: Option<AnalyzeFormatKind>,
+    /// Postgres style utility options, `(analyze, verbose true)`
+    pub options: Option<Vec<UtilityOption>>,
+}
+
+/// Payload of [`Statement::Savepoint`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Savepoint {
+    /// Name of the savepoint being defined.
+    pub name: Ident,
+}
+
+/// Payload of [`Statement::ReleaseSavepoint`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ReleaseSavepoint {
+    /// Name of the savepoint to release.
+    pub name: Ident,
+}
+
+/// Payload of [`Statement::Cache`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Cache {
+    /// Table flag
+    pub table_flag: Option<ObjectName>,
+    /// Table name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// `true` if `AS` keyword was present before the query.
+    pub has_as: bool,
+    /// Table confs
+    pub options: Vec<SqlOption>,
+    /// Cache table as a Query
+    pub query: Option<Box<Query>>,
+}
+
+/// Payload of [`Statement::UNCache`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UNCache {
+    /// Table name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// `true` when `IF EXISTS` was present.
+    pub if_exists: bool,
+}
+
+/// Payload of [`Statement::CreateSequence`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateSequence {
+    /// Whether the sequence is temporary.
+    pub temporary: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// Sequence name.
+    pub name: ObjectName,
+    /// Optional data type for the sequence.
+    pub data_type: Option<DataType>,
+    /// Sequence options (INCREMENT, MINVALUE, etc.).
+    pub sequence_options: Vec<SequenceOptions>,
+    /// Optional `OWNED BY` target.
+    pub owned_by: Option<ObjectName>,
+}
+
+/// Payload of [`Statement::CreateType`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateType {
+    /// Type name to create.
+    pub name: ObjectName,
+    /// Optional type representation details.
+    pub representation: Option<UserDefinedTypeRepresentation>,
+}
+
+/// Payload of [`Statement::Pragma`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Pragma {
+    /// Pragma name (possibly qualified).
+    pub name: ObjectName,
+    /// Optional pragma value.
+    pub value: Option<ValueWithSpan>,
+    /// Whether the pragma used `=`.
+    pub is_eq: bool,
+}
+
+/// Payload of [`Statement::LockTables`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LockTables {
+    /// List of tables to lock with modes.
+    pub tables: Vec<LockTable>,
+}
+
+/// Payload of [`Statement::Unload`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Unload {
+    /// Optional query AST to unload.
+    pub query: Option<Box<Query>>,
+    /// Optional original query text.
+    pub query_text: Option<String>,
+    /// Destination identifier.
+    pub to: Ident,
+    /// Optional IAM role/auth information.
+    pub auth: Option<IamRoleKind>,
+    /// Additional `WITH` options.
+    pub with: Vec<SqlOption>,
+    /// Legacy copy-style options.
+    pub options: Vec<CopyLegacyOption>,
+}
+
+/// Payload of [`Statement::OptimizeTable`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OptimizeTable {
+    /// Table name to optimize.
+    pub name: ObjectName,
+    /// Whether the `TABLE` keyword was present (ClickHouse uses `OPTIMIZE TABLE`, Databricks uses `OPTIMIZE`).
+    pub has_table_keyword: bool,
+    /// Optional cluster identifier.
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    pub on_cluster: Option<Ident>,
+    /// Optional partition spec.
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    pub partition: Option<Partition>,
+    /// Whether `FINAL` was specified.
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    pub include_final: bool,
+    /// Optional deduplication settings.
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    pub deduplicate: Option<Deduplicate>,
+    /// Optional WHERE predicate.
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
+    pub predicate: Option<Expr>,
+    /// Optional ZORDER BY columns.
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
+    pub zorder: Option<Vec<Expr>>,
+}
+
+/// Payload of [`Statement::LISTEN`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Listen {
+    /// Notification channel identifier.
+    pub channel: Ident,
+}
+
+/// Payload of [`Statement::UNLISTEN`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Unlisten {
+    /// Notification channel identifier.
+    pub channel: Ident,
+}
+
+/// Payload of [`Statement::NOTIFY`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Notify {
+    /// Notification channel identifier.
+    pub channel: Ident,
+    /// Optional payload string.
+    pub payload: Option<String>,
+}
+
+/// Payload of [`Statement::LoadData`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LoadData {
+    /// Whether `LOCAL` is present.
+    pub local: bool,
+    /// Input path for files to load.
+    pub inpath: String,
+    /// Whether `OVERWRITE` was specified.
+    pub overwrite: bool,
+    /// Target table name to load into.
+    pub table_name: ObjectName,
+    /// Optional partition specification.
+    pub partitioned: Option<Vec<Expr>>,
+    /// Optional table format information.
+    pub table_format: Option<HiveLoadDataFormat>,
+}
+
+/// Payload of [`Statement::Put`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Put {
+    /// Local source URI as written in the statement, e.g. `file:///tmp/data.csv`.
+    pub source: String,
+    /// Target internal stage (e.g. `@mystage`, `@~`, `@%table`).
+    pub stage: ObjectName,
+    /// Trailing options (`PARALLEL=4`, `AUTO_COMPRESS=TRUE`, ...).
+    pub options: KeyValueOptions,
+}
+
+/// Payload of [`Statement::RaisError`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RaisError {
+    /// Error message expression or identifier.
+    pub message: Box<Expr>,
+    /// Severity expression.
+    pub severity: Box<Expr>,
+    /// State expression.
+    pub state: Box<Expr>,
+    /// Substitution arguments for the message.
+    pub arguments: Vec<Expr>,
+    /// Additional `WITH` options for RAISERROR.
+    pub options: Vec<RaisErrorOption>,
 }
 
 impl From<Analyze> for Statement {
     fn from(analyze: Analyze) -> Self {
-        Statement::Analyze(analyze)
+        Statement::Analyze(Box::new(analyze))
     }
 }
 
 impl From<ddl::Truncate> for Statement {
     fn from(truncate: ddl::Truncate) -> Self {
-        Statement::Truncate(truncate)
+        Statement::Truncate(Box::new(truncate))
     }
 }
 
 impl From<Lock> for Statement {
     fn from(lock: Lock) -> Self {
-        Statement::Lock(lock)
+        Statement::Lock(Box::new(lock))
     }
 }
 
 impl From<ddl::Msck> for Statement {
     fn from(msck: ddl::Msck) -> Self {
-        Statement::Msck(msck)
+        Statement::Msck(Box::new(msck))
     }
 }
 
@@ -5153,14 +5572,15 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Statement::Flush {
-                object_type,
-                location,
-                channel,
-                read_lock,
-                export,
-                tables,
-            } => {
+            Statement::Flush(flush) => {
+                let Flush {
+                    object_type,
+                    location,
+                    channel,
+                    read_lock,
+                    export,
+                    tables,
+                } = &**flush;
                 write!(f, "FLUSH")?;
                 if let Some(location) = location {
                     f.write_str(" ")?;
@@ -5184,7 +5604,8 @@ impl fmt::Display for Statement {
                     read = if *read_lock { " WITH READ LOCK" } else { "" }
                 )
             }
-            Statement::Kill { modifier, id } => {
+            Statement::Kill(kill) => {
+                let Kill { modifier, id } = &**kill;
                 write!(f, "KILL ")?;
 
                 if let Some(m) = modifier {
@@ -5193,12 +5614,13 @@ impl fmt::Display for Statement {
 
                 write!(f, "{id}")
             }
-            Statement::ExplainTable {
-                describe_alias,
-                hive_format,
-                has_table_keyword,
-                table_name,
-            } => {
+            Statement::ExplainTable(explain_table) => {
+                let ExplainTable {
+                    describe_alias,
+                    hive_format,
+                    has_table_keyword,
+                    table_name,
+                } = &**explain_table;
                 write!(f, "{describe_alias} ")?;
 
                 if let Some(format) = hive_format {
@@ -5210,16 +5632,17 @@ impl fmt::Display for Statement {
 
                 write!(f, "{table_name}")
             }
-            Statement::Explain {
-                describe_alias,
-                verbose,
-                analyze,
-                query_plan,
-                estimate,
-                statement,
-                format,
-                options,
-            } => {
+            Statement::Explain(explain) => {
+                let Explain {
+                    describe_alias,
+                    verbose,
+                    analyze,
+                    query_plan,
+                    estimate,
+                    statement,
+                    format,
+                    options,
+                } = &**explain;
                 write!(f, "{describe_alias} ")?;
 
                 if *query_plan {
@@ -5247,16 +5670,18 @@ impl fmt::Display for Statement {
                 write!(f, "{statement}")
             }
             Statement::Query(s) => s.fmt(f),
-            Statement::Declare { stmts } => {
+            Statement::Declare(declare) => {
+                let DeclareStatement { stmts } = &**declare;
                 write!(f, "DECLARE ")?;
                 write!(f, "{}", display_separated(stmts, "; "))
             }
-            Statement::Fetch {
-                name,
-                direction,
-                position,
-                into,
-            } => {
+            Statement::Fetch(fetch) => {
+                let FetchStatement {
+                    name,
+                    direction,
+                    position,
+                    into,
+                } = &**fetch;
                 write!(f, "FETCH {direction} {position} {name}")?;
 
                 if let Some(into) = into {
@@ -5265,13 +5690,14 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
-            Statement::Directory {
-                overwrite,
-                local,
-                path,
-                file_format,
-                source,
-            } => {
+            Statement::Directory(directory) => {
+                let Directory {
+                    overwrite,
+                    local,
+                    path,
+                    file_format,
+                    source,
+                } = &**directory;
                 write!(
                     f,
                     "INSERT{overwrite}{local} DIRECTORY '{path}'",
@@ -5298,21 +5724,23 @@ impl fmt::Display for Statement {
             Statement::Raise(stmt) => {
                 write!(f, "{stmt}")
             }
-            Statement::AttachDatabase {
-                schema_name,
-                database_file_name,
-                database,
-            } => {
+            Statement::AttachDatabase(attach_database) => {
+                let AttachDatabase {
+                    schema_name,
+                    database_file_name,
+                    database,
+                } = &**attach_database;
                 let keyword = if *database { "DATABASE " } else { "" };
                 write!(f, "ATTACH {keyword}{database_file_name} AS {schema_name}")
             }
-            Statement::AttachDuckDBDatabase {
-                if_not_exists,
-                database,
-                database_path,
-                database_alias,
-                attach_options,
-            } => {
+            Statement::AttachDuckDBDatabase(attach_duck_d_b_database) => {
+                let AttachDuckDBDatabase {
+                    if_not_exists,
+                    database,
+                    database_path,
+                    database_alias,
+                    attach_options,
+                } = &**attach_duck_d_b_database;
                 write!(
                     f,
                     "ATTACH{database}{if_not_exists} {database_path}",
@@ -5327,11 +5755,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DetachDuckDBDatabase {
-                if_exists,
-                database,
-                database_alias,
-            } => {
+            Statement::DetachDuckDBDatabase(detach_duck_d_b_database) => {
+                let DetachDuckDBDatabase {
+                    if_exists,
+                    database,
+                    database_alias,
+                } = &**detach_duck_d_b_database;
                 write!(
                     f,
                     "DETACH{database}{if_exists} {database_alias}",
@@ -5342,24 +5771,31 @@ impl fmt::Display for Statement {
             }
             Statement::Analyze(analyze) => analyze.fmt(f),
             Statement::Insert(insert) => insert.fmt(f),
-            Statement::Install {
-                extension_name: name,
-            } => write!(f, "INSTALL {name}"),
+            Statement::Install(install) => {
+                let Install {
+                    extension_name: name,
+                } = &**install;
+                write!(f, "INSTALL {name}")
+            }
 
-            Statement::Load {
-                extension_name: name,
-            } => write!(f, "LOAD {name}"),
+            Statement::Load(load) => {
+                let Load {
+                    extension_name: name,
+                } = &**load;
+                write!(f, "LOAD {name}")
+            }
 
             Statement::Call(function) => write!(f, "CALL {function}"),
 
-            Statement::Copy {
-                source,
-                to,
-                target,
-                options,
-                legacy_options,
-                values,
-            } => {
+            Statement::Copy(copy) => {
+                let CopyStatement {
+                    source,
+                    to,
+                    target,
+                    options,
+                    legacy_options,
+                    values,
+                } = &**copy;
                 write!(f, "COPY")?;
                 match source {
                     CopySource::Query(query) => write!(f, " ({query})")?,
@@ -5399,35 +5835,37 @@ impl fmt::Display for Statement {
             Statement::Update(update) => update.fmt(f),
             Statement::Delete(delete) => delete.fmt(f),
             Statement::Open(open) => open.fmt(f),
-            Statement::Close { cursor } => {
+            Statement::Close(close) => {
+                let Close { cursor } = &**close;
                 write!(f, "CLOSE {cursor}")?;
 
                 Ok(())
             }
-            Statement::CreateDatabase {
-                db_name,
-                if_not_exists,
-                location,
-                managed_location,
-                or_replace,
-                transient,
-                clone,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                external_volume,
-                catalog,
-                replace_invalid_characters,
-                default_ddl_collation,
-                storage_serialization_policy,
-                comment,
-                default_charset,
-                default_collation,
-                catalog_sync,
-                catalog_sync_namespace_mode,
-                catalog_sync_namespace_flatten_delimiter,
-                with_tags,
-                with_contacts,
-            } => {
+            Statement::CreateDatabase(create_database) => {
+                let CreateDatabase {
+                    db_name,
+                    if_not_exists,
+                    location,
+                    managed_location,
+                    or_replace,
+                    transient,
+                    clone,
+                    data_retention_time_in_days,
+                    max_data_extension_time_in_days,
+                    external_volume,
+                    catalog,
+                    replace_invalid_characters,
+                    default_ddl_collation,
+                    storage_serialization_policy,
+                    comment,
+                    default_charset,
+                    default_collation,
+                    catalog_sync,
+                    catalog_sync_namespace_mode,
+                    catalog_sync_namespace_flatten_delimiter,
+                    with_tags,
+                    with_contacts,
+                } = &**create_database;
                 write!(
                     f,
                     "CREATE {or_replace}{transient}DATABASE {if_not_exists}{name}",
@@ -5514,13 +5952,14 @@ impl fmt::Display for Statement {
             Statement::CreateDomain(create_domain) => create_domain.fmt(f),
             Statement::CreateTrigger(create_trigger) => create_trigger.fmt(f),
             Statement::DropTrigger(drop_trigger) => drop_trigger.fmt(f),
-            Statement::CreateProcedure {
-                name,
-                or_alter,
-                params,
-                language,
-                body,
-            } => {
+            Statement::CreateProcedure(create_procedure) => {
+                let CreateProcedure {
+                    name,
+                    or_alter,
+                    params,
+                    language,
+                    body,
+                } = &**create_procedure;
                 write!(
                     f,
                     "CREATE {or_alter}PROCEDURE {name}",
@@ -5540,13 +5979,14 @@ impl fmt::Display for Statement {
 
                 write!(f, " AS {body}")
             }
-            Statement::CreateMacro {
-                or_replace,
-                temporary,
-                name,
-                args,
-                definition,
-            } => {
+            Statement::CreateMacro(create_macro) => {
+                let CreateMacro {
+                    or_replace,
+                    temporary,
+                    name,
+                    args,
+                    definition,
+                } = &**create_macro;
                 write!(
                     f,
                     "CREATE {or_replace}{temp}MACRO {name}",
@@ -5564,14 +6004,15 @@ impl fmt::Display for Statement {
             }
             Statement::CreateView(create_view) => create_view.fmt(f),
             Statement::CreateTable(create_table) => create_table.fmt(f),
-            Statement::LoadData {
-                local,
-                inpath,
-                overwrite,
-                table_name,
-                partitioned,
-                table_format,
-            } => {
+            Statement::LoadData(load_data) => {
+                let LoadData {
+                    local,
+                    inpath,
+                    overwrite,
+                    table_name,
+                    partitioned,
+                    table_format,
+                } = &**load_data;
                 write!(
                     f,
                     "LOAD DATA {local}INPATH '{inpath}' {overwrite}INTO TABLE {table_name}",
@@ -5594,12 +6035,13 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateVirtualTable {
-                name,
-                if_not_exists,
-                module_name,
-                module_args,
-            } => {
+            Statement::CreateVirtualTable(create_virtual_table) => {
+                let CreateVirtualTable {
+                    name,
+                    if_not_exists,
+                    module_name,
+                    module_args,
+                } = &**create_virtual_table;
                 write!(
                     f,
                     "CREATE VIRTUAL TABLE {if_not_exists}{name} USING {module_name}",
@@ -5624,15 +6066,16 @@ impl fmt::Display for Statement {
                 write!(f, "{drop_operator_class}")
             }
             Statement::CreateRole(create_role) => write!(f, "{create_role}"),
-            Statement::CreateSecret {
-                or_replace,
-                temporary,
-                if_not_exists,
-                name,
-                storage_specifier,
-                secret_type,
-                options,
-            } => {
+            Statement::CreateSecret(create_secret) => {
+                let CreateSecret {
+                    or_replace,
+                    temporary,
+                    if_not_exists,
+                    name,
+                    storage_specifier,
+                    secret_type,
+                    options,
+                } = &**create_secret;
                 write!(
                     f,
                     "CREATE {or_replace}",
@@ -5672,15 +6115,17 @@ impl fmt::Display for Statement {
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
             Statement::CreateTextSearch(create_text_search) => create_text_search.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
-            Statement::AlterIndex { name, operation } => {
+            Statement::AlterIndex(alter_index) => {
+                let AlterIndex { name, operation } = &**alter_index;
                 write!(f, "ALTER INDEX {name} {operation}")
             }
-            Statement::AlterView {
-                name,
-                columns,
-                query,
-                with_options,
-            } => {
+            Statement::AlterView(alter_view) => {
+                let AlterView {
+                    name,
+                    columns,
+                    query,
+                    with_options,
+                } = &**alter_view;
                 write!(f, "ALTER VIEW {name}")?;
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
@@ -5691,7 +6136,8 @@ impl fmt::Display for Statement {
                 write!(f, " AS {query}")
             }
             Statement::AlterFunction(alter_function) => write!(f, "{alter_function}"),
-            Statement::AlterType(AlterType { name, operation }) => {
+            Statement::AlterType(alter_type) => {
+                let AlterType { name, operation } = alter_type.as_ref();
                 write!(f, "ALTER TYPE {name} {operation}")
             }
             Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
@@ -5703,16 +6149,18 @@ impl fmt::Display for Statement {
                 write!(f, "{alter_operator_class}")
             }
             Statement::AlterTextSearch(alter_text_search) => write!(f, "{alter_text_search}"),
-            Statement::AlterRole { name, operation } => {
+            Statement::AlterRole(alter_role) => {
+                let AlterRole { name, operation } = &**alter_role;
                 write!(f, "ALTER ROLE {name} {operation}")
             }
             Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
-            Statement::AlterConnector {
-                name,
-                properties,
-                url,
-                owner,
-            } => {
+            Statement::AlterConnector(alter_connector) => {
+                let AlterConnector {
+                    name,
+                    properties,
+                    url,
+                    owner,
+                } = &**alter_connector;
                 write!(f, "ALTER CONNECTOR {name}")?;
                 if let Some(properties) = properties {
                     write!(
@@ -5729,10 +6177,11 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::AlterSession {
-                set,
-                session_params,
-            } => {
+            Statement::AlterSession(alter_session) => {
+                let AlterSession {
+                    set,
+                    session_params,
+                } = &**alter_session;
                 write!(
                     f,
                     "ALTER SESSION {set}",
@@ -5752,16 +6201,17 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Drop {
-                object_type,
-                if_exists,
-                names,
-                cascade,
-                restrict,
-                purge,
-                temporary,
-                table,
-            } => {
+            Statement::Drop(drop) => {
+                let DropStatement {
+                    object_type,
+                    if_exists,
+                    names,
+                    cascade,
+                    restrict,
+                    purge,
+                    temporary,
+                    table,
+                } = &**drop;
                 write!(
                     f,
                     "DROP {}{}{} {}{}{}{}",
@@ -5779,11 +6229,12 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
-            Statement::DropDomain(DropDomain {
-                if_exists,
-                name,
-                drop_behavior,
-            }) => {
+            Statement::DropDomain(drop_domain) => {
+                let DropDomain {
+                    if_exists,
+                    name,
+                    drop_behavior,
+                } = drop_domain.as_ref();
                 write!(
                     f,
                     "DROP DOMAIN{} {name}",
@@ -5794,11 +6245,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropProcedure {
-                if_exists,
-                proc_desc,
-                drop_behavior,
-            } => {
+            Statement::DropProcedure(drop_procedure) => {
+                let DropProcedure {
+                    if_exists,
+                    proc_desc,
+                    drop_behavior,
+                } = &**drop_procedure;
                 write!(
                     f,
                     "DROP PROCEDURE{} {}",
@@ -5810,12 +6262,13 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropSecret {
-                if_exists,
-                temporary,
-                name,
-                storage_specifier,
-            } => {
+            Statement::DropSecret(drop_secret) => {
+                let DropSecret {
+                    if_exists,
+                    temporary,
+                    name,
+                    storage_specifier,
+                } = &**drop_secret;
                 write!(f, "DROP ")?;
                 if let Some(t) = temporary {
                     write!(f, "{}", if *t { "TEMPORARY " } else { "PERSISTENT " })?;
@@ -5831,7 +6284,8 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::DropPolicy(policy) => write!(f, "{policy}"),
-            Statement::DropConnector { if_exists, name } => {
+            Statement::DropConnector(drop_connector) => {
+                let DropConnector { if_exists, name } = &**drop_connector;
                 write!(
                     f,
                     "DROP CONNECTOR {if_exists}{name}",
@@ -5839,23 +6293,26 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::Discard { object_type } => {
+            Statement::Discard(discard) => {
+                let Discard { object_type } = &**discard;
                 write!(f, "DISCARD {object_type}")?;
                 Ok(())
             }
             Self::Set(set) => write!(f, "{set}"),
-            Statement::ShowVariable { variable } => {
+            Statement::ShowVariable(show_variable) => {
+                let ShowVariable { variable } = &**show_variable;
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
                 }
                 Ok(())
             }
-            Statement::ShowStatus {
-                filter,
-                global,
-                session,
-            } => {
+            Statement::ShowStatus(show_status) => {
+                let ShowStatus {
+                    filter,
+                    global,
+                    session,
+                } = &**show_status;
                 write!(f, "SHOW")?;
                 if *global {
                     write!(f, " GLOBAL")?;
@@ -5869,11 +6326,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowVariables {
-                filter,
-                global,
-                session,
-            } => {
+            Statement::ShowVariables(show_variables) => {
+                let ShowVariables {
+                    filter,
+                    global,
+                    session,
+                } = &**show_variables;
                 write!(f, "SHOW")?;
                 if *global {
                     write!(f, " GLOBAL")?;
@@ -5887,15 +6345,17 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowCreate { obj_type, obj_name } => {
+            Statement::ShowCreate(show_create) => {
+                let ShowCreate { obj_type, obj_name } = &**show_create;
                 write!(f, "SHOW CREATE {obj_type} {obj_name}",)?;
                 Ok(())
             }
-            Statement::ShowColumns {
-                extended,
-                full,
-                show_options,
-            } => {
+            Statement::ShowColumns(show_columns) => {
+                let ShowColumns {
+                    extended,
+                    full,
+                    show_options,
+                } = &**show_columns;
                 write!(
                     f,
                     "SHOW {extended}{full}COLUMNS{show_options}",
@@ -5904,11 +6364,12 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowDatabases {
-                terse,
-                history,
-                show_options,
-            } => {
+            Statement::ShowDatabases(show_databases) => {
+                let ShowDatabases {
+                    terse,
+                    history,
+                    show_options,
+                } = &**show_databases;
                 write!(
                     f,
                     "SHOW {terse}DATABASES{history}{show_options}",
@@ -5917,11 +6378,12 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowCatalogs {
-                terse,
-                history,
-                show_options,
-            } => {
+            Statement::ShowCatalogs(show_catalogs) => {
+                let ShowCatalogs {
+                    terse,
+                    history,
+                    show_options,
+                } = &**show_catalogs;
                 write!(
                     f,
                     "SHOW {terse}CATALOGS{history}{show_options}",
@@ -5930,7 +6392,8 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowProcessList { full } => {
+            Statement::ShowProcessList(show_process_list) => {
+                let ShowProcessList { full } = &**show_process_list;
                 write!(
                     f,
                     "SHOW {full}PROCESSLIST",
@@ -5938,11 +6401,12 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowSchemas {
-                terse,
-                history,
-                show_options,
-            } => {
+            Statement::ShowSchemas(show_schemas) => {
+                let ShowSchemas {
+                    terse,
+                    history,
+                    show_options,
+                } = &**show_schemas;
                 write!(
                     f,
                     "SHOW {terse}SCHEMAS{history}{show_options}",
@@ -5951,10 +6415,11 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowObjects(ShowObjects {
-                terse,
-                show_options,
-            }) => {
+            Statement::ShowObjects(show_objects) => {
+                let ShowObjects {
+                    terse,
+                    show_options,
+                } = show_objects.as_ref();
                 write!(
                     f,
                     "SHOW {terse}OBJECTS{show_options}",
@@ -5962,14 +6427,15 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowTables {
-                terse,
-                history,
-                extended,
-                full,
-                external,
-                show_options,
-            } => {
+            Statement::ShowTables(show_tables) => {
+                let ShowTables {
+                    terse,
+                    history,
+                    extended,
+                    full,
+                    external,
+                    show_options,
+                } = &**show_tables;
                 write!(
                     f,
                     "SHOW {terse}{extended}{full}{external}TABLES{history}{show_options}",
@@ -5981,11 +6447,12 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowViews {
-                terse,
-                materialized,
-                show_options,
-            } => {
+            Statement::ShowViews(show_views) => {
+                let ShowViews {
+                    terse,
+                    materialized,
+                    show_options,
+                } = &**show_views;
                 write!(
                     f,
                     "SHOW {terse}{materialized}VIEWS{show_options}",
@@ -5994,7 +6461,8 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowFunctions { filter } => {
+            Statement::ShowFunctions(show_functions) => {
+                let ShowFunctions { filter } = &**show_functions;
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -6002,7 +6470,8 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Use(use_expr) => use_expr.fmt(f),
-            Statement::ShowCollation { filter } => {
+            Statement::ShowCollation(show_collation) => {
+                let ShowCollation { filter } = &**show_collation;
                 write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -6010,15 +6479,16 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::ShowCharset(show_stm) => show_stm.fmt(f),
-            Statement::StartTransaction {
-                modes,
-                begin: syntax_begin,
-                transaction,
-                modifier,
-                statements,
-                exception,
-                has_end_keyword,
-            } => {
+            Statement::StartTransaction(start_transaction) => {
+                let StartTransaction {
+                    modes,
+                    begin: syntax_begin,
+                    transaction,
+                    modifier,
+                    statements,
+                    exception,
+                    has_end_keyword,
+                } = &**start_transaction;
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
                         write!(f, "BEGIN {modifier}")?;
@@ -6049,11 +6519,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Commit {
-                chain,
-                end: end_syntax,
-                modifier,
-            } => {
+            Statement::Commit(commit) => {
+                let Commit {
+                    chain,
+                    end: end_syntax,
+                    modifier,
+                } = &**commit;
                 if *end_syntax {
                     write!(f, "END")?;
                     if let Some(modifier) = *modifier {
@@ -6067,7 +6538,8 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Rollback { chain, savepoint } => {
+            Statement::Rollback(rollback) => {
+                let Rollback { chain, savepoint } = &**rollback;
                 write!(f, "ROLLBACK")?;
 
                 if *chain {
@@ -6080,15 +6552,16 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
-            Statement::CreateSchema {
-                schema_name,
-                or_replace,
-                if_not_exists,
-                with,
-                options,
-                default_collate_spec,
-                clone,
-            } => {
+            Statement::CreateSchema(create_schema) => {
+                let CreateSchema {
+                    schema_name,
+                    or_replace,
+                    if_not_exists,
+                    with,
+                    options,
+                    default_collate_spec,
+                    clone,
+                } = &**create_schema;
                 write!(
                     f,
                     "CREATE {or_replace}SCHEMA {if_not_exists}{name}",
@@ -6114,7 +6587,8 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Assert { condition, message } => {
+            Statement::Assert(assert) => {
+                let Assert { condition, message } = &**assert;
                 write!(f, "ASSERT {condition}")?;
                 if let Some(m) = message {
                     write!(f, " AS {m}")?;
@@ -6124,22 +6598,26 @@ impl fmt::Display for Statement {
             Statement::Grant(grant) => write!(f, "{grant}"),
             Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke(revoke) => write!(f, "{revoke}"),
-            Statement::Deallocate { name, prepare } => write!(
-                f,
-                "DEALLOCATE {prepare}{name}",
-                prepare = if *prepare { "PREPARE " } else { "" },
-                name = name,
-            ),
-            Statement::Execute {
-                name,
-                parameters,
-                has_parentheses,
-                immediate,
-                into,
-                using,
-                output,
-                default,
-            } => {
+            Statement::Deallocate(deallocate) => {
+                let Deallocate { name, prepare } = &**deallocate;
+                write!(
+                    f,
+                    "DEALLOCATE {prepare}{name}",
+                    prepare = if *prepare { "PREPARE " } else { "" },
+                    name = name,
+                )
+            }
+            Statement::Execute(execute) => {
+                let Execute {
+                    name,
+                    parameters,
+                    has_parentheses,
+                    immediate,
+                    into,
+                    using,
+                    output,
+                    default,
+                } = &**execute;
                 let (open, close) = if *has_parentheses {
                     // Space before `(` only when there is no name directly preceding it.
                     (if name.is_some() { "(" } else { " (" }, ")")
@@ -6168,23 +6646,25 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Prepare {
-                name,
-                data_types,
-                statement,
-            } => {
+            Statement::Prepare(prepare) => {
+                let Prepare {
+                    name,
+                    data_types,
+                    statement,
+                } = &**prepare;
                 write!(f, "PREPARE {name} ")?;
                 if !data_types.is_empty() {
                     write!(f, "({}) ", display_comma_separated(data_types))?;
                 }
                 write!(f, "AS {statement}")
             }
-            Statement::Comment {
-                object_type,
-                object_name,
-                comment,
-                if_exists,
-            } => {
+            Statement::Comment(comment) => {
+                let CommentStatement {
+                    object_type,
+                    object_name,
+                    comment,
+                    if_exists,
+                } = &**comment;
                 write!(f, "COMMENT ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?
@@ -6196,21 +6676,24 @@ impl fmt::Display for Statement {
                     write!(f, "NULL")
                 }
             }
-            Statement::Savepoint { name } => {
+            Statement::Savepoint(savepoint) => {
+                let Savepoint { name } = &**savepoint;
                 write!(f, "SAVEPOINT ")?;
                 write!(f, "{name}")
             }
-            Statement::ReleaseSavepoint { name } => {
+            Statement::ReleaseSavepoint(release_savepoint) => {
+                let ReleaseSavepoint { name } = &**release_savepoint;
                 write!(f, "RELEASE SAVEPOINT {name}")
             }
             Statement::Merge(merge) => merge.fmt(f),
-            Statement::Cache {
-                table_name,
-                table_flag,
-                has_as,
-                options,
-                query,
-            } => {
+            Statement::Cache(cache) => {
+                let Cache {
+                    table_name,
+                    table_flag,
+                    has_as,
+                    options,
+                    query,
+                } = &**cache;
                 if let Some(table_flag) = table_flag {
                     write!(f, "CACHE {table_flag} TABLE {table_name}")?;
                 } else {
@@ -6228,24 +6711,26 @@ impl fmt::Display for Statement {
                     (false, None) => Ok(()),
                 }
             }
-            Statement::UNCache {
-                table_name,
-                if_exists,
-            } => {
+            Statement::UNCache(u_n_cache) => {
+                let UNCache {
+                    table_name,
+                    if_exists,
+                } = &**u_n_cache;
                 if *if_exists {
                     write!(f, "UNCACHE TABLE IF EXISTS {table_name}")
                 } else {
                     write!(f, "UNCACHE TABLE {table_name}")
                 }
             }
-            Statement::CreateSequence {
-                temporary,
-                if_not_exists,
-                name,
-                data_type,
-                sequence_options,
-                owned_by,
-            } => {
+            Statement::CreateSequence(create_sequence) => {
+                let CreateSequence {
+                    temporary,
+                    if_not_exists,
+                    name,
+                    data_type,
+                    sequence_options,
+                    owned_by,
+                } = &**create_sequence;
                 let as_type: String = if let Some(dt) = data_type.as_ref() {
                     //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
                     // " AS ".to_owned() + &dt.to_string()
@@ -6269,18 +6754,19 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "")
             }
-            Statement::CreateStage {
-                or_replace,
-                temporary,
-                if_not_exists,
-                name,
-                stage_params,
-                directory_table_params,
-                file_format,
-                copy_options,
-                comment,
-                ..
-            } => {
+            Statement::CreateStage(create_stage) => {
+                let CreateStage {
+                    or_replace,
+                    temporary,
+                    if_not_exists,
+                    name,
+                    stage_params,
+                    directory_table_params,
+                    file_format,
+                    copy_options,
+                    comment,
+                    ..
+                } = &**create_stage;
                 write!(
                     f,
                     "CREATE {or_replace}{temp}STAGE {if_not_exists}{name}{stage_params}",
@@ -6302,15 +6788,16 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateFileFormat {
-                or_replace,
-                temporary,
-                volatile,
-                if_not_exists,
-                name,
-                options,
-                comment,
-            } => {
+            Statement::CreateFileFormat(create_file_format) => {
+                let CreateFileFormat {
+                    or_replace,
+                    temporary,
+                    volatile,
+                    if_not_exists,
+                    name,
+                    options,
+                    comment,
+                } = &**create_file_format;
                 write!(
                     f,
                     "CREATE {or_replace}{temp}{volatile}FILE FORMAT {if_not_exists}{name}",
@@ -6328,22 +6815,23 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateWarehouse(s) => write!(f, "{s}"),
-            Statement::CopyIntoSnowflake {
-                kind,
-                into,
-                into_columns,
-                from_obj,
-                from_obj_alias,
-                stage_params,
-                from_transformations,
-                from_query,
-                files,
-                pattern,
-                file_format,
-                copy_options,
-                validation_mode,
-                partition,
-            } => {
+            Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+                let CopyIntoSnowflake {
+                    kind,
+                    into,
+                    into_columns,
+                    from_obj,
+                    from_obj_alias,
+                    stage_params,
+                    from_transformations,
+                    from_query,
+                    files,
+                    pattern,
+                    file_format,
+                    copy_options,
+                    validation_mode,
+                    partition,
+                } = &**copy_into_snowflake;
                 write!(f, "COPY INTO {into}")?;
                 if let Some(into_columns) = into_columns {
                     write!(f, " ({})", display_comma_separated(into_columns))?;
@@ -6399,17 +6887,19 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateType {
-                name,
-                representation,
-            } => {
+            Statement::CreateType(create_type) => {
+                let CreateType {
+                    name,
+                    representation,
+                } = &**create_type;
                 write!(f, "CREATE TYPE {name}")?;
                 if let Some(repr) = representation {
                     write!(f, " {repr}")?;
                 }
                 Ok(())
             }
-            Statement::Pragma { name, value, is_eq } => {
+            Statement::Pragma(pragma) => {
+                let Pragma { name, value, is_eq } = &**pragma;
                 write!(f, "PRAGMA {name}")?;
                 if let Some(value) = value {
                     if *is_eq {
@@ -6421,20 +6911,22 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Lock(lock) => lock.fmt(f),
-            Statement::LockTables { tables } => {
+            Statement::LockTables(lock_tables) => {
+                let LockTables { tables } = &**lock_tables;
                 write!(f, "LOCK TABLES {}", display_comma_separated(tables))
             }
             Statement::UnlockTables => {
                 write!(f, "UNLOCK TABLES")
             }
-            Statement::Unload {
-                query,
-                query_text,
-                to,
-                auth,
-                with,
-                options,
-            } => {
+            Statement::Unload(unload) => {
+                let Unload {
+                    query,
+                    query_text,
+                    to,
+                    auth,
+                    with,
+                    options,
+                } = &**unload;
                 write!(f, "UNLOAD(")?;
                 if let Some(query) = query {
                     write!(f, "{query}")?;
@@ -6454,16 +6946,17 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::OptimizeTable {
-                name,
-                has_table_keyword,
-                on_cluster,
-                partition,
-                include_final,
-                deduplicate,
-                predicate,
-                zorder,
-            } => {
+            Statement::OptimizeTable(optimize_table) => {
+                let OptimizeTable {
+                    name,
+                    has_table_keyword,
+                    on_cluster,
+                    partition,
+                    include_final,
+                    deduplicate,
+                    predicate,
+                    zorder,
+                } = &**optimize_table;
                 write!(f, "OPTIMIZE")?;
                 if *has_table_keyword {
                     write!(f, " TABLE")?;
@@ -6489,15 +6982,18 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::LISTEN { channel } => {
+            Statement::LISTEN(l_i_s_t_e_n) => {
+                let Listen { channel } = &**l_i_s_t_e_n;
                 write!(f, "LISTEN {channel}")?;
                 Ok(())
             }
-            Statement::UNLISTEN { channel } => {
+            Statement::UNLISTEN(u_n_l_i_s_t_e_n) => {
+                let Unlisten { channel } = &**u_n_l_i_s_t_e_n;
                 write!(f, "UNLISTEN {channel}")?;
                 Ok(())
             }
-            Statement::NOTIFY { channel, payload } => {
+            Statement::NOTIFY(n_o_t_i_f_y) => {
+                let Notify { channel, payload } = &**n_o_t_i_f_y;
                 write!(f, "NOTIFY {channel}")?;
                 if let Some(payload) = payload {
                     write!(f, ", '{payload}'")?;
@@ -6507,13 +7003,14 @@ impl fmt::Display for Statement {
             Statement::RenameTable(rename_tables) => {
                 write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
             }
-            Statement::RaisError {
-                message,
-                severity,
-                state,
-                arguments,
-                options,
-            } => {
+            Statement::RaisError(rais_error) => {
+                let RaisError {
+                    message,
+                    severity,
+                    state,
+                    arguments,
+                    options,
+                } = &**rais_error;
                 write!(f, "RAISERROR({message}, {severity}, {state}")?;
                 if !arguments.is_empty() {
                     write!(f, ", {}", display_comma_separated(arguments))?;
@@ -6529,11 +7026,12 @@ impl fmt::Display for Statement {
             Statement::WaitFor(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
-            Statement::Put {
-                source,
-                stage,
-                options,
-            } => {
+            Statement::Put(put) => {
+                let Put {
+                    source,
+                    stage,
+                    options,
+                } = &**put;
                 write!(f, "PUT '{source}' {stage}")?;
                 if !options.options.is_empty() {
                     write!(f, " {options}")?;
@@ -12331,7 +12829,7 @@ impl fmt::Display for ResetStatement {
 
 impl From<Set> for Statement {
     fn from(s: Set) -> Self {
-        Self::Set(s)
+        Self::Set(Box::new(s))
     }
 }
 
@@ -12349,283 +12847,283 @@ impl From<Box<Query>> for Statement {
 
 impl From<Insert> for Statement {
     fn from(i: Insert) -> Self {
-        Self::Insert(i)
+        Self::Insert(Box::new(i))
     }
 }
 
 impl From<Update> for Statement {
     fn from(u: Update) -> Self {
-        Self::Update(u)
+        Self::Update(Box::new(u))
     }
 }
 
 impl From<CreateView> for Statement {
     fn from(cv: CreateView) -> Self {
-        Self::CreateView(cv)
+        Self::CreateView(Box::new(cv))
     }
 }
 
 impl From<CreateRole> for Statement {
     fn from(cr: CreateRole) -> Self {
-        Self::CreateRole(cr)
+        Self::CreateRole(Box::new(cr))
     }
 }
 
 impl From<AlterTable> for Statement {
     fn from(at: AlterTable) -> Self {
-        Self::AlterTable(at)
+        Self::AlterTable(Box::new(at))
     }
 }
 
 impl From<DropFunction> for Statement {
     fn from(df: DropFunction) -> Self {
-        Self::DropFunction(df)
+        Self::DropFunction(Box::new(df))
     }
 }
 
 impl From<CreateExtension> for Statement {
     fn from(ce: CreateExtension) -> Self {
-        Self::CreateExtension(ce)
+        Self::CreateExtension(Box::new(ce))
     }
 }
 
 impl From<CreateCollation> for Statement {
     fn from(c: CreateCollation) -> Self {
-        Self::CreateCollation(c)
+        Self::CreateCollation(Box::new(c))
     }
 }
 
 impl From<DropExtension> for Statement {
     fn from(de: DropExtension) -> Self {
-        Self::DropExtension(de)
+        Self::DropExtension(Box::new(de))
     }
 }
 
 impl From<CaseStatement> for Statement {
     fn from(c: CaseStatement) -> Self {
-        Self::Case(c)
+        Self::Case(Box::new(c))
     }
 }
 
 impl From<IfStatement> for Statement {
     fn from(i: IfStatement) -> Self {
-        Self::If(i)
+        Self::If(Box::new(i))
     }
 }
 
 impl From<WhileStatement> for Statement {
     fn from(w: WhileStatement) -> Self {
-        Self::While(w)
+        Self::While(Box::new(w))
     }
 }
 
 impl From<RaiseStatement> for Statement {
     fn from(r: RaiseStatement) -> Self {
-        Self::Raise(r)
+        Self::Raise(Box::new(r))
     }
 }
 
 impl From<ThrowStatement> for Statement {
     fn from(t: ThrowStatement) -> Self {
-        Self::Throw(t)
+        Self::Throw(Box::new(t))
     }
 }
 
 impl From<Function> for Statement {
     fn from(f: Function) -> Self {
-        Self::Call(f)
+        Self::Call(Box::new(f))
     }
 }
 
 impl From<OpenStatement> for Statement {
     fn from(o: OpenStatement) -> Self {
-        Self::Open(o)
+        Self::Open(Box::new(o))
     }
 }
 
 impl From<Delete> for Statement {
     fn from(d: Delete) -> Self {
-        Self::Delete(d)
+        Self::Delete(Box::new(d))
     }
 }
 
 impl From<CreateTable> for Statement {
     fn from(c: CreateTable) -> Self {
-        Self::CreateTable(c)
+        Self::CreateTable(Box::new(c))
     }
 }
 
 impl From<CreateIndex> for Statement {
     fn from(c: CreateIndex) -> Self {
-        Self::CreateIndex(c)
+        Self::CreateIndex(Box::new(c))
     }
 }
 
 impl From<CreateServerStatement> for Statement {
     fn from(c: CreateServerStatement) -> Self {
-        Self::CreateServer(c)
+        Self::CreateServer(Box::new(c))
     }
 }
 
 impl From<CreateConnector> for Statement {
     fn from(c: CreateConnector) -> Self {
-        Self::CreateConnector(c)
+        Self::CreateConnector(Box::new(c))
     }
 }
 
 impl From<CreateOperator> for Statement {
     fn from(c: CreateOperator) -> Self {
-        Self::CreateOperator(c)
+        Self::CreateOperator(Box::new(c))
     }
 }
 
 impl From<CreateOperatorFamily> for Statement {
     fn from(c: CreateOperatorFamily) -> Self {
-        Self::CreateOperatorFamily(c)
+        Self::CreateOperatorFamily(Box::new(c))
     }
 }
 
 impl From<CreateOperatorClass> for Statement {
     fn from(c: CreateOperatorClass) -> Self {
-        Self::CreateOperatorClass(c)
+        Self::CreateOperatorClass(Box::new(c))
     }
 }
 
 impl From<CreateTextSearch> for Statement {
     fn from(c: CreateTextSearch) -> Self {
-        Self::CreateTextSearch(c)
+        Self::CreateTextSearch(Box::new(c))
     }
 }
 
 impl From<AlterSchema> for Statement {
     fn from(a: AlterSchema) -> Self {
-        Self::AlterSchema(a)
+        Self::AlterSchema(Box::new(a))
     }
 }
 
 impl From<AlterFunction> for Statement {
     fn from(a: AlterFunction) -> Self {
-        Self::AlterFunction(a)
+        Self::AlterFunction(Box::new(a))
     }
 }
 
 impl From<AlterType> for Statement {
     fn from(a: AlterType) -> Self {
-        Self::AlterType(a)
+        Self::AlterType(Box::new(a))
     }
 }
 
 impl From<AlterCollation> for Statement {
     fn from(a: AlterCollation) -> Self {
-        Self::AlterCollation(a)
+        Self::AlterCollation(Box::new(a))
     }
 }
 
 impl From<AlterOperator> for Statement {
     fn from(a: AlterOperator) -> Self {
-        Self::AlterOperator(a)
+        Self::AlterOperator(Box::new(a))
     }
 }
 
 impl From<AlterOperatorFamily> for Statement {
     fn from(a: AlterOperatorFamily) -> Self {
-        Self::AlterOperatorFamily(a)
+        Self::AlterOperatorFamily(Box::new(a))
     }
 }
 
 impl From<AlterOperatorClass> for Statement {
     fn from(a: AlterOperatorClass) -> Self {
-        Self::AlterOperatorClass(a)
+        Self::AlterOperatorClass(Box::new(a))
     }
 }
 
 impl From<AlterTextSearch> for Statement {
     fn from(a: AlterTextSearch) -> Self {
-        Self::AlterTextSearch(a)
+        Self::AlterTextSearch(Box::new(a))
     }
 }
 
 impl From<Merge> for Statement {
     fn from(m: Merge) -> Self {
-        Self::Merge(m)
+        Self::Merge(Box::new(m))
     }
 }
 
 impl From<AlterUser> for Statement {
     fn from(a: AlterUser) -> Self {
-        Self::AlterUser(a)
+        Self::AlterUser(Box::new(a))
     }
 }
 
 impl From<DropDomain> for Statement {
     fn from(d: DropDomain) -> Self {
-        Self::DropDomain(d)
+        Self::DropDomain(Box::new(d))
     }
 }
 
 impl From<ShowCharset> for Statement {
     fn from(s: ShowCharset) -> Self {
-        Self::ShowCharset(s)
+        Self::ShowCharset(Box::new(s))
     }
 }
 
 impl From<ShowObjects> for Statement {
     fn from(s: ShowObjects) -> Self {
-        Self::ShowObjects(s)
+        Self::ShowObjects(Box::new(s))
     }
 }
 
 impl From<Use> for Statement {
     fn from(u: Use) -> Self {
-        Self::Use(u)
+        Self::Use(Box::new(u))
     }
 }
 
 impl From<CreateFunction> for Statement {
     fn from(c: CreateFunction) -> Self {
-        Self::CreateFunction(c)
+        Self::CreateFunction(Box::new(c))
     }
 }
 
 impl From<CreateTrigger> for Statement {
     fn from(c: CreateTrigger) -> Self {
-        Self::CreateTrigger(c)
+        Self::CreateTrigger(Box::new(c))
     }
 }
 
 impl From<DropTrigger> for Statement {
     fn from(d: DropTrigger) -> Self {
-        Self::DropTrigger(d)
+        Self::DropTrigger(Box::new(d))
     }
 }
 
 impl From<DropOperator> for Statement {
     fn from(d: DropOperator) -> Self {
-        Self::DropOperator(d)
+        Self::DropOperator(Box::new(d))
     }
 }
 
 impl From<DropOperatorFamily> for Statement {
     fn from(d: DropOperatorFamily) -> Self {
-        Self::DropOperatorFamily(d)
+        Self::DropOperatorFamily(Box::new(d))
     }
 }
 
 impl From<DropOperatorClass> for Statement {
     fn from(d: DropOperatorClass) -> Self {
-        Self::DropOperatorClass(d)
+        Self::DropOperatorClass(Box::new(d))
     }
 }
 
 impl From<DenyStatement> for Statement {
     fn from(d: DenyStatement) -> Self {
-        Self::Deny(d)
+        Self::Deny(Box::new(d))
     }
 }
 
 impl From<CreateDomain> for Statement {
     fn from(c: CreateDomain) -> Self {
-        Self::CreateDomain(c)
+        Self::CreateDomain(Box::new(c))
     }
 }
 
@@ -12637,49 +13135,49 @@ impl From<RenameTable> for Statement {
 
 impl From<Vec<RenameTable>> for Statement {
     fn from(r: Vec<RenameTable>) -> Self {
-        Self::RenameTable(r)
+        Self::RenameTable(Box::new(r))
     }
 }
 
 impl From<PrintStatement> for Statement {
     fn from(p: PrintStatement) -> Self {
-        Self::Print(p)
+        Self::Print(Box::new(p))
     }
 }
 
 impl From<ReturnStatement> for Statement {
     fn from(r: ReturnStatement) -> Self {
-        Self::Return(r)
+        Self::Return(Box::new(r))
     }
 }
 
 impl From<ExportData> for Statement {
     fn from(e: ExportData) -> Self {
-        Self::ExportData(e)
+        Self::ExportData(Box::new(e))
     }
 }
 
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
-        Self::CreateUser(c)
+        Self::CreateUser(Box::new(c))
     }
 }
 
 impl From<CreateWarehouse> for Statement {
     fn from(c: CreateWarehouse) -> Self {
-        Self::CreateWarehouse(c)
+        Self::CreateWarehouse(Box::new(c))
     }
 }
 
 impl From<VacuumStatement> for Statement {
     fn from(v: VacuumStatement) -> Self {
-        Self::Vacuum(v)
+        Self::Vacuum(Box::new(v))
     }
 }
 
 impl From<ResetStatement> for Statement {
     fn from(r: ResetStatement) -> Self {
-        Self::Reset(r)
+        Self::Reset(Box::new(r))
     }
 }
 

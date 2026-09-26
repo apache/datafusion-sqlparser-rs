@@ -264,15 +264,15 @@ fn parse_at_at_identifier() {
 #[test]
 fn parse_begin() {
     let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; RAISE USING MESSAGE = FORMAT('ERR: %s', 'Bad'); END"#;
-    let Statement::StartTransaction {
+    let Statement::StartTransaction(start_transaction) = bigquery().verified_stmt(sql) else {
+        unreachable!();
+    };
+    let StartTransaction {
         statements,
         exception,
         has_end_keyword,
         ..
-    } = bigquery().verified_stmt(sql)
-    else {
-        unreachable!();
-    };
+    } = *start_transaction;
     assert_eq!(1, statements.len());
     assert!(exception.is_some());
 
@@ -309,10 +309,14 @@ fn parse_begin() {
 fn parse_delete_statement() {
     let sql = "DELETE \"table\" WHERE 1";
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Delete(Delete {
-            from: FromTable::WithoutKeyword(from),
-            ..
-        }) => {
+        Statement::Delete(delete) => {
+            let Delete {
+                from: FromTable::WithoutKeyword(from),
+                ..
+            } = *delete
+            else {
+                unreachable!()
+            };
             assert_eq!(
                 table_from_name(ObjectName::from(vec![Ident::with_quote('"', "table")])),
                 from[0].relation
@@ -332,13 +336,14 @@ fn parse_create_view_with_options() {
         "AS SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable",
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            query,
-            options,
-            columns,
-            ..
-        }) => {
+        Statement::CreateView(create_view) => {
+            let CreateView {
+                name,
+                query,
+                options,
+                columns,
+                ..
+            } = *create_view;
             assert_eq!(
                 name,
                 ObjectName::from(vec![
@@ -401,20 +406,21 @@ fn parse_create_view_with_options() {
 fn parse_create_view_if_not_exists() {
     let sql = "CREATE VIEW IF NOT EXISTS mydataset.newview AS SELECT foo FROM bar";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            columns,
-            query,
-            or_replace,
-            materialized,
-            options,
-            cluster_by,
-            comment,
-            with_no_schema_binding: late_binding,
-            if_not_exists,
-            temporary,
-            ..
-        }) => {
+        Statement::CreateView(create_view) => {
+            let CreateView {
+                name,
+                columns,
+                query,
+                or_replace,
+                materialized,
+                options,
+                cluster_by,
+                comment,
+                with_no_schema_binding: late_binding,
+                if_not_exists,
+                temporary,
+                ..
+            } = *create_view;
             assert_eq!("mydataset.newview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -435,12 +441,13 @@ fn parse_create_view_if_not_exists() {
 fn parse_create_view_with_unquoted_hyphen() {
     let sql = "CREATE VIEW IF NOT EXISTS my-pro-ject.mydataset.myview AS SELECT 1";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            query,
-            if_not_exists,
-            ..
-        }) => {
+        Statement::CreateView(create_view) => {
+            let CreateView {
+                name,
+                query,
+                if_not_exists,
+                ..
+            } = *create_view;
             assert_eq!("my-pro-ject.mydataset.myview", name.to_string());
             assert_eq!("SELECT 1", query.to_string());
             assert!(if_not_exists);
@@ -453,7 +460,8 @@ fn parse_create_view_with_unquoted_hyphen() {
 fn parse_create_table_with_unquoted_hyphen() {
     let sql = "CREATE TABLE my-pro-ject.mydataset.mytable (x INT64)";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, columns, .. } = *create_table;
             assert_eq!(
                 name,
                 ObjectName::from(vec![
@@ -486,14 +494,15 @@ fn parse_create_table_with_options() {
         r#"OPTIONS(partition_expiration_days = 1, description = "table option description")"#
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            partition_by,
-            cluster_by,
-            table_options,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                table_options,
+                ..
+            } = *create_table;
             assert_eq!(
                 name,
                 ObjectName::from(vec!["mydataset".into(), "newtable".into()])
@@ -605,7 +614,8 @@ fn parse_create_external_table_with_options() {
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery_and_generic().one_statement_parses_to(sql, sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, columns, .. } = *create_table;
             assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -1845,14 +1855,15 @@ fn parse_merge() {
     });
 
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Merge(Merge {
-            into,
-            table,
-            source,
-            on,
-            clauses,
-            ..
-        }) => {
+        Statement::Merge(merge) => {
+            let Merge {
+                into,
+                table,
+                source,
+                on,
+                clauses,
+                ..
+            } = *merge;
             assert!(!into);
             assert_eq!(
                 TableFactor::Table {
@@ -2174,7 +2185,8 @@ fn parse_big_query_declare() {
         ),
     ] {
         match bigquery().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare(declare) => {
+                let DeclareStatement { mut stmts } = *declare;
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -2306,7 +2318,7 @@ fn test_bigquery_create_function() {
     let stmt = bigquery().verified_stmt(sql);
     assert_eq!(
         stmt,
-        Statement::CreateFunction(CreateFunction {
+        Statement::CreateFunction(Box::new(CreateFunction {
             or_alter: false,
             or_replace: true,
             temporary: true,
@@ -2334,7 +2346,7 @@ fn test_bigquery_create_function() {
             parallel: None,
             security: None,
             set_params: vec![],
-        })
+        }))
     );
 
     let sqls = [
@@ -2687,7 +2699,7 @@ fn test_export_data() {
     ));
     assert_eq!(
         stmt,
-        Statement::ExportData(ExportData {
+        Statement::ExportData(Box::new(ExportData {
             options: vec![
                 SqlOption::KeyValue {
                     key: Ident::new("uri"),
@@ -2775,7 +2787,7 @@ fn test_export_data() {
                 format_clause: None,
                 pipe_operators: vec![],
             })
-        })
+        }))
     );
 
     let stmt = bigquery().verified_stmt(concat!(
@@ -2789,7 +2801,7 @@ fn test_export_data() {
 
     assert_eq!(
         stmt,
-        Statement::ExportData(ExportData {
+        Statement::ExportData(Box::new(ExportData {
             options: vec![
                 SqlOption::KeyValue {
                     key: Ident::new("uri"),
@@ -2881,7 +2893,7 @@ fn test_export_data() {
                 format_clause: None,
                 pipe_operators: vec![],
             })
-        })
+        }))
     );
 
     // at least one option (uri) is required

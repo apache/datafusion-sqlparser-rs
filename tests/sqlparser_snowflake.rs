@@ -37,7 +37,8 @@ use pretty_assertions::assert_eq;
 fn test_snowflake_create_table() {
     let sql = "CREATE TABLE _my_$table (am00unt number)";
     match snowflake_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, .. } = *create_table;
             assert_eq!("_my_$table", name.to_string());
         }
         _ => unreachable!(),
@@ -53,11 +54,12 @@ fn parse_sf_create_secure_view_and_materialized_view() {
         "CREATE OR REPLACE SECURE MATERIALIZED VIEW v AS SELECT 1",
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::CreateView(CreateView {
-                secure,
-                materialized,
-                ..
-            }) => {
+            Statement::CreateView(create_view) => {
+                let CreateView {
+                    secure,
+                    materialized,
+                    ..
+                } = *create_view;
                 assert!(secure);
                 if sql.contains("MATERIALIZED") {
                     assert!(materialized);
@@ -75,9 +77,10 @@ fn parse_sf_create_secure_view_and_materialized_view() {
 fn test_snowflake_create_or_replace_table() {
     let sql = "CREATE OR REPLACE TABLE my_table (a number)";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name, or_replace, ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name, or_replace, ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert!(or_replace);
         }
@@ -89,12 +92,13 @@ fn test_snowflake_create_or_replace_table() {
 fn test_snowflake_create_or_replace_table_copy_grants() {
     let sql = "CREATE OR REPLACE TABLE my_table (a number) COPY GRANTS";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            or_replace,
-            copy_grants,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                or_replace,
+                copy_grants,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert!(or_replace);
             assert!(copy_grants);
@@ -108,12 +112,13 @@ fn test_snowflake_create_or_replace_table_copy_grants_at_end() {
     let sql = "CREATE OR REPLACE TABLE my_table COPY GRANTS (a number) ";
     let parsed = "CREATE OR REPLACE TABLE my_table (a number) COPY GRANTS";
     match snowflake().one_statement_parses_to(sql, parsed) {
-        Statement::CreateTable(CreateTable {
-            name,
-            or_replace,
-            copy_grants,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                or_replace,
+                copy_grants,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert!(or_replace);
             assert!(copy_grants);
@@ -126,12 +131,13 @@ fn test_snowflake_create_or_replace_table_copy_grants_at_end() {
 fn test_snowflake_create_or_replace_table_copy_grants_cta() {
     let sql = "CREATE OR REPLACE TABLE my_table COPY GRANTS AS SELECT 1 AS a";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            or_replace,
-            copy_grants,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                or_replace,
+                copy_grants,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert!(or_replace);
             assert!(copy_grants);
@@ -144,11 +150,12 @@ fn test_snowflake_create_or_replace_table_copy_grants_cta() {
 fn test_snowflake_create_table_enable_schema_evolution() {
     let sql = "CREATE TABLE my_table (a number) ENABLE_SCHEMA_EVOLUTION=TRUE";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            enable_schema_evolution,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                enable_schema_evolution,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(Some(true), enable_schema_evolution);
         }
@@ -160,11 +167,12 @@ fn test_snowflake_create_table_enable_schema_evolution() {
 fn test_snowflake_create_table_change_tracking() {
     let sql = "CREATE TABLE my_table (a number) CHANGE_TRACKING=TRUE";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            change_tracking,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                change_tracking,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(Some(true), change_tracking);
         }
@@ -176,11 +184,12 @@ fn test_snowflake_create_table_change_tracking() {
 fn test_snowflake_create_table_data_retention_time_in_days() {
     let sql = "CREATE TABLE my_table (a number) DATA_RETENTION_TIME_IN_DAYS=5";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            data_retention_time_in_days,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                data_retention_time_in_days,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(Some(5), data_retention_time_in_days);
         }
@@ -192,11 +201,12 @@ fn test_snowflake_create_table_data_retention_time_in_days() {
 fn test_snowflake_create_table_max_data_extension_time_in_days() {
     let sql = "CREATE TABLE my_table (a number) MAX_DATA_EXTENSION_TIME_IN_DAYS=5";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            max_data_extension_time_in_days,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                max_data_extension_time_in_days,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(Some(5), max_data_extension_time_in_days);
         }
@@ -209,11 +219,12 @@ fn test_snowflake_create_table_with_aggregation_policy() {
     match snowflake()
         .verified_stmt("CREATE TABLE my_table (a number) WITH AGGREGATION POLICY policy_name")
     {
-        Statement::CreateTable(CreateTable {
-            name,
-            with_aggregation_policy,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                with_aggregation_policy,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some("policy_name".to_string()),
@@ -229,11 +240,12 @@ fn test_snowflake_create_table_with_aggregation_policy() {
         .pop()
         .unwrap()
     {
-        Statement::CreateTable(CreateTable {
-            name,
-            with_aggregation_policy,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                with_aggregation_policy,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some("policy_name".to_string()),
@@ -249,11 +261,12 @@ fn test_snowflake_create_table_with_row_access_policy() {
     match snowflake().verified_stmt(
         "CREATE TABLE my_table (a number, b number) WITH ROW ACCESS POLICY policy_name ON (a)",
     ) {
-        Statement::CreateTable(CreateTable {
-            name,
-            with_row_access_policy,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                with_row_access_policy,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
@@ -271,11 +284,12 @@ fn test_snowflake_create_table_with_row_access_policy() {
         .pop()
         .unwrap()
     {
-        Statement::CreateTable(CreateTable {
-            name,
-            with_row_access_policy,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                with_row_access_policy,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
@@ -292,11 +306,11 @@ fn test_snowflake_create_table_with_storage_lifecycle_policy() {
     match snowflake().verified_stmt(
         "CREATE TABLE IF NOT EXISTS my_table (a NUMBER(38, 0), b VARIANT) WITH STORAGE LIFECYCLE POLICY dba.global_settings.my_policy ON (a)",
     ) {
-        Statement::CreateTable(CreateTable {
+        Statement::CreateTable(create_table) => { let CreateTable {
             name,
             with_storage_lifecycle_policy,
             ..
-        }) => {
+        } = *create_table;
             assert_eq!("my_table", name.to_string());
             let policy = with_storage_lifecycle_policy.unwrap();
             assert_eq!("dba.global_settings.my_policy", policy.policy.to_string());
@@ -317,9 +331,10 @@ fn test_snowflake_create_table_with_tag() {
     match snowflake()
         .verified_stmt("CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')")
     {
-        Statement::CreateTable(CreateTable {
-            name, with_tags, ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name, with_tags, ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
@@ -338,9 +353,10 @@ fn test_snowflake_create_table_with_tag() {
         .pop()
         .unwrap()
     {
-        Statement::CreateTable(CreateTable {
-            name, with_tags, ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name, with_tags, ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
@@ -358,11 +374,12 @@ fn test_snowflake_create_table_with_tag() {
 fn test_snowflake_create_table_default_ddl_collation() {
     let sql = "CREATE TABLE my_table (a number) DEFAULT_DDL_COLLATION='de'";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            default_ddl_collation,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                default_ddl_collation,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(Some("de".to_string()), default_ddl_collation);
         }
@@ -374,9 +391,10 @@ fn test_snowflake_create_table_default_ddl_collation() {
 fn test_snowflake_create_transient_table() {
     let sql = "CREATE TRANSIENT TABLE CUSTOMER (id INT, name VARCHAR(255))";
     match snowflake_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name, transient, ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name, transient, ..
+            } = *create_table;
             assert_eq!("CUSTOMER", name.to_string());
             assert!(transient)
         }
@@ -388,7 +406,8 @@ fn test_snowflake_create_transient_table() {
 fn test_snowflake_create_table_column_comment() {
     let sql = "CREATE TABLE my_table (a STRING COMMENT 'some comment')";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, columns, .. } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 vec![ColumnDef {
@@ -418,7 +437,8 @@ fn test_snowflake_create_table_on_commit() {
 #[test]
 fn test_snowflake_create_local_table() {
     match snowflake().verified_stmt("CREATE TABLE my_table (a INT)") {
-        Statement::CreateTable(CreateTable { name, global, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, global, .. } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert!(global.is_none())
         }
@@ -426,7 +446,8 @@ fn test_snowflake_create_local_table() {
     }
 
     match snowflake().verified_stmt("CREATE LOCAL TABLE my_table (a INT)") {
-        Statement::CreateTable(CreateTable { name, global, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, global, .. } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(Some(false), global)
         }
@@ -437,7 +458,8 @@ fn test_snowflake_create_local_table() {
 #[test]
 fn test_snowflake_create_global_table() {
     match snowflake().verified_stmt("CREATE GLOBAL TABLE my_table (a INT)") {
-        Statement::CreateTable(CreateTable { name, global, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, global, .. } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(Some(true), global)
         }
@@ -492,11 +514,12 @@ fn test_snowflake_create_invalid_temporal_file_format() {
 #[test]
 fn test_snowflake_create_table_if_not_exists() {
     match snowflake().verified_stmt("CREATE TABLE IF NOT EXISTS my_table (a INT)") {
-        Statement::CreateTable(CreateTable {
-            name,
-            if_not_exists,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                if_not_exists,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert!(if_not_exists)
         }
@@ -528,9 +551,10 @@ fn test_snowflake_create_table_if_not_exists() {
 #[test]
 fn test_snowflake_create_table_cluster_by() {
     match snowflake().verified_stmt("CREATE TABLE my_table (a INT) CLUSTER BY (a, b, my_func(c))") {
-        Statement::CreateTable(CreateTable {
-            name, cluster_by, ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name, cluster_by, ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(WrappedCollection::Parentheses(vec![
@@ -563,11 +587,12 @@ fn test_snowflake_create_table_cluster_by() {
 #[test]
 fn test_snowflake_create_table_comment() {
     match snowflake().verified_stmt("CREATE TABLE my_table (a INT) COMMENT = 'some comment'") {
-        Statement::CreateTable(CreateTable {
-            name,
-            table_options,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                table_options,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             let plain_options = match table_options {
                 CreateTableOptions::Plain(options) => options,
@@ -635,7 +660,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
     );
     // it is a snowflake specific options (AUTOINCREMENT/IDENTITY)
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { columns, .. } = *create_table;
             assert_eq!(
                 columns,
                 vec![
@@ -717,7 +743,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
 #[test]
 fn test_snowflake_create_table_with_collated_column() {
     match snowflake_and_generic().verified_stmt("CREATE TABLE my_table (a TEXT COLLATE 'de_DE')") {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { columns, .. } = *create_table;
             assert_eq!(
                 columns,
                 vec![ColumnDef {
@@ -761,7 +788,8 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
         ),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::CreateTable(CreateTable { columns, .. }) => {
+            Statement::CreateTable(create_table) => {
+                let CreateTable { columns, .. } = *create_table;
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
@@ -795,7 +823,8 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
         ("CREATE TABLE my_table (a INT PROJECTION POLICY p)", false),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::CreateTable(CreateTable { columns, .. }) => {
+            Statement::CreateTable(create_table) => {
+                let CreateTable { columns, .. } = *create_table;
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
@@ -832,7 +861,8 @@ fn test_snowflake_create_table_with_columns_tags() {
         ),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::CreateTable(CreateTable { columns, .. }) => {
+            Statement::CreateTable(create_table) => {
+                let CreateTable { columns, .. } = *create_table;
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
@@ -871,7 +901,8 @@ fn test_snowflake_create_table_with_several_column_options() {
         ")"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { columns, .. } = *create_table;
             assert_eq!(
                 columns,
                 vec![
@@ -967,14 +998,14 @@ fn test_snowflake_create_iceberg_table_all_options() {
     CLUSTER BY (a, b) EXTERNAL_VOLUME='volume' CATALOG='SNOWFLAKE' BASE_LOCATION='relative/path' CATALOG_SYNC='OPEN_CATALOG' \
     STORAGE_SERIALIZATION_POLICY=COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
     WITH AGGREGATION POLICY policy_name WITH ROW ACCESS POLICY policy_name ON (a) WITH TAG (A='TAG A', B='TAG B')") {
-        Statement::CreateTable(CreateTable {
+        Statement::CreateTable(create_table) => { let CreateTable {
             name, cluster_by, base_location,
             external_volume, catalog, catalog_sync,
             storage_serialization_policy, change_tracking,
             copy_grants, data_retention_time_in_days,
             max_data_extension_time_in_days, with_aggregation_policy,
             with_row_access_policy, with_tags, ..
-        }) => {
+        } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(WrappedCollection::Parentheses(vec![
@@ -1015,11 +1046,12 @@ fn test_snowflake_create_iceberg_table() {
     match snowflake()
         .verified_stmt("CREATE ICEBERG TABLE my_table (a INT) BASE_LOCATION='relative_path'")
     {
-        Statement::CreateTable(CreateTable {
-            name,
-            base_location,
-            ..
-        }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                name,
+                base_location,
+                ..
+            } = *create_table;
             assert_eq!("my_table", name.to_string());
             assert_eq!("relative_path", base_location.unwrap());
         }
@@ -1078,20 +1110,21 @@ fn parse_sf_create_or_replace_with_comment_for_snowflake() {
         test_utils::TestedDialects::new(vec![Box::new(SnowflakeDialect {}) as Box<dyn Dialect>]);
 
     match dialect.verified_stmt(sql) {
-        Statement::CreateView(CreateView {
-            name,
-            columns,
-            or_replace,
-            options,
-            query,
-            materialized,
-            cluster_by,
-            comment,
-            with_no_schema_binding: late_binding,
-            if_not_exists,
-            temporary,
-            ..
-        }) => {
+        Statement::CreateView(create_view) => {
+            let CreateView {
+                name,
+                columns,
+                or_replace,
+                options,
+                query,
+                materialized,
+                cluster_by,
+                comment,
+                with_no_schema_binding: late_binding,
+                if_not_exists,
+                temporary,
+                ..
+            } = *create_view;
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(options, CreateTableOptions::None);
@@ -1693,18 +1726,20 @@ fn test_alter_iceberg_table() {
 #[test]
 fn test_drop_stage() {
     match snowflake_and_generic().verified_stmt("DROP STAGE s1") {
-        Statement::Drop {
-            names, if_exists, ..
-        } => {
+        Statement::Drop(drop) => {
+            let DropStatement {
+                names, if_exists, ..
+            } = *drop;
             assert!(!if_exists);
             assert_eq!("s1", names[0].to_string());
         }
         _ => unreachable!(),
     };
     match snowflake_and_generic().verified_stmt("DROP STAGE IF EXISTS s1") {
-        Statement::Drop {
-            names, if_exists, ..
-        } => {
+        Statement::Drop(drop) => {
+            let DropStatement {
+                names, if_exists, ..
+            } = *drop;
             assert!(if_exists);
             assert_eq!("s1", names[0].to_string());
         }
@@ -1736,7 +1771,8 @@ fn parse_snowflake_declare_cursor() {
         ),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare(declare) => {
+                let DeclareStatement { mut stmts } = *declare;
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1804,7 +1840,8 @@ fn parse_snowflake_declare_result_set() {
         ("DECLARE res RESULTSET", "res", None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare(declare) => {
+                let DeclareStatement { mut stmts } = *declare;
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1857,7 +1894,8 @@ fn parse_snowflake_declare_exception() {
         ("DECLARE ex EXCEPTION", "ex", None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare(declare) => {
+                let DeclareStatement { mut stmts } = *declare;
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1897,7 +1935,8 @@ fn parse_snowflake_declare_variable() {
         ("DECLARE profit", "profit", None, None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare(declare) => {
+                let DeclareStatement { mut stmts } = *declare;
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1947,7 +1986,8 @@ fn parse_snowflake_declare_multi_statements() {
         "ex EXCEPTION (-20003, 'ERROR: Could not create table.')"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::Declare { stmts } => {
+        Statement::Declare(declare) => {
+            let DeclareStatement { stmts } = *declare;
             let actual = stmts
                 .iter()
                 .map(|stmt| (stmt.names[0].value.as_str(), stmt.declare_type.clone()))
@@ -1977,14 +2017,15 @@ fn parse_snowflake_declare_multi_statements() {
 fn test_create_stage() {
     let sql = "CREATE STAGE s1.s2";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateStage {
-            or_replace,
-            temporary,
-            if_not_exists,
-            name,
-            comment,
-            ..
-        } => {
+        Statement::CreateStage(create_stage) => {
+            let CreateStage {
+                or_replace,
+                temporary,
+                if_not_exists,
+                name,
+                comment,
+                ..
+            } = *create_stage;
             assert!(!or_replace);
             assert!(!temporary);
             assert!(!if_not_exists);
@@ -2000,15 +2041,16 @@ fn test_create_stage() {
         "COMMENT='some-comment'"
     );
     match snowflake().verified_stmt(extended_sql) {
-        Statement::CreateStage {
-            or_replace,
-            temporary,
-            if_not_exists,
-            name,
-            stage_params,
-            comment,
-            ..
-        } => {
+        Statement::CreateStage(create_stage) => {
+            let CreateStage {
+                or_replace,
+                temporary,
+                if_not_exists,
+                name,
+                stage_params,
+                comment,
+                ..
+            } = *create_stage;
             assert!(or_replace);
             assert!(temporary);
             assert!(if_not_exists);
@@ -2037,7 +2079,8 @@ fn test_create_stage_with_stage_params() {
     );
 
     match snowflake().verified_stmt(sql) {
-        Statement::CreateStage { stage_params, .. } => {
+        Statement::CreateStage(create_stage) => {
+            let CreateStage { stage_params, .. } = *create_stage;
             assert_eq!("s3://load/files/", stage_params.url.unwrap());
             assert_eq!("myint", stage_params.storage_integration.unwrap());
             assert_eq!(
@@ -2084,10 +2127,11 @@ fn test_create_stage_with_directory_table_params() {
     );
 
     match snowflake().verified_stmt(sql) {
-        Statement::CreateStage {
-            directory_table_params,
-            ..
-        } => {
+        Statement::CreateStage(create_stage) => {
+            let CreateStage {
+                directory_table_params,
+                ..
+            } = *create_stage;
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "ENABLE".to_string(),
                 option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
@@ -2117,7 +2161,8 @@ fn test_create_stage_with_file_format() {
     );
 
     match snowflake_without_unescape().verified_stmt(sql) {
-        Statement::CreateStage { file_format, .. } => {
+        Statement::CreateStage(create_stage) => {
+            let CreateStage { file_format, .. } = *create_stage;
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
                 option_value: KeyValueOptionKind::Single(
@@ -2153,7 +2198,8 @@ fn test_create_stage_with_copy_options() {
         "COPY_OPTIONS=(ON_ERROR=CONTINUE FORCE=true)"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::CreateStage { copy_options, .. } => {
+        Statement::CreateStage(create_stage) => {
+            let CreateStage { copy_options, .. } = *create_stage;
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
                 option_value: KeyValueOptionKind::Single(
@@ -2174,15 +2220,16 @@ fn test_create_stage_with_copy_options() {
 fn test_create_file_format() {
     let sql = "CREATE FILE FORMAT my_fmt";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateFileFormat {
-            or_replace,
-            temporary,
-            volatile,
-            if_not_exists,
-            name,
-            options,
-            comment,
-        } => {
+        Statement::CreateFileFormat(create_file_format) => {
+            let CreateFileFormat {
+                or_replace,
+                temporary,
+                volatile,
+                if_not_exists,
+                name,
+                options,
+                comment,
+            } = *create_file_format;
             assert!(!or_replace);
             assert!(!temporary);
             assert!(!volatile);
@@ -2200,14 +2247,15 @@ fn test_create_file_format() {
         "COMMENT='some-comment'"
     );
     match snowflake().verified_stmt(extended_sql) {
-        Statement::CreateFileFormat {
-            or_replace,
-            temporary,
-            if_not_exists,
-            name,
-            comment,
-            ..
-        } => {
+        Statement::CreateFileFormat(create_file_format) => {
+            let CreateFileFormat {
+                or_replace,
+                temporary,
+                if_not_exists,
+                name,
+                comment,
+                ..
+            } = *create_file_format;
             assert!(or_replace);
             assert!(temporary);
             assert!(if_not_exists);
@@ -2229,7 +2277,8 @@ fn test_create_file_format_with_options() {
         "TYPE=CSV FIELD_DELIMITER='|' SKIP_HEADER=1 COMPRESSION=GZIP"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::CreateFileFormat { options, .. } => {
+        Statement::CreateFileFormat(create_file_format) => {
+            let CreateFileFormat { options, .. } = *create_file_format;
             assert!(options.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
                 option_value: KeyValueOptionKind::Single(
@@ -2264,12 +2313,13 @@ fn test_create_file_format_with_options() {
 fn test_create_file_format_volatile() {
     let sql = "CREATE VOLATILE FILE FORMAT my_fmt TYPE=JSON STRIP_OUTER_ARRAY=true";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateFileFormat {
-            temporary,
-            volatile,
-            options,
-            ..
-        } => {
+        Statement::CreateFileFormat(create_file_format) => {
+            let CreateFileFormat {
+                temporary,
+                volatile,
+                options,
+                ..
+            } = *create_file_format;
             assert!(!temporary);
             assert!(volatile);
             assert!(options.options.contains(&KeyValueOption {
@@ -2300,15 +2350,16 @@ fn test_copy_into() {
         "FROM 'gcs://mybucket/./../a.csv'"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake {
-            kind,
-            into,
-            from_obj,
-            files,
-            pattern,
-            validation_mode,
-            ..
-        } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake {
+                kind,
+                into,
+                from_obj,
+                files,
+                pattern,
+                validation_mode,
+                ..
+            } = *copy_into_snowflake;
             assert_eq!(kind, CopyIntoSnowflakeKind::Table);
             assert_eq!(
                 into,
@@ -2331,14 +2382,15 @@ fn test_copy_into() {
 
     let sql = concat!("COPY INTO 's3://a/b/c/data.parquet' ", "FROM db.sc.tbl ", "PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || to_varchar(date_part(hour, ts)))");
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake {
-            kind,
-            into,
-            from_obj,
-            from_query,
-            partition,
-            ..
-        } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake {
+                kind,
+                into,
+                from_obj,
+                from_query,
+                partition,
+                ..
+            } = *copy_into_snowflake;
             assert_eq!(kind, CopyIntoSnowflakeKind::Location);
             assert_eq!(
                 into,
@@ -2364,13 +2416,14 @@ fn test_copy_into() {
         "FROM (SELECT * FROM tbl)"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake {
-            kind,
-            into,
-            from_obj,
-            from_query,
-            ..
-        } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake {
+                kind,
+                into,
+                from_obj,
+                from_query,
+                ..
+            } = *copy_into_snowflake;
             assert_eq!(kind, CopyIntoSnowflakeKind::Location);
             assert_eq!(
                 into,
@@ -2396,11 +2449,12 @@ fn test_copy_into_with_stage_params() {
     );
 
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake {
-            from_obj,
-            stage_params,
-            ..
-        } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake {
+                from_obj,
+                stage_params,
+                ..
+            } = *copy_into_snowflake;
             //assert_eq!("s3://load/files/", stage_params.url.unwrap());
             assert_eq!(
                 from_obj,
@@ -2451,11 +2505,12 @@ fn test_copy_into_with_stage_params() {
     );
 
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake {
-            from_obj,
-            stage_params,
-            ..
-        } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake {
+                from_obj,
+                stage_params,
+                ..
+            } = *copy_into_snowflake;
             assert_eq!(
                 from_obj,
                 Some(ObjectName::from(vec![Ident::with_quote(
@@ -2480,13 +2535,14 @@ fn test_copy_into_with_files_and_pattern_and_verification() {
     );
 
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake {
-            files,
-            pattern,
-            validation_mode,
-            from_obj_alias,
-            ..
-        } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake {
+                files,
+                pattern,
+                validation_mode,
+                from_obj_alias,
+                ..
+            } = *copy_into_snowflake;
             assert_eq!(files.unwrap(), vec!["file1.json", "file2.json"]);
             assert_eq!(pattern.unwrap(), ".*employees0[1-5].csv.gz");
             assert_eq!(validation_mode.unwrap(), "RETURN_7_ROWS");
@@ -2508,11 +2564,12 @@ fn test_copy_into_with_transformations() {
     );
 
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake {
-            from_obj,
-            from_transformations,
-            ..
-        } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake {
+                from_obj,
+                from_transformations,
+                ..
+            } = *copy_into_snowflake;
             assert_eq!(
                 from_obj,
                 Some(ObjectName::from(vec![
@@ -2630,7 +2687,8 @@ fn test_copy_into_file_format() {
     );
 
     match snowflake_without_unescape().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake { file_format, .. } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake { file_format, .. } = *copy_into_snowflake;
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
                 option_value: KeyValueOptionKind::Single(
@@ -2672,7 +2730,8 @@ fn test_copy_into_file_format() {
         .first()
         .unwrap()
     {
-        Statement::CopyIntoSnowflake { file_format, .. } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake { file_format, .. } = &**copy_into_snowflake;
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
                 option_value: KeyValueOptionKind::Single(
@@ -2707,7 +2766,8 @@ fn test_copy_into_copy_options() {
     );
 
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake { copy_options, .. } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake { copy_options, .. } = *copy_into_snowflake;
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
                 option_value: KeyValueOptionKind::Single(
@@ -2752,7 +2812,8 @@ fn test_snowflake_stage_object_names_into_location() {
         let (formatted_name, object_name) = it;
         let sql = format!("COPY INTO {formatted_name} FROM 'gcs://mybucket/./../a.csv'");
         match snowflake().verified_stmt(&sql) {
-            Statement::CopyIntoSnowflake { into, .. } => {
+            Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+                let CopyIntoSnowflake { into, .. } = *copy_into_snowflake;
                 assert_eq!(into.0, object_name.0)
             }
             _ => unreachable!(),
@@ -2775,7 +2836,8 @@ fn test_snowflake_stage_object_names_into_table() {
         let (formatted_name, object_name) = it;
         let sql = format!("COPY INTO {formatted_name} FROM 'gcs://mybucket/./../a.csv'");
         match snowflake().verified_stmt(&sql) {
-            Statement::CopyIntoSnowflake { into, .. } => {
+            Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+                let CopyIntoSnowflake { into, .. } = *copy_into_snowflake;
                 assert_eq!(into.0, object_name.0)
             }
             _ => unreachable!(),
@@ -2788,7 +2850,8 @@ fn test_snowflake_copy_into() {
     let sql = "COPY INTO a.b FROM @namespace.stage_name";
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake { into, from_obj, .. } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake { into, from_obj, .. } = *copy_into_snowflake;
             assert_eq!(
                 into,
                 ObjectName::from(vec![Ident::new("a"), Ident::new("b")])
@@ -2808,7 +2871,8 @@ fn test_snowflake_copy_into() {
     let sql = "COPY INTO a.b FROM @namespace.stage_name/x@x~x%x+/20250723_data-x";
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake { into, from_obj, .. } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake { into, from_obj, .. } = *copy_into_snowflake;
             assert_eq!(
                 into,
                 ObjectName::from(vec![Ident::new("a"), Ident::new("b")])
@@ -2830,7 +2894,8 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
     let sql = "COPY INTO SCHEMA.SOME_MONITORING_SYSTEM FROM (SELECT t.$1:st AS st FROM @schema.general_finished)";
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
     match snowflake().verified_stmt(sql) {
-        Statement::CopyIntoSnowflake { into, from_obj, .. } => {
+        Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+            let CopyIntoSnowflake { into, from_obj, .. } = *copy_into_snowflake;
             assert_eq!(
                 into,
                 ObjectName::from(vec![
@@ -3267,12 +3332,13 @@ fn explain_desc() {
 #[test]
 fn parse_explain_table() {
     match snowflake().verified_stmt("EXPLAIN TABLE test_identifier") {
-        Statement::ExplainTable {
-            describe_alias,
-            hive_format,
-            has_table_keyword,
-            table_name,
-        } => {
+        Statement::ExplainTable(explain_table) => {
+            let ExplainTable {
+                describe_alias,
+                hive_format,
+                has_table_keyword,
+                table_name,
+            } = *explain_table;
             assert_eq!(describe_alias, DescribeAlias::Explain);
             assert_eq!(hive_format, None);
             assert_eq!(has_table_keyword, true);
@@ -3290,18 +3356,17 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE {object_name}")),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
+            Statement::Use(Box::new(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )]))))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
                 snowflake().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
-                    quote,
-                    object_name.to_string(),
-                )])))
+                Statement::Use(Box::new(Use::Object(ObjectName::from(vec![
+                    Ident::with_quote(quote, object_name.to_string(),)
+                ]))))
             );
         }
     }
@@ -3312,59 +3377,55 @@ fn parse_use() {
             snowflake().verified_stmt(&format!(
                 "USE {quote}CATALOG{quote}.{quote}my_schema{quote}"
             )),
-            Statement::Use(Use::Object(ObjectName::from(vec![
+            Statement::Use(Box::new(Use::Object(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
-            ])))
+            ]))))
         );
     }
     // Test double identifier without quotes
     assert_eq!(
         snowflake().verified_stmt("USE mydb.my_schema"),
-        Statement::Use(Use::Object(ObjectName::from(vec![
+        Statement::Use(Box::new(Use::Object(ObjectName::from(vec![
             Ident::new("mydb"),
             Ident::new("my_schema")
-        ])))
+        ]))))
     );
 
     for &quote in &quote_styles {
         // Test single and double identifier with keyword and different type of quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE DATABASE {quote}my_database{quote}")),
-            Statement::Use(Use::Database(ObjectName::from(vec![Ident::with_quote(
-                quote,
-                "my_database".to_string(),
-            )])))
+            Statement::Use(Box::new(Use::Database(ObjectName::from(vec![
+                Ident::with_quote(quote, "my_database".to_string(),)
+            ]))))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {quote}my_schema{quote}")),
-            Statement::Use(Use::Schema(ObjectName::from(vec![Ident::with_quote(
-                quote,
-                "my_schema".to_string(),
-            )])))
+            Statement::Use(Box::new(Use::Schema(ObjectName::from(vec![
+                Ident::with_quote(quote, "my_schema".to_string(),)
+            ]))))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!(
                 "USE SCHEMA {quote}CATALOG{quote}.{quote}my_schema{quote}"
             )),
-            Statement::Use(Use::Schema(ObjectName::from(vec![
+            Statement::Use(Box::new(Use::Schema(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
-            ])))
+            ]))))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE ROLE {quote}my_role{quote}")),
-            Statement::Use(Use::Role(ObjectName::from(vec![Ident::with_quote(
-                quote,
-                "my_role".to_string(),
-            )])))
+            Statement::Use(Box::new(Use::Role(ObjectName::from(vec![
+                Ident::with_quote(quote, "my_role".to_string(),)
+            ]))))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE WAREHOUSE {quote}my_wh{quote}")),
-            Statement::Use(Use::Warehouse(ObjectName::from(vec![Ident::with_quote(
-                quote,
-                "my_wh".to_string(),
-            )])))
+            Statement::Use(Box::new(Use::Warehouse(ObjectName::from(vec![
+                Ident::with_quote(quote, "my_wh".to_string(),)
+            ]))))
         );
     }
 
@@ -3407,7 +3468,8 @@ fn parse_view_column_descriptions() {
     let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
 
     match snowflake().verified_stmt(sql) {
-        Statement::CreateView(CreateView { name, columns, .. }) => {
+        Statement::CreateView(create_view) => {
+            let CreateView { name, columns, .. } = *create_view;
             assert_eq!(name.to_string(), "v");
             assert_eq!(
                 columns,
@@ -3501,10 +3563,11 @@ fn test_parse_show_objects() {
     snowflake()
         .verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10 FROM 'x'");
     match snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc") {
-        Statement::ShowObjects(ShowObjects {
-            terse,
-            show_options,
-        }) => {
+        Statement::ShowObjects(show_objects) => {
+            let ShowObjects {
+                terse,
+                show_options,
+            } = *show_objects;
             assert!(terse);
             let name = match show_options.show_in {
                 Some(ShowStatementIn {
@@ -3745,15 +3808,16 @@ fn test_multi_table_insert_ast_unconditional() {
     let stmt = snowflake().verified_stmt(sql);
 
     match stmt {
-        Statement::Insert(Insert {
-            multi_table_insert_type,
-            overwrite,
-            multi_table_into_clauses,
-            multi_table_when_clauses,
-            multi_table_else_clause,
-            source,
-            ..
-        }) => {
+        Statement::Insert(insert) => {
+            let Insert {
+                multi_table_insert_type,
+                overwrite,
+                multi_table_into_clauses,
+                multi_table_when_clauses,
+                multi_table_else_clause,
+                source,
+                ..
+            } = *insert;
             // Should be INSERT ALL (not FIRST)
             assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
             assert!(!overwrite);
@@ -3791,10 +3855,11 @@ fn test_multi_table_insert_ast_with_values() {
     let stmt = snowflake().verified_stmt(sql);
 
     match stmt {
-        Statement::Insert(Insert {
-            multi_table_into_clauses,
-            ..
-        }) => {
+        Statement::Insert(insert) => {
+            let Insert {
+                multi_table_into_clauses,
+                ..
+            } = *insert;
             assert_eq!(multi_table_into_clauses.len(), 1);
 
             let into_clause = &multi_table_into_clauses[0];
@@ -3838,13 +3903,14 @@ fn test_multi_table_insert_ast_conditional() {
     let stmt = snowflake().verified_stmt(sql);
 
     match stmt {
-        Statement::Insert(Insert {
-            multi_table_insert_type,
-            multi_table_into_clauses,
-            multi_table_when_clauses,
-            multi_table_else_clause,
-            ..
-        }) => {
+        Statement::Insert(insert) => {
+            let Insert {
+                multi_table_insert_type,
+                multi_table_into_clauses,
+                multi_table_when_clauses,
+                multi_table_else_clause,
+                ..
+            } = *insert;
             // Should be INSERT ALL (not FIRST)
             assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
 
@@ -3900,11 +3966,12 @@ fn test_multi_table_insert_ast_first() {
     let stmt = snowflake().verified_stmt(sql);
 
     match stmt {
-        Statement::Insert(Insert {
-            multi_table_insert_type,
-            multi_table_when_clauses,
-            ..
-        }) => {
+        Statement::Insert(insert) => {
+            let Insert {
+                multi_table_insert_type,
+                multi_table_when_clauses,
+                ..
+            } = *insert;
             // Should be INSERT FIRST
             assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::First));
             assert_eq!(multi_table_when_clauses.len(), 2);
@@ -3920,12 +3987,13 @@ fn test_multi_table_insert_ast_overwrite() {
     let stmt = snowflake().verified_stmt(sql);
 
     match stmt {
-        Statement::Insert(Insert {
-            overwrite,
-            multi_table_insert_type,
-            multi_table_into_clauses,
-            ..
-        }) => {
+        Statement::Insert(insert) => {
+            let Insert {
+                overwrite,
+                multi_table_insert_type,
+                multi_table_into_clauses,
+                ..
+            } = *insert;
             assert!(overwrite);
             assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
             assert_eq!(multi_table_into_clauses.len(), 2);
@@ -3941,10 +4009,11 @@ fn test_multi_table_insert_ast_complex_values() {
     let stmt = snowflake().verified_stmt(sql);
 
     match stmt {
-        Statement::Insert(Insert {
-            multi_table_into_clauses,
-            ..
-        }) => {
+        Statement::Insert(insert) => {
+            let Insert {
+                multi_table_into_clauses,
+                ..
+            } = *insert;
             assert_eq!(multi_table_into_clauses.len(), 1);
 
             let values = multi_table_into_clauses[0]
@@ -4015,11 +4084,12 @@ fn parse_ls_and_rm() {
 fn test_put() {
     let sql = "PUT 'file:///tmp/data.csv' @my_stage";
     match snowflake().verified_stmt(sql) {
-        Statement::Put {
-            source,
-            stage,
-            options,
-        } => {
+        Statement::Put(put) => {
+            let Put {
+                source,
+                stage,
+                options,
+            } = *put;
             assert_eq!("file:///tmp/data.csv", source);
             assert_eq!(ObjectName::from(vec!["@my_stage".into()]), stage);
             assert!(options.options.is_empty());
@@ -4034,7 +4104,8 @@ fn test_put_with_quoted_stage() {
     // Stage names can be quoted (e.g. Snowflake driver `write_pandas`)
     let sql = r#"PUT 'file:///tmp/data.csv' @"my stage" PARALLEL=4"#;
     match snowflake().verified_stmt(sql) {
-        Statement::Put { stage, .. } => {
+        Statement::Put(put) => {
+            let Put { stage, .. } = *put;
             assert_eq!(ObjectName::from(vec![r#"@"my stage""#.into()]), stage);
         }
         _ => unreachable!(),
@@ -4049,7 +4120,8 @@ fn test_put_with_options() {
         "PARALLEL=8 AUTO_COMPRESS=true SOURCE_COMPRESSION=GZIP OVERWRITE=false"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::Put { options, .. } => {
+        Statement::Put(put) => {
+            let Put { options, .. } = *put;
             assert!(options.options.contains(&KeyValueOption {
                 option_name: "PARALLEL".to_string(),
                 option_value: KeyValueOptionKind::Single(
@@ -4478,7 +4550,7 @@ fn test_alter_session_followed_by_statement() {
         .parse_sql_statements("ALTER SESSION SET QUERY_TAG='hello'; SELECT 42")
         .unwrap();
     match stmts[..] {
-        [Statement::AlterSession { .. }, Statement::Query { .. }] => {}
+        [Statement::AlterSession(_), Statement::Query { .. }] => {}
         _ => panic!("Unexpected statements: {stmts:?}"),
     }
 }
@@ -4558,7 +4630,7 @@ END
 "#;
 
     // Outer `BEGIN` of the two nested `BEGIN` statements.
-    let Statement::StartTransaction { mut statements, .. } = snowflake()
+    let Statement::StartTransaction(start_transaction) = snowflake()
         .parse_sql_statements(sql)
         .unwrap()
         .pop()
@@ -4566,17 +4638,18 @@ END
     else {
         unreachable!();
     };
+    let StartTransaction { mut statements, .. } = *start_transaction;
 
     // Inner `BEGIN` of the two nested `BEGIN` statements.
-    let Statement::StartTransaction {
+    let Statement::StartTransaction(start_transaction) = statements.pop().unwrap() else {
+        unreachable!();
+    };
+    let StartTransaction {
         statements,
         exception,
         has_end_keyword,
         ..
-    } = statements.pop().unwrap()
-    else {
-        unreachable!();
-    };
+    } = *start_transaction;
 
     assert_eq!(1, statements.len());
     assert!(has_end_keyword);
@@ -4753,7 +4826,8 @@ fn test_snowflake_identifier_function() {
 
     // Using IDENTIFIER to reference a database
     match snowflake().verified_stmt("CREATE DATABASE IDENTIFIER('tbl')") {
-        Statement::CreateDatabase { db_name, .. } => {
+        Statement::CreateDatabase(create_database) => {
+            let CreateDatabase { db_name, .. } = *create_database;
             assert_eq!(
                 db_name,
                 ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
@@ -4769,7 +4843,8 @@ fn test_snowflake_identifier_function() {
 
     // Using IDENTIFIER to reference a schema
     match snowflake().verified_stmt("CREATE SCHEMA IDENTIFIER('db1.sc1')") {
-        Statement::CreateSchema { schema_name, .. } => {
+        Statement::CreateSchema(create_schema) => {
+            let CreateSchema { schema_name, .. } = *create_schema;
             assert_eq!(
                 schema_name,
                 SchemaName::Simple(ObjectName(vec![ObjectNamePart::Function(
@@ -4787,7 +4862,8 @@ fn test_snowflake_identifier_function() {
 
     // Using IDENTIFIER to reference a table
     match snowflake().verified_stmt("CREATE TABLE IDENTIFIER('tbl') (id INT)") {
-        Statement::CreateTable(CreateTable { name, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, .. } = *create_table;
             assert_eq!(
                 name,
                 ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
@@ -5013,11 +5089,12 @@ fn test_structured_object_type() {
         .parse_sql_statements("CREATE TABLE t (o OBJECT(city VARCHAR)")
         .is_err());
 
-    let Statement::CreateTable(CreateTable { columns, .. }) =
+    let Statement::CreateTable(create_table) =
         snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)")
     else {
         unreachable!();
     };
+    let CreateTable { columns, .. } = *create_table;
 
     assert_eq!(
         columns[0].data_type,

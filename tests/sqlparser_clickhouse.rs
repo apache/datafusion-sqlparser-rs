@@ -2024,16 +2024,31 @@ fn parse_object_type_parameter() {
 
 #[test]
 fn parse_tuple_element_access() {
-    clickhouse().verified_stmt("SELECT t.1 FROM t");
-    clickhouse().verified_stmt("SELECT t.1 AS a, t.2 AS b FROM (SELECT (1, 'x') AS t)");
-    clickhouse().verified_stmt("SELECT (1, 'a').1");
-    clickhouse().verified_stmt("SELECT tuple(1, 'a').2");
-    clickhouse().verified_stmt("SELECT arr[1].1 FROM t");
-    clickhouse().verified_stmt("SELECT `t`.1 FROM t");
-    clickhouse().verified_stmt("SELECT t.1 + 1 FROM t");
-    clickhouse().verified_stmt("SELECT * FROM t WHERE t.1 = 1");
+    for (sql, canonical) in [
+        ("SELECT t.1 FROM t", "SELECT t . 1 FROM t"),
+        (
+            "SELECT t.1 AS a, t.2 AS b FROM (SELECT (1, 'x') AS t)",
+            "SELECT t . 1 AS a, t . 2 AS b FROM (SELECT (1, 'x') AS t)",
+        ),
+        ("SELECT (1, 'a').1", "SELECT (1, 'a') . 1"),
+        ("SELECT tuple(1, 'a').2", "SELECT tuple(1, 'a') . 2"),
+        ("SELECT arr[1].1 FROM t", "SELECT arr[1] . 1 FROM t"),
+        ("SELECT `t`.1 FROM t", "SELECT `t` . 1 FROM t"),
+        ("SELECT t.1 + 1 FROM t", "SELECT t . 1 + 1 FROM t"),
+        (
+            "SELECT * FROM t WHERE t.1 = 1",
+            "SELECT * FROM t WHERE t . 1 = 1",
+        ),
+        ("SELECT t.1.2 FROM t", "SELECT t . 1 . 2 FROM t"),
+        (
+            "SELECT ((1, 2), 3).1.2, tuple(1, (2, 3)).2.1",
+            "SELECT ((1, 2), 3) . 1 . 2, tuple(1, (2, 3)) . 2 . 1",
+        ),
+    ] {
+        clickhouse().one_statement_parses_to(sql, canonical);
+    }
 
-    let select = clickhouse().verified_only_select("SELECT t.1 FROM t");
+    let select = clickhouse().verified_only_select("SELECT t . 1 FROM t");
     assert_eq!(
         select.projection[0],
         UnnamedExpr(Expr::CompoundFieldAccess {
@@ -2042,13 +2057,26 @@ fn parse_tuple_element_access() {
         })
     );
 
-    clickhouse().one_statement_parses_to("SELECT t . 1 FROM t", "SELECT t.1 FROM t");
+    let select = clickhouse().verified_only_select("SELECT t . 1 . 2 FROM t");
+    assert_eq!(
+        select.projection[0],
+        UnnamedExpr(Expr::CompoundFieldAccess {
+            root: Box::new(Identifier(Ident::new("t"))),
+            access_chain: vec![
+                AccessExpr::Dot(Expr::Value(number("1").with_empty_span())),
+                AccessExpr::Dot(Expr::Value(number("2").with_empty_span())),
+            ],
+        })
+    );
 
     clickhouse().verified_stmt("SELECT 1.5, 1 + 0.5");
+    clickhouse().one_statement_parses_to("SELECT .5, 1e3", "SELECT 0.5, 1000");
 
     assert!(clickhouse().parse_sql_statements("SELECT t.").is_err());
+    assert!(clickhouse().parse_sql_statements("SELECT t.1.").is_err());
 
     let unsupported = all_dialects_where(|d| !d.supports_tuple_element_access());
+    unsupported.verified_stmt("SELECT (1, 'a') . 1");
     for dialect in unsupported.dialects {
         assert!(TestedDialects::new(vec![dialect])
             .parse_sql_statements("SELECT t.1 FROM t")

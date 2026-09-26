@@ -1354,13 +1354,18 @@ impl<'a> Tokenizer<'a> {
                         );
                     }
 
-                    // A period directly after an identifier, `)` or `]` starts a
-                    // field access such as `t.1` or `(1, 2).1`, never a float.
+                    // A period directly after an identifier, `)`, `]` or a tuple index
+                    // starts a field access such as `t.1`, `(1, 2).1` or `t.1.2`, never a float.
                     if ch == '.'
                         && self.dialect.supports_tuple_element_access()
                         && matches!(
                             prev_token,
-                            Some(Token::Word(_) | Token::RParen | Token::RBracket)
+                            Some(
+                                Token::Word(_)
+                                    | Token::RParen
+                                    | Token::RBracket
+                                    | Token::Number(..)
+                            )
                         )
                     {
                         chars.next();
@@ -1368,6 +1373,14 @@ impl<'a> Tokenizer<'a> {
                     }
 
                     let mut s = self.tokenize_number_part(chars, |ch| ch.is_ascii_digit())?;
+
+                    // A tuple index is an integer, so `t.1.2` is `(t.1).2`.
+                    if !s.is_empty()
+                        && self.dialect.supports_tuple_element_access()
+                        && prev_token == Some(&Token::Period)
+                    {
+                        return Ok(Some(Token::Number(s, false)));
+                    }
 
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
@@ -4628,6 +4641,16 @@ mod tests {
                 ],
             ),
             (
+                "t.1.2",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                    Token::Period,
+                    Token::Number("2".to_string(), false),
+                ],
+            ),
+            (
                 "t .1",
                 vec![
                     Token::make_word("t", None),
@@ -4636,6 +4659,7 @@ mod tests {
                 ],
             ),
             ("1.5", vec![Token::Number("1.5".to_string(), false)]),
+            (".5", vec![Token::Number(".5".to_string(), false)]),
         ] {
             let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
             compare(expected, tokens);

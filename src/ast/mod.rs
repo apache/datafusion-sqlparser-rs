@@ -1758,29 +1758,8 @@ impl fmt::Display for Expr {
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::CompoundFieldAccess { root, access_chain } => {
                 write!(f, "{root}")?;
-                // `.1` tokenizes as a period only after an identifier, `)` or `]`.
-                let mut glue = matches!(
-                    **root,
-                    Expr::Identifier(_)
-                        | Expr::CompoundIdentifier(_)
-                        | Expr::Function(_)
-                        | Expr::Nested(_)
-                        | Expr::Tuple(_)
-                );
                 for field in access_chain {
-                    match field {
-                        AccessExpr::Dot(index @ Expr::Value(v))
-                            if glue && matches!(v.value, Value::Number(_, _)) =>
-                        {
-                            write!(f, ".{index}")?
-                        }
-                        _ => write!(f, "{field}")?,
-                    }
-                    glue = matches!(
-                        field,
-                        AccessExpr::Subscript(_)
-                            | AccessExpr::Dot(Expr::Identifier(_) | Expr::Function(_))
-                    );
+                    write!(f, "{field}")?;
                 }
                 Ok(())
             }

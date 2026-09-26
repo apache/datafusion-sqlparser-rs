@@ -20263,3 +20263,20 @@ fn parse_placeholder_disallows_quoted_ident() {
         err
     );
 }
+
+#[test]
+fn parse_bang_not_renders_apart_from_operand() {
+    let dialects = all_dialects_where(|d| d.supports_bang_not_operator());
+    dialects.verified_stmt("SELECT ! !a");
+    dialects.verified_stmt("SELECT ! ! !a");
+    dialects.verified_stmt("SELECT ! ~ a");
+    dialects.verified_stmt("SELECT ! -a");
+    dialects.verified_stmt("SELECT ! +a");
+    dialects.verified_stmt("SELECT !a");
+    dialects.verified_stmt("SELECT !(b > 3)");
+    dialects.verified_stmt("SELECT ! -a + b");
+    dialects.verified_stmt("SELECT !a + b");
+    dialects.verified_stmt("SELECT !NOT a");
+    dialects.verified_stmt("SET eaac_cion = ! !o");
+    dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
+}

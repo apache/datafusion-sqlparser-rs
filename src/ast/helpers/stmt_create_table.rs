@@ -127,6 +127,8 @@ pub struct CreateTableBuilder {
     pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
     /// Optional `CLUSTERED BY` clause.
     pub clustered_by: Option<ClusteredBy>,
+    /// Optional standalone `SORTED BY` expressions.
+    pub sorted_by: Option<Vec<Expr>>,
     /// Optional parent tables (`INHERITS`).
     pub inherits: Option<Vec<ObjectName>>,
     /// Optional partitioned table (`PARTITION OF`)
@@ -231,6 +233,7 @@ impl CreateTableBuilder {
             partition_by: None,
             cluster_by: None,
             clustered_by: None,
+            sorted_by: None,
             inherits: None,
             partition_of: None,
             for_values: None,
@@ -415,6 +418,11 @@ impl CreateTableBuilder {
     /// Set `CLUSTERED BY` clause.
     pub fn clustered_by(mut self, clustered_by: Option<ClusteredBy>) -> Self {
         self.clustered_by = clustered_by;
+        self
+    }
+    /// Set standalone `SORTED BY` expressions.
+    pub fn sorted_by(mut self, sorted_by: Option<Vec<Expr>>) -> Self {
+        self.sorted_by = sorted_by;
         self
     }
     /// Set parent tables via `INHERITS`.
@@ -632,6 +640,7 @@ impl CreateTableBuilder {
             partition_by: self.partition_by,
             cluster_by: self.cluster_by,
             clustered_by: self.clustered_by,
+            sorted_by: self.sorted_by,
             inherits: self.inherits,
             partition_of: self.partition_of,
             for_values: self.for_values,
@@ -718,6 +727,7 @@ impl From<CreateTable> for CreateTableBuilder {
             partition_by: table.partition_by,
             cluster_by: table.cluster_by,
             clustered_by: table.clustered_by,
+            sorted_by: table.sorted_by,
             inherits: table.inherits,
             partition_of: table.partition_of,
             for_values: table.for_values,

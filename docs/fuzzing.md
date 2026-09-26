@@ -27,7 +27,7 @@ cd fuzz
 cargo +nightly fuzz run fuzz_parse_sql fuzz_seeds -- -max_total_time=600
 ```
 
-There are two targets. `fuzz_parse_sql` parses the input with every dialect.
+`fuzz_parse_sql` parses the input with every dialect.
 `fuzz_parse_roundtrip` additionally re-parses the SQL rendered by `Display` and fails when a
 rendered statement no longer parses.
 
@@ -36,6 +36,8 @@ rendered statement no longer parses.
 `fuzz_postgres_accepts` parses the input with PostgreSQL's own grammar through `pg_query` and fails when PostgreSQL accepts SQL that `PostgreSqlDialect` rejects.
 
 `fuzz_duckdb_accepts` parses the input with DuckDB's own parser and fails when DuckDB accepts a `SELECT` that `DuckDbDialect` rejects.
+
+`fuzz_stage_cost` times tokenizing, parsing and printing the input with every dialect and fails when parsing takes more than 50 times as long as tokenizing, or printing more than 50 times as long as parsing, once the slower stage passes 10 ms. It reports superlinear paths whose cost stays far below the fuzzer's timeout.
 
 ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
 `code-change` mode, a daily batch job grows the shared corpus stored on the

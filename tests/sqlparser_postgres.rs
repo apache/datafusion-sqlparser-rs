@@ -10138,3 +10138,13 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_group_by_modifier() {
+    for modifier in ["ALL", "DISTINCT"] {
+        pg().verified_stmt(&format!("SELECT a FROM t GROUP BY {modifier} a"));
+        assert!(pg()
+            .parse_sql_statements(&format!("SELECT a FROM t GROUP BY {modifier}"))
+            .is_err());
+    }
+}

@@ -6662,7 +6662,7 @@ pub struct TruncateTableTarget {
     /// TRUNCATE TABLE name [ * ]
     /// ```
     /// <https://www.postgresql.org/docs/current/sql-truncate.html>
-    pub has_asterisk: bool,
+    pub has_trailing_asterisk: bool,
 }
 
 impl fmt::Display for TruncateTableTarget {
@@ -6671,7 +6671,7 @@ impl fmt::Display for TruncateTableTarget {
             write!(f, "ONLY ")?;
         };
         write!(f, "{}", self.name)?;
-        if self.has_asterisk {
+        if self.has_trailing_asterisk {
             write!(f, " *")?;
         };
         Ok(())
@@ -6719,7 +6719,7 @@ pub struct LockTableTarget {
     /// Whether `ONLY` was specified to exclude descendant tables.
     pub only: bool,
     /// Whether `*` was specified to explicitly include descendant tables.
-    pub has_asterisk: bool,
+    pub has_trailing_asterisk: bool,
 }
 
 impl fmt::Display for LockTableTarget {
@@ -6728,7 +6728,7 @@ impl fmt::Display for LockTableTarget {
             write!(f, "ONLY ")?;
         }
         write!(f, "{}", self.name)?;
-        if self.has_asterisk {
+        if self.has_trailing_asterisk {
             write!(f, " *")?;
         }
         Ok(())

@@ -88,6 +88,10 @@ impl Dialect for MsSqlDialect {
         false
     }
 
+    fn supports_alter_table_add_multiple_columns(&self) -> bool {
+        true
+    }
+
     fn supports_named_fn_args_with_colon_operator(&self) -> bool {
         true
     }

@@ -386,8 +386,16 @@ pub(crate) fn fmt_ident(
     match quote_style {
         Some('[') => write!(f, "[{value}]"),
         Some(q) => {
-            let escaped = value::escape_quoted_string(value, q);
-            write!(f, "{q}{escaped}{q}")
+            // The value is the decoded identifier, so every delimiter
+            // inside it is literal and must be doubled.
+            write!(f, "{q}")?;
+            for (i, part) in value.split(q).enumerate() {
+                if i > 0 {
+                    write!(f, "{q}{q}")?;
+                }
+                f.write_str(part)?;
+            }
+            write!(f, "{q}")
         }
         None => f.write_str(value),
     }

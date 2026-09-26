@@ -1497,6 +1497,12 @@ impl fmt::Display for AccessExpr {
             AccessExpr::Dot(Expr::Value(value)) if matches!(value.value, Value::Number(_, _)) => {
                 write!(f, " . {value}")
             }
+            AccessExpr::Dot(Expr::Identifier(ident))
+                if ident.quote_style.is_none()
+                    && ident.value.starts_with(|c: char| c.is_ascii_digit()) =>
+            {
+                write!(f, " . {ident}")
+            }
             AccessExpr::Dot(expr) => write!(f, ".{expr}"),
             AccessExpr::Subscript(subscript) => write!(f, "[{subscript}]"),
         }
@@ -1755,7 +1761,21 @@ impl fmt::Display for Expr {
             Expr::Identifier(s) => write!(f, "{s}"),
             Expr::Wildcard(_) => f.write_str("*"),
             Expr::QualifiedWildcard(prefix, _) => write!(f, "{prefix}.*"),
-            Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::CompoundIdentifier(idents) => {
+                for (index, ident) in idents.iter().enumerate() {
+                    if index > 0 {
+                        if ident.quote_style.is_none()
+                            && ident.value.starts_with(|c: char| c.is_ascii_digit())
+                        {
+                            f.write_str(" . ")?;
+                        } else {
+                            f.write_str(".")?;
+                        }
+                    }
+                    ident.fmt(f)?;
+                }
+                Ok(())
+            }
             Expr::CompoundFieldAccess { root, access_chain } => {
                 write!(f, "{root}")?;
                 for field in access_chain {

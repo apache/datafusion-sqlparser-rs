@@ -10138,3 +10138,10 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_table_command() {
+    pg_and_generic().verified_stmt("TABLE customers ORDER BY contact_name LIMIT 1");
+    pg_and_generic().verified_stmt("TABLE ONLY customers");
+    pg_and_generic().verified_stmt("TABLE customers *");
+}

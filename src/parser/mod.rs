@@ -641,7 +641,11 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_raise_stmt().map(Into::into)
                 }
-                Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
+                Keyword::SELECT
+                | Keyword::TABLE
+                | Keyword::WITH
+                | Keyword::VALUES
+                | Keyword::FROM => {
                     self.prev_token();
                     self.parse_query().map(Into::into)
                 }
@@ -14640,7 +14644,15 @@ impl<'a> Parser<'a> {
             }
         }
 
-        match self.maybe_parse(|parser| parser.parse_statement())? {
+        let statement = if self.dialect.describe_requires_table_keyword()
+            && self.peek_keyword(Keyword::TABLE)
+        {
+            None
+        } else {
+            self.maybe_parse(|parser| parser.parse_statement())?
+        };
+
+        match statement {
             Some(Statement::Explain { .. }) | Some(Statement::ExplainTable { .. }) => Err(
                 ParserError::ParserError("Explain must be root of the plan".to_string()),
             ),
@@ -15769,17 +15781,22 @@ impl<'a> Parser<'a> {
 
     /// Parse `CREATE TABLE x AS TABLE y`
     pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
+        let only = self.parse_keyword(Keyword::ONLY);
         let first_name = self.parse_identifier()?;
         if self.consume_token(&Token::Period) {
             let second_name = self.parse_identifier()?;
             Ok(Table {
+                only,
                 table_name: Some(second_name),
                 schema_name: Some(first_name),
+                with_asterisk: self.consume_token(&Token::Mul),
             })
         } else {
             Ok(Table {
+                only,
                 table_name: Some(first_name),
                 schema_name: None,
+                with_asterisk: self.consume_token(&Token::Mul),
             })
         }
     }

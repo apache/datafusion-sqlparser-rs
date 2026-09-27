@@ -413,6 +413,8 @@ pub enum DataType {
     LongText,
     /// String with optional length.
     String(Option<u64>),
+    /// A data type with an explicit collation, as supported by Databricks.
+    Collate(Box<DataType>, ObjectName),
     /// A fixed-length string e.g [ClickHouse][1].
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/fixedstring
@@ -452,6 +454,10 @@ pub enum DataType {
     ///
     /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nested-data-structures/nested
     Nested(Vec<ColumnDef>),
+    /// Structured object type, see [Snowflake].
+    ///
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/data-types-structured#structured-object-types
+    Object(Vec<ColumnDef>),
     /// Enum type.
     Enum(Vec<EnumMember>, Option<u8>),
     /// Set type.
@@ -708,6 +714,9 @@ impl fmt::Display for DataType {
             DataType::MediumText => write!(f, "MEDIUMTEXT"),
             DataType::LongText => write!(f, "LONGTEXT"),
             DataType::String(size) => format_type_with_optional_length(f, "STRING", size, false),
+            DataType::Collate(data_type, collation) => {
+                write!(f, "{data_type} COLLATE {collation}")
+            }
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Bit(size) => format_type_with_optional_length(f, "BIT", size, false),
             DataType::BitVarying(size) => {
@@ -795,6 +804,9 @@ impl fmt::Display for DataType {
                 MapBracketKind::Parentheses => {
                     write!(f, "Map({key_data_type}, {value_data_type})")
                 }
+                MapBracketKind::ParenthesesNotNull => {
+                    write!(f, "MAP({key_data_type}, {value_data_type} NOT NULL)")
+                }
                 MapBracketKind::AngleBrackets => {
                     write!(f, "MAP<{key_data_type}, {value_data_type}>")
                 }
@@ -804,6 +816,9 @@ impl fmt::Display for DataType {
             }
             DataType::Nested(fields) => {
                 write!(f, "Nested({})", display_comma_separated(fields))
+            }
+            DataType::Object(fields) => {
+                write!(f, "OBJECT({})", display_comma_separated(fields))
             }
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
@@ -922,6 +937,8 @@ pub enum StructBracketKind {
 pub enum MapBracketKind {
     /// Example: `Map(String, UInt16)`
     Parentheses,
+    /// Example: `MAP(VARCHAR, NUMBER NOT NULL)`
+    ParenthesesNotNull,
     /// Example: `MAP<STRING, INT>`
     AngleBrackets,
 }

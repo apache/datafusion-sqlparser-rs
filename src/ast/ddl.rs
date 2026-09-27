@@ -42,15 +42,15 @@ use crate::ast::{
         UniqueConstraint,
     },
     ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
-    CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr,
-    FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
-    FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
-    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
-    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, ResetConfig, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
-    TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
+    CreateFunctionUsing, CreateServerOption, CreateTableLikeKind, CreateTableOptions,
+    CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull,
+    FunctionDefinitionSetParam, FunctionDesc, FunctionDeterminismSpecifier, FunctionParallel,
+    FunctionSecurity, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat,
+    HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
+    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
+    ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject,
+    TriggerPeriod, TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -411,6 +411,14 @@ pub enum AlterTableOperation {
         options: Vec<ColumnOption>,
         /// MySQL-specific column position (`FIRST`/`AFTER`).
         column_position: Option<MySQLColumnPosition>,
+    },
+    /// `MODIFY ORDER BY <expr>`
+    ///
+    /// Note: this is a ClickHouse-specific operation.
+    /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/order-by)
+    ModifyOrderBy {
+        /// The new sorting key.
+        order_by: OneOrManyWithParens<Expr>,
     },
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
@@ -962,6 +970,9 @@ impl fmt::Display for AlterTableOperation {
                 }
 
                 Ok(())
+            }
+            AlterTableOperation::ModifyOrderBy { order_by } => {
+                write!(f, "MODIFY ORDER BY {order_by}")
             }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 write!(f, "RENAME CONSTRAINT {old_name} TO {new_name}")
@@ -5993,5 +6004,77 @@ impl fmt::Display for AlterPolicy {
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
         crate::ast::Statement::AlterPolicy(v)
+    }
+}
+
+/// A `CREATE FOREIGN TABLE` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateForeignTable {
+    /// The foreign table name.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Whether `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// Column definitions.
+    pub columns: Vec<ColumnDef>,
+    /// Table-level constraints (e.g. `CHECK (...)`, composite `FOREIGN KEY`).
+    /// PostgreSQL's grammar accepts these here, but rejects primary key, unique,
+    /// foreign key and exclusion constraints on a foreign table at execution.
+    pub constraints: Vec<TableConstraint>,
+    /// The `SERVER server_name` clause.
+    pub server_name: Ident,
+    /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateForeignTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name,
+            columns = display_comma_separated(&self.columns),
+        )?;
+        if !self.columns.is_empty() && !self.constraints.is_empty() {
+            write!(f, ", ")?;
+        }
+        write!(f, "{}", display_comma_separated(&self.constraints))?;
+        write!(f, ") SERVER {}", self.server_name)?;
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateForeignTable> for crate::ast::Statement {
+    fn from(v: CreateForeignTable) -> Self {
+        crate::ast::Statement::CreateForeignTable(v)
+    }
+}
+
+impl Spanned for CreateForeignTable {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            core::iter::once(self.name.span())
+                .chain(self.columns.iter().map(|column| column.span()))
+                .chain(self.constraints.iter().map(|constraint| constraint.span()))
+                .chain(core::iter::once(self.server_name.span))
+                .chain(
+                    self.options
+                        .iter()
+                        .flatten()
+                        .flat_map(|option| [option.key.span, option.value.span]),
+                ),
+        )
     }
 }

@@ -13004,4 +13004,26 @@ mod tests {
         std::mem::swap(&mut a.span, &mut b.span);
         assert!(a < b);
     }
+
+    #[test]
+    fn test_pipe_statement_display() {
+        assert_eq!(
+            "",
+            Statement::Pipe { statements: vec![] }.to_string()
+        );
+        assert_eq!(
+            "UNLOCK TABLES",
+            Statement::Pipe {
+                statements: vec![Statement::UnlockTables],
+            }
+            .to_string()
+        );
+        assert_eq!(
+            "UNLOCK TABLES ->> UNLOCK TABLES",
+            Statement::Pipe {
+                statements: vec![Statement::UnlockTables, Statement::UnlockTables],
+            }
+            .to_string()
+        );
+    }
 }

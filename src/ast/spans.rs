@@ -3165,4 +3165,18 @@ WHERE id = 1
             Span::new(Location::new(2, 8), Location::new(4, 52))
         );
     }
+
+    #[test]
+    fn test_snowflake_pipe_spans() {
+        let sql = "SELECT 1 ->> SELECT * FROM t";
+        let mut test = SpanTest::new(&SnowflakeDialect, sql);
+        let stmt = test.0.parse_statement().unwrap();
+
+        assert_eq!(test.get_source(stmt.span()), sql);
+
+        let mut test = SpanTest::new(&SnowflakeDialect, "SELECT * FROM $1");
+        let select = test.0.parse_select().unwrap();
+
+        assert_eq!(select.from[0].relation.span(), Span::empty());
+    }
 }

@@ -5303,6 +5303,16 @@ impl<'a> Parser<'a> {
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
+        // `or_replace` is caught by an earlier arm. It stays so that reordering cannot bypass it.
+        let has_modifier = or_replace
+            || or_alter
+            || temporary
+            || global.is_some()
+            || transient
+            || volatile
+            || multiset.is_some()
+            || persistent
+            || create_view_params.is_some();
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
@@ -5382,18 +5392,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
-            // `or_replace` cannot reach here today, since the arm above catches it.
-            // It stays so that reordering the arms cannot make it fall through.
-            if or_replace
-                || or_alter
-                || temporary
-                || global.is_some()
-                || transient
-                || volatile
-                || multiset.is_some()
-                || persistent
-                || create_view_params.is_some()
-            {
+            if has_modifier {
                 return parser_err!(
                     "CREATE FOREIGN TABLE does not accept this modifier",
                     modifier_loc
@@ -5401,6 +5400,12 @@ impl<'a> Parser<'a> {
             }
             self.parse_create_foreign_table().map(Into::into)
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
+            if has_modifier {
+                return parser_err!(
+                    "CREATE FOREIGN DATA WRAPPER does not accept this modifier",
+                    modifier_loc
+                );
+            }
             self.parse_create_foreign_data_wrapper().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())

@@ -10207,6 +10207,19 @@ fn parse_create_foreign_data_wrapper() {
         pg_and_generic().parse_sql_statements("CREATE FOREIGN DATA WRAPPER myschema.myfdw"),
         Err(ParserError::ParserError(_))
     ));
+
+    for sql in [
+        "CREATE TEMPORARY FOREIGN DATA WRAPPER myfdw",
+        "CREATE OR ALTER FOREIGN DATA WRAPPER myfdw",
+        "CREATE GLOBAL TEMPORARY FOREIGN DATA WRAPPER myfdw",
+    ] {
+        let err = pg_and_generic().parse_sql_statements(sql).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("CREATE FOREIGN DATA WRAPPER does not accept this modifier"),
+            "unexpected error for {sql}: {err}"
+        );
+    }
 }
 
 #[test]

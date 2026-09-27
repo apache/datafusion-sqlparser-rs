@@ -13013,10 +13013,7 @@ mod tests {
 
     #[test]
     fn test_pipe_statement_display() {
-        assert_eq!(
-            "",
-            Statement::Pipe { statements: vec![] }.to_string()
-        );
+        assert_eq!("", Statement::Pipe { statements: vec![] }.to_string());
         assert_eq!(
             "UNLOCK TABLES",
             Statement::Pipe {

@@ -9978,8 +9978,22 @@ fn parse_reserved_keyword_as_bare_column_alias() {
     // (`AS`-less) column alias; only a small set of keywords require a leading `AS`.
     // See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>
     for kw in [
-        "analyze", "cluster", "end", "exclude", "explain", "lateral", "select", "values", "view",
-        "and", "or", "collate", "distribute", "minus", "sort", "top",
+        "analyze",
+        "cluster",
+        "end",
+        "exclude",
+        "explain",
+        "lateral",
+        "select",
+        "values",
+        "view",
+        "and",
+        "or",
+        "collate",
+        "distribute",
+        "minus",
+        "sort",
+        "top",
     ] {
         pg().one_statement_parses_to(
             &format!("SELECT a {kw} FROM tbl_name"),
@@ -9987,10 +10001,19 @@ fn parse_reserved_keyword_as_bare_column_alias() {
         );
     }
 
+    pg().one_statement_parses_to(
+        "SELECT (SELECT c FROM tbl_name LIMIT 1) select",
+        "SELECT (SELECT c FROM tbl_name LIMIT 1) AS select",
+    );
+    for kw in ["and", "or", "collate"] {
+        pg().one_statement_parses_to(&format!("SELECT 1 {kw}"), &format!("SELECT 1 AS {kw}"));
+    }
+
     // `AND`/`OR`/`COLLATE` are still parsed as operators when followed by an operand.
     pg().verified_stmt("SELECT 1 AND 2");
     pg().verified_stmt("SELECT 1 OR 2");
     pg().verified_stmt(r#"SELECT 1 COLLATE "de_DE" FROM tbl_name"#);
+    assert!(pg().parse_sql_statements("SELECT 1 COLLATE 2").is_err());
     pg().verified_stmt("SELECT a AND sort FROM tbl_name WHERE b OR top");
 
     // Keywords that require `AS` still cannot be used as a bare column alias.

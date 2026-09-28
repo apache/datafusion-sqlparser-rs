@@ -1430,6 +1430,10 @@ impl<'a> Parser<'a> {
         }
 
         debug!("prefix: {expr:?}");
+        self.parse_infix_chain(expr, precedence)
+    }
+
+    fn parse_infix_chain(&mut self, mut expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         loop {
             let next_precedence = self.get_next_precedence()?;
             debug!("next precedence: {next_precedence:?}");
@@ -3044,11 +3048,15 @@ impl<'a> Parser<'a> {
             }
         };
         self.expect_token(&Token::LParen)?;
-        // Parse at `LIKE` precedence so a bare `SIMILAR` isn't swallowed as the start of a
-        // `SIMILAR TO` operator, allowing it to be recognized as the substring syntax below.
-        let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?;
+        let mut expr = self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?;
 
-        if self.parse_keyword(Keyword::SIMILAR) {
+        if self.peek_keyword(Keyword::SIMILAR)
+            && !matches!(
+                &self.peek_nth_token_ref(1).token,
+                Token::Word(word) if word.keyword == Keyword::TO
+            )
+        {
+            self.advance_token();
             let from_expr = self.parse_expr()?;
             self.expect_keyword_is(Keyword::ESCAPE)?;
             let to_expr = self.parse_expr()?;
@@ -3062,6 +3070,7 @@ impl<'a> Parser<'a> {
                 similar: true,
             });
         }
+        expr = self.parse_infix_chain(expr, self.dialect.prec_unknown())?;
 
         let mut from_expr = None;
         let special = self.consume_token(&Token::Comma);

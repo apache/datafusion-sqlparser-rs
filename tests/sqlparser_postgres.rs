@@ -10037,3 +10037,10 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_substring_source_expression_operators() {
+    pg().verified_stmt("SELECT SUBSTRING(1 = 1 FROM 1)");
+    pg().verified_stmt("SELECT SUBSTRING(a ~ 'x' FROM 1)");
+    pg().verified_stmt("SELECT SUBSTRING(a SIMILAR TO 'x' FROM 1)");
+}

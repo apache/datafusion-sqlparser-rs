@@ -156,9 +156,10 @@ pub enum Value {
     /// Triple double quoted strings: Example """abc"""
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
     TripleDoubleQuotedString(String),
-    /// e'string value' (postgres extension)
-    /// See [Postgres docs](https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS)
-    /// for more details.
+    /// `E'...'` escape string literal.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE)
+    /// [DuckDB](https://duckdb.org/docs/current/sql/data_types/literal_types#escape-string-literals)
     EscapedStringLiteral(String),
     /// u&'string value' (postgres extension)
     /// See [Postgres docs](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE)

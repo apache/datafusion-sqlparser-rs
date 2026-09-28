@@ -925,3 +925,73 @@ fn test_duckdb_lambda_function() {
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
 }
+
+#[test]
+fn parse_summarize() {
+    duckdb().verified_stmt("SUMMARIZE users");
+    duckdb().verified_stmt(r#"SUMMARIZE "analytics"."events""#);
+    duckdb().verified_stmt("SUMMARIZE 'users'");
+    duckdb().verified_stmt("SUMMARIZE SELECT * FROM users");
+    duckdb().verified_stmt("SUMMARIZE FROM users");
+    duckdb().verified_stmt("SUMMARIZE VALUES (1.0), (6754950520)");
+    duckdb().verified_stmt("SUMMARIZE (SELECT 42 AS answer)");
+    duckdb().verified_stmt("SUMMARIZE WITH users AS (SELECT 1 AS id) SELECT * FROM users");
+    duckdb().verified_stmt("SELECT column_name FROM (SUMMARIZE SELECT 42 AS answer)");
+
+    TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("SUMMARIZE users")
+        .expect_err("SUMMARIZE should remain DuckDB-specific");
+    duckdb_and_generic().verified_stmt("SELECT summarize FROM jobs");
+}
+
+#[test]
+fn parse_summarize_scalar_subquery() {
+    for sql in [
+        "SELECT (SUMMARIZE users)",
+        "SELECT (SUMMARIZE SELECT 42 AS answer)",
+        "SELECT (SUMMARIZE FROM users)",
+        "SELECT (SUMMARIZE VALUES (1))",
+        "SELECT (SUMMARIZE (SELECT 42 AS answer))",
+        "SELECT (SUMMARIZE WITH users AS (SELECT 1 AS id) SELECT * FROM users)",
+        "SELECT ((SUMMARIZE users))",
+        "SELECT coalesce((SUMMARIZE users), 0)",
+        "SELECT 1 = ANY(SUMMARIZE users)",
+        "SELECT 1 >= ALL(SUMMARIZE users)",
+    ] {
+        duckdb().verified_stmt(sql);
+    }
+
+    let Expr::Subquery(query) = duckdb().verified_expr("(SUMMARIZE users)") else {
+        panic!("Expected a scalar subquery");
+    };
+    assert_eq!(
+        *query.body,
+        SetExpr::Summarize(SummarizeTarget::Table {
+            name: ObjectName::from(vec![Ident::new("users")]),
+        })
+    );
+}
+
+#[test]
+fn parse_summarize_subquery_dialect_gate() {
+    duckdb_and_generic().verified_stmt(r#"SELECT ("summarize") FROM jobs"#);
+    let dialects = all_dialects_where(|dialect| !dialect.supports_summarize());
+    dialects.verified_stmt("SELECT (summarize) FROM jobs");
+    dialects.verified_stmt("SELECT summarize(1) FROM jobs");
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT (SUMMARIZE users)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: users".to_owned())
+    );
+}
+
+#[test]
+fn parse_summarize_subquery_missing_target() {
+    assert_eq!(
+        duckdb()
+            .parse_sql_statements("SELECT (SUMMARIZE)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_owned())
+    );
+}

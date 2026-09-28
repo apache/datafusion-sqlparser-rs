@@ -1,0 +1,21 @@
+CREATE AGGREGATE public.my_avg(numeric) (
+    SFUNC = numeric_avg_accum,
+    STYPE = internal,
+    SSPACE = 128,
+    INITCOND = '0',
+    FINALFUNC = numeric_avg,
+    FINALFUNC_EXTRA,
+    FINALFUNC_MODIFY = SHAREABLE,
+    COMBINEFUNC = numeric_avg_combine,
+    SERIALFUNC = numeric_avg_serialize,
+    DESERIALFUNC = numeric_avg_deserialize,
+    MSFUNC = numeric_avg_accum,
+    MINVFUNC = numeric_accum_inv,
+    MSTYPE = internal,
+    MSSPACE = 64,
+    MFINALFUNC = numeric_avg,
+    MFINALFUNC_EXTRA,
+    MFINALFUNC_MODIFY = READ_WRITE,
+    MINITCOND = '0',
+    PARALLEL = safe
+)

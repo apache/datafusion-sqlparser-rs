@@ -980,9 +980,14 @@ pub trait Dialect: Debug + Any {
                 // string columns. See `JsonAccess`.
                 _ => Ok(p!(Colon)),
             },
-            Token::Arrow
-            | Token::LongArrow
-            | Token::HashArrow
+            // `->` and `->>` are separated from the rest of the family
+            // because dialects disagree about them: in PostgreSQL they are
+            // ordinary operators, while in MySQL `c -> '$.a'` means
+            // `JSON_EXTRACT(c, '$.a')` and has to bind before arithmetic. The
+            // default value is the same for both, and the dialects that need
+            // the MySQL grouping override these two tokens.
+            Token::Arrow | Token::LongArrow => Ok(p!(JsonExtraction)),
+            Token::HashArrow
             | Token::HashLongArrow
             | Token::AtArrow
             | Token::ArrowAt
@@ -1033,6 +1038,11 @@ pub trait Dialect: Debug + Any {
             Precedence::Ampersand => 23,
             Precedence::Caret => 22,
             Precedence::Pipe => 21,
+            // Same value as `PgOther`, which is where the arrows have always
+            // sat. The variant exists so that a dialect whose arrows extract
+            // from JSON can move them without moving the rest of that family;
+            // see `MySqlDialect::get_next_precedence`.
+            Precedence::JsonExtraction => 21,
             Precedence::Colon => 21,
             // "any other operator" -- `->`, `@>`, custom operators. PostgreSQL
             // places this row above `BETWEEN` / `LIKE` and below `+` / `-`
@@ -1991,6 +2001,8 @@ pub enum Precedence {
     Pipe,
     /// `:` operator for json/variant access.
     Colon,
+    /// `->` and `->>`, which extract from JSON and bind before arithmetic.
+    JsonExtraction,
     /// `BETWEEN` operator.
     Between,
     /// Equality operator (`=`).

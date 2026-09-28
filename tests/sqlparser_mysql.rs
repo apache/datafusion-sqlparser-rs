@@ -5054,6 +5054,98 @@ fn parse_is_distinct_from_json_arrow_precedence() {
 }
 
 #[test]
+fn parse_json_arrow_arithmetic_precedence() {
+    let col = || Expr::Identifier(Ident::new("c"));
+    let path = || Expr::Value(Value::SingleQuotedString("$.a".into()).with_empty_span());
+    let extract = |op: BinaryOperator| Expr::BinaryOp {
+        left: Box::new(col()),
+        op,
+        right: Box::new(path()),
+    };
+    let num = |n: &str| Expr::value(number(n));
+    let binop = |left: Expr, op: BinaryOperator, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    };
+
+    // `c -> path` is defined as `JSON_EXTRACT(c, path)`, so the extraction has
+    // to happen before any arithmetic can use its result: `c -> '$.a' + 1` is
+    // `(c -> '$.a') + 1` rather than `c -> ('$.a' + 1)`, which would add a
+    // number to a JSON path.
+    assert_eq!(
+        binop(
+            extract(BinaryOperator::Arrow),
+            BinaryOperator::Plus,
+            num("1")
+        ),
+        mysql_and_generic().verified_expr("c -> '$.a' + 1")
+    );
+    assert_eq!(
+        binop(
+            extract(BinaryOperator::LongArrow),
+            BinaryOperator::Plus,
+            num("1")
+        ),
+        mysql_and_generic().verified_expr("c ->> '$.a' + 1")
+    );
+    assert_eq!(
+        binop(
+            extract(BinaryOperator::Arrow),
+            BinaryOperator::Multiply,
+            num("2")
+        ),
+        mysql_and_generic().verified_expr("c -> '$.a' * 2")
+    );
+
+    // The same on the other side: the arrow takes `c`, not `1 + c`.
+    assert_eq!(
+        binop(
+            num("1"),
+            BinaryOperator::Plus,
+            extract(BinaryOperator::Arrow)
+        ),
+        mysql_and_generic().verified_expr("1 + c -> '$.a'")
+    );
+
+    // Bitwise operators bind less tightly than the arrow too, which the
+    // arithmetic cases above do not cover: `&` and `^` sit above `->` in the
+    // precedence table while MySQL puts them below it.
+    assert_eq!(
+        binop(
+            extract(BinaryOperator::Arrow),
+            BinaryOperator::BitwiseAnd,
+            num("1")
+        ),
+        mysql_and_generic().verified_expr("c -> '$.a' & 1")
+    );
+    assert_eq!(
+        binop(
+            extract(BinaryOperator::Arrow),
+            BinaryOperator::BitwiseXor,
+            num("1")
+        ),
+        mysql_and_generic().verified_expr("c -> '$.a' ^ 1")
+    );
+
+    // These two already group correctly and are kept so that a change to the
+    // arrow's precedence cannot break them: `=` sits below the arrow, and `|`
+    // shares its level, where left associativity gives the same answer.
+    assert_eq!(
+        binop(extract(BinaryOperator::Arrow), BinaryOperator::Eq, num("1")),
+        mysql_and_generic().verified_expr("c -> '$.a' = 1")
+    );
+    assert_eq!(
+        binop(
+            extract(BinaryOperator::Arrow),
+            BinaryOperator::BitwiseOr,
+            num("1")
+        ),
+        mysql_and_generic().verified_expr("c -> '$.a' | 1")
+    );
+}
+
+#[test]
 fn parse_bitstring_literal_escaping() {
     mysql_and_generic().verified_stmt("SELECT B''''");
     mysql_and_generic().verified_stmt("SELECT B'it''s'");

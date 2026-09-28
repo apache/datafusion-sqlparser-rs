@@ -15,7 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::dialect::mysql::JSON_EXTRACTION_PREC;
 use crate::dialect::Dialect;
+use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
 
 /// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
 /// statements, from many different dialects.
@@ -24,6 +27,20 @@ use crate::dialect::Dialect;
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
+    /// `->` and `->>` follow MySQL here rather than PostgreSQL.
+    ///
+    /// The two engines disagree: PostgreSQL treats the arrows as ordinary
+    /// operators below arithmetic, while in MySQL `c -> '$.a'` is
+    /// `JSON_EXTRACT(c, '$.a')` and binds before it. A permissive dialect has
+    /// to pick one, and the contributing guide asks that a dialect-specific
+    /// feature parse under both that dialect and this one.
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        match parser.peek_token_ref().token {
+            Token::Arrow | Token::LongArrow => Some(Ok(JSON_EXTRACTION_PREC)),
+            _ => None,
+        }
+    }
+
     fn supports_map_typedef_with_parentheses(&self) -> bool {
         true
     }

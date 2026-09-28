@@ -23,6 +23,7 @@ use crate::{
     dialect::Dialect,
     keywords::Keyword,
     parser::{Parser, ParserError},
+    tokenizer::Token,
 };
 
 use super::keywords;
@@ -38,6 +39,13 @@ const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MySqlDialect {}
+
+/// Precedence of `->` and `->>` in MySQL.
+///
+/// `c -> '$.a'` is defined as `JSON_EXTRACT(c, '$.a')`, so the extraction has
+/// to happen before any operator can use its result. That puts it above
+/// `MulDivModOp` (40) and `AtTz` (41), and below `DoubleColon` (50).
+pub(crate) const JSON_EXTRACTION_PREC: u8 = 42;
 
 impl Dialect for MySqlDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
@@ -57,6 +65,15 @@ impl Dialect for MySqlDialect {
         self.is_identifier_start(ch) || ch.is_ascii_digit() ||
         // MySQL implements Unicode characters in identifiers.
         !ch.is_ascii()
+    }
+
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        match parser.peek_token_ref().token {
+            // The rest of the `PgOther` family keeps the shared value: only
+            // these two extract from JSON in MySQL.
+            Token::Arrow | Token::LongArrow => Some(Ok(JSON_EXTRACTION_PREC)),
+            _ => None,
+        }
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

@@ -200,6 +200,10 @@ impl Dialect for PostgreSqlDialect {
             Precedence::Eq => EQ_PREC,
             Precedence::Like => BETWEEN_LIKE_PREC,
             Precedence::Is => IS_PREC,
+            // PostgreSQL's `->` is an ordinary operator and belongs below
+            // arithmetic, which is where it already sits. The dedicated
+            // variant exists for dialects whose arrows extract from JSON.
+            Precedence::JsonExtraction => PG_OTHER_PREC,
             Precedence::PgOther => PG_OTHER_PREC,
             Precedence::UnaryNot => NOT_PREC,
             Precedence::And => AND_PREC,

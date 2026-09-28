@@ -489,6 +489,7 @@ impl Spanned for Statement {
             Statement::CreatePolicy { .. } => Span::empty(),
             Statement::AlterPolicy { .. } => Span::empty(),
             Statement::AlterConnector { .. } => Span::empty(),
+            Statement::Pipe { statements } => union_spans(statements.iter().map(|s| s.span())),
             Statement::DropPolicy { .. } => Span::empty(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowCatalogs { .. } => Span::empty(),
@@ -2113,6 +2114,7 @@ impl Spanned for TableFactor {
                     .chain(where_clause.as_ref().map(|e| e.span()))
                     .chain(alias.as_ref().map(|a| a.span())),
             ),
+            TableFactor::PipeResultScan { .. } => Span::empty(),
             TableFactor::OpenJsonTable { .. } => Span::empty(),
         }
     }
@@ -3166,6 +3168,20 @@ WHERE id = 1
             stmt_span,
             Span::new(Location::new(2, 8), Location::new(4, 52))
         );
+    }
+
+    #[test]
+    fn test_snowflake_pipe_spans() {
+        let sql = "SELECT 1 ->> SELECT * FROM t";
+        let mut test = SpanTest::new(&SnowflakeDialect, sql);
+        let stmt = test.0.parse_statement().unwrap();
+
+        assert_eq!(test.get_source(stmt.span()), sql);
+
+        let mut test = SpanTest::new(&SnowflakeDialect, "SELECT * FROM $1");
+        let select = test.0.parse_select().unwrap();
+
+        assert_eq!(select.from[0].relation.span(), Span::empty());
     }
 
     #[test]

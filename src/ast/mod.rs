@@ -3620,6 +3620,13 @@ pub enum Statement {
     /// SELECT
     /// ```
     Query(Box<Query>),
+    /// Snowflake pipe operator chain: `stmt1 ->> stmt2 ->> ...`
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/operators-flow>
+    Pipe {
+        /// The chained SQL statements separated by `->>`.
+        statements: Vec<Statement>,
+    },
     /// ```sql
     /// INSERT
     /// ```
@@ -5183,6 +5190,15 @@ impl fmt::Display for Statement {
                     export = if *export { " FOR EXPORT" } else { "" },
                     read = if *read_lock { " WITH READ LOCK" } else { "" }
                 )
+            }
+            Statement::Pipe { statements } => {
+                for (i, stmt) in statements.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(" ->> ")?;
+                    }
+                    stmt.fmt(f)?;
+                }
+                Ok(())
             }
             Statement::Kill { modifier, id } => {
                 write!(f, "KILL ")?;
@@ -12993,5 +13009,24 @@ mod tests {
         assert!(a < b);
         std::mem::swap(&mut a.span, &mut b.span);
         assert!(a < b);
+    }
+
+    #[test]
+    fn test_pipe_statement_display() {
+        assert_eq!("", Statement::Pipe { statements: vec![] }.to_string());
+        assert_eq!(
+            "UNLOCK TABLES",
+            Statement::Pipe {
+                statements: vec![Statement::UnlockTables],
+            }
+            .to_string()
+        );
+        assert_eq!(
+            "UNLOCK TABLES ->> UNLOCK TABLES",
+            Statement::Pipe {
+                statements: vec![Statement::UnlockTables, Statement::UnlockTables],
+            }
+            .to_string()
+        );
     }
 }

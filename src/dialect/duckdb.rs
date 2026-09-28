@@ -142,4 +142,8 @@ impl Dialect for DuckDbDialect {
     fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }
+
+    fn supports_limit_percent(&self) -> bool {
+        true
+    }
 }

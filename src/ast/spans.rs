@@ -153,6 +153,9 @@ impl Spanned for LimitClause {
                     .chain(limit_by.iter().map(|i| i.span())),
             ),
             LimitClause::OffsetCommaLimit { offset, limit } => offset.span().union(&limit.span()),
+            LimitClause::Percent { limit, offset } => {
+                union_spans(core::iter::once(limit.span()).chain(offset.as_ref().map(|i| i.span())))
+            }
         }
     }
 }

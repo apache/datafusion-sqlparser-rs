@@ -1514,7 +1514,9 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 require_semicolon_stmt_delimiter: true,
             }
         )
-        .verified_stmt(sql),
+        .parse_sql_statements(sql)
+        .unwrap()
+        .remove(0),
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
@@ -1616,7 +1618,9 @@ fn parse_escaped_backticks_with_no_escape() {
             vec![Box::new(MySqlDialect {})],
             ParserOptions::new().with_unescape(false)
         )
-        .verified_stmt(sql),
+        .parse_sql_statements(sql)
+        .unwrap()
+        .remove(0),
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {

@@ -27,6 +27,10 @@ use crate::{
 pub struct DorisDialect {}
 
 impl Dialect for DorisDialect {
+    fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         MySqlDialect {}.is_delimited_identifier_start(ch)
     }

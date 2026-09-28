@@ -6169,7 +6169,9 @@ pub enum CreateAggregateArgs {
     List(Vec<OperateFunctionArg>),
     /// PostgreSQL ordered-set form: args before `ORDER BY` are direct args.
     OrderedSet {
+        /// Arguments before `ORDER BY`.
         direct: Vec<OperateFunctionArg>,
+        /// Arguments after `ORDER BY`.
         aggregated: Vec<OperateFunctionArg>,
     },
 }

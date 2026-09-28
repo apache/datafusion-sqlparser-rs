@@ -39,6 +39,11 @@ const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::FROM,
     Keyword::INTO,
     Keyword::END,
+    // GoogleSQL requires reserved keywords to be quoted when used as identifiers.
+    // See <https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#reserved_keywords>
+    Keyword::AND,
+    Keyword::OR,
+    Keyword::COLLATE,
 ];
 
 /// A [`Dialect`] for [Google Bigquery](https://cloud.google.com/bigquery/)

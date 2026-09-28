@@ -386,7 +386,7 @@ pub(crate) fn fmt_ident(
     match quote_style {
         Some('[') => write!(f, "[{value}]"),
         Some(q) => {
-            let escaped = value::escape_quoted_string(value, q);
+            let escaped = value::escape_quoted_identifier(value, q);
             write!(f, "{q}{escaped}{q}")
         }
         None => f.write_str(value),

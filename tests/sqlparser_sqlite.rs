@@ -957,6 +957,18 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn parse_n_prefix_not_national_string() {
+    // In SQLite, `n'...'` is the identifier `n` followed by a string literal.
+    // The string becomes an implicit alias, so `t.n''` round-trips as `t.n AS ''`.
+    sqlite().one_statement_parses_to("SELECT t.n'' FROM t", "SELECT t.n AS '' FROM t");
+    sqlite().one_statement_parses_to("SELECT n'' FROM t", "SELECT n AS '' FROM t");
+    sqlite().one_statement_parses_to("SELECT N'hello'", "SELECT N AS 'hello'");
+
+    // Other dialects still tokenize N'...' as a national string literal.
+    all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

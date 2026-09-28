@@ -1429,6 +1429,7 @@ fn parse_mssql_declare() {
                     data_type: None,
                     assignment: None,
                     declare_type: Some(DeclareType::Cursor),
+                    cursor_options: vec![],
                     binary: None,
                     sensitive: None,
                     scroll: None,
@@ -1444,6 +1445,7 @@ fn parse_mssql_declare() {
                     data_type: Some(Int(None)),
                     assignment: None,
                     declare_type: None,
+                    cursor_options: vec![],
                     binary: None,
                     sensitive: None,
                     scroll: None,
@@ -1461,6 +1463,7 @@ fn parse_mssql_declare() {
                         (SingleQuotedString("foobar".to_string())).with_empty_span()
                     )))),
                     declare_type: None,
+                    cursor_options: vec![],
                     binary: None,
                     sensitive: None,
                     scroll: None,
@@ -1482,6 +1485,7 @@ fn parse_mssql_declare() {
                     data_type: Some(Int(None)),
                     assignment: None,
                     declare_type: None,
+                    cursor_options: vec![],
                     binary: None,
                     sensitive: None,
                     scroll: None,
@@ -2957,4 +2961,38 @@ fn parse_create_proc() {
         .parse_sql_statements("CREATE PROC test AS BEGIN SELECT 1; END")
         .expect_err("PROC should remain MSSQL-specific");
     ms_and_generic().verified_stmt("SELECT proc FROM jobs");
+}
+
+#[test]
+fn parse_mssql_cursor_options() {
+    for (sql, expected_options) in [
+        (
+            "DECLARE local_cursor CURSOR LOCAL FOR SELECT name FROM dbo.reports",
+            vec![MsSqlCursorOption::Local],
+        ),
+        (
+            "DECLARE fast_cursor CURSOR FAST_FORWARD FOR SELECT name FROM dbo.reports",
+            vec![MsSqlCursorOption::FastForward],
+        ),
+        (
+            "DECLARE global_cursor CURSOR GLOBAL FAST_FORWARD FOR SELECT name FROM dbo.reports",
+            vec![MsSqlCursorOption::Global, MsSqlCursorOption::FastForward],
+        ),
+        (
+            "DECLARE local_cursor CURSOR FAST_FORWARD LOCAL FOR SELECT name FROM dbo.reports",
+            vec![MsSqlCursorOption::FastForward, MsSqlCursorOption::Local],
+        ),
+    ] {
+        let Statement::Declare { stmts } = ms().verified_stmt(sql) else {
+            panic!("expected DECLARE statement");
+        };
+        assert_eq!(only(&stmts).cursor_options, expected_options);
+    }
+
+    TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements(
+            "DECLARE report_cursor CURSOR LOCAL FAST_FORWARD FOR SELECT name FROM reports",
+        )
+        .expect_err("MSSQL cursor options should remain dialect-specific");
+    ms_and_generic().verified_stmt("SELECT fast_forward FROM jobs");
 }

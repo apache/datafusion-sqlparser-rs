@@ -97,6 +97,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_window_frame_exclusion(&self) -> bool {
+        true
+    }
+
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         if matches!(kw, Keyword::INTERVAL) {
             false

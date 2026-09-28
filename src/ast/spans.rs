@@ -2570,6 +2570,9 @@ impl Spanned for CreateAggregateArgs {
         match self {
             CreateAggregateArgs::Legacy | CreateAggregateArgs::Star => Span::empty(),
             CreateAggregateArgs::List(args) => union_spans(args.iter().map(|arg| arg.span())),
+            CreateAggregateArgs::OrderedSet { direct, aggregated } => {
+                union_spans(direct.iter().chain(aggregated).map(|arg| arg.span()))
+            }
         }
     }
 }

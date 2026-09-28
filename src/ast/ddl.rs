@@ -6107,6 +6107,13 @@ impl fmt::Display for CreateAggregate {
             CreateAggregateArgs::Legacy => {}
             CreateAggregateArgs::Star => write!(f, " (*)")?,
             CreateAggregateArgs::List(args) => write!(f, " ({})", display_comma_separated(args))?,
+            CreateAggregateArgs::OrderedSet { direct, aggregated } => {
+                write!(f, " (")?;
+                if !direct.is_empty() {
+                    write!(f, "{} ", display_comma_separated(direct))?;
+                }
+                write!(f, "ORDER BY {})", display_comma_separated(aggregated))?;
+            }
         }
         write!(f, " ({})", display_comma_separated(&self.options))
     }
@@ -6126,6 +6133,11 @@ pub enum CreateAggregateArgs {
     /// An explicit argument list: `(NUMERIC)`,
     /// `(input INT, VARIADIC tail TEXT)`.
     List(Vec<OperateFunctionArg>),
+    /// PostgreSQL ordered-set form: args before `ORDER BY` are direct args.
+    OrderedSet {
+        direct: Vec<OperateFunctionArg>,
+        aggregated: Vec<OperateFunctionArg>,
+    },
 }
 
 impl From<CreateAggregate> for crate::ast::Statement {

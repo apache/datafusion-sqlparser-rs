@@ -9775,7 +9775,13 @@ fn parse_create_aggregate_named_and_variadic_args() {
 #[test]
 fn parse_create_aggregate_additional_options() {
     pg_and_generic().verified_stmt(
-        "CREATE AGGREGATE percentile (FLOAT8) (SFUNC = ordered_set_transition, STYPE = internal, FINALFUNC = percentile_final, FINALFUNC_MODIFY = READ_WRITE, HYPOTHETICAL)",
+        "CREATE AGGREGATE percentile (FLOAT8 ORDER BY FLOAT8) (SFUNC = ordered_set_transition, STYPE = internal, FINALFUNC = percentile_final, FINALFUNC_MODIFY = READ_WRITE)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_mode (ORDER BY anyelement) (SFUNC = ordered_set_transition, STYPE = internal, FINALFUNC = mode_final, FINALFUNC_EXTRA)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_rank (VARIADIC \"any\" ORDER BY VARIADIC \"any\") (SFUNC = ordered_set_transition_multi, STYPE = internal, FINALFUNC = rank_final, FINALFUNC_EXTRA, HYPOTHETICAL)",
     );
     pg_and_generic().verified_stmt(
         "CREATE AGGREGATE my_min (INT) (SFUNC = my_sfunc, STYPE = INT, SSPACE = 128, SORTOP = <)",
@@ -9870,13 +9876,8 @@ fn parse_create_aggregate_rejects_bad_options() {
         "unexpected error: {quoted}"
     );
 
-    let duplicate = pg_and_generic()
-        .parse_sql_statements("CREATE AGGREGATE foo (INT) (SFUNC = f, SFUNC = g, STYPE = INT)")
-        .unwrap_err();
-    assert_eq!(
-        duplicate.to_string(),
-        "sql parser error: Duplicate CREATE AGGREGATE option: SFUNC"
-    );
+    pg_and_generic()
+        .verified_stmt("CREATE AGGREGATE foo (INT) (SFUNC = f, SFUNC = g, STYPE = INT)");
 }
 
 #[test]

@@ -6296,12 +6296,12 @@ impl<'a> Parser<'a> {
         // first token is a name and not a type in itself.
         let data_type_idx = self.get_current_index();
 
-        // DEFAULT will be parsed as `DataType::Custom`, which is undesirable in this context
-        fn parse_data_type_no_default(parser: &mut Parser) -> Result<DataType, ParserError> {
-            if parser.peek_keyword(Keyword::DEFAULT) {
+        // DEFAULT and ORDER parse as `DataType::Custom`, which is undesirable here.
+        fn parse_data_type_no_arg_boundary(parser: &mut Parser) -> Result<DataType, ParserError> {
+            if parser.peek_keyword(Keyword::DEFAULT) || parser.peek_keyword(Keyword::ORDER) {
                 // This dummy error is ignored in `maybe_parse`
                 parser_err!(
-                    "The DEFAULT keyword is not a type",
+                    "The DEFAULT or ORDER keyword is not a type",
                     parser.peek_token_ref().span.start
                 )
             } else {
@@ -6309,7 +6309,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if let Some(next_data_type) = self.maybe_parse(parse_data_type_no_default)? {
+        if let Some(next_data_type) = self.maybe_parse(parse_data_type_no_arg_boundary)? {
             let token = self.token_at(data_type_idx).clone();
 
             // We ensure that the token is a `Word` token, and not other special tokens.
@@ -7511,17 +7511,8 @@ impl<'a> Parser<'a> {
         };
         self.expect_token(&Token::LParen)?;
 
-        let mut seen: Vec<Keyword> = Vec::new();
         let options = self.parse_comma_separated(|parser| {
-            let start = parser.peek_token_ref().span.start;
             let keyword = parser.parse_create_aggregate_option_key()?;
-            if seen.contains(&keyword) {
-                return parser_err!(
-                    format!("Duplicate CREATE AGGREGATE option: {keyword:?}"),
-                    start
-                );
-            }
-            seen.push(keyword);
             parser.parse_create_aggregate_option(keyword)
         })?;
         self.expect_token(&Token::RParen)?;
@@ -7534,13 +7525,24 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse the argument list of a `CREATE AGGREGATE`: `(*)` or `(arg [, ...])`.
     fn parse_create_aggregate_args(&mut self) -> Result<CreateAggregateArgs, ParserError> {
         self.expect_token(&Token::LParen)?;
         let args = if self.consume_token(&Token::Mul) {
             CreateAggregateArgs::Star
         } else {
-            CreateAggregateArgs::List(self.parse_comma_separated(Parser::parse_function_arg)?)
+            let direct = if self.peek_keyword(Keyword::ORDER) {
+                vec![]
+            } else {
+                self.parse_comma_separated(Parser::parse_function_arg)?
+            };
+            if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                CreateAggregateArgs::OrderedSet {
+                    direct,
+                    aggregated: self.parse_comma_separated(Parser::parse_function_arg)?,
+                }
+            } else {
+                CreateAggregateArgs::List(direct)
+            }
         };
         self.expect_token(&Token::RParen)?;
         Ok(args)

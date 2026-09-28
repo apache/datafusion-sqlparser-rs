@@ -49,3 +49,8 @@ fn parse_doris_div_infix() {
 fn parse_doris_group_by_with_rollup() {
     doris().verified_only_select("SELECT * FROM t GROUP BY col1, col2 WITH ROLLUP");
 }
+
+#[test]
+fn parse_doris_nested_comments() {
+    doris().one_statement_parses_to("SELECT 1 /* a /* b */ c */, 2", "SELECT 1, 2");
+}

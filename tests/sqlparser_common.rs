@@ -2259,6 +2259,7 @@ fn parse_not_precedence() {
                     (Value::SingleQuotedString("a".into())).with_empty_span()
                 )],
                 negated: true,
+                global: false,
             }),
         },
     );
@@ -2541,6 +2542,7 @@ fn parse_in_list() {
                     Expr::Value((Value::SingleQuotedString("MED".to_string())).with_empty_span()),
                 ],
                 negated,
+                global: false,
             },
             select.selection.unwrap()
         );
@@ -2558,6 +2560,7 @@ fn parse_in_subquery() {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
             subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
+            global: false,
         },
         select.selection.unwrap()
     );
@@ -2574,6 +2577,7 @@ fn parse_in_union() {
                 "(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)"
             )),
             negated: false,
+            global: false,
         },
         select.selection.unwrap()
     );

@@ -4142,6 +4142,11 @@ impl<'a> Parser<'a> {
                         time_zone: Box::new(self.parse_subexpr(precedence)?),
                     })
                 }
+                Keyword::GLOBAL if self.dialect.supports_global_in() => {
+                    let negated = self.parse_keyword(Keyword::NOT);
+                    self.expect_keyword_is(Keyword::IN)?;
+                    self.parse_in(expr, negated, true)
+                }
                 Keyword::NOT
                 | Keyword::IN
                 | Keyword::BETWEEN
@@ -4171,7 +4176,7 @@ impl<'a> Parser<'a> {
                     } else if negated && null {
                         Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::IN) {
-                        self.parse_in(expr, negated)
+                        self.parse_in(expr, negated, false)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
                         self.parse_between(expr, negated)
                     } else if self.parse_keyword(Keyword::LIKE) {
@@ -4434,11 +4439,16 @@ impl<'a> Parser<'a> {
         Ok(JsonPath { path })
     }
 
-    /// Parses the parens following the `[ NOT ] IN` operator.
-    pub fn parse_in(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+    /// Parses the parens following the `[ GLOBAL ] [ NOT ] IN` operator.
+    pub fn parse_in(
+        &mut self,
+        expr: Expr,
+        negated: bool,
+        global: bool,
+    ) -> Result<Expr, ParserError> {
         // BigQuery allows `IN UNNEST(array_expression)`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
-        if self.parse_keyword(Keyword::UNNEST) {
+        if !global && self.parse_keyword(Keyword::UNNEST) {
             self.expect_token(&Token::LParen)?;
             let array_expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
@@ -4455,6 +4465,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 list: vec![self.parse_expr()?],
                 negated,
+                global,
             });
         }
         self.expect_token(&Token::LParen)?;
@@ -4463,6 +4474,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 subquery,
                 negated,
+                global,
             },
             None => Expr::InList {
                 expr: Box::new(expr),
@@ -4472,6 +4484,7 @@ impl<'a> Parser<'a> {
                     self.parse_comma_separated(Parser::parse_expr)?
                 },
                 negated,
+                global,
             },
         };
         self.expect_token(&Token::RParen)?;

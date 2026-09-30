@@ -25,20 +25,20 @@ report vulnerabilities.
 ## Security Model
 
 `sqlparser-rs` parses SQL text, which is often untrusted input (e.g., a query
-string from a user or an external system). The parser is expected to reject
-invalid or malformed SQL with a normal error, without crashing or otherwise
-behaving unexpectedly.
+string from a user or external system). The parser is expected to reject invalid
+or malformed SQL with an error.
 
-Unexpected behavior (e.g., panics, crashes, excessive resource consumption, or
-infinite loops) triggered by malformed or adversarial input is generally
-considered a **bug**, not a security vulnerability, unless it is
-**exploitable** and could allow an attacker to
+Unexpected behavior triggered by malformed or adversarial input is generally
+considered a **bug**, not a security vulnerability, unless it is *exploitable**
+and could allow an attacker to
 
 * Execute arbitrary code (Remote Code Execution);
 * Exfiltrate sensitive information from process memory (Information Disclosure);
 
-If that exploitation path is unclear, the issue should likely be reported as a
-bug.
+For example, panics, crashes, stack overflows, excessive resource consumption,
+or infinite loops are generally considered bugs, unless they can be exploited to
+achieve one of the above security goals.  If that exploitation path is unclear,
+the issue should likely be reported as a bug.
 
 ## Reporting a Bug
 
@@ -48,15 +48,12 @@ in the public issue tracker.
 
 ## Reporting a Vulnerability
 
-For security vulnerabilities, please follow the responsible disclosure process
-below so we can investigate and fix the issue before it is exploited in the
-wild.
-
-**Do not file a public issue.** Follow the [ASF security reporting process] by emailing [security@apache.org](mailto:security@apache.org).
+For security vulnerabilities, **do not file a public issue.** 
+Follow the [ASF security reporting process] by emailing [security@apache.org](mailto:security@apache.org).
 
 Include in your report:
 - A clear description and minimal reproducer.
 - Affected crates and versions.
-- Potential impact.
+- A demonstration of the potential impact.
 
 [ASF security reporting process]: https://www.apache.org/security/#reporting-a-vulnerability

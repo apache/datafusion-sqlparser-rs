@@ -133,4 +133,8 @@ impl Dialect for SQLiteDialect {
     fn supports_string_literal_column_names(&self) -> bool {
         true
     }
+
+    fn supports_national_string_literal(&self) -> bool {
+        false
+    }
 }

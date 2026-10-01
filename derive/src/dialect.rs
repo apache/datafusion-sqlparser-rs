@@ -292,7 +292,7 @@ fn read_dialect_mod_file() -> Result<String, String> {
                     name.starts_with("sqlparser-") && !name.starts_with("sqlparser-derive")
                 })
                 .collect();
-            siblings.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+            siblings.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
             candidates.extend(
                 siblings
                     .into_iter()

@@ -394,6 +394,7 @@ impl Spanned for Statement {
             Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
+            Statement::CreateForeignTable(stmt) => stmt.span(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {
@@ -1219,6 +1220,9 @@ impl Spanned for AlterTableOperation {
                 column_position: _,
             } => {
                 union_spans(core::iter::once(col_name.span).chain(options.iter().map(|i| i.span())))
+            }
+            AlterTableOperation::ModifyOrderBy { order_by } => {
+                union_spans(order_by.iter().map(|e| e.span()))
             }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 old_name.span.union(&new_name.span)
@@ -3162,5 +3166,34 @@ WHERE id = 1
             stmt_span,
             Span::new(Location::new(2, 8), Location::new(4, 52))
         );
+    }
+
+    #[test]
+    fn test_create_foreign_table_option_spans() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = r#"CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ("schema_name" 'public')"#;
+        let mut test = SpanTest::new(dialect, sql);
+
+        let options = match test.0.parse_statement().unwrap() {
+            Statement::CreateForeignTable(stmt) => stmt.options.unwrap(),
+            stmt => panic!("expected CREATE FOREIGN TABLE, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(options[0].key.span), r#""schema_name""#);
+        assert_eq!(test.get_source(options[0].value.span), "'public'");
+    }
+
+    #[test]
+    fn test_alter_table_modify_order_by_span() {
+        let dialect = &crate::dialect::ClickHouseDialect {};
+        let sql = "ALTER TABLE t MODIFY ORDER BY (a, b.c)";
+        let test = SpanTest::new(dialect, sql);
+        let r = Parser::parse_sql(dialect, sql).unwrap();
+        match &r[0] {
+            Statement::AlterTable(alter) => {
+                let op_span = alter.operations[0].span();
+                assert_eq!(test.get_source(op_span), "a, b.c");
+            }
+            stmt => panic!("expected ALTER TABLE; got {stmt:?}"),
+        }
     }
 }

@@ -71,6 +71,10 @@ impl Dialect for MsSqlDialect {
         true
     }
 
+    fn supports_create_proc_syntax(&self) -> bool {
+        true
+    }
+
     fn supports_connect_by(&self) -> bool {
         true
     }

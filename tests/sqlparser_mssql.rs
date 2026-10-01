@@ -2941,3 +2941,20 @@ fn parse_bracket_quoted_function_argument_name() {
         }])
     );
 }
+
+#[test]
+fn parse_create_proc() {
+    ms().one_statement_parses_to(
+        "CREATE PROC test AS BEGIN SELECT 1; END",
+        "CREATE PROCEDURE test AS BEGIN SELECT 1; END",
+    );
+    ms().one_statement_parses_to(
+        "CREATE OR ALTER PROC test AS BEGIN SELECT 1; END",
+        "CREATE OR ALTER PROCEDURE test AS BEGIN SELECT 1; END",
+    );
+
+    TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("CREATE PROC test AS BEGIN SELECT 1; END")
+        .expect_err("PROC should remain MSSQL-specific");
+    ms_and_generic().verified_stmt("SELECT proc FROM jobs");
+}

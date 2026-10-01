@@ -20241,6 +20241,25 @@ fn parse_alter_table_column_position() {
 }
 
 #[test]
+fn parse_compound_field_access_numeric_display() {
+    all_dialects().verified_stmt("SELECT 1 . i");
+    all_dialects().verified_stmt("SELECT (1 . i)");
+    all_dialects().verified_stmt("SELECT 1 . 2");
+    all_dialects().verified_stmt("SELECT (a . 1 . b)");
+    all_dialects().verified_stmt("SELECT 1 . i.j");
+    all_dialects().verified_stmt("SELECT 1 . 2 . 3");
+    all_dialects().verified_stmt("SELECT a.b.c");
+
+    let err = all_dialects_where(|d| !d.supports_numeric_prefix())
+        .parse_sql_statements("SELECT (1.i)")
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ParserError::ParserError("Expected: ), found: i".to_string())
+    );
+}
+
+#[test]
 fn parse_placeholder_disallows_quoted_ident() {
     let dialects = TestedDialects::new(vec![
         Box::new(AnsiDialect {}),

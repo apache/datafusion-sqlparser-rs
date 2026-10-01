@@ -133,4 +133,8 @@ impl Dialect for SQLiteDialect {
     fn supports_double_eq_assignment(&self) -> bool {
         true
     }
+
+    fn supports_national_string_literal(&self) -> bool {
+        false
+    }
 }

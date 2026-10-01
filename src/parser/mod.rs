@@ -2925,7 +2925,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword_is(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
+        let data_type = if self.dialect.supports_cast_empty_data_type_to_unspecified()
+            && self.peek_token_ref().token == Token::RParen
+        {
+            DataType::Unspecified
+        } else {
+            self.parse_data_type()?
+        };
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
@@ -19295,6 +19301,13 @@ impl<'a> Parser<'a> {
             } if self.dialect.supports_eq_alias_assignment()
                 && matches!(left.as_ref(), Expr::Identifier(_)) =>
             {
+                if matches!(right.as_ref(), Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none())
+                {
+                    return parser_err!(
+                        format!("Expected an expression, found: {right}"),
+                        self.peek_token_ref().span.start
+                    );
+                }
                 let Expr::Identifier(alias) = *left else {
                     return parser_err!(
                         "BUG: expected identifier expression as alias",

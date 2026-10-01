@@ -134,6 +134,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
+        true
+    }
+
     fn supports_national_string_literal(&self) -> bool {
         false
     }

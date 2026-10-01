@@ -37,6 +37,8 @@ rendered statement no longer parses.
 
 `fuzz_duckdb_accepts` parses the input with DuckDB's own parser and fails when DuckDB accepts a `SELECT` that `DuckDbDialect` rejects.
 
+The three oracle targets compile their engine from source, so each builds only with its feature, `sqlite`, `postgres` or `duckdb`, as in `cargo +nightly fuzz run --features sqlite fuzz_sqlite_accepts fuzz_seeds`. `cargo +nightly fuzz build --all-features` builds every target.
+
 ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
 `code-change` mode, a daily batch job grows the shared corpus stored on the
 `clusterfuzzlite` branch, and a daily prune compacts it.

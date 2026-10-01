@@ -72,7 +72,7 @@ pub use self::ddl::{
     AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
     ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
     ConstraintCharacteristics, CreateCollation, CreateCollationDefinition, CreateConnector,
-    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    CreateDomain, CreateExtension, CreateForeignTable, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
     CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
@@ -1986,16 +1986,14 @@ impl fmt::Display for Expr {
                 | UnaryOperator::QuestionPipe
                 | UnaryOperator::PGSquareRoot
                 | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
-                UnaryOperator::Minus => {
+                UnaryOperator::Minus | UnaryOperator::BangNot => {
                     if starts_with_operator_char(expr) {
                         write!(f, "{op} {expr}")
                     } else {
                         write!(f, "{op}{expr}")
                     }
                 }
-                UnaryOperator::Plus | UnaryOperator::BangNot | UnaryOperator::PGPrefixFactorial => {
-                    write!(f, "{op}{expr}")
-                }
+                UnaryOperator::Plus | UnaryOperator::PGPrefixFactorial => write!(f, "{op}{expr}"),
             },
             Expr::Convert {
                 is_try,
@@ -3801,6 +3799,11 @@ pub enum Statement {
     },
     /// A `CREATE SERVER` statement.
     CreateServer(CreateServerStatement),
+    /// ```sql
+    /// CREATE FOREIGN TABLE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+    CreateForeignTable(CreateForeignTable),
     /// ```sql
     /// CREATE POLICY
     /// ```
@@ -5661,6 +5664,7 @@ impl fmt::Display for Statement {
             Statement::CreateServer(stmt) => {
                 write!(f, "{stmt}")
             }
+            Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
@@ -8112,24 +8116,17 @@ impl fmt::Display for FunctionArg {
     }
 }
 
-/// Whether `expr` renders with an operator character first. A prefix `-`
-/// must not abut one, since `--` starts a line comment and operator-run
-/// dialects fuse `-@`, `-~`, `-#`, `-!!` and `-||/` into single tokens.
-fn starts_with_operator_char(expr: &Expr) -> bool {
-    use fmt::Write;
-    struct FirstChar(Option<char>);
-    impl fmt::Write for FirstChar {
-        fn write_str(&mut self, s: &str) -> fmt::Result {
-            if self.0.is_none() {
-                self.0 = s.chars().next();
-            }
-            Ok(())
+/// Whether `expr` renders with an operator character first. A prefix `-` or `!`
+/// must not abut one, since `--` starts a line comment and compound tokens
+/// like `!!` or `!~` alter the parsed AST or fail to parse.
+fn starts_with_operator_char(mut expr: &Expr) -> bool {
+    loop {
+        match expr {
+            Expr::UnaryOp { op, .. } => return !matches!(op, UnaryOperator::Not),
+            Expr::BinaryOp { left, .. } => expr = left,
+            _ => return false,
         }
     }
-    let mut first = FirstChar(None);
-    let _ = write!(first, "{expr}");
-    const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
-    first.0.is_some_and(|c| OPERATOR_CHARS.contains(c))
 }
 
 /// `FunctionArgOperator::Space` has no token of its own, so the name and the
@@ -9238,7 +9235,7 @@ impl fmt::Display for CreateServerStatement {
     }
 }
 
-/// A key/value option for `CREATE SERVER`.
+/// A key/value entry in a Postgres `OPTIONS ( ... )` clause.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

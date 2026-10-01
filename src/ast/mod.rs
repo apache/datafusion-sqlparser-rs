@@ -1491,12 +1491,14 @@ pub enum AccessExpr {
     Subscript(Subscript),
 }
 
+const fn is_number_expr(expr: &Expr) -> bool {
+    matches!(expr, Expr::Value(v) if matches!(v.value, Value::Number(_, _)))
+}
+
 impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccessExpr::Dot(Expr::Value(value)) if matches!(value.value, Value::Number(_, _)) => {
-                write!(f, " . {value}")
-            }
+            AccessExpr::Dot(expr) if is_number_expr(expr) => write!(f, " . {expr}"),
             AccessExpr::Dot(expr) => write!(f, ".{expr}"),
             AccessExpr::Subscript(subscript) => write!(f, "[{subscript}]"),
         }
@@ -1758,8 +1760,13 @@ impl fmt::Display for Expr {
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::CompoundFieldAccess { root, access_chain } => {
                 write!(f, "{root}")?;
+                let mut prev_is_number = is_number_expr(root);
                 for field in access_chain {
-                    write!(f, "{field}")?;
+                    match field {
+                        AccessExpr::Dot(expr) if prev_is_number => write!(f, " . {expr}")?,
+                        _ => write!(f, "{field}")?,
+                    }
+                    prev_is_number = matches!(field, AccessExpr::Dot(expr) if is_number_expr(expr));
                 }
                 Ok(())
             }

@@ -1333,6 +1333,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports `PROC` as an abbreviation for
+    /// `PROCEDURE` in a `CREATE` statement.
+    fn supports_create_proc_syntax(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect accepts a comma-separated list of table-level
     /// options placed between the table name and the column-list parenthesis, e.g.
     ///
@@ -1955,6 +1961,18 @@ pub trait Dialect: Debug + Any {
     ///
     /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-datatypes.html)
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `CAST(expr AS)` with an empty type name.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT CAST(a AS)
+    /// ```
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html)
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
         false
     }
 }

@@ -15270,6 +15270,24 @@ fn test_alias_equal_expr() {
     let expected = r#"SELECT (a * b) AS some_alias FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);
 
+    let sql = r#"SELECT some_alias = "from" FROM some_table"#;
+    let expected = r#"SELECT "from" AS some_alias FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a = FROM")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression, found: FROM".to_string())
+    );
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a = FROM some_table")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression, found: FROM".to_string())
+    );
+
     let dialects = all_dialects_where(|d| !d.supports_eq_alias_assignment());
     let sql = r#"SELECT x = (a * b) FROM some_table"#;
     let expected = r#"SELECT x = (a * b) FROM some_table"#;
@@ -20223,6 +20241,25 @@ fn parse_alter_table_column_position() {
 }
 
 #[test]
+fn parse_compound_field_access_numeric_display() {
+    all_dialects().verified_stmt("SELECT 1 . i");
+    all_dialects().verified_stmt("SELECT (1 . i)");
+    all_dialects().verified_stmt("SELECT 1 . 2");
+    all_dialects().verified_stmt("SELECT (a . 1 . b)");
+    all_dialects().verified_stmt("SELECT 1 . i.j");
+    all_dialects().verified_stmt("SELECT 1 . 2 . 3");
+    all_dialects().verified_stmt("SELECT a.b.c");
+
+    let err = all_dialects_where(|d| !d.supports_numeric_prefix())
+        .parse_sql_statements("SELECT (1.i)")
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ParserError::ParserError("Expected: ), found: i".to_string())
+    );
+}
+
+#[test]
 fn parse_placeholder_disallows_quoted_ident() {
     let dialects = TestedDialects::new(vec![
         Box::new(AnsiDialect {}),
@@ -20262,4 +20299,21 @@ fn parse_placeholder_disallows_quoted_ident() {
         ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
         err
     );
+}
+
+#[test]
+fn parse_bang_not_renders_apart_from_operand() {
+    let dialects = all_dialects_where(|d| d.supports_bang_not_operator());
+    dialects.verified_stmt("SELECT ! !a");
+    dialects.verified_stmt("SELECT ! ! !a");
+    dialects.verified_stmt("SELECT ! ~ a");
+    dialects.verified_stmt("SELECT ! -a");
+    dialects.verified_stmt("SELECT ! +a");
+    dialects.verified_stmt("SELECT !a");
+    dialects.verified_stmt("SELECT !(b > 3)");
+    dialects.verified_stmt("SELECT ! -a + b");
+    dialects.verified_stmt("SELECT !a + b");
+    dialects.verified_stmt("SELECT !NOT a");
+    dialects.verified_stmt("SET eaac_cion = ! !o");
+    dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
 }

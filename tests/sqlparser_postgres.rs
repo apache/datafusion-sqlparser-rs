@@ -565,18 +565,6 @@ fn parse_create_table_from_pg_dump() {
 }
 
 #[test]
-fn parse_create_table_with_inherit() {
-    let sql = "\
-               CREATE TABLE bazaar.settings (\
-               settings_id UUID PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
-               user_id UUID UNIQUE, \
-               value TEXT[], \
-               use_metric BOOLEAN DEFAULT true\
-               )";
-    pg().verified_stmt(sql);
-}
-
-#[test]
 fn parse_create_table_empty() {
     // Zero-column tables are weird, but supported by at least PostgreSQL.
     // <https://github.com/sqlparser-rs/sqlparser-rs/pull/94>

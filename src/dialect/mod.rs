@@ -505,6 +505,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a period directly after an identifier starts a tuple
+    /// element access such as `t.1`, instead of the number `.1`.
+    fn supports_tuple_element_access(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports numbers containing underscores, e.g. `10_000_000`
     fn supports_numeric_literal_underscores(&self) -> bool {
         false
@@ -1324,6 +1330,12 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
     fn supports_create_table_select(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `PROC` as an abbreviation for
+    /// `PROCEDURE` in a `CREATE` statement.
+    fn supports_create_proc_syntax(&self) -> bool {
         false
     }
 

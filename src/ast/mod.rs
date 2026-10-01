@@ -1986,16 +1986,14 @@ impl fmt::Display for Expr {
                 | UnaryOperator::QuestionPipe
                 | UnaryOperator::PGSquareRoot
                 | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
-                UnaryOperator::Minus => {
+                UnaryOperator::Minus | UnaryOperator::BangNot => {
                     if starts_with_operator_char(expr) {
                         write!(f, "{op} {expr}")
                     } else {
                         write!(f, "{op}{expr}")
                     }
                 }
-                UnaryOperator::Plus | UnaryOperator::BangNot | UnaryOperator::PGPrefixFactorial => {
-                    write!(f, "{op}{expr}")
-                }
+                UnaryOperator::Plus | UnaryOperator::PGPrefixFactorial => write!(f, "{op}{expr}"),
             },
             Expr::Convert {
                 is_try,
@@ -8114,24 +8112,17 @@ impl fmt::Display for FunctionArg {
     }
 }
 
-/// Whether `expr` renders with an operator character first. A prefix `-`
-/// must not abut one, since `--` starts a line comment and operator-run
-/// dialects fuse `-@`, `-~`, `-#`, `-!!` and `-||/` into single tokens.
-fn starts_with_operator_char(expr: &Expr) -> bool {
-    use fmt::Write;
-    struct FirstChar(Option<char>);
-    impl fmt::Write for FirstChar {
-        fn write_str(&mut self, s: &str) -> fmt::Result {
-            if self.0.is_none() {
-                self.0 = s.chars().next();
-            }
-            Ok(())
+/// Whether `expr` renders with an operator character first. A prefix `-` or `!`
+/// must not abut one, since `--` starts a line comment and compound tokens
+/// like `!!` or `!~` alter the parsed AST or fail to parse.
+fn starts_with_operator_char(mut expr: &Expr) -> bool {
+    loop {
+        match expr {
+            Expr::UnaryOp { op, .. } => return !matches!(op, UnaryOperator::Not),
+            Expr::BinaryOp { left, .. } => expr = left,
+            _ => return false,
         }
     }
-    let mut first = FirstChar(None);
-    let _ = write!(first, "{expr}");
-    const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
-    first.0.is_some_and(|c| OPERATOR_CHARS.contains(c))
 }
 
 /// `FunctionArgOperator::Space` has no token of its own, so the name and the

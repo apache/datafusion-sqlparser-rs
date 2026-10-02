@@ -20755,3 +20755,41 @@ fn parse_string_literal_alias() {
     dialects.verified_stmt("SELECT 1 AS 'x'");
     dialects.verified_stmt("SELECT a FROM t AS 'y'");
 }
+
+#[test]
+fn parse_placeholder_as_field_name() {
+    let supported = all_dialects_where(|d| d.supports_placeholder_as_field_name());
+    let select = supported.verified_only_select("SELECT t.$1, t.$2 FROM t");
+    assert_eq!(
+        select.projection,
+        vec![
+            SelectItem::UnnamedExpr(Expr::CompoundIdentifier(vec![
+                Ident::new("t"),
+                Ident::new("$1")
+            ])),
+            SelectItem::UnnamedExpr(Expr::CompoundIdentifier(vec![
+                Ident::new("t"),
+                Ident::new("$2")
+            ])),
+        ]
+    );
+    supported.verified_stmt("SELECT (t).$1 FROM t");
+    supported.verified_stmt("SELECT t.$name FROM t");
+
+    let unsupported = all_dialects_where(|d| {
+        !d.supports_placeholder_as_field_name() && !d.is_identifier_start('$')
+    });
+    for sql in [
+        "SELECT t.$name FROM t",
+        "SELECT t.$1 FROM t",
+        "SELECT c.$ame FROM c",
+        "SELECT (t).$1 FROM t",
+        "SELECT (t).$name FROM t",
+    ] {
+        unsupported.parse_sql_statements(sql).unwrap_err();
+    }
+
+    // Bare placeholders are unaffected by the capability.
+    unsupported.verified_stmt("SELECT $1, $2 FROM t");
+    unsupported.verified_only_select("SELECT * FROM student WHERE id = $Id1");
+}

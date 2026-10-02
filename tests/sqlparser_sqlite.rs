@@ -975,6 +975,19 @@ fn parse_update_set_double_eq() {
 }
 
 #[test]
+fn test_non_bmp_identifiers() {
+    // SQLite tokenizer treats every byte >= 0x80 as an identifier character,
+    // so any Unicode code point above U+007F is a valid identifier start/part.
+    sqlite().verified_stmt("SELECT 󟿾");
+    sqlite().verified_stmt("SELECT 𒀀");
+    sqlite().verified_stmt("SELECT 𒀀𒀁");
+    // U+DFFFE is not alphabetic, so GenericDialect rejects it as an identifier.
+    assert!(sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "SELECT 󟿾").is_err());
+    // SQLite rejects U+007F as an unrecognized token.
+    assert!(sqlite().parse_sql_statements("SELECT \u{007f}").is_err());
+}
+
+#[test]
 fn parse_create_table_string_column_names() {
     sqlite().verified_stmt("CREATE TABLE t ('a')");
     sqlite().verified_stmt(r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL)"#);

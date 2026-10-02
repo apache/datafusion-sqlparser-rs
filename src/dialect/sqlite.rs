@@ -48,10 +48,7 @@ impl Dialect for SQLiteDialect {
 
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://www.sqlite.org/draft/tokenreq.html
-        ch.is_ascii_lowercase()
-            || ch.is_ascii_uppercase()
-            || ch == '_'
-            || ('\u{007f}'..='\u{ffff}').contains(&ch)
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_' || ch >= '\u{0080}'
     }
 
     fn supports_filter_during_aggregation(&self) -> bool {

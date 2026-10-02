@@ -177,6 +177,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_singular_value_keyword(&self) -> bool {
+        true
+    }
+
     fn supports_comment_on(&self) -> bool {
         true
     }

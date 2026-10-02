@@ -100,6 +100,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_singular_value_keyword(&self) -> bool {
+        true
+    }
+
     /// see <https://dev.mysql.com/doc/refman/8.4/en/comments.html>
     fn supports_multiline_comment_hints(&self) -> bool {
         true

@@ -115,6 +115,7 @@ define_keywords!(
     ALL,
     ALLOCATE,
     ALLOWOVERWRITE,
+    ALSO,
     ALTER,
     ALWAYS,
     ANALYZE,

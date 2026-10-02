@@ -54,6 +54,7 @@ macro_rules! define_keywords {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+        #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
         #[expect(
             non_camel_case_types,
             reason = "variants are spelled like the SQL keywords they name, such as `CURRENT_DATE`"

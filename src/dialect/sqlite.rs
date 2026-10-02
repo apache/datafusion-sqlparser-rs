@@ -130,6 +130,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_signed_type_modifier(&self) -> bool {
+        true
+    }
+
     fn supports_double_eq_assignment(&self) -> bool {
         true
     }

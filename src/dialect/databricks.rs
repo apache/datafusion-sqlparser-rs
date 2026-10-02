@@ -48,6 +48,10 @@ impl Dialect for DatabricksDialect {
         true
     }
 
+    fn supports_semi_structured_data_traversal(&self) -> bool {
+        true
+    }
+
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }

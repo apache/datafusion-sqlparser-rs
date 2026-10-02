@@ -229,7 +229,7 @@ fn generate_derived_dialect(input: &DeriveDialectInput, methods: &[DialectMethod
         const _: () = {
             use ::core::iter::Peekable;
             use ::core::str::Chars;
-            use sqlparser::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
+            use sqlparser::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement, Value};
             use sqlparser::dialect::{Dialect, Precedence};
             use sqlparser::keywords::Keyword;
             use sqlparser::parser::{Parser, ParserError};

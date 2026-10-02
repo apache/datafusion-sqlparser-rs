@@ -19,7 +19,7 @@
 use alloc::boxed::Box;
 
 use crate::ast::BinaryOperator;
-use crate::ast::{Expr, Statement};
+use crate::ast::{Expr, Statement, Value};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -154,5 +154,10 @@ impl Dialect for SQLiteDialect {
 
     fn supports_parens_around_table_factor(&self) -> bool {
         true
+    }
+
+    /// SQLite's `nm ::= id | STRING` grammar takes a quoted string as a table qualifier.
+    fn supports_value_access(&self, value: &Value) -> bool {
+        matches!(value, Value::SingleQuotedString(_))
     }
 }

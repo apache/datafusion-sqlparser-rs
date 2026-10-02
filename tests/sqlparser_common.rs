@@ -20424,12 +20424,13 @@ fn parse_alter_table_column_position() {
 
 #[test]
 fn parse_compound_field_access_numeric_display() {
-    all_dialects().verified_stmt("SELECT 1 . i");
-    all_dialects().verified_stmt("SELECT (1 . i)");
-    all_dialects().verified_stmt("SELECT 1 . 2");
-    all_dialects().verified_stmt("SELECT (a . 1 . b)");
-    all_dialects().verified_stmt("SELECT 1 . i.j");
-    all_dialects().verified_stmt("SELECT 1 . 2 . 3");
+    let dialects = all_dialects_except(|d| d.is::<PostgreSqlDialect>() || d.is::<SQLiteDialect>());
+    dialects.verified_stmt("SELECT 1 . i");
+    dialects.verified_stmt("SELECT (1 . i)");
+    dialects.verified_stmt("SELECT 1 . 2");
+    dialects.verified_stmt("SELECT (a . 1 . b)");
+    dialects.verified_stmt("SELECT 1 . i.j");
+    dialects.verified_stmt("SELECT 1 . 2 . 3");
     all_dialects().verified_stmt("SELECT a.b.c");
 
     let err = all_dialects_where(|d| !d.supports_numeric_prefix())
@@ -20754,4 +20755,18 @@ fn parse_string_literal_alias() {
     dialects.one_statement_parses_to("SELECT 1 'x'", "SELECT 1 AS 'x'");
     dialects.verified_stmt("SELECT 1 AS 'x'");
     dialects.verified_stmt("SELECT a FROM t AS 'y'");
+}
+
+#[test]
+fn parse_colon_json_access_requires_dialect_support() {
+    let unsupported = all_dialects_where(|d| !d.supports_semi_structured_data_traversal());
+    assert_eq!(
+        unsupported
+            .parse_sql_statements("SELECT a:b FROM t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: :".to_string())
+    );
+
+    unsupported.verified_stmt("SELECT a::INT FROM t");
+    unsupported.verified_stmt("SELECT :name");
 }

@@ -2963,3 +2963,75 @@ fn parse_create_proc() {
         .expect_err("PROC should remain MSSQL-specific");
     ms_and_generic().verified_stmt("SELECT proc FROM jobs");
 }
+
+#[test]
+fn parse_mssql_nonreserved_expression_keywords() {
+    for keyword in ["INTERVAL", "TRIM", "SUBSTRING", "DATE"] {
+        let sql = format!("SELECT {keyword} FROM dbo.example");
+        let select = ms().verified_only_select(&sql);
+        assert!(
+            matches!(expr_from_projection(&select.projection[0]), Expr::Identifier(identifier)
+            if identifier.value == keyword),
+            "{sql}"
+        );
+    }
+    for sql in [
+        "SELECT INTERVAL + 1 FROM dbo.example",
+        "SELECT INTERVAL AS value FROM dbo.example",
+        "SELECT 1 FROM dbo.example WHERE INTERVAL = 1",
+        "SELECT 1 FROM dbo.example WHERE TRIM = 'value'",
+    ] {
+        ms().verified_stmt(sql);
+    }
+    ms().one_statement_parses_to(
+        "SELECT INTERVAL value FROM dbo.example",
+        "SELECT INTERVAL AS value FROM dbo.example",
+    );
+    let select = ms().verified_only_select("SELECT MAX(INTERVAL) FROM dbo.example");
+    assert!(matches!(
+        expr_from_projection(&select.projection[0]),
+        Expr::Function(_)
+    ));
+    let select = ms().verified_only_select("SELECT INTERVAL + 1 FROM dbo.example");
+    assert!(matches!(expr_from_projection(&select.projection[0]),
+        Expr::BinaryOp { left, op: BinaryOperator::Plus, .. }
+            if matches!(left.as_ref(), Expr::Identifier(identifier) if identifier.value == "INTERVAL")));
+}
+
+#[test]
+fn parse_mssql_keyword_functions_keep_special_ast() {
+    assert!(matches!(
+        ms().verified_expr("TRIM(value)"),
+        Expr::Trim { .. }
+    ));
+    assert!(matches!(
+        ms().verified_expr("SUBSTRING(value, 1, 2)"),
+        Expr::Substring { .. }
+    ));
+    assert!(matches!(
+        ms().verified_expr("CAST(value AS INT)"),
+        Expr::Cast { .. }
+    ));
+    assert!(matches!(
+        ms().verified_expr("CONVERT(INT, value)"),
+        Expr::Convert { .. }
+    ));
+    ms_and_generic().verified_stmt("SELECT t.INTERVAL FROM t");
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    assert!(matches!(
+        generic.verified_expr("INTERVAL '1' DAY"),
+        Expr::Interval(_)
+    ));
+    assert!(matches!(
+        generic.verified_expr("DATE '2025-01-01'"),
+        Expr::TypedString(_)
+    ));
+    for sql in [
+        "SELECT TRIM(",
+        "SELECT SUBSTRING(value,",
+        "SELECT CAST(value AS)",
+        "SELECT FROM t",
+    ] {
+        assert!(ms().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}

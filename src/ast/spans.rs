@@ -488,6 +488,7 @@ impl Spanned for Statement {
             Statement::Unload { .. } => Span::empty(),
             Statement::OptimizeTable { .. } => Span::empty(),
             Statement::CreatePolicy { .. } => Span::empty(),
+            Statement::CreateRule { .. } => Span::empty(),
             Statement::AlterPolicy { .. } => Span::empty(),
             Statement::AlterTrigger(trigger) => trigger.span(),
             Statement::AlterConnector { .. } => Span::empty(),

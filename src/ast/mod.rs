@@ -75,8 +75,9 @@ pub use self::ddl::{
     ConstraintCharacteristics, CreateAggregate, CreateAggregateArgs, CreateAggregateOption,
     CreateCollation, CreateCollationDefinition, CreateConnector, CreateDomain, CreateExtension,
     CreateForeignTable, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
-    CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateTable,
-    CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle,
+    CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateRule,
+    CreateRuleAction, CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch,
+    CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle,
     DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
     DropOperatorSignature, DropPolicy, DropTrigger, ForValues, FunctionReturnType, GeneratedAs,
     GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
@@ -3842,6 +3843,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
     CreatePolicy(CreatePolicy),
     /// ```sql
+    /// CREATE RULE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrule.html)
+    CreateRule(CreateRule),
+    /// ```sql
     /// CREATE CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
@@ -5708,6 +5714,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
+            Statement::CreateRule(rule) => write!(f, "{rule}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
             Statement::CreateOperatorFamily(create_operator_family) => {

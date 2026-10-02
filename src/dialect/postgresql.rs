@@ -345,6 +345,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// PostgreSQL requires one of those forms; a bare table name is a syntax error.
+    fn supports_create_table_without_column_list(&self) -> bool {
+        false
+    }
+
     fn supports_select_wildcard_with_alias(&self) -> bool {
         true
     }

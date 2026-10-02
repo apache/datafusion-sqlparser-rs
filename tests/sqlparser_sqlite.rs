@@ -1222,6 +1222,69 @@ fn parse_over_as_column_alias_after_function() {
         Err(ParserError::ParserError(
             "Expected: identifier, found: EOF".to_string()
         ))
+        ))
+    );
+}
+
+#[test]
+fn parse_comparison_binds_tighter_than_equality() {
+    let id = |name: &str| Expr::Identifier(Ident::new(name));
+    let binary = |left: Expr, op: BinaryOperator, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    };
+
+    for (sql, eq_op, cmp_op) in [
+        ("a = b < c", BinaryOperator::Eq, BinaryOperator::Lt),
+        ("a <> b <= c", BinaryOperator::NotEq, BinaryOperator::LtEq),
+        ("a = b > c", BinaryOperator::Eq, BinaryOperator::Gt),
+        ("a <> b >= c", BinaryOperator::NotEq, BinaryOperator::GtEq),
+    ] {
+        assert_eq!(
+            sqlite().verified_expr(sql),
+            binary(id("a"), eq_op, binary(id("b"), cmp_op, id("c"))),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        sqlite().verified_expr("a < b = c"),
+        binary(
+            binary(id("a"), BinaryOperator::Lt, id("b")),
+            BinaryOperator::Eq,
+            id("c")
+        ),
+    );
+
+    // `IN` and `BETWEEN` sit on the level of `=`
+    assert_eq!(
+        sqlite().verified_expr("a < b IN (1)"),
+        Expr::InList {
+            expr: Box::new(binary(id("a"), BinaryOperator::Lt, id("b"))),
+            list: vec![Expr::value(number("1"))],
+            negated: false,
+            global: false,
+        },
+    );
+    assert_eq!(
+        sqlite().verified_expr("a BETWEEN b AND c < d"),
+        Expr::Between {
+            expr: Box::new(id("a")),
+            negated: false,
+            low: Box::new(id("b")),
+            high: Box::new(binary(id("c"), BinaryOperator::Lt, id("d"))),
+        },
+    );
+
+    // Other dialects keep one level for every comparison
+    assert_eq!(
+        all_dialects_except(|d| d.is::<SQLiteDialect>()).verified_expr("a = b < c"),
+        binary(
+            binary(id("a"), BinaryOperator::Eq, id("b")),
+            BinaryOperator::Lt,
+            id("c")
+        ),
     );
 }
 

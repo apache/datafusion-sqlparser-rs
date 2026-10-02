@@ -25,6 +25,10 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
+/// Precedence of `<`, `<=`, `>` and `>=`, between `=` and the bitwise operators, see
+/// <https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes>
+const COMPARISON_PREC: u8 = 21;
+
 /// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 ///
 /// This dialect allows columns in a
@@ -103,7 +107,28 @@ impl Dialect for SQLiteDialect {
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
         match parser.peek_token_ref().token {
             Token::Ampersand | Token::Pipe => Some(Ok(self.prec_value(Precedence::Ampersand))),
+            Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Some(Ok(COMPARISON_PREC)),
             _ => None,
+        }
+    }
+
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::Period => 100,
+            Precedence::DoubleColon => 50,
+            Precedence::AtTz => 41,
+            Precedence::MulDivModOp => 40,
+            Precedence::PlusMinus => 30,
+            Precedence::Xor => 25,
+            Precedence::Ampersand => 24,
+            Precedence::Caret => 23,
+            Precedence::Pipe | Precedence::Colon | Precedence::PgOther => 22,
+            Precedence::Between | Precedence::Eq => 20,
+            Precedence::Like => 19,
+            Precedence::Is => 17,
+            Precedence::UnaryNot => 15,
+            Precedence::And => 10,
+            Precedence::Or => 5,
         }
     }
 

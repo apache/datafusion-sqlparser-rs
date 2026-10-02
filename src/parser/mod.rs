@@ -12904,6 +12904,9 @@ impl<'a> Parser<'a> {
         let _guard = self.recursion_counter.try_decrease()?;
 
         let dialect = self.dialect;
+        if let Some(custom) = self.maybe_parse(|p| p.parse_type_with_signed_modifier())? {
+            return Ok((custom, false.into()));
+        }
         self.advance_token();
         let next_token = self.get_current_token();
         let next_token_index = self.get_current_index();
@@ -13190,7 +13193,6 @@ impl<'a> Parser<'a> {
                 )),
                 Keyword::DECIMAL => {
                     let precision = self.parse_exact_number_optional_precision_scale()?;
-
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::DecimalUnsigned(precision))
                     } else {
@@ -14482,6 +14484,70 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected_ref("number", current_token),
         }
+    }
+
+    /// Parses a single-word type name followed by a signed or non-integer modifier list.
+    /// Called via `maybe_parse` so the token index resets when the modifier is a plain
+    /// unsigned integer or the dialect does not enable this path.
+    fn parse_type_with_signed_modifier(&mut self) -> Result<DataType, ParserError> {
+        if !self.dialect.supports_signed_type_modifier() {
+            return self.expected_ref("", self.peek_token_ref());
+        }
+        self.advance_token();
+        let tok = self.get_current_token();
+        let tok_span = tok.span;
+        let type_ident = match &tok.token {
+            Token::Word(w) => w.to_ident(tok_span),
+            _ => return self.expected_at("a data type name", self.get_current_index()),
+        };
+        if self.peek_token_ref().token != Token::LParen {
+            return self.expected_ref("(", self.peek_token_ref());
+        }
+        // The custom path applies when any modifier is signed or decimal.
+        // All-unsigned modifiers are left to the standard type parsing.
+        let mut is_non_standard = false;
+        let mut nth = 1usize;
+        loop {
+            let token = self.peek_nth_token(nth);
+            match &token.token {
+                Token::RParen => break,
+                Token::Plus | Token::Minus => is_non_standard = true,
+                Token::Number(n, _) if n.parse::<u64>().is_err() => is_non_standard = true,
+                Token::Number(_, _) | Token::Comma => {}
+                _ => return self.expected_ref("a signed or decimal type modifier", &token),
+            }
+            nth += 1;
+        }
+        if !is_non_standard {
+            return self.expected_ref("a signed or decimal type modifier", self.peek_token_ref());
+        }
+        self.expect_token(&Token::LParen)?;
+        let mut modifiers: Vec<String> = Vec::new();
+        loop {
+            let mut s = String::new();
+            if self.consume_token(&Token::Minus) {
+                s.push('-');
+            } else if self.consume_token(&Token::Plus) {
+                s.push('+');
+            }
+            let tok = self.next_token();
+            match tok.token {
+                Token::Number(n, _) => s.push_str(&n),
+                _ => return self.expected("a number in type modifier", tok),
+            }
+            modifiers.push(s);
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+            if modifiers.len() == 2 {
+                return self.expected_ref(")", self.peek_token_ref());
+            }
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(DataType::Custom(
+            ObjectName::from(vec![type_ident]),
+            modifiers,
+        ))
     }
 
     /// Parse optional type modifiers appearing in parentheses e.g. `(UNSIGNED, ZEROFILL)`.

@@ -10710,7 +10710,7 @@ VALUES (1, 'abc')";
 
 #[test]
 fn test_merge_in_cte() {
-    verified_only_select(
+    all_dialects_where(|d| d.supports_nested_dml_query()).verified_only_select(
         "WITH x AS (\
             MERGE INTO t USING (VALUES (1)) ON 1 = 1 \
             WHEN MATCHED THEN DELETE \

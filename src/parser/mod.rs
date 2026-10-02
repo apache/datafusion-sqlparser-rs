@@ -650,7 +650,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
-                    self.parse_query().map(Into::into)
+                    self.parse_query_allowing_dml(true).map(Into::into)
                 }
                 Keyword::TRUNCATE => self.parse_truncate().map(Into::into),
                 Keyword::ATTACH => {
@@ -14728,8 +14728,13 @@ impl<'a> Parser<'a> {
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
-    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
+        self.parse_query_allowing_dml(self.dialect.supports_nested_dml_query())
+    }
+
+    /// Parses a query whose body may be `INSERT`, `UPDATE`, `DELETE` or `MERGE` when `allow_dml` is set.
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
+    fn parse_query_allowing_dml(&mut self, allow_dml: bool) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
             let with_token = self.get_current_token();
@@ -14741,7 +14746,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        if self.parse_keyword(Keyword::INSERT) {
+        if allow_dml && self.parse_keyword(Keyword::INSERT) {
             Ok(Query {
                 with,
                 body: self.parse_insert_setexpr_boxed(self.get_current_token().clone())?,
@@ -14755,7 +14760,7 @@ impl<'a> Parser<'a> {
                 pipe_operators: vec![],
             }
             .into())
-        } else if self.parse_keyword(Keyword::UPDATE) {
+        } else if allow_dml && self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
                 with,
                 body: self.parse_update_setexpr_boxed(self.get_current_token().clone())?,
@@ -14769,7 +14774,7 @@ impl<'a> Parser<'a> {
                 pipe_operators: vec![],
             }
             .into())
-        } else if self.parse_keyword(Keyword::DELETE) {
+        } else if allow_dml && self.parse_keyword(Keyword::DELETE) {
             Ok(Query {
                 with,
                 body: self.parse_delete_setexpr_boxed(self.get_current_token().clone())?,
@@ -14783,7 +14788,7 @@ impl<'a> Parser<'a> {
                 pipe_operators: vec![],
             }
             .into())
-        } else if self.parse_keyword(Keyword::MERGE) {
+        } else if allow_dml && self.parse_keyword(Keyword::MERGE) {
             Ok(Query {
                 with,
                 body: self.parse_merge_setexpr_boxed(self.get_current_token().clone())?,

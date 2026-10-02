@@ -1760,6 +1760,15 @@ impl<'a> Parser<'a> {
             return prefix;
         }
 
+        if self.dialect.supports_try_parse()
+            && matches!(&self.peek_token_ref().token, Token::Word(word)
+                if word.quote_style.is_none() && word.keyword == Keyword::TRY_PARSE)
+            && self.peek_nth_token_ref(1).token == Token::LParen
+        {
+            self.next_token();
+            return self.parse_try_parse_expr();
+        }
+
         // Memoize parse_prefix failures to break 2^N speculation when both
         // prefix arms fail at every level (e.g. `IF(current_time(...x`).
         // The per-arm cache in `parse_prefix_inner` complements this for
@@ -2946,6 +2955,25 @@ impl<'a> Parser<'a> {
             expr: Box::new(expr),
             data_type,
             format,
+        })
+    }
+
+    /// Parse `TRY_PARSE(expr AS data_type [USING culture])`.
+    pub fn parse_try_parse_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let data_type = self.parse_data_type()?;
+        let culture = if self.parse_keyword(Keyword::USING) {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::TryParse {
+            expr: Box::new(expr),
+            data_type,
+            culture,
         })
     }
 

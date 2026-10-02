@@ -2963,3 +2963,143 @@ fn parse_create_proc() {
         .expect_err("PROC should remain MSSQL-specific");
     ms_and_generic().verified_stmt("SELECT proc FROM jobs");
 }
+
+#[test]
+fn parse_try_parse() {
+    let expr = ms().verified_expr("TRY_PARSE(value AS DECIMAL(10,2) USING culture)");
+    let Expr::TryParse {
+        expr,
+        data_type,
+        culture,
+    } = expr
+    else {
+        panic!("expected TRY_PARSE");
+    };
+    assert_eq!(*expr, Expr::Identifier(Ident::new("value")));
+    assert_eq!(data_type.to_string(), "DECIMAL(10,2)");
+    assert_eq!(
+        culture,
+        Some(Box::new(Expr::Identifier(Ident::new("culture"))))
+    );
+
+    for sql in [
+        "TRY_PARSE('123' AS INT)",
+        "TRY_PARSE(N'31/12/2025' AS DATE USING 'en-GB')",
+        "TRY_PARSE(value AS FLOAT USING @culture)",
+        "TRY_PARSE(CONCAT(prefix, value) AS MONEY USING COALESCE(@culture, 'en-US'))",
+        "TRY_PARSE(TRY_PARSE(value AS INT) AS BIGINT)",
+    ] {
+        assert!(matches!(ms().verified_expr(sql), Expr::TryParse { .. }));
+    }
+    let Expr::TryParse { culture, .. } = ms().verified_expr("TRY_PARSE(value AS INT)") else {
+        unreachable!()
+    };
+    assert!(culture.is_none());
+    ms().expr_parses_to(
+        "try_parse(value as int using 'en-US')",
+        "TRY_PARSE(value AS INT USING 'en-US')",
+    );
+}
+
+#[test]
+fn parse_try_parse_rejects_malformed_arguments() {
+    for sql in [
+        "SELECT TRY_PARSE()",
+        "SELECT TRY_PARSE(value)",
+        "SELECT TRY_PARSE(value AS)",
+        "SELECT TRY_PARSE(value AS INT USING)",
+        "SELECT TRY_PARSE(value AS INT USING 'en-US', 'en-GB')",
+        "SELECT TRY_PARSE(value AS INT USING 'en-US' USING 'en-GB')",
+        "SELECT TRY_PARSE(value AS INT",
+    ] {
+        assert!(ms().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}
+
+#[test]
+fn parse_try_parse_is_dialect_gated() {
+    let sql = "SELECT TRY_PARSE(value AS INT USING 'en-US')";
+    assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+    ms_and_generic().verified_stmt("SELECT TRY_PARSE FROM t");
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    assert!(matches!(
+        generic.verified_expr("TRY_PARSE(value)"),
+        Expr::Function(_)
+    ));
+    assert!(matches!(
+        ms().verified_expr("TRY_CAST(value AS INT)"),
+        Expr::Cast { .. }
+    ));
+    assert!(matches!(
+        ms().verified_expr("TRY_CONVERT(INT, value)"),
+        Expr::Convert { is_try: true, .. }
+    ));
+}
+
+#[test]
+fn try_parse_child_spans() {
+    let sql = "SELECT TRY_PARSE(source_value AS INT USING culture_value)";
+    let statements = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        unreachable!()
+    };
+    let expr = expr_from_projection(&query.body.as_select().unwrap().projection[0]);
+    let Expr::TryParse {
+        expr: input,
+        culture,
+        ..
+    } = expr
+    else {
+        unreachable!()
+    };
+    let input_start = sql.find("source_value").unwrap() as u64 + 1;
+    let culture_start = sql.find("culture_value").unwrap() as u64 + 1;
+    assert_eq!(
+        input.span(),
+        Span::new(
+            Location::new(1, input_start),
+            Location::new(1, input_start + 12)
+        )
+    );
+    assert_eq!(
+        culture.as_ref().unwrap().span(),
+        Span::new(
+            Location::new(1, culture_start),
+            Location::new(1, culture_start + 13)
+        )
+    );
+    assert_eq!(
+        expr.span(),
+        input.span().union(&culture.as_ref().unwrap().span())
+    );
+}
+
+#[cfg(feature = "visitor")]
+#[test]
+fn try_parse_visits_input_and_culture() {
+    use core::ops::ControlFlow;
+
+    #[derive(Default)]
+    struct Identifiers(Vec<String>);
+    impl Visitor for Identifiers {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+            if let Expr::Identifier(identifier) = expr {
+                self.0.push(identifier.value.clone());
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    let expr = ms().verified_expr("TRY_PARSE(value AS INT USING culture)");
+    let mut identifiers = Identifiers::default();
+    assert_eq!(expr.visit(&mut identifiers), ControlFlow::Continue(()));
+    assert_eq!(identifiers.0, vec!["value", "culture"]);
+}
+
+#[cfg(all(feature = "serde", feature = "json_example"))]
+#[test]
+fn try_parse_serde_roundtrip() {
+    let expr = ms().verified_expr("TRY_PARSE(value AS DECIMAL(10,2) USING 'en-US')");
+    let json = serde_json::to_string(&expr).unwrap();
+    assert_eq!(serde_json::from_str::<Expr>(&json).unwrap(), expr);
+}

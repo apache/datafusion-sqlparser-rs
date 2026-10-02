@@ -1284,6 +1284,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true for `TRY_PARSE(expr AS data_type [USING culture])`.
+    fn supports_try_parse(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `!a` syntax for boolean `NOT` expressions.
     fn supports_bang_not_operator(&self) -> bool {
         false

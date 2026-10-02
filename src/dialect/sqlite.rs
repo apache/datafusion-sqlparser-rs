@@ -130,6 +130,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_multiword_type_names(&self) -> bool {
+        true
+    }
+
     fn supports_double_eq_assignment(&self) -> bool {
         true
     }

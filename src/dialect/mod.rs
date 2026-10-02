@@ -1457,6 +1457,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect allows `INTO` to be omitted from an
+    /// `INSERT` statement, e.g. `INSERT t VALUES (1)`.
+    fn supports_insert_without_into(&self) -> bool {
+        true
+    }
+
+    /// Returns true if this dialect allows a `DELETE` statement to list its
+    /// target tables before `FROM`, e.g. `DELETE t1, t2 FROM t1 JOIN t2 ...`.
+    fn supports_delete_multiple_tables(&self) -> bool {
+        true
+    }
+
     /// Returns true if this dialect supports `SET` statements without an explicit
     /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
     fn supports_set_stmt_without_operator(&self) -> bool {

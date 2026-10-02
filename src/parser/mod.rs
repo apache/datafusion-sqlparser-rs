@@ -14569,10 +14569,12 @@ impl<'a> Parser<'a> {
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
             if dialect_of!(self is BigQueryDialect | OracleDialect | GenericDialect) {
                 (vec![], false)
-            } else {
+            } else if self.dialect.supports_delete_multiple_tables() {
                 let tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
                 self.expect_keyword_is(Keyword::FROM)?;
                 (tables, true)
+            } else {
+                return self.expected("FROM", self.peek_token());
             }
         } else {
             (vec![], true)
@@ -18620,7 +18622,13 @@ impl<'a> Parser<'a> {
         let replace_into = false;
 
         let overwrite = self.parse_keyword(Keyword::OVERWRITE);
-        let into = self.parse_keyword(Keyword::INTO);
+        let into = if self.parse_keyword(Keyword::INTO) {
+            true
+        } else if self.dialect.supports_insert_without_into() {
+            false
+        } else {
+            return self.expected("INTO", self.peek_token());
+        };
 
         let local = self.parse_keyword(Keyword::LOCAL);
 

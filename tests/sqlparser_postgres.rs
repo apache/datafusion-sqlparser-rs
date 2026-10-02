@@ -10202,3 +10202,31 @@ fn parse_string_literal_alias_rejected() {
     }
     pg().verified_stmt(r#"SELECT a AS "x" FROM t AS "y""#);
 }
+
+#[test]
+fn parse_unqualified_wildcard_alias_rejected() {
+    for (sql, found) in [
+        ("SELECT * x FROM t", "x"),
+        ("SELECT * AS x FROM t", "AS"),
+        ("SELECT * \"x\" FROM t", "\"x\""),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: Expected: end of statement, found: {found}")
+        );
+    }
+
+    // nested consumers reject the same bare-wildcard alias
+    pg().parse_sql_statements("SELECT a FROM (SELECT * x FROM t) AS y")
+        .unwrap_err();
+    pg().parse_sql_statements("WITH c AS (SELECT * x FROM t) SELECT * FROM c")
+        .unwrap_err();
+
+    // controls: qualified wildcard aliases, unaliased wildcards and ordinary expression aliases
+    pg().verified_stmt("SELECT t.* AS x FROM t");
+    pg().one_statement_parses_to("SELECT t.* x FROM t", "SELECT t.* AS x FROM t");
+    pg().verified_stmt("SELECT * FROM t");
+    pg().verified_stmt("SELECT t.* FROM t");
+    pg().verified_stmt("SELECT a AS x FROM t");
+    pg().one_statement_parses_to("SELECT a x FROM t", "SELECT a AS x FROM t");
+}

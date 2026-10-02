@@ -19214,9 +19214,9 @@ impl<'a> Parser<'a> {
         wildcard_expr: Expr,
     ) -> Result<FunctionArgExpr, ParserError> {
         Ok(match wildcard_expr {
-            Expr::Wildcard(ref token) if self.dialect.supports_select_wildcard_exclude() => {
+            Expr::Wildcard(token) if self.dialect.supports_select_wildcard_exclude() => {
                 // Parse the options the same way SELECT items do.
-                let opts = self.parse_wildcard_additional_options(token.0.clone())?;
+                let opts = self.parse_wildcard_additional_options(token.0, false)?;
                 if opts.opt_exclude.is_some()
                     || opts.opt_except.is_some()
                     || opts.opt_replace.is_some()
@@ -19225,7 +19225,7 @@ impl<'a> Parser<'a> {
                 {
                     FunctionArgExpr::WildcardWithOptions(opts)
                 } else {
-                    wildcard_expr.into()
+                    Expr::Wildcard(opts.wildcard_token).into()
                 }
             }
             other => other.into(),
@@ -19457,10 +19457,10 @@ impl<'a> Parser<'a> {
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(
                 SelectItemQualifiedWildcardKind::ObjectName(prefix),
-                self.parse_wildcard_additional_options(token.0)?,
+                self.parse_wildcard_additional_options(token.0, true)?,
             )),
             Expr::Wildcard(token) => Ok(SelectItem::Wildcard(
-                self.parse_wildcard_additional_options(token.0)?,
+                self.parse_wildcard_additional_options(token.0, false)?,
             )),
             Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none() => {
                 parser_err!(
@@ -19499,7 +19499,7 @@ impl<'a> Parser<'a> {
                 let wildcard_token = self.get_previous_token().clone();
                 Ok(SelectItem::QualifiedWildcard(
                     SelectItemQualifiedWildcardKind::Expr(expr),
-                    self.parse_wildcard_additional_options(wildcard_token)?,
+                    self.parse_wildcard_additional_options(wildcard_token, true)?,
                 ))
             }
             expr if self.dialect.supports_select_item_multi_column_alias()
@@ -19533,6 +19533,7 @@ impl<'a> Parser<'a> {
     pub fn parse_wildcard_additional_options(
         &mut self,
         wildcard_token: TokenWithSpan,
+        is_qualified_wildcard: bool,
     ) -> Result<WildcardAdditionalOptions, ParserError> {
         let opt_ilike = if self.dialect.supports_select_wildcard_ilike() {
             self.parse_optional_select_item_ilike()?
@@ -19561,7 +19562,13 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_alias = if self.dialect.supports_select_wildcard_with_alias() {
+        let supports_wildcard_alias = if is_qualified_wildcard {
+            self.dialect.supports_select_wildcard_with_alias()
+                || self.dialect.supports_select_qualified_wildcard_with_alias()
+        } else {
+            self.dialect.supports_select_wildcard_with_alias()
+        };
+        let opt_alias = if supports_wildcard_alias {
             self.maybe_parse_select_item_alias()?
         } else {
             None

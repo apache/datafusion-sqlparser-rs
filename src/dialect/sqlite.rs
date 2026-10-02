@@ -134,6 +134,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_string_literal_column_names(&self) -> bool {
+        true
+    }
+
     fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
         true
     }

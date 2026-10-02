@@ -365,6 +365,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_variadic_function_argument(&self) -> bool {
+        true
+    }
+
     fn supports_alter_column_position(&self) -> bool {
         true
     }

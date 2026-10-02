@@ -133,7 +133,8 @@ fn create_table_with_comment() {
         " INTO 4 BUCKETS"
     );
     match hive().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { comment, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { comment, .. } = *create_table;
             assert_eq!(
                 comment,
                 Some(CommentDef::WithoutEq("table comment".to_string()))
@@ -163,7 +164,8 @@ fn create_table_with_clustered_by() {
         " INTO 4 BUCKETS"
     );
     match hive_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { clustered_by, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { clustered_by, .. } = *create_table;
             assert_eq!(
                 clustered_by.unwrap(),
                 ClusteredBy {
@@ -372,7 +374,7 @@ fn from_cte() {
 fn set_statement_with_minus() {
     assert_eq!(
         hive().verified_stmt("SET hive.tez.java.opts = -Xmx4g"),
-        Statement::Set(Set::SingleAssignment {
+        Statement::Set(Box::new(Set::SingleAssignment {
             scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![
@@ -385,7 +387,7 @@ fn set_statement_with_minus() {
                 op: UnaryOperator::Minus,
                 expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
             }],
-        })
+        }))
     );
 
     assert_eq!(
@@ -400,13 +402,14 @@ fn set_statement_with_minus() {
 fn parse_create_function() {
     let sql = "CREATE TEMPORARY FUNCTION mydb.myfunc AS 'org.random.class.Name' USING JAR 'hdfs://somewhere.com:8020/very/far'";
     match hive().verified_stmt(sql) {
-        Statement::CreateFunction(CreateFunction {
-            temporary,
-            name,
-            function_body,
-            using,
-            ..
-        }) => {
+        Statement::CreateFunction(create_function) => {
+            let CreateFunction {
+                temporary,
+                name,
+                function_body,
+                using,
+                ..
+            } = *create_function;
             assert!(temporary);
             assert_eq!(name.to_string(), "mydb.myfunc");
             assert_eq!(
@@ -531,25 +534,24 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             hive().verified_stmt(&format!("USE {object_name}")),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
+            Statement::Use(Box::new(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )]))))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
                 hive().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
-                    quote,
-                    object_name.to_string(),
-                )])))
+                Statement::Use(Box::new(Use::Object(ObjectName::from(vec![
+                    Ident::with_quote(quote, object_name.to_string(),)
+                ]))))
             );
         }
     }
     // Test DEFAULT keyword that is special case in Hive
     assert_eq!(
         hive().verified_stmt("USE DEFAULT"),
-        Statement::Use(Use::Default)
+        Statement::Use(Box::new(Use::Default))
     );
 }
 

@@ -87,6 +87,10 @@ impl Dialect for MsSqlDialect {
         true
     }
 
+    fn supports_try_parse(&self) -> bool {
+        true
+    }
+
     /// In MSSQL, there is no boolean type, and `true` and `false` are valid column names
     fn supports_boolean_literals(&self) -> bool {
         false

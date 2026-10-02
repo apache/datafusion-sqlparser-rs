@@ -1133,6 +1133,15 @@ pub enum Expr {
         /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
         format: Option<CastFormat>,
     },
+    /// MSSQL `TRY_PARSE(expr AS data_type [USING culture])`.
+    TryParse {
+        /// Expression to parse.
+        expr: Box<Expr>,
+        /// Target numeric or date/time type.
+        data_type: DataType,
+        /// Optional culture expression.
+        culture: Option<Box<Expr>>,
+    },
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
     AtTimeZone {
         /// Timestamp expression to shift.
@@ -2064,6 +2073,17 @@ impl fmt::Display for Expr {
                     write!(f, "{expr}::{data_type}")
                 }
             },
+            Expr::TryParse {
+                expr,
+                data_type,
+                culture,
+            } => {
+                write!(f, "TRY_PARSE({expr} AS {data_type}")?;
+                if let Some(culture) = culture {
+                    write!(f, " USING {culture}")?;
+                }
+                write!(f, ")")
+            }
             Expr::Extract {
                 field,
                 syntax,

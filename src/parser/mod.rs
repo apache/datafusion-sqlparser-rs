@@ -355,6 +355,11 @@ pub struct Parser<'a> {
     /// `parse_table_factor`. See [`Parser::parse_table_factor`] for the 2^N
     /// pattern this guards.
     failed_derived_table_factor_positions: BTreeSet<usize>,
+    /// Cached failures from the speculative subquery arm of [`Parser::parse_in`],
+    /// which `IN` lists nested in a leading subquery would otherwise retry at
+    /// every level, taking 2^N time. Maps the arm's start to where a parsed
+    /// query lacked its `)`.
+    failed_in_subquery_positions: BTreeMap<usize, Option<usize>>,
 }
 
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
@@ -401,6 +406,7 @@ impl<'a> Parser<'a> {
             failed_prefix_positions: BTreeMap::new(),
             failed_reserved_word_prefix_positions: BTreeMap::new(),
             failed_derived_table_factor_positions: BTreeSet::new(),
+            failed_in_subquery_positions: BTreeMap::new(),
         }
     }
 
@@ -469,6 +475,7 @@ impl<'a> Parser<'a> {
         self.failed_prefix_positions.clear();
         self.failed_reserved_word_prefix_positions.clear();
         self.failed_derived_table_factor_positions.clear();
+        self.failed_in_subquery_positions.clear();
         self
     }
 
@@ -4464,24 +4471,51 @@ impl<'a> Parser<'a> {
             });
         }
         self.expect_token(&Token::LParen)?;
-        let in_op = match self.maybe_parse(|p| p.parse_query())? {
-            Some(subquery) => Expr::InSubquery {
-                expr: Box::new(expr),
-                subquery,
-                negated,
-            },
-            None => Expr::InList {
-                expr: Box::new(expr),
-                list: if self.dialect.supports_in_empty_list() {
-                    self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?
-                } else {
-                    self.parse_comma_separated(Parser::parse_expr)?
-                },
-                negated,
-            },
+        // A leading query is the whole subquery only when `)` follows it,
+        // otherwise it is the first item of a list, as in `IN ((SELECT 1), 2)`.
+        let start = self.index;
+        // Where a parsed query lacked its `)`. Reported if the list fails no
+        // further in, since that error would sit inside the query.
+        let missing_rparen = match self.failed_in_subquery_positions.get(&start) {
+            Some(&cached) => cached,
+            None => {
+                let mut missing_rparen = None;
+                if let Some(subquery) = self.maybe_parse(|p| p.parse_query())? {
+                    if self.consume_token(&Token::RParen) {
+                        return Ok(Expr::InSubquery {
+                            expr: Box::new(expr),
+                            subquery,
+                            negated,
+                        });
+                    }
+                    missing_rparen = Some(self.index);
+                    self.index = start;
+                }
+                self.failed_in_subquery_positions
+                    .insert(start, missing_rparen);
+                missing_rparen
+            }
         };
-        self.expect_token(&Token::RParen)?;
-        Ok(in_op)
+        let list = if self.dialect.supports_in_empty_list() {
+            self.parse_comma_separated0(Parser::parse_expr, Token::RParen)
+        } else {
+            self.parse_comma_separated(Parser::parse_expr)
+        };
+        match list.and_then(|list| self.expect_token(&Token::RParen).map(|_| list)) {
+            Ok(list) => Ok(Expr::InList {
+                expr: Box::new(expr),
+                list,
+                negated,
+            }),
+            Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
+            Err(e) => match missing_rparen {
+                Some(index) if self.index <= index => {
+                    self.index = index;
+                    self.expected_ref(")", self.peek_token_ref())
+                }
+                _ => Err(e),
+            },
+        }
     }
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.

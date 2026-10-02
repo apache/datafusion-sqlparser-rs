@@ -146,4 +146,12 @@ impl Dialect for SQLiteDialect {
     fn supports_parens_around_table_factor(&self) -> bool {
         true
     }
+
+    fn supports_insert_without_into(&self) -> bool {
+        false
+    }
+
+    fn supports_delete_multiple_tables(&self) -> bool {
+        false
+    }
 }

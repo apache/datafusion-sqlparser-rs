@@ -10202,3 +10202,23 @@ fn parse_string_literal_alias_rejected() {
     }
     pg().verified_stmt(r#"SELECT a AS "x" FROM t AS "y""#);
 }
+
+#[test]
+fn parse_insert_requires_into() {
+    assert_eq!(
+        pg().parse_sql_statements("INSERT customer VALUES (1)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: INTO, found: customer".to_string())
+    );
+    pg().verified_stmt("INSERT INTO customer VALUES (1)");
+}
+
+#[test]
+fn parse_delete_rejects_multiple_tables() {
+    assert_eq!(
+        pg().parse_sql_statements("DELETE t FROM t WHERE id = 1")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: FROM, found: t".to_string())
+    );
+    pg().verified_stmt("DELETE FROM t WHERE id = 1");
+}

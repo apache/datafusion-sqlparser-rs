@@ -368,4 +368,12 @@ impl Dialect for PostgreSqlDialect {
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }
+
+    fn supports_insert_without_into(&self) -> bool {
+        false
+    }
+
+    fn supports_delete_multiple_tables(&self) -> bool {
+        false
+    }
 }

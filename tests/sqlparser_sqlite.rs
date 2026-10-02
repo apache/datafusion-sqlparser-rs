@@ -1011,6 +1011,28 @@ fn parse_n_prefix_not_national_string() {
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
 }
 
+#[test]
+fn parse_insert_requires_into() {
+    assert_eq!(
+        sqlite()
+            .parse_sql_statements("INSERT customer VALUES (1)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: INTO, found: customer".to_string())
+    );
+    sqlite().verified_stmt("INSERT INTO customer VALUES (1)");
+}
+
+#[test]
+fn parse_delete_rejects_multiple_tables() {
+    assert_eq!(
+        sqlite()
+            .parse_sql_statements("DELETE t FROM t WHERE id = 1")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: FROM, found: t".to_string())
+    );
+    sqlite().verified_stmt("DELETE FROM t WHERE id = 1");
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

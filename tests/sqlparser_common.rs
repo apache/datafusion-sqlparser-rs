@@ -122,22 +122,37 @@ fn parse_insert_values() {
     ];
 
     let sql = "INSERT customer VALUES (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows1, false);
+    check_one(
+        &all_dialects_where(|d| d.supports_insert_without_into()),
+        sql,
+        "customer",
+        &[],
+        &rows1,
+        false,
+    );
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows1, false);
+    check_one(&all_dialects(), sql, "customer", &[], &rows1, false);
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3), (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows2, false);
+    check_one(&all_dialects(), sql, "customer", &[], &rows2, false);
 
     let sql = "INSERT INTO public.customer VALUES (1, 2, 3)";
-    check_one(sql, "public.customer", &[], &rows1, false);
+    check_one(&all_dialects(), sql, "public.customer", &[], &rows1, false);
 
     let sql = "INSERT INTO db.public.customer VALUES (1, 2, 3)";
-    check_one(sql, "db.public.customer", &[], &rows1, false);
+    check_one(
+        &all_dialects(),
+        sql,
+        "db.public.customer",
+        &[],
+        &rows1,
+        false,
+    );
 
     let sql = "INSERT INTO public.customer (id, name, active) VALUES (1, 2, 3)";
     check_one(
+        &all_dialects(),
         sql,
         "public.customer",
         &["id".to_string(), "name".to_string(), "active".to_string()],
@@ -147,6 +162,7 @@ fn parse_insert_values() {
 
     let sql = r"INSERT INTO t (id, name, active) VALUE (1, 2, 3)";
     check_one(
+        &all_dialects(),
         sql,
         "t",
         &["id".to_string(), "name".to_string(), "active".to_string()],
@@ -155,13 +171,14 @@ fn parse_insert_values() {
     );
 
     fn check_one(
+        dialects: &TestedDialects,
         sql: &str,
         expected_table_name: &str,
         expected_columns: &[String],
         expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
-        match verified_stmt(sql) {
+        match dialects.verified_stmt(sql) {
             Statement::Insert(Insert {
                 table: table_name,
                 columns,
@@ -750,11 +767,21 @@ fn parse_delete_without_from_error() {
     let sql = "DELETE \"table\" WHERE 1";
 
     let dialects = all_dialects_except(|d| {
-        d.is::<BigQueryDialect>() || d.is::<OracleDialect>() || d.is::<GenericDialect>()
+        d.is::<BigQueryDialect>()
+            || d.is::<OracleDialect>()
+            || d.is::<GenericDialect>()
+            || !d.supports_delete_multiple_tables()
     });
     let res = dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: FROM, found: WHERE".to_string()),
+        res.unwrap_err()
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_delete_multiple_tables());
+    let res = dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected: FROM, found: \"table\"".to_string()),
         res.unwrap_err()
     );
 }
@@ -763,7 +790,10 @@ fn parse_delete_without_from_error() {
 fn parse_delete_statement_for_multi_tables() {
     let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     let dialects = all_dialects_except(|d| {
-        d.is::<BigQueryDialect>() || d.is::<OracleDialect>() || d.is::<GenericDialect>()
+        d.is::<BigQueryDialect>()
+            || d.is::<OracleDialect>()
+            || d.is::<GenericDialect>()
+            || !d.supports_delete_multiple_tables()
     });
     match dialects.verified_stmt(sql) {
         Statement::Delete(Delete {

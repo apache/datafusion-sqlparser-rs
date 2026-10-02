@@ -8858,7 +8858,22 @@ impl<'a> Parser<'a> {
         };
 
         // parse optional column list (schema)
+        let has_column_list = matches!(self.peek_token_ref().token, Token::LParen);
         let (columns, constraints) = self.parse_columns()?;
+        if !has_column_list
+            && partition_of.is_none()
+            && like.is_none()
+            && clone.is_none()
+            && !self.dialect.supports_create_table_without_column_list()
+            && !(self.peek_keyword(Keyword::AS)
+                || (self.dialect.supports_create_table_select()
+                    && self.peek_keyword(Keyword::SELECT)))
+        {
+            return self.expected_ref(
+                "'(', AS, PARTITION OF, or LIKE after CREATE TABLE table name",
+                self.peek_token_ref(),
+            );
+        }
         let comment_after_column_def =
             if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
                 let next_token = self.next_token();

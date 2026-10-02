@@ -1370,25 +1370,37 @@ fn parse_create_table_if_not_exists() {
 fn parse_bad_if_not_exists() {
     let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
+        ParserError::ParserError(
+            "Expected: '(', AS, PARTITION OF, or LIKE after CREATE TABLE table name, found: EXISTS"
+                .to_string()
+        ),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
+        ParserError::ParserError(
+            "Expected: '(', AS, PARTITION OF, or LIKE after CREATE TABLE table name, found: EXISTS"
+                .to_string()
+        ),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: uk_cities".to_string()),
+        ParserError::ParserError(
+            "Expected: '(', AS, PARTITION OF, or LIKE after CREATE TABLE table name, found: uk_cities"
+                .to_string()
+        ),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: NOT".to_string()),
+        ParserError::ParserError(
+            "Expected: '(', AS, PARTITION OF, or LIKE after CREATE TABLE table name, found: NOT"
+                .to_string()
+        ),
         res.unwrap_err()
     );
 }
@@ -10125,4 +10137,30 @@ fn parse_stage_table_factor_rejected() {
 fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
+}
+
+#[test]
+fn parse_create_table_requires_column_list_or_alternative() {
+    let expected_err = "sql parser error: Expected: '(', AS, PARTITION OF, or LIKE after CREATE TABLE table name, found: EOF";
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE t")
+            .unwrap_err()
+            .to_string(),
+        expected_err
+    );
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEMP TABLE t")
+            .unwrap_err()
+            .to_string(),
+        expected_err
+    );
+
+    pg().verified_stmt("CREATE TABLE t ()");
+    pg().verified_stmt("CREATE TABLE t (id INT)");
+    pg().verified_stmt("CREATE TABLE t AS SELECT 1");
+    pg().verified_stmt("CREATE TABLE t PARTITION OF p FOR VALUES IN (1)");
+
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    generic.verified_stmt("CREATE TABLE t ()");
+    assert!(generic.parse_sql_statements("CREATE TABLE t").is_ok());
 }

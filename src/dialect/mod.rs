@@ -1339,6 +1339,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts `CREATE TABLE t` with no column list, `AS`, `OF`, `PARTITION OF` or `LIKE` clause after the table name, as a zero-column table.
+    fn supports_create_table_without_column_list(&self) -> bool {
+        true
+    }
+
     /// Returns true if this dialect supports `PROC` as an abbreviation for
     /// `PROCEDURE` in a `CREATE` statement.
     fn supports_create_proc_syntax(&self) -> bool {

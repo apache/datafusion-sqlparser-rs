@@ -146,4 +146,9 @@ impl Dialect for SQLiteDialect {
     fn supports_parens_around_table_factor(&self) -> bool {
         true
     }
+
+    /// See <https://sqlite.org/lang_select.html>
+    fn supports_nested_dml_query(&self) -> bool {
+        false
+    }
 }

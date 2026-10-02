@@ -10126,3 +10126,31 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_reserved_keywords_rejected_as_identifiers() {
+    let err = pg().parse_sql_statements("SELECT to").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected an expression, found: to".to_string()),
+        err
+    );
+
+    let err = pg().parse_sql_statements("SELECT on").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected an expression, found: on".to_string()),
+        err
+    );
+
+    pg().parse_sql_statements("SELECT CAST").unwrap_err();
+    pg().parse_sql_statements("SELECT id, CASE FROM t")
+        .unwrap_err();
+    pg().parse_sql_statements("SELECT a = case FROM t")
+        .unwrap_err();
+    pg().parse_sql_statements("SELECT a FROM t WHERE a = select.b")
+        .unwrap_err();
+
+    pg().verified_stmt("SELECT name FROM t");
+    pg().verified_stmt("SELECT set FROM t");
+    pg().verified_expr("right('abc', 3)");
+    pg().verified_expr("left('abc', 3)");
+}

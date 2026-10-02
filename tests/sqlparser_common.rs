@@ -1207,10 +1207,10 @@ fn parse_select_wildcard() {
 
 #[test]
 fn parse_count_wildcard() {
-    verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
+    verified_only_select("SELECT COUNT(*) FROM orders WHERE id = 10");
 
     verified_only_select(
-        "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
+        "SELECT COUNT(Employee.*) FROM orders JOIN Employee ON orders.employee = Employee.id",
     );
 }
 
@@ -2990,7 +2990,9 @@ fn parse_select_order_by_all() {
 #[test]
 fn parse_select_order_by_not_support_all() {
     fn chk(sql: &str, except_order_by: OrderByKind) {
-        let dialects = all_dialects_where(|d| !d.supports_order_by_all());
+        let dialects = all_dialects_where(|d| {
+            !d.supports_order_by_all() && !d.is::<PostgreSqlDialect>() && !d.is::<SQLiteDialect>()
+        });
         let select = dialects.verified_query(sql);
         assert_eq!(
             except_order_by,
@@ -3157,13 +3159,13 @@ fn parse_select_group_by() {
 
 #[test]
 fn parse_select_group_by_all() {
-    let sql = "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL";
+    let sql = "SELECT id, fname, lname, SUM(amount) FROM customer GROUP BY ALL";
     let select = verified_only_select(sql);
     assert_eq!(GroupByExpr::All(vec![]), select.group_by);
 
     one_statement_parses_to(
-        "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL",
-        "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL",
+        "SELECT id, fname, lname, SUM(amount) FROM customer GROUP BY ALL",
+        "SELECT id, fname, lname, SUM(amount) FROM customer GROUP BY ALL",
     );
 }
 
@@ -9146,9 +9148,22 @@ fn parse_create_warehouse() {
 
 #[test]
 fn parse_invalid_subquery_without_parens() {
-    let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
+    let sql = "SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz";
+
+    let res = all_dialects_except(|d| d.is::<PostgreSqlDialect>() || d.is::<SQLiteDialect>())
+        .parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: 1".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(SQLiteDialect {}),
+    ])
+    .parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected an expression, found: SELECT".to_string()),
         res.unwrap_err()
     );
 }
@@ -14888,7 +14903,7 @@ fn test_create_policy() {
         "CREATE POLICY my_policy ON my_table ",
         "AS PERMISSIVE FOR SELECT ",
         "TO my_role, CURRENT_USER ",
-        "USING (c0 IN (SELECT column FROM t0)) ",
+        "USING (c0 IN (SELECT col FROM t0)) ",
         "WITH CHECK (1 = 1)"
     ));
     // omit AS / FOR / TO / USING / WITH CHECK clauses is allowed
@@ -15311,7 +15326,7 @@ fn parse_method_select() {
         "SELECT LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T",
     );
     let _ = verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
-    let _ = verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
+    let _ = verified_only_select("SELECT CAST(col AS XML).value('.', 'NVARCHAR(MAX)') AS T");
 
     // `CONVERT` support
     let dialects =
@@ -15350,7 +15365,7 @@ fn parse_method_expr() {
         }
         _ => unreachable!(),
     }
-    let expr = verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
+    let expr = verified_expr("CAST(col AS XML).value('.', 'NVARCHAR(MAX)')");
     match expr {
         Expr::CompoundFieldAccess { root, access_chain } => {
             assert!(matches!(*root, Expr::Cast { .. }));
@@ -16682,7 +16697,7 @@ fn parse_raise_statement() {
     verified_stmt("RAISE USING MESSAGE = 'error'");
     verified_stmt("RAISE myerror");
     verified_stmt("RAISE 42");
-    verified_stmt("RAISE using");
+    verified_stmt("RAISE custom_error");
     verified_stmt("RAISE");
 
     assert_eq!(

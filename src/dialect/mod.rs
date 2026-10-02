@@ -1406,6 +1406,11 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
+    /// Returns true if the keyword can never be a bare identifier, even one with no dedicated expression form to fall back from (e.g. `TO`, `ON`).
+    fn disallows_bare_identifier(&self, _kw: Keyword) -> bool {
+        false
+    }
+
     /// Returns reserved keywords that may prefix a select item expression
     /// e.g. `SELECT CONNECT_BY_ROOT name FROM Tbl2` (Snowflake)
     fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {

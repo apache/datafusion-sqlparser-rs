@@ -1739,7 +1739,16 @@ impl<'a> Parser<'a> {
                     syntax: LambdaSyntax::Arrow,
                 }))
             }
-            _ => Ok(Expr::Identifier(w.to_ident(w_span))),
+            _ => {
+                if self.dialect.disallows_bare_identifier(w.keyword) {
+                    parser_err!(
+                        format!("Expected an expression, found: {}", w.value),
+                        w_span.start
+                    )
+                } else {
+                    Ok(Expr::Identifier(w.to_ident(w_span)))
+                }
+            }
         }
     }
 
@@ -2388,7 +2397,12 @@ impl<'a> Parser<'a> {
         if next_token == &Token::Comma || next_token == &Token::RParen {
             return Ok(UtilityOption { name, arg: None });
         }
-        let arg = self.parse_expr()?;
+        // PostgreSQL's `generic_option_arg` grammar special-cases `ON` (e.g. `EXPLAIN (ANALYZE ON)`).
+        let arg = if self.peek_keyword(Keyword::ON) {
+            Expr::Identifier(self.parse_identifier()?)
+        } else {
+            self.parse_expr()?
+        };
 
         Ok(UtilityOption {
             name,

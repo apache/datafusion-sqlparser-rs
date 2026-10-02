@@ -345,7 +345,9 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    fn supports_select_wildcard_with_alias(&self) -> bool {
+    /// PostgreSQL accepts an alias on a qualified wildcard (`t.* alias`) but
+    /// rejects one on a bare `*`.
+    fn supports_select_qualified_wildcard_with_alias(&self) -> bool {
         true
     }
 

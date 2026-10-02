@@ -1320,7 +1320,9 @@ fn parse_select_expr_star() {
 
 #[test]
 fn parse_select_wildcard_with_alias() {
-    let dialects = all_dialects_where(|d| d.supports_select_wildcard_with_alias());
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_wildcard_with_alias() || d.supports_select_qualified_wildcard_with_alias()
+    });
 
     // qualified wildcard with alias
     dialects
@@ -1335,12 +1337,6 @@ fn parse_select_wildcard_with_alias() {
         "SELECT t.* AS all_cols, other_col FROM t",
     );
 
-    // unqualified wildcard with alias
-    dialects
-        .parse_sql_statements("SELECT * AS all_cols FROM t")
-        .unwrap();
-    dialects.one_statement_parses_to("SELECT * all_cols FROM t", "SELECT * AS all_cols FROM t");
-
     // mixed: regular column + qualified wildcard with alias
     dialects
         .parse_sql_statements("SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)")
@@ -1349,6 +1345,14 @@ fn parse_select_wildcard_with_alias() {
         "SELECT a.id, b.* b_cols FROM a JOIN b ON (a.id = b.a_id)",
         "SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)",
     );
+
+    // unqualified wildcard with alias: only dialects granting the broad capability accept it
+    let unqualified_dialects = all_dialects_where(|d| d.supports_select_wildcard_with_alias());
+    unqualified_dialects
+        .parse_sql_statements("SELECT * AS all_cols FROM t")
+        .unwrap();
+    unqualified_dialects
+        .one_statement_parses_to("SELECT * all_cols FROM t", "SELECT * AS all_cols FROM t");
 }
 
 #[test]

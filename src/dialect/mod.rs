@@ -1754,14 +1754,30 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect supports aliasing a wildcard select item.
+    /// Returns true if this dialect supports aliasing a wildcard select item,
+    /// qualified or not.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT t.* alias FROM t
+    /// SELECT t.* AS alias FROM t
+    /// SELECT * alias FROM t
+    /// SELECT * AS alias FROM t
+    /// ```
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports aliasing a qualified wildcard
+    /// select item, such as `t.*`, without extending that support to the
+    /// unqualified `*` form.
     ///
     /// Example:
     /// ```sql
     /// SELECT t.* alias FROM t
     /// SELECT t.* AS alias FROM t
     /// ```
-    fn supports_select_wildcard_with_alias(&self) -> bool {
+    fn supports_select_qualified_wildcard_with_alias(&self) -> bool {
         false
     }
 

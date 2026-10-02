@@ -28,6 +28,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_semi_structured_data_traversal(&self) -> bool {
+        true
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }

@@ -28,6 +28,7 @@
 // limitations under the License.
 use log::debug;
 
+use crate::ast::Value;
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -367,5 +368,10 @@ impl Dialect for PostgreSqlDialect {
     /// See <https://github.com/ossc-db/pg_hint_plan>
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
+    }
+
+    /// `c_expr: PARAM opt_indirection` allows only a numbered parameter (`$1`).
+    fn supports_value_access(&self, value: &Value) -> bool {
+        matches!(value, Value::Placeholder(name) if name.starts_with('$'))
     }
 }

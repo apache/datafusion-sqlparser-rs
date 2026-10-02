@@ -132,7 +132,7 @@ pub use self::teradata::TeradataDialect;
 #[cfg(feature = "derive-dialect")]
 pub use sqlparser_derive::derive_dialect;
 
-use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
+use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement, Value};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -973,13 +973,15 @@ pub trait Dialect: Debug + Any {
             Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
                 Ok(p!(DoubleColon))
             }
-            Token::Colon => match &parser.peek_nth_token_ref(1).token {
-                // When colon is followed by a string or a number, it's usually in MAP syntax.
-                Token::SingleQuotedString(_) | Token::Number(_, _) => Ok(self.prec_unknown()),
-                // In other cases, it's used in semi-structured data traversal like in variant or JSON
-                // string columns. See `JsonAccess`.
-                _ => Ok(p!(Colon)),
-            },
+            Token::Colon if self.supports_semi_structured_data_traversal() => {
+                match &parser.peek_nth_token_ref(1).token {
+                    // When colon is followed by a string or a number, it's usually in MAP syntax.
+                    Token::SingleQuotedString(_) | Token::Number(_, _) => Ok(self.prec_unknown()),
+                    // In other cases, it's used in semi-structured data traversal like in variant or JSON
+                    // string columns. See `JsonAccess`.
+                    _ => Ok(p!(Colon)),
+                }
+            }
             Token::Arrow
             | Token::LongArrow
             | Token::HashArrow
@@ -1359,6 +1361,16 @@ pub trait Dialect: Debug + Any {
     /// <https://partiql.org/index.html>
     fn supports_partiql(&self) -> bool {
         false
+    }
+
+    /// Returns true if the dialect supports traversing semi-structured data with the infix `:` operator, e.g. `a:b`.
+    fn supports_semi_structured_data_traversal(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `value` may root a `.field` or `[index]` access chain under this dialect.
+    fn supports_value_access(&self, _value: &Value) -> bool {
+        true
     }
 
     /// Returns true if the dialect supports object-unpivot table factors in the FROM clause.

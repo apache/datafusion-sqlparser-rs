@@ -304,6 +304,7 @@ impl Spanned for Values {
 /// - [Statement::Revoke]
 /// - [Statement::GrantRole]
 /// - [Statement::RevokeRole]
+/// - [Statement::AlterDefaultPrivileges]
 /// - [Statement::Deallocate]
 /// - [Statement::Execute]
 /// - [Statement::Prepare]
@@ -473,6 +474,7 @@ impl Spanned for Statement {
             Statement::Revoke { .. } => Span::empty(),
             Statement::GrantRole { .. } => Span::empty(),
             Statement::RevokeRole { .. } => Span::empty(),
+            Statement::AlterDefaultPrivileges { .. } => Span::empty(),
             Statement::Deallocate { .. } => Span::empty(),
             Statement::Execute { .. } => Span::empty(),
             Statement::Prepare { .. } => Span::empty(),

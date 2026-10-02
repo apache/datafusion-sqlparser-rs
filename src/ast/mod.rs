@@ -1499,6 +1499,12 @@ impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AccessExpr::Dot(expr) if is_number_expr(expr) => write!(f, " . {expr}"),
+            AccessExpr::Dot(Expr::Identifier(ident))
+                if ident.quote_style.is_none()
+                    && ident.value.starts_with(|c: char| c.is_ascii_digit()) =>
+            {
+                write!(f, " . {ident}")
+            }
             AccessExpr::Dot(expr) => write!(f, ".{expr}"),
             AccessExpr::Subscript(subscript) => write!(f, "[{subscript}]"),
         }
@@ -1757,7 +1763,21 @@ impl fmt::Display for Expr {
             Expr::Identifier(s) => write!(f, "{s}"),
             Expr::Wildcard(_) => f.write_str("*"),
             Expr::QualifiedWildcard(prefix, _) => write!(f, "{prefix}.*"),
-            Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::CompoundIdentifier(idents) => {
+                for (index, ident) in idents.iter().enumerate() {
+                    if index > 0 {
+                        if ident.quote_style.is_none()
+                            && ident.value.starts_with(|c: char| c.is_ascii_digit())
+                        {
+                            f.write_str(" . ")?;
+                        } else {
+                            f.write_str(".")?;
+                        }
+                    }
+                    ident.fmt(f)?;
+                }
+                Ok(())
+            }
             Expr::CompoundFieldAccess { root, access_chain } => {
                 write!(f, "{root}")?;
                 let mut prev_is_number = is_number_expr(root);

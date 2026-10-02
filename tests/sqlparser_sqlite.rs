@@ -398,7 +398,17 @@ fn parse_create_table_with_strict() {
 #[test]
 fn parse_single_quoted_identified() {
     sqlite().verified_only_select("SELECT 't'.*, t.'x' FROM 't'");
-    // TODO: add support for select 't'.x
+    sqlite().verified_only_select("SELECT 't'.x FROM 't'");
+}
+
+#[test]
+fn parse_field_access_rejects_non_string_value_roots() {
+    for sql in ["SELECT c = :NA.o FROM t", "SELECT 2 .id FROM t"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: end of statement, found: .".to_string())
+        );
+    }
 }
 
 #[test]

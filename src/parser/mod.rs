@@ -2082,8 +2082,12 @@ impl<'a> Parser<'a> {
         mut chain: Vec<AccessExpr>,
     ) -> Result<Expr, ParserError> {
         let mut ending_wildcard: Option<TokenWithSpan> = None;
+        let root_value_access_allowed = match &root {
+            Expr::Value(v) => self.dialect.supports_value_access(&v.value),
+            _ => true,
+        };
         loop {
-            if self.consume_token(&Token::Period) {
+            if root_value_access_allowed && self.consume_token(&Token::Period) {
                 let next_token = self.peek_token_ref();
                 match &next_token.token {
                     Token::Mul => {
@@ -2183,7 +2187,8 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-            } else if !self.dialect.supports_partiql()
+            } else if root_value_access_allowed
+                && !self.dialect.supports_partiql()
                 && self.peek_token_ref().token == Token::LBracket
             {
                 self.parse_multi_dim_subscript(&mut chain)?;
@@ -4262,7 +4267,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == *tok && self.dialect.supports_partiql()
-            || (Token::Colon == *tok)
+            || (Token::Colon == *tok && self.dialect.supports_semi_structured_data_traversal())
         {
             self.prev_token();
             self.parse_json_access(expr)

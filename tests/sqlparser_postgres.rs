@@ -10126,3 +10126,30 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_param_indirection() {
+    pg().verified_stmt("SELECT $1.a");
+    pg().verified_stmt("SELECT $1[1]");
+    pg().verified_stmt("SELECT $1[1].a");
+}
+
+#[test]
+fn parse_indirection_rejects_non_param_value_roots() {
+    for sql in [
+        "SELECT 'abc'.foo",
+        "SELECT c = :NA.o FROM t",
+        "SELECT 2 .id FROM t",
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: end of statement, found: .".to_string()),
+        );
+    }
+    for sql in ["SELECT 'abc'[1]", "SELECT c = :NA[0] FROM t"] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token LBracket".to_string()),
+        );
+    }
+}

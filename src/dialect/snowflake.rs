@@ -507,6 +507,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_semi_structured_data_traversal(&self) -> bool {
+        true
+    }
+
     fn is_column_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
         match kw {
             // The following keywords can be considered an alias as long as

@@ -1195,6 +1195,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `$`, `@`, `:` and `#` parameters follow SQLite's tokenizer rules.
+    /// See <https://www.sqlite.org/lang_expr.html#varparam>
+    fn supports_sqlite_variable_syntax(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `$` as a prefix for money literals
     /// e.g. `SELECT $123.45` (SQL Server)
     fn supports_dollar_as_money_prefix(&self) -> bool {

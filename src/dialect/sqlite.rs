@@ -113,6 +113,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn disallows_raw_nul_in_quoted_source(&self) -> bool {
+        true
+    }
+
     /// SQLite supports `NOTNULL` as aliases for `IS NOT NULL`
     /// See: <https://sqlite.org/syntax/expr.html>
     fn supports_notnull_operator(&self) -> bool {

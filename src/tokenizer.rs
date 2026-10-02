@@ -55,6 +55,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Token {
     /// An end-of-file marker, not a real token
     EOF,
@@ -455,6 +456,7 @@ fn keyword_lookup(word: &str, quote_style: Option<char>) -> Keyword {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
@@ -489,6 +491,7 @@ impl Word {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Whitespace {
     /// A single space character.
     Space,
@@ -543,6 +546,7 @@ impl fmt::Display for Whitespace {
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Location {
     /// Line number, starting from 1.
     ///
@@ -606,6 +610,7 @@ impl From<(u64, u64)> for Location {
 #[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Span {
     /// Start `Location` (inclusive).
     pub start: Location,
@@ -731,6 +736,7 @@ pub type TokenWithLocation = TokenWithSpan;
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 /// A `Token` together with its `Span` (location in the source).
 pub struct TokenWithSpan {
     /// The token value.

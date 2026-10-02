@@ -1457,6 +1457,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts `VALUE` as a synonym of `VALUES`.
+    fn supports_singular_value_keyword(&self) -> bool {
+        true
+    }
+
     /// Returns true if this dialect supports `SET` statements without an explicit
     /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
     fn supports_set_stmt_without_operator(&self) -> bool {

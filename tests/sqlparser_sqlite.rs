@@ -1024,6 +1024,20 @@ fn parse_n_prefix_not_national_string() {
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
 }
 
+#[test]
+fn parse_singular_value_keyword_rejected() {
+    for sql in [
+        "INSERT INTO t VALUE (1)",
+        "INSERT INTO t (a) VALUE (1)",
+        "SELECT * FROM (VALUE (1))",
+    ] {
+        assert!(sqlite().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+    sqlite().verified_stmt("INSERT INTO t (a) VALUES (1)");
+    all_dialects_where(|d| d.supports_singular_value_keyword())
+        .verified_stmt("INSERT INTO t (a) VALUE (1)");
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

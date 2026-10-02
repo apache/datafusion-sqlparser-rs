@@ -15303,7 +15303,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::VALUES) {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql, false)?)
-        } else if self.parse_keyword(Keyword::VALUE) {
+        } else if self.dialect.supports_singular_value_keyword()
+            && self.parse_keyword(Keyword::VALUE)
+        {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql, true)?)
         } else if self.parse_keyword(Keyword::TABLE) {

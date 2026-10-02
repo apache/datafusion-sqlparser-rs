@@ -142,4 +142,9 @@ impl Dialect for SQLiteDialect {
     fn supports_national_string_literal(&self) -> bool {
         false
     }
+
+    /// See <https://sqlite.org/lang_insert.html>
+    fn supports_singular_value_keyword(&self) -> bool {
+        false
+    }
 }

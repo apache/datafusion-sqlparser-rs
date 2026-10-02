@@ -80,6 +80,7 @@ use sqlparser_derive::{Visit, VisitMut};
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AttachedToken(pub TokenWithSpan);
 
 impl AttachedToken {

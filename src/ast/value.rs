@@ -75,6 +75,7 @@ use sqlparser_derive::{Visit, VisitMut};
     derive(Visit, VisitMut),
     visit(with = "visit_value")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ValueWithSpan {
     /// The wrapped `Value`.
     pub value: Value,
@@ -132,10 +133,20 @@ impl DerefMut for ValueWithSpan {
     }
 }
 
+/// Generate a `BigDecimal` with a bounded scale so its `Display` output stays small.
+#[cfg(all(feature = "arbitrary", feature = "bigdecimal"))]
+fn bigdecimal_arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<BigDecimal> {
+    use arbitrary::Arbitrary;
+    let mantissa = i64::arbitrary(u)?;
+    let scale = i64::arbitrary(u)? % 1_000_000;
+    Ok(BigDecimal::from(mantissa).with_scale(scale))
+}
+
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
@@ -145,7 +156,10 @@ pub enum Value {
     /// Value::Number This might help if you your tests pass locally
     /// but fail on CI with the `--all-features` flag enabled
     /// Numeric literal (uses `BigDecimal` when the `bigdecimal` feature is enabled).
-    Number(BigDecimal, bool),
+    Number(
+        #[cfg_attr(feature = "arbitrary", arbitrary(with = bigdecimal_arbitrary))] BigDecimal,
+        bool,
+    ),
     /// 'string value'
     SingleQuotedString(String),
     /// Dollar-quoted string literal, e.g. `$$...$$` or `$tag$...$tag$` (Postgres syntax).
@@ -304,6 +318,7 @@ impl fmt::Display for Value {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DollarQuotedString {
     /// Inner string contents.
     pub value: String,
@@ -331,6 +346,7 @@ impl fmt::Display for DollarQuotedString {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct QuoteDelimitedString {
     /// the quote start character; i.e. the character _after_ the opening `Q'`
     pub start_quote: char,
@@ -354,6 +370,7 @@ impl fmt::Display for QuoteDelimitedString {
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DateTimeField {
     /// `YEAR`
     Year,
@@ -516,6 +533,7 @@ impl fmt::Display for DateTimeField {
 /// certain distinctions between visually or functionally identical characters.
 ///
 /// See [Unicode Normalization Forms](https://unicode.org/reports/tr15/) for details.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum NormalizationForm {
     /// Canonical Decomposition, followed by Canonical Composition.
     NFC,
@@ -538,6 +556,7 @@ impl fmt::Display for NormalizationForm {
     }
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct EscapeQuotedString<'a> {
     string: &'a str,
     quote: char,
@@ -618,6 +637,7 @@ pub fn escape_double_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\"')
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct EscapeEscapedStringLiteral<'a>(&'a str);
 
 impl fmt::Display for EscapeEscapedStringLiteral<'_> {
@@ -654,6 +674,7 @@ pub fn escape_escaped_string(s: &str) -> EscapeEscapedStringLiteral<'_> {
     EscapeEscapedStringLiteral(s)
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct EscapeUnicodeStringLiteral<'a>(&'a str);
 
 impl fmt::Display for EscapeUnicodeStringLiteral<'_> {
@@ -697,6 +718,7 @@ pub fn escape_unicode_string(s: &str) -> EscapeUnicodeStringLiteral<'_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TrimWhereField {
     /// `BOTH` (trim from both ends)
     Both,
@@ -773,4 +795,15 @@ fn test_byte_and_raw_string_literal_display_escaping() {
         Value::DoubleQuotedRawStringLiteral("it\"s".to_string()).to_string(),
         "R\"it\"\"s\""
     );
+}
+
+#[cfg(all(test, feature = "arbitrary", feature = "bigdecimal"))]
+#[test]
+fn test_arbitrary_bigdecimal_scale_is_bounded() {
+    let data: Vec<u8> = (0..32).collect();
+    let mut u = arbitrary::Unstructured::new(&data);
+    while !u.is_empty() {
+        let number = bigdecimal_arbitrary(&mut u).unwrap();
+        assert!(number.as_bigint_and_exponent().1.abs() < 1_000_000);
+    }
 }

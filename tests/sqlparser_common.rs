@@ -20467,7 +20467,6 @@ fn parse_placeholder_as_field_name() {
         assert!(unsupported.parse_sql_statements(sql).is_err());
     }
 
-    // Bare placeholders are unaffected by the capability.
     unsupported.verified_stmt("SELECT $1, $2 FROM t");
     unsupported.verified_only_select("SELECT * FROM student WHERE id = $Id1");
 }

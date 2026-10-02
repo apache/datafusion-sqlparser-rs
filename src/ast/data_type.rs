@@ -25,7 +25,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, Expr, Ident, ObjectName, StructField, UnionField};
+use crate::ast::{
+    display_comma_separated, display_separated, Expr, Ident, ObjectName, StructField, UnionField,
+};
 
 use super::{value::escape_single_quote_string, ColumnDef};
 
@@ -466,6 +468,8 @@ pub enum DataType {
     VarBit(Option<u64>),
     /// Custom type with a modifier list, e.g. `GEOMETRY(POINT, 4326)`.
     Custom(ObjectName, Vec<TypeModifier>),
+    /// Multi-word type name whose parts are space-separated, as in SQLite's `typename` grammar.
+    CustomMultiWord(Vec<Ident>, Vec<TypeModifier>),
     /// Arrays.
     Array(ArrayElemTypeDef),
     /// Map, see [ClickHouse], [Hive].
@@ -769,6 +773,13 @@ impl fmt::Display for DataType {
                 } else {
                     write!(f, "{ty}({})", display_comma_separated(modifiers))
                 }
+            }
+            DataType::CustomMultiWord(parts, modifiers) => {
+                write!(f, "{}", display_separated(parts, " "))?;
+                if !modifiers.is_empty() {
+                    write!(f, "({})", display_comma_separated(modifiers))?;
+                }
+                Ok(())
             }
             DataType::Enum(vals, bits) => {
                 match bits {

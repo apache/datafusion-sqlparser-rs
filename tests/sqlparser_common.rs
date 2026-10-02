@@ -20328,6 +20328,21 @@ fn parse_in_list_leading_subquery() {
         ParserError::ParserError("Expected: ), found: 1".to_string()),
         parse_sql_statements("SELECT * FROM t WHERE x IN ((SELECT a FROM u) 1)").unwrap_err()
     );
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: EOF".to_string()),
+        parse_sql_statements("SELECT * FROM t WHERE x IN (SELECT a FROM u").unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: EOF".to_string()),
+        parse_sql_statements("SELECT * FROM t WHERE x IN ((SELECT a FROM u), 1").unwrap_err()
+    );
+    // The inner `IN` is read again for the outer list after its subquery
+    // arm was cached as failed.
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: EOF".to_string()),
+        parse_sql_statements("SELECT * FROM t WHERE x IN ((SELECT 1 FROM u WHERE y IN (SELECT 2")
+            .unwrap_err()
+    );
 }
 
 /// Hang guard for `IN` lists nested in the leading subquery of an enclosing

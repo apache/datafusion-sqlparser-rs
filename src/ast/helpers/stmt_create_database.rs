@@ -16,7 +16,7 @@
 // under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::{format, string::String, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec::Vec};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,8 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    CatalogSyncNamespaceMode, ContactEntry, ObjectName, Statement, StorageSerializationPolicy, Tag,
+    CatalogSyncNamespaceMode, ContactEntry, CreateDatabase, ObjectName, Statement,
+    StorageSerializationPolicy, Tag,
 };
 use crate::parser::ParserError;
 
@@ -278,7 +279,7 @@ impl CreateDatabaseBuilder {
 
     /// Build the `CREATE DATABASE` statement.
     pub fn build(self) -> Statement {
-        Statement::CreateDatabase {
+        Statement::CreateDatabase(Box::new(CreateDatabase {
             db_name: self.db_name,
             if_not_exists: self.if_not_exists,
             managed_location: self.managed_location,
@@ -301,7 +302,7 @@ impl CreateDatabaseBuilder {
             catalog_sync_namespace_flatten_delimiter: self.catalog_sync_namespace_flatten_delimiter,
             with_tags: self.with_tags,
             with_contacts: self.with_contacts,
-        }
+        }))
     }
 }
 
@@ -310,53 +311,56 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
 
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
-            Statement::CreateDatabase {
-                db_name,
-                if_not_exists,
-                location,
-                managed_location,
-                or_replace,
-                transient,
-                clone,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                external_volume,
-                catalog,
-                replace_invalid_characters,
-                default_ddl_collation,
-                storage_serialization_policy,
-                comment,
-                default_charset,
-                default_collation,
-                catalog_sync,
-                catalog_sync_namespace_mode,
-                catalog_sync_namespace_flatten_delimiter,
-                with_tags,
-                with_contacts,
-            } => Ok(Self {
-                db_name,
-                if_not_exists,
-                location,
-                managed_location,
-                or_replace,
-                transient,
-                clone,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                external_volume,
-                catalog,
-                replace_invalid_characters,
-                default_ddl_collation,
-                storage_serialization_policy,
-                comment,
-                default_charset,
-                default_collation,
-                catalog_sync,
-                catalog_sync_namespace_mode,
-                catalog_sync_namespace_flatten_delimiter,
-                with_tags,
-                with_contacts,
-            }),
+            Statement::CreateDatabase(create_database) => {
+                let CreateDatabase {
+                    db_name,
+                    if_not_exists,
+                    location,
+                    managed_location,
+                    or_replace,
+                    transient,
+                    clone,
+                    data_retention_time_in_days,
+                    max_data_extension_time_in_days,
+                    external_volume,
+                    catalog,
+                    replace_invalid_characters,
+                    default_ddl_collation,
+                    storage_serialization_policy,
+                    comment,
+                    default_charset,
+                    default_collation,
+                    catalog_sync,
+                    catalog_sync_namespace_mode,
+                    catalog_sync_namespace_flatten_delimiter,
+                    with_tags,
+                    with_contacts,
+                } = *create_database;
+                Ok(Self {
+                    db_name,
+                    if_not_exists,
+                    location,
+                    managed_location,
+                    or_replace,
+                    transient,
+                    clone,
+                    data_retention_time_in_days,
+                    max_data_extension_time_in_days,
+                    external_volume,
+                    catalog,
+                    replace_invalid_characters,
+                    default_ddl_collation,
+                    storage_serialization_policy,
+                    comment,
+                    default_charset,
+                    default_collation,
+                    catalog_sync,
+                    catalog_sync_namespace_mode,
+                    catalog_sync_namespace_flatten_delimiter,
+                    with_tags,
+                    with_contacts,
+                })
+            }
             _ => Err(ParserError::ParserError(format!(
                 "Expected create database statement, but received: {stmt}"
             ))),
@@ -367,7 +371,7 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
 #[cfg(test)]
 mod tests {
     use crate::ast::helpers::stmt_create_database::CreateDatabaseBuilder;
-    use crate::ast::{Ident, ObjectName, Statement};
+    use crate::ast::{Commit, Ident, ObjectName, Statement};
     use crate::parser::ParserError;
 
     #[test]
@@ -381,11 +385,11 @@ mod tests {
 
     #[test]
     pub fn test_from_invalid_statement() {
-        let stmt = Statement::Commit {
+        let stmt = Statement::Commit(Box::new(Commit {
             chain: false,
             end: false,
             modifier: None,
-        };
+        }));
 
         assert_eq!(
             CreateDatabaseBuilder::try_from(stmt).unwrap_err(),

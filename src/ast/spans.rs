@@ -17,9 +17,10 @@
 
 use crate::{
     ast::{
-        ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
-        ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
-        ExportData, Owner, TypedString,
+        ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterIndex, AlterSchemaOperation,
+        AlterTable, AlterView, Close, ColumnOptions, CopyIntoSnowflake, CopyStatement,
+        CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView, CreateVirtualTable,
+        Directory, ExportData, Install, Load, Owner, TypedString,
     },
     tokenizer::TokenWithSpan,
 };
@@ -327,63 +328,84 @@ impl Spanned for Statement {
             Statement::Msck(msck) => msck.span(),
             Statement::Query(query) => query.span(),
             Statement::Insert(insert) => insert.span(),
-            Statement::Install { extension_name } => extension_name.span,
-            Statement::Load { extension_name } => extension_name.span,
-            Statement::Directory {
-                overwrite: _,
-                local: _,
-                path: _,
-                file_format: _,
-                source,
-            } => source.span(),
+            Statement::Install(install) => {
+                let Install { extension_name } = &**install;
+                extension_name.span
+            }
+            Statement::Load(load) => {
+                let Load { extension_name } = &**load;
+                extension_name.span
+            }
+            Statement::Directory(directory) => {
+                let Directory {
+                    overwrite: _,
+                    local: _,
+                    path: _,
+                    file_format: _,
+                    source,
+                } = &**directory;
+                source.span()
+            }
             Statement::Case(stmt) => stmt.span(),
             Statement::If(stmt) => stmt.span(),
             Statement::While(stmt) => stmt.span(),
             Statement::Raise(stmt) => stmt.span(),
             Statement::Call(function) => function.span(),
-            Statement::Copy {
-                source,
-                to: _,
-                target: _,
-                options: _,
-                legacy_options: _,
-                values: _,
-            } => source.span(),
-            Statement::CopyIntoSnowflake {
-                into: _,
-                into_columns: _,
-                from_obj: _,
-                from_obj_alias: _,
-                stage_params: _,
-                from_transformations: _,
-                files: _,
-                pattern: _,
-                file_format: _,
-                copy_options: _,
-                validation_mode: _,
-                kind: _,
-                from_query: _,
-                partition: _,
-            } => Span::empty(),
+            Statement::Copy(copy) => {
+                let CopyStatement {
+                    source,
+                    to: _,
+                    target: _,
+                    options: _,
+                    legacy_options: _,
+                    values: _,
+                } = &**copy;
+                source.span()
+            }
+            Statement::CopyIntoSnowflake(copy_into_snowflake) => {
+                let CopyIntoSnowflake {
+                    into: _,
+                    into_columns: _,
+                    from_obj: _,
+                    from_obj_alias: _,
+                    stage_params: _,
+                    from_transformations: _,
+                    files: _,
+                    pattern: _,
+                    file_format: _,
+                    copy_options: _,
+                    validation_mode: _,
+                    kind: _,
+                    from_query: _,
+                    partition: _,
+                } = &**copy_into_snowflake;
+                Span::empty()
+            }
             Statement::Open(open) => open.span(),
-            Statement::Close { cursor } => match cursor {
-                CloseCursor::All => Span::empty(),
-                CloseCursor::Specific { name } => name.span,
-            },
+            Statement::Close(close) => {
+                let Close { cursor } = &**close;
+                match cursor {
+                    CloseCursor::All => Span::empty(),
+                    CloseCursor::Specific { name } => name.span,
+                }
+            }
             Statement::Update(update) => update.span(),
             Statement::Delete(delete) => delete.span(),
             Statement::CreateView(create_view) => create_view.span(),
             Statement::CreateTable(create_table) => create_table.span(),
-            Statement::CreateVirtualTable {
-                name,
-                if_not_exists: _,
-                module_name,
-                module_args,
-            } => union_spans(
-                core::iter::once(name.span())
-                    .chain(core::iter::once(module_name.span))
-                    .chain(module_args.iter().map(|i| i.span)),
-            ),
+            Statement::CreateVirtualTable(create_virtual_table) => {
+                let CreateVirtualTable {
+                    name,
+                    if_not_exists: _,
+                    module_name,
+                    module_args,
+                } = &**create_virtual_table;
+                union_spans(
+                    core::iter::once(name.span())
+                        .chain(core::iter::once(module_name.span))
+                        .chain(module_args.iter().map(|i| i.span)),
+                )
+            }
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),
             Statement::CreateExtension(create_extension) => create_extension.span(),
@@ -392,7 +414,7 @@ impl Spanned for Statement {
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
             Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
-            Statement::CreateSecret { .. } => Span::empty(),
+            Statement::CreateSecret(_) => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateForeignTable(stmt) => stmt.span(),
             Statement::CreateConnector { .. } => Span::empty(),
@@ -403,18 +425,24 @@ impl Spanned for Statement {
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.span(),
             Statement::CreateTextSearch(create_text_search) => create_text_search.span(),
             Statement::AlterTable(alter_table) => alter_table.span(),
-            Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
-            Statement::AlterView {
-                name,
-                columns,
-                query,
-                with_options,
-            } => union_spans(
-                core::iter::once(name.span())
-                    .chain(columns.iter().map(|i| i.span))
-                    .chain(core::iter::once(query.span()))
-                    .chain(with_options.iter().map(|i| i.span())),
-            ),
+            Statement::AlterIndex(alter_index) => {
+                let AlterIndex { name, operation } = &**alter_index;
+                name.span().union(&operation.span())
+            }
+            Statement::AlterView(alter_view) => {
+                let AlterView {
+                    name,
+                    columns,
+                    query,
+                    with_options,
+                } = &**alter_view;
+                union_spans(
+                    core::iter::once(name.span())
+                        .chain(columns.iter().map(|i| i.span))
+                        .chain(core::iter::once(query.span()))
+                        .chain(with_options.iter().map(|i| i.span())),
+                )
+            }
             // These statements need to be implemented
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
@@ -423,102 +451,105 @@ impl Spanned for Statement {
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
             Statement::AlterTextSearch { .. } => Span::empty(),
-            Statement::AlterRole { .. } => Span::empty(),
-            Statement::AlterSession { .. } => Span::empty(),
-            Statement::AttachDatabase { .. } => Span::empty(),
-            Statement::AttachDuckDBDatabase { .. } => Span::empty(),
-            Statement::DetachDuckDBDatabase { .. } => Span::empty(),
-            Statement::Drop { .. } => Span::empty(),
+            Statement::AlterRole(_) => Span::empty(),
+            Statement::AlterSession(_) => Span::empty(),
+            Statement::AttachDatabase(_) => Span::empty(),
+            Statement::AttachDuckDBDatabase(_) => Span::empty(),
+            Statement::DetachDuckDBDatabase(_) => Span::empty(),
+            Statement::Drop(_) => Span::empty(),
             Statement::DropFunction(drop_function) => drop_function.span(),
             Statement::DropDomain { .. } => Span::empty(),
-            Statement::DropProcedure { .. } => Span::empty(),
-            Statement::DropSecret { .. } => Span::empty(),
-            Statement::Declare { .. } => Span::empty(),
-            Statement::Fetch { .. } => Span::empty(),
-            Statement::Flush { .. } => Span::empty(),
-            Statement::Discard { .. } => Span::empty(),
+            Statement::DropProcedure(_) => Span::empty(),
+            Statement::DropSecret(_) => Span::empty(),
+            Statement::Declare(_) => Span::empty(),
+            Statement::Fetch(_) => Span::empty(),
+            Statement::Flush(_) => Span::empty(),
+            Statement::Discard(_) => Span::empty(),
             Statement::Set(_) => Span::empty(),
-            Statement::ShowFunctions { .. } => Span::empty(),
-            Statement::ShowVariable { .. } => Span::empty(),
-            Statement::ShowStatus { .. } => Span::empty(),
-            Statement::ShowVariables { .. } => Span::empty(),
-            Statement::ShowCreate { .. } => Span::empty(),
-            Statement::ShowColumns { .. } => Span::empty(),
-            Statement::ShowTables { .. } => Span::empty(),
-            Statement::ShowCollation { .. } => Span::empty(),
+            Statement::ShowFunctions(_) => Span::empty(),
+            Statement::ShowVariable(_) => Span::empty(),
+            Statement::ShowStatus(_) => Span::empty(),
+            Statement::ShowVariables(_) => Span::empty(),
+            Statement::ShowCreate(_) => Span::empty(),
+            Statement::ShowColumns(_) => Span::empty(),
+            Statement::ShowTables(_) => Span::empty(),
+            Statement::ShowCollation(_) => Span::empty(),
             Statement::ShowCharset { .. } => Span::empty(),
             Statement::Use(u) => u.span(),
-            Statement::StartTransaction { .. } => Span::empty(),
-            Statement::Comment { .. } => Span::empty(),
-            Statement::Commit { .. } => Span::empty(),
-            Statement::Rollback { .. } => Span::empty(),
-            Statement::CreateSchema { .. } => Span::empty(),
-            Statement::CreateDatabase { .. } => Span::empty(),
+            Statement::StartTransaction(_) => Span::empty(),
+            Statement::Comment(_) => Span::empty(),
+            Statement::Commit(_) => Span::empty(),
+            Statement::Rollback(_) => Span::empty(),
+            Statement::CreateSchema(_) => Span::empty(),
+            Statement::CreateDatabase(_) => Span::empty(),
             Statement::CreateFunction { .. } => Span::empty(),
             Statement::CreateDomain { .. } => Span::empty(),
             Statement::CreateTrigger { .. } => Span::empty(),
             Statement::DropTrigger { .. } => Span::empty(),
-            Statement::CreateProcedure { .. } => Span::empty(),
-            Statement::CreateMacro { .. } => Span::empty(),
-            Statement::CreateStage { .. } => Span::empty(),
-            Statement::CreateFileFormat { .. } => Span::empty(),
+            Statement::CreateProcedure(_) => Span::empty(),
+            Statement::CreateMacro(_) => Span::empty(),
+            Statement::CreateStage(_) => Span::empty(),
+            Statement::CreateFileFormat(_) => Span::empty(),
             Statement::CreateWarehouse(..) => Span::empty(),
-            Statement::Assert { .. } => Span::empty(),
+            Statement::Assert(_) => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
             Statement::Deny { .. } => Span::empty(),
             Statement::Revoke { .. } => Span::empty(),
-            Statement::Deallocate { .. } => Span::empty(),
-            Statement::Execute { .. } => Span::empty(),
-            Statement::Prepare { .. } => Span::empty(),
-            Statement::Kill { .. } => Span::empty(),
-            Statement::ExplainTable { .. } => Span::empty(),
-            Statement::Explain { .. } => Span::empty(),
-            Statement::Savepoint { .. } => Span::empty(),
-            Statement::ReleaseSavepoint { .. } => Span::empty(),
+            Statement::Deallocate(_) => Span::empty(),
+            Statement::Execute(_) => Span::empty(),
+            Statement::Prepare(_) => Span::empty(),
+            Statement::Kill(_) => Span::empty(),
+            Statement::ExplainTable(_) => Span::empty(),
+            Statement::Explain(_) => Span::empty(),
+            Statement::Savepoint(_) => Span::empty(),
+            Statement::ReleaseSavepoint(_) => Span::empty(),
             Statement::Merge(merge) => merge.span(),
-            Statement::Cache { .. } => Span::empty(),
-            Statement::UNCache { .. } => Span::empty(),
-            Statement::CreateSequence { .. } => Span::empty(),
-            Statement::CreateType { .. } => Span::empty(),
-            Statement::Pragma { .. } => Span::empty(),
+            Statement::Cache(_) => Span::empty(),
+            Statement::UNCache(_) => Span::empty(),
+            Statement::CreateSequence(_) => Span::empty(),
+            Statement::CreateType(_) => Span::empty(),
+            Statement::Pragma(_) => Span::empty(),
             Statement::Lock(_) => Span::empty(),
-            Statement::LockTables { .. } => Span::empty(),
+            Statement::LockTables(_) => Span::empty(),
             Statement::UnlockTables => Span::empty(),
-            Statement::Unload { .. } => Span::empty(),
-            Statement::OptimizeTable { .. } => Span::empty(),
+            Statement::Unload(_) => Span::empty(),
+            Statement::OptimizeTable(_) => Span::empty(),
             Statement::CreatePolicy { .. } => Span::empty(),
             Statement::AlterPolicy { .. } => Span::empty(),
-            Statement::AlterConnector { .. } => Span::empty(),
+            Statement::AlterConnector(_) => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
-            Statement::DropConnector { .. } => Span::empty(),
-            Statement::ShowCatalogs { .. } => Span::empty(),
-            Statement::ShowDatabases { .. } => Span::empty(),
-            Statement::ShowProcessList { .. } => Span::empty(),
-            Statement::ShowSchemas { .. } => Span::empty(),
+            Statement::DropConnector(_) => Span::empty(),
+            Statement::ShowCatalogs(_) => Span::empty(),
+            Statement::ShowDatabases(_) => Span::empty(),
+            Statement::ShowProcessList(_) => Span::empty(),
+            Statement::ShowSchemas(_) => Span::empty(),
             Statement::ShowObjects { .. } => Span::empty(),
-            Statement::ShowViews { .. } => Span::empty(),
-            Statement::LISTEN { .. } => Span::empty(),
-            Statement::NOTIFY { .. } => Span::empty(),
-            Statement::LoadData { .. } => Span::empty(),
-            Statement::UNLISTEN { .. } => Span::empty(),
+            Statement::ShowViews(_) => Span::empty(),
+            Statement::LISTEN(_) => Span::empty(),
+            Statement::NOTIFY(_) => Span::empty(),
+            Statement::LoadData(_) => Span::empty(),
+            Statement::UNLISTEN(_) => Span::empty(),
             Statement::RenameTable { .. } => Span::empty(),
-            Statement::RaisError { .. } => Span::empty(),
+            Statement::RaisError(_) => Span::empty(),
             Statement::Throw(_) => Span::empty(),
             Statement::Print { .. } => Span::empty(),
             Statement::WaitFor(_) => Span::empty(),
             Statement::Return { .. } => Span::empty(),
-            Statement::List(..) | Statement::Put { .. } | Statement::Remove(..) => Span::empty(),
-            Statement::ExportData(ExportData {
-                options,
-                query,
-                connection,
-            }) => union_spans(
-                options
-                    .iter()
-                    .map(|i| i.span())
-                    .chain(core::iter::once(query.span()))
-                    .chain(connection.iter().map(|i| i.span())),
-            ),
+            Statement::List(..) | Statement::Put(_) | Statement::Remove(..) => Span::empty(),
+            Statement::ExportData(export_data) => {
+                let ExportData {
+                    options,
+                    query,
+                    connection,
+                } = export_data.as_ref();
+                union_spans(
+                    options
+                        .iter()
+                        .map(|i| i.span())
+                        .chain(core::iter::once(query.span()))
+                        .chain(connection.iter().map(|i| i.span())),
+                )
+            }
             Statement::CreateUser(..) => Span::empty(),
             Statement::AlterSchema(s) => s.span(),
             Statement::Vacuum(..) => Span::empty(),
@@ -2930,7 +2961,10 @@ WHERE id = 1
         assert_eq!(stmt_span.end, (17, 37).into());
 
         // ~ individual tokens within the statement
-        let Statement::Merge(Merge {
+        let Statement::Merge(merge) = &r[0] else {
+            panic!("not a MERGE statement");
+        };
+        let Merge {
             merge_token,
             optimizer_hints: _,
             into: _,
@@ -2939,10 +2973,7 @@ WHERE id = 1
             on: _,
             clauses,
             output,
-        }) = &r[0]
-        else {
-            panic!("not a MERGE statement");
-        };
+        } = &**merge;
         assert_eq!(
             merge_token.0.span,
             Span::new(Location::new(4, 9), Location::new(4, 14))
@@ -3080,7 +3111,8 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge(Merge { output, .. }) = &r[0] {
+        if let Statement::Merge(merge) = &r[0] {
+            let Merge { output, .. } = &**merge;
             if let Some(OutputClause::Returning {
                 returning_token, ..
             }) = output
@@ -3114,7 +3146,8 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge(Merge { output, .. }) = &r[0] {
+        if let Statement::Merge(merge) = &r[0] {
+            let Merge { output, .. } = &**merge;
             if let Some(OutputClause::Output { output_token, .. }) = output {
                 assert_eq!(
                     output_token.0.span,

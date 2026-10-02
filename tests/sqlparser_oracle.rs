@@ -428,7 +428,7 @@ fn test_insert_with_table_alias() {
 
     fn verify_table_name_with_alias(stmt: &Statement, exp_table_name: &str, exp_table_alias: &str) {
         assert!(matches!(stmt,
-            Statement::Insert(Insert {
+            Statement::Insert(insert) if matches!(&**insert, Insert {
                 table: TableObject::TableName(table_name),
                 table_alias: Some(TableAliasWithoutColumns {
                     explicit: false,
@@ -439,13 +439,13 @@ fn test_insert_with_table_alias() {
                     }
                 }),
                 ..
-            })
+            }
             if table_alias == exp_table_alias
             && table_name == &ObjectName::from(vec![Ident {
                 value: exp_table_name.into(),
                 quote_style: None,
                 span: Span::empty(),
-            }])
+            }]))
         ));
     }
 
@@ -476,7 +476,8 @@ fn test_insert_with_table_alias() {
     let stmt =
         oracle_dialect.verified_stmt("INSERT INTO foo_t t (t.id, t.val) SELECT 1, 2 FROM dual");
     verify_table_name_with_alias(&stmt, "foo_t", "t");
-    if let Statement::Insert(Insert { columns, .. }) = stmt {
+    if let Statement::Insert(insert) = stmt {
+        let Insert { columns, .. } = *insert;
         assert_eq!(
             vec![
                 ObjectName::from(vec![Ident::new("t"), Ident::new("id")]),
@@ -507,35 +508,35 @@ fn test_insert_without_alias() {
     let stmt = oracle_dialect.verified_stmt(sql);
     assert!(matches!(
         &stmt,
-        Statement::Insert(Insert {
+        Statement::Insert(insert) if matches!(&**insert, Insert {
             table_alias: None,
             source: Some(source),
             ..
-        })
-        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_)))));
+        }
+        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_))))));
 
     // check WITH
     let sql = "INSERT INTO dual WITH w AS (SELECT 1 AS y FROM dual) SELECT y FROM w";
     let stmt = oracle_dialect.verified_stmt(sql);
     assert!(matches!(
         &stmt,
-        Statement::Insert(Insert {
+        Statement::Insert(insert) if matches!(&**insert, Insert {
             table_alias: None,
             source: Some(source),
             ..
-        })
-        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_)))));
+        }
+        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_))))));
 
     // check VALUES
     let sql = "INSERT INTO t VALUES (1)";
     let stmt = oracle_dialect.verified_stmt(sql);
     assert!(matches!(
         stmt,
-        Statement::Insert(Insert {
+        Statement::Insert(insert) if matches!(&*insert, Insert {
             table_alias: None,
             source: Some(source),
             ..
-        })
-        if matches!(&*source, Query { body, .. } if matches!(&**body, SetExpr::Values(_)))
+        }
+        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Values(_))))
     ));
 }

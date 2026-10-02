@@ -6221,13 +6221,13 @@ impl fmt::Display for DropPolicy {
 
 impl From<CreatePolicy> for crate::ast::Statement {
     fn from(v: CreatePolicy) -> Self {
-        crate::ast::Statement::CreatePolicy(v)
+        crate::ast::Statement::CreatePolicy(Box::new(v))
     }
 }
 
 impl From<DropPolicy> for crate::ast::Statement {
     fn from(v: DropPolicy) -> Self {
-        crate::ast::Statement::DropPolicy(v)
+        crate::ast::Statement::DropPolicy(Box::new(v))
     }
 }
 
@@ -6264,7 +6264,7 @@ impl fmt::Display for AlterPolicy {
 
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
-        crate::ast::Statement::AlterPolicy(v)
+        crate::ast::Statement::AlterPolicy(Box::new(v))
     }
 }
 
@@ -6560,7 +6560,7 @@ impl fmt::Display for CreateForeignDataWrapper {
 
 impl From<CreateForeignTable> for crate::ast::Statement {
     fn from(v: CreateForeignTable) -> Self {
-        crate::ast::Statement::CreateForeignTable(v)
+        crate::ast::Statement::CreateForeignTable(Box::new(v))
     }
 }
 

@@ -16,7 +16,7 @@
 // under the License.
 
 use crate::{
-    ast::{Expr, LockTable, LockTableType, Statement},
+    ast::{Expr, LockTable, LockTableType, LockTables, Statement},
     dialect::{BindPlaceholderStyle, Dialect, Precedence},
     keywords::Keyword,
     parser::{Parser, ParserError},
@@ -260,7 +260,7 @@ impl Dialect for MySqlDialect {
 /// <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
 fn parse_lock_tables(parser: &mut Parser) -> Result<Statement, ParserError> {
     let tables = parser.parse_comma_separated(parse_lock_table)?;
-    Ok(Statement::LockTables { tables })
+    Ok(Statement::LockTables(Box::new(LockTables { tables })))
 }
 
 // tbl_name [[AS] alias] lock_type

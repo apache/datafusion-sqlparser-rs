@@ -17,11 +17,11 @@
 
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{
-    BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, CreateTrigger,
-    GranteesType, IfStatement, Statement,
+    BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, CreateTrigger, Expr,
+    GranteesType, IfStatement, ObjectName, Statement,
 };
 use crate::dialect::Dialect;
-use crate::keywords::Keyword;
+use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
@@ -33,6 +33,57 @@ use alloc::{vec, vec::Vec};
 pub struct MsSqlDialect {}
 
 impl Dialect for MsSqlDialect {
+    fn parse_prefix(&self, parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
+        let Token::Word(word) = &parser.peek_token_ref().token else {
+            return None;
+        };
+        if word.quote_style.is_some()
+            || !matches!(
+                word.keyword,
+                Keyword::INTERVAL | Keyword::TRIM | Keyword::SUBSTRING
+            )
+        {
+            return None;
+        }
+
+        if word.keyword == Keyword::INTERVAL
+            && matches!(
+                parser.peek_nth_token_ref(1).token,
+                Token::SingleQuotedString(_)
+                    | Token::DoubleQuotedString(_)
+                    | Token::NationalStringLiteral(_)
+                    | Token::Number(..)
+            )
+        {
+            return None;
+        }
+
+        if parser.peek_nth_token_ref(1).token == Token::LParen {
+            match word.keyword {
+                Keyword::TRIM => {
+                    parser.next_token();
+                    return Some(parser.parse_trim_expr());
+                }
+                Keyword::SUBSTRING => return Some(parser.parse_substring()),
+                _ => {}
+            }
+            Some(
+                parser.parse_identifier().and_then(|identifier| {
+                    parser.parse_function(ObjectName::from(vec![identifier]))
+                }),
+            )
+        } else {
+            Some(parser.parse_identifier().map(Expr::Identifier))
+        }
+    }
+
+    fn is_reserved_for_identifier(&self, keyword: Keyword) -> bool {
+        !matches!(
+            keyword,
+            Keyword::INTERVAL | Keyword::TRIM | Keyword::SUBSTRING
+        ) && keywords::RESERVED_FOR_IDENTIFIER.contains(&keyword)
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '['
     }

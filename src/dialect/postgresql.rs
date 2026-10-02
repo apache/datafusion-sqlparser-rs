@@ -293,6 +293,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn disallows_raw_nul_in_quoted_source(&self) -> bool {
+        true
+    }
+
     fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }

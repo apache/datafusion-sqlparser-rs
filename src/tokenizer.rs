@@ -1943,6 +1943,10 @@ impl<'a> Tokenizer<'a> {
             let mut prev: Option<char> = None;
 
             while let Some(&ch) = chars.peek() {
+                if ch == '\0' && self.dialect.disallows_raw_nul_in_quoted_source() {
+                    return self
+                        .tokenizer_error(chars.location(), "Raw NUL byte not allowed in source");
+                }
                 if prev == Some('$') {
                     if ch == '$' {
                         chars.next();
@@ -1997,8 +2001,15 @@ impl<'a> Tokenizer<'a> {
                 let end_delimiter = format!("${value}$");
 
                 loop {
+                    let nul_loc = chars.location();
                     match chars.next() {
                         Some(ch) => {
+                            if ch == '\0' && self.dialect.disallows_raw_nul_in_quoted_source() {
+                                return self.tokenizer_error(
+                                    nul_loc,
+                                    "Raw NUL byte not allowed in source",
+                                );
+                            }
                             temp.push(ch);
 
                             if temp.ends_with(&end_delimiter) {
@@ -2099,7 +2110,7 @@ impl<'a> Tokenizer<'a> {
         let error_loc = chars.location();
         chars.next(); // consume the opening quote
         let quote_end = Word::matching_end_quote(quote_start);
-        let (s, last_char) = self.parse_quoted_ident(chars, quote_end);
+        let (s, last_char) = self.parse_quoted_ident(chars, quote_end)?;
 
         if last_char == Some(quote_end) {
             Ok(s)
@@ -2117,7 +2128,9 @@ impl<'a> Tokenizer<'a> {
         starting_loc: Location,
         chars: &mut State,
     ) -> Result<String, TokenizerError> {
-        if let Some(s) = unescape_single_quoted_string(chars) {
+        if let Some(s) =
+            unescape_single_quoted_string(chars, self.dialect.disallows_raw_nul_in_quoted_source())
+        {
             return Ok(s);
         }
 
@@ -2346,6 +2359,13 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 ch => {
+                    if ch == '\0' && self.dialect.disallows_raw_nul_in_quoted_source() {
+                        return self.tokenizer_error(
+                            chars.location(),
+                            "Raw NUL byte not allowed in source",
+                        );
+                    }
+
                     chars.next(); // consume ch
 
                     if ch == settings.quote_style {
@@ -2398,10 +2418,19 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_quoted_ident(&self, chars: &mut State, quote_end: char) -> (String, Option<char>) {
+    fn parse_quoted_ident(
+        &self,
+        chars: &mut State,
+        quote_end: char,
+    ) -> Result<(String, Option<char>), TokenizerError> {
         let mut last_char = None;
         let mut s = String::new();
-        while let Some(ch) = chars.next() {
+        while let Some(&ch) = chars.peek() {
+            let loc = chars.location();
+            chars.next();
+            if ch == '\0' && self.dialect.disallows_raw_nul_in_quoted_source() {
+                return self.tokenizer_error(loc, "Raw NUL byte not allowed in source");
+            }
             if ch == quote_end {
                 if chars.peek() == Some(&quote_end) {
                     chars.next();
@@ -2418,7 +2447,7 @@ impl<'a> Tokenizer<'a> {
                 s.push(ch);
             }
         }
-        (s, last_char)
+        Ok((s, last_char))
     }
 
     #[allow(clippy::unnecessary_wraps)]
@@ -2448,17 +2477,21 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
     s
 }
 
-fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
-    Unescape::new(chars).unescape()
+fn unescape_single_quoted_string(chars: &mut State<'_>, reject_raw_nul: bool) -> Option<String> {
+    Unescape::new(chars, reject_raw_nul).unescape()
 }
 
 struct Unescape<'a: 'b, 'b> {
     chars: &'b mut State<'a>,
+    reject_raw_nul: bool,
 }
 
 impl<'a: 'b, 'b> Unescape<'a, 'b> {
-    fn new(chars: &'b mut State<'a>) -> Self {
-        Self { chars }
+    fn new(chars: &'b mut State<'a>, reject_raw_nul: bool) -> Self {
+        Self {
+            chars,
+            reject_raw_nul,
+        }
     }
     fn unescape(mut self) -> Option<String> {
         let mut unescaped = String::new();
@@ -2477,6 +2510,9 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
             }
 
             if c != '\\' {
+                if self.reject_raw_nul && c == '\0' {
+                    return None;
+                }
                 unescaped.push(c);
                 continue;
             }
@@ -3589,6 +3625,60 @@ mod tests {
             })
         );
     }
+    #[test]
+    fn tokenize_raw_nul_rejected_in_quoted_source() {
+        let error = |column: u64| {
+            Err(TokenizerError {
+                message: "Raw NUL byte not allowed in source".to_string(),
+                location: Location { line: 1, column },
+            })
+        };
+        for dialect in [
+            &PostgreSqlDialect {} as &dyn Dialect,
+            &SQLiteDialect {} as &dyn Dialect,
+        ] {
+            assert_eq!(
+                Tokenizer::new(dialect, "SELECT 'a\0b'").tokenize(),
+                error(10)
+            );
+            assert_eq!(
+                Tokenizer::new(dialect, "SELECT \"a\0b\" FROM t").tokenize(),
+                error(10)
+            );
+        }
+        assert_eq!(
+            Tokenizer::new(&PostgreSqlDialect {}, "SELECT $$a\0b$$").tokenize(),
+            error(11)
+        );
+        assert_eq!(
+            Tokenizer::new(&PostgreSqlDialect {}, "SELECT $tag$a\0b$tag$").tokenize(),
+            error(14)
+        );
+    }
+
+    #[test]
+    fn tokenize_raw_nul_rejected_in_escaped_string_literal() {
+        assert_eq!(
+            Tokenizer::new(&PostgreSqlDialect {}, "SELECT E'a\0b'").tokenize(),
+            Err(TokenizerError {
+                message: "Unterminated encoded string literal".to_string(),
+                location: Location { line: 1, column: 8 },
+            })
+        );
+    }
+
+    #[test]
+    fn tokenize_raw_nul_allowed_outside_scoped_dialects() {
+        for dialect in [
+            &GenericDialect {} as &dyn Dialect,
+            &MySqlDialect {} as &dyn Dialect,
+        ] {
+            assert!(Tokenizer::new(dialect, "SELECT 'a\0b'").tokenize().is_ok());
+            assert!(Tokenizer::new(dialect, "SELECT \"a\0b\" FROM t")
+                .tokenize()
+                .is_ok());
+        }
+    }
 
     #[test]
     fn tokenize_newlines() {
@@ -3804,7 +3894,7 @@ mod tests {
         };
 
         assert_eq!(
-            unescape_single_quoted_string(&mut state),
+            unescape_single_quoted_string(&mut state, false),
             expected.map(|s| s.to_string())
         );
     }

@@ -1010,6 +1010,16 @@ fn parse_n_prefix_not_national_string() {
     // Other dialects still tokenize N'...' as a national string literal.
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
 }
+#[test]
+fn parse_raw_nul_rejected() {
+    let err = sqlite().parse_sql_statements("SELECT 'a\0b'").unwrap_err();
+    assert_eq!(
+        ParserError::TokenizerError(
+            "Raw NUL byte not allowed in source at Line: 1, Column: 10".to_string(),
+        ),
+        err
+    );
+}
 
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])

@@ -10126,3 +10126,13 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+#[test]
+fn parse_raw_nul_rejected() {
+    let err = pg().parse_sql_statements("SELECT 'a\0b'").unwrap_err();
+    assert_eq!(
+        ParserError::TokenizerError(
+            "Raw NUL byte not allowed in source at Line: 1, Column: 10".to_string(),
+        ),
+        err
+    );
+}

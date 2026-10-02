@@ -18,7 +18,7 @@
 //! Test SQL syntax, specific to [sqlparser::dialect::TeradataDialect].
 
 use sqlparser::dialect::{Dialect, GenericDialect, TeradataDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 use sqlparser::test_utils::all_dialects_where;
 use test_utils::TestedDialects;
 
@@ -118,10 +118,17 @@ fn parse_leading_comma_before_table_options() {
 
     let unsupported_dialects =
         all_dialects_where(|d| !d.supports_leading_comma_before_table_options());
-    assert_eq!(
-        unsupported_dialects.parse_sql_statements("CREATE TABLE foo, FALLBACK (id INT)"),
-        Err(ParserError::ParserError(
-            "Expected: end of statement, found: ,".to_string()
-        ))
-    );
+    for dialect in &unsupported_dialects.dialects {
+        let expected = if dialect.supports_create_table_without_column_list() {
+            "Expected: end of statement, found: ,"
+        } else {
+            "Expected: '(', AS, PARTITION OF, or LIKE after CREATE TABLE table name, found: ,"
+        };
+        assert_eq!(
+            Parser::parse_sql(dialect.as_ref(), "CREATE TABLE foo, FALLBACK (id INT)"),
+            Err(ParserError::ParserError(format!(
+                "{expected} at Line: 1, Column: 17"
+            )))
+        );
+    }
 }

@@ -393,12 +393,12 @@ fn test_placeholder() {
 #[test]
 fn parse_colon_does_not_start_json_access() {
     // SQLite rejects `SELECT c:se` (`near ":se": syntax error`); no `:` traversal.
-    for sql in ["SELECT c:se", "SELECT a:b FROM t"] {
+    for (sql, found) in [("SELECT c:se", ":se"), ("SELECT a:b FROM t", ":b")] {
         assert_eq!(
             sqlite().parse_sql_statements(sql),
-            Err(ParserError::ParserError(
-                "Expected: end of statement, found: :".to_string()
-            ))
+            Err(ParserError::ParserError(format!(
+                "Expected: end of statement, found: {found}"
+            )))
         );
     }
 
@@ -1998,4 +1998,56 @@ fn parse_bitwise_shift_precedence_boundaries() {
     ] {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
     }
+fn parse_sqlite_variable_tokens() {
+    for sql in [
+        "SELECT #a",
+        "SELECT @a",
+        "SELECT :a",
+        "SELECT $a",
+        "SELECT @2t",
+        "SELECT :9c",
+        "SELECT @a$",
+        "SELECT :a$",
+        "SELECT :a()",
+        "SELECT :a(x)",
+        "SELECT @a()",
+        "SELECT :::6",
+        "SELECT :a::b",
+        "SELECT $a::b",
+        "SELECT @::b",
+        "SELECT #::b",
+        "SELECT ($$::)",
+        "SELECT @\u{00e9}",
+        "SELECT :\u{00e9}",
+        "SELECT #\u{00e9}",
+        "SELECT :::\u{00e9}",
+    ] {
+        sqlite().verified_stmt(sql);
+    }
+    sqlite().one_statement_parses_to("SELECT @2t i", "SELECT @2t AS i");
+
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    for sql in ["SELECT :::6", "SELECT ($$::)"] {
+        assert!(generic.parse_sql_statements(sql).is_err(), "{sql}");
+    }
+    // SQLite ends a subscript at whitespace and rejects the token
+    assert!(sqlite().parse_sql_statements("SELECT $a(x y)").is_err());
+    // A vertical tab also ends a subscript in SQLite's tokenizer
+    assert!(sqlite()
+        .parse_sql_statements("SELECT :a(x\u{000b}y)")
+        .is_err());
+}
+
+#[test]
+fn parse_colon_is_not_an_operator() {
+    for sql in [
+        "SELECT b : c",
+        "SELECT a / b : c",
+        "SELECT b : c.d",
+        "SELECT b : \"c\"",
+        "SELECT b :c",
+    ] {
+        assert!(sqlite().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+    sqlite().verified_stmt("SELECT a FROM t WHERE b = :c");
 }

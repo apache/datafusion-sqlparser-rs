@@ -357,9 +357,12 @@ pub struct Parser<'a> {
     failed_derived_table_factor_positions: BTreeSet<usize>,
     /// Cached failures from the speculative subquery arm of [`Parser::parse_in`],
     /// which `IN` lists nested in a leading subquery would otherwise retry at
-    /// every level, taking 2^N time. Maps the arm's start to where a parsed
-    /// query lacked its `)`.
-    failed_in_subquery_positions: BTreeMap<usize, Option<usize>>,
+    /// every level, taking 2^N time. Maps the arm's start to the index where it
+    /// failed.
+    failed_in_subquery_positions: BTreeMap<usize, usize>,
+    /// The furthest-reaching failure of that arm, the one error a cached retry
+    /// can replay without the cache holding strings.
+    furthest_in_subquery_error: Option<(usize, ParserError)>,
 }
 
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
@@ -407,6 +410,7 @@ impl<'a> Parser<'a> {
             failed_reserved_word_prefix_positions: BTreeMap::new(),
             failed_derived_table_factor_positions: BTreeSet::new(),
             failed_in_subquery_positions: BTreeMap::new(),
+            furthest_in_subquery_error: None,
         }
     }
 
@@ -476,6 +480,7 @@ impl<'a> Parser<'a> {
         self.failed_reserved_word_prefix_positions.clear();
         self.failed_derived_table_factor_positions.clear();
         self.failed_in_subquery_positions.clear();
+        self.furthest_in_subquery_error = None;
         self
     }
 
@@ -4474,26 +4479,40 @@ impl<'a> Parser<'a> {
         // A leading query is the whole subquery only when `)` follows it,
         // otherwise it is the first item of a list, as in `IN ((SELECT 1), 2)`.
         let start = self.index;
-        // Where a parsed query lacked its `)`. Reported if the list fails no
-        // further in, since that error would sit inside the query.
-        let missing_rparen = match self.failed_in_subquery_positions.get(&start) {
-            Some(&cached) => cached,
+        // The arm's error is reported if the list fails at an earlier token,
+        // since the list error would then sit inside the query.
+        let query_failed_at = match self.failed_in_subquery_positions.get(&start) {
+            Some(&at) => at,
             None => {
-                let mut missing_rparen = None;
-                if let Some(subquery) = self.maybe_parse(|p| p.parse_query())? {
-                    if self.consume_token(&Token::RParen) {
+                let query = self.parse_query().and_then(|subquery| {
+                    self.expect_token(&Token::RParen)?;
+                    Ok(subquery)
+                });
+                match query {
+                    Ok(subquery) => {
                         return Ok(Expr::InSubquery {
                             expr: Box::new(expr),
                             subquery,
                             negated,
                         });
                     }
-                    missing_rparen = Some(self.index);
-                    self.index = start;
+                    Err(ParserError::RecursionLimitExceeded) => {
+                        return Err(ParserError::RecursionLimitExceeded);
+                    }
+                    Err(e) => {
+                        let at = self.index;
+                        self.index = start;
+                        self.failed_in_subquery_positions.insert(start, at);
+                        if self
+                            .furthest_in_subquery_error
+                            .as_ref()
+                            .is_none_or(|(furthest, _)| *furthest <= at)
+                        {
+                            self.furthest_in_subquery_error = Some((at, e));
+                        }
+                        at
+                    }
                 }
-                self.failed_in_subquery_positions
-                    .insert(start, missing_rparen);
-                missing_rparen
             }
         };
         let list = if self.dialect.supports_in_empty_list() {
@@ -4508,11 +4527,8 @@ impl<'a> Parser<'a> {
                 negated,
             }),
             Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
-            Err(e) => match missing_rparen {
-                Some(index) if self.index <= index => {
-                    self.index = index;
-                    self.expected_ref(")", self.peek_token_ref())
-                }
+            Err(e) => match &self.furthest_in_subquery_error {
+                Some((_, furthest)) if self.index < query_failed_at => Err(furthest.clone()),
                 _ => Err(e),
             },
         }

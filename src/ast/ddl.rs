@@ -6007,6 +6007,44 @@ impl From<AlterPolicy> for crate::ast::Statement {
     }
 }
 
+/// DROP RULE statement.
+///
+/// ```sql
+/// DROP RULE [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
+/// ```
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droprule.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropRule {
+    /// `true` when `IF EXISTS` was present.
+    pub if_exists: bool,
+    /// Name of the rule to drop.
+    pub name: Ident,
+    /// Name of the table the rule applies to.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Optional drop behavior (`CASCADE` or `RESTRICT`).
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+impl fmt::Display for DropRule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DROP RULE {if_exists}{name} ON {table_name}",
+            if_exists = if self.if_exists { "IF EXISTS " } else { "" },
+            name = self.name,
+            table_name = self.table_name
+        )?;
+        if let Some(behavior) = &self.drop_behavior {
+            write!(f, " {behavior}")?;
+        }
+        Ok(())
+    }
+}
+
 /// A `CREATE FOREIGN TABLE` statement.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
@@ -6053,6 +6091,12 @@ impl fmt::Display for CreateForeignTable {
             write!(f, " OPTIONS ({})", display_comma_separated(options))?;
         }
         Ok(())
+    }
+}
+
+impl From<DropRule> for crate::ast::Statement {
+    fn from(v: DropRule) -> Self {
+        crate::ast::Statement::DropRule(v)
     }
 }
 

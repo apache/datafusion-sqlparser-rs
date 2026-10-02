@@ -1024,6 +1024,35 @@ fn parse_n_prefix_not_national_string() {
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
 }
 
+#[test]
+fn parse_reserved_keywords_rejected_as_identifiers() {
+    let err = sqlite().parse_sql_statements("SELECT to").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected an expression, found: to".to_string()),
+        err
+    );
+
+    let err = sqlite().parse_sql_statements("SELECT on").unwrap_err();
+    assert_eq!(
+        ParserError::ParserError("Expected an expression, found: on".to_string()),
+        err
+    );
+
+    sqlite().parse_sql_statements("SELECT CAST").unwrap_err();
+    sqlite()
+        .parse_sql_statements("SELECT id, CASE FROM t")
+        .unwrap_err();
+    sqlite()
+        .parse_sql_statements("SELECT a = case FROM t")
+        .unwrap_err();
+    sqlite()
+        .parse_sql_statements("SELECT a FROM t WHERE a = select.b")
+        .unwrap_err();
+
+    sqlite().verified_stmt("SELECT name FROM t");
+    sqlite().verified_stmt("SELECT full FROM t");
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

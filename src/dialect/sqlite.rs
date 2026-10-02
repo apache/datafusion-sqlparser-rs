@@ -24,6 +24,69 @@ use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
+/// Keywords SQLite rejects as a bare expression identifier or function name, unlike most SQLite keywords.
+/// See <https://www.sqlite.org/lang_keywords.html>.
+const SQLITE_RESERVED_FOR_IDENTIFIER: &[Keyword] = &[
+    Keyword::ADD,
+    Keyword::ALL,
+    Keyword::ALTER,
+    Keyword::AND,
+    Keyword::AS,
+    Keyword::AUTOINCREMENT,
+    Keyword::BETWEEN,
+    Keyword::CASE,
+    Keyword::CAST,
+    Keyword::CHECK,
+    Keyword::COLLATE,
+    Keyword::COMMIT,
+    Keyword::CONSTRAINT,
+    Keyword::CREATE,
+    Keyword::DEFAULT,
+    Keyword::DEFERRABLE,
+    Keyword::DELETE,
+    Keyword::DISTINCT,
+    Keyword::DROP,
+    Keyword::ELSE,
+    Keyword::ESCAPE,
+    Keyword::EXCEPT,
+    Keyword::EXISTS,
+    Keyword::FOREIGN,
+    Keyword::FROM,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::IN,
+    Keyword::INDEX,
+    Keyword::INSERT,
+    Keyword::INTERSECT,
+    Keyword::INTO,
+    Keyword::IS,
+    Keyword::JOIN,
+    Keyword::LIMIT,
+    Keyword::NOT,
+    Keyword::NOTHING,
+    Keyword::NOTNULL,
+    Keyword::ON,
+    Keyword::OR,
+    Keyword::ORDER,
+    Keyword::PRIMARY,
+    Keyword::RAISE,
+    Keyword::REFERENCES,
+    Keyword::RETURNING,
+    Keyword::SELECT,
+    Keyword::SET,
+    Keyword::TABLE,
+    Keyword::THEN,
+    Keyword::TO,
+    Keyword::TRANSACTION,
+    Keyword::UNION,
+    Keyword::UNIQUE,
+    Keyword::UPDATE,
+    Keyword::USING,
+    Keyword::VALUES,
+    Keyword::WHEN,
+    Keyword::WHERE,
+];
+
 /// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 ///
 /// This dialect allows columns in a
@@ -141,5 +204,13 @@ impl Dialect for SQLiteDialect {
 
     fn supports_national_string_literal(&self) -> bool {
         false
+    }
+
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        SQLITE_RESERVED_FOR_IDENTIFIER.contains(&kw)
+    }
+
+    fn disallows_bare_identifier(&self, kw: Keyword) -> bool {
+        SQLITE_RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 }

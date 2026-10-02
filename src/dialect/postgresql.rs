@@ -33,7 +33,110 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
-use super::keywords::{self, RESERVED_FOR_IDENTIFIER};
+use super::keywords;
+
+/// Keywords PostgreSQL rejects as a bare expression identifier (catcode `R` or `T`), though the `T` subset may still appear as a function or type name.
+/// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>.
+const PG_RESERVED_FOR_IDENTIFIER: &[Keyword] = &[
+    Keyword::ALL,
+    Keyword::ANALYZE,
+    Keyword::AND,
+    Keyword::ANY,
+    Keyword::ARRAY,
+    Keyword::AS,
+    Keyword::ASC,
+    Keyword::ASYMMETRIC,
+    Keyword::AUTHORIZATION,
+    Keyword::BINARY,
+    Keyword::BOTH,
+    Keyword::CASE,
+    Keyword::CAST,
+    Keyword::CHECK,
+    Keyword::COLLATE,
+    Keyword::COLLATION,
+    Keyword::COLUMN,
+    Keyword::CONCURRENTLY,
+    Keyword::CONSTRAINT,
+    Keyword::CREATE,
+    Keyword::CROSS,
+    Keyword::CURRENT_CATALOG,
+    Keyword::CURRENT_DATE,
+    Keyword::CURRENT_ROLE,
+    Keyword::CURRENT_SCHEMA,
+    Keyword::CURRENT_TIME,
+    Keyword::CURRENT_TIMESTAMP,
+    Keyword::CURRENT_USER,
+    Keyword::DEFERRABLE,
+    Keyword::DESC,
+    Keyword::DISTINCT,
+    Keyword::DO,
+    Keyword::ELSE,
+    Keyword::END,
+    Keyword::EXCEPT,
+    Keyword::FALSE,
+    Keyword::FETCH,
+    Keyword::FOR,
+    Keyword::FOREIGN,
+    Keyword::FREEZE,
+    Keyword::FROM,
+    Keyword::FULL,
+    Keyword::GRANT,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::ILIKE,
+    Keyword::IN,
+    Keyword::INITIALLY,
+    Keyword::INNER,
+    Keyword::INTERSECT,
+    Keyword::INTO,
+    Keyword::IS,
+    Keyword::JOIN,
+    Keyword::LATERAL,
+    Keyword::LEADING,
+    Keyword::LEFT,
+    Keyword::LIKE,
+    Keyword::LIMIT,
+    Keyword::LOCALTIME,
+    Keyword::LOCALTIMESTAMP,
+    Keyword::NATURAL,
+    Keyword::NOT,
+    Keyword::NOTNULL,
+    Keyword::NULL,
+    Keyword::OFFSET,
+    Keyword::ON,
+    Keyword::ONLY,
+    Keyword::OR,
+    Keyword::ORDER,
+    Keyword::OUTER,
+    Keyword::OVERLAPS,
+    Keyword::PLACING,
+    Keyword::PRIMARY,
+    Keyword::REFERENCES,
+    Keyword::RETURNING,
+    Keyword::RIGHT,
+    Keyword::SELECT,
+    Keyword::SESSION_USER,
+    Keyword::SIMILAR,
+    Keyword::SOME,
+    Keyword::SYMMETRIC,
+    Keyword::SYSTEM_USER,
+    Keyword::TABLE,
+    Keyword::TABLESAMPLE,
+    Keyword::THEN,
+    Keyword::TO,
+    Keyword::TRAILING,
+    Keyword::TRUE,
+    Keyword::UNION,
+    Keyword::UNIQUE,
+    Keyword::USER,
+    Keyword::USING,
+    Keyword::VARIADIC,
+    Keyword::VERBOSE,
+    Keyword::WHEN,
+    Keyword::WHERE,
+    Keyword::WINDOW,
+    Keyword::WITH,
+];
 
 /// Keywords in [`keywords::RESERVED_FOR_TABLE_ALIAS`] because of other dialects, yet are safe for aliasing in PostgreSQL.
 /// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>.
@@ -98,11 +201,12 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
-        if matches!(kw, Keyword::INTERVAL) {
-            false
-        } else {
-            RESERVED_FOR_IDENTIFIER.contains(&kw)
-        }
+        // EXISTS(...) is always PostgreSQL's subquery form, never a function call.
+        kw == Keyword::EXISTS || PG_RESERVED_FOR_IDENTIFIER.contains(&kw)
+    }
+
+    fn disallows_bare_identifier(&self, kw: Keyword) -> bool {
+        PG_RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
     fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {

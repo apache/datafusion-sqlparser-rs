@@ -1117,6 +1117,53 @@ fn parse_create_table_options_list() {
     }
 }
 
+#[test]
+fn parse_nested_dml_rejected() {
+    let body_error = |found: &str| {
+        format!("Expected: SELECT, VALUES, or a subquery in the query body, found: {found}")
+    };
+    for (sql, error) in [
+        ("INSERT INTO u INSERT INTO u SELECT 1", body_error("INSERT")),
+        (
+            "INSERT INTO u (a) INSERT INTO u SELECT 1",
+            body_error("INSERT"),
+        ),
+        (
+            "INSERT INTO u WITH x AS (SELECT 1) INSERT INTO u SELECT 1",
+            body_error("INSERT"),
+        ),
+        (
+            "SELECT * FROM (INSERT INTO u SELECT 1)",
+            "Expected: joined table, found: u".to_string(),
+        ),
+        (
+            "WITH x AS (INSERT INTO u SELECT 1) SELECT 1",
+            body_error("INSERT"),
+        ),
+        (
+            "WITH x AS (UPDATE u SET a = 1) SELECT 1",
+            body_error("UPDATE"),
+        ),
+        ("WITH x AS (DELETE FROM u) SELECT 1", body_error("DELETE")),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error)),
+            "{sql}"
+        );
+    }
+
+    let nested_dml = all_dialects_where(|d| d.supports_nested_dml_query());
+    nested_dml.verified_stmt("INSERT INTO u (a) INSERT INTO u SELECT 1");
+    nested_dml.verified_stmt("SELECT * FROM (INSERT INTO u SELECT 1)");
+    nested_dml.verified_stmt("WITH x AS (INSERT INTO u SELECT 1) SELECT 1");
+
+    sqlite().verified_stmt("WITH x AS (SELECT 1) INSERT INTO u SELECT * FROM x");
+    sqlite().verified_stmt("WITH x AS (SELECT 1) UPDATE u SET a = 2");
+    sqlite().verified_stmt("WITH x AS (SELECT 1) DELETE FROM u");
+    sqlite().verified_stmt("INSERT INTO u (a) WITH x AS (SELECT 1) SELECT * FROM x");
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

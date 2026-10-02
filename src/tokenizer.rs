@@ -2128,13 +2128,16 @@ impl<'a> Tokenizer<'a> {
         starting_loc: Location,
         chars: &mut State,
     ) -> Result<String, TokenizerError> {
-        if let Some(s) =
-            unescape_single_quoted_string(chars, self.dialect.disallows_raw_nul_in_quoted_source())
-        {
-            return Ok(s);
+        match unescape_single_quoted_string(
+            chars,
+            self.dialect.disallows_raw_nul_in_quoted_source(),
+        ) {
+            Ok(s) => Ok(s),
+            Err(Some(nul_loc)) => {
+                self.tokenizer_error(nul_loc, "Raw NUL byte not allowed in source")
+            }
+            Err(None) => self.tokenizer_error(starting_loc, "Unterminated encoded string literal"),
         }
-
-        self.tokenizer_error(starting_loc, "Unterminated encoded string literal")
     }
 
     /// Reads a string literal quoted by a single or triple quote characters.
@@ -2477,7 +2480,10 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
     s
 }
 
-fn unescape_single_quoted_string(chars: &mut State<'_>, reject_raw_nul: bool) -> Option<String> {
+fn unescape_single_quoted_string(
+    chars: &mut State<'_>,
+    reject_raw_nul: bool,
+) -> Result<String, Option<Location>> {
     Unescape::new(chars, reject_raw_nul).unescape()
 }
 
@@ -2493,12 +2499,16 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
             reject_raw_nul,
         }
     }
-    fn unescape(mut self) -> Option<String> {
+    /// `Err(Some(location))` rejects a raw NUL at that location, `Err(None)` is any other failure.
+    fn unescape(mut self) -> Result<String, Option<Location>> {
         let mut unescaped = String::new();
 
         self.chars.next();
 
-        while let Some(c) = self.chars.next() {
+        while let Some(&c) = self.chars.peek() {
+            let loc = self.chars.location();
+            self.chars.next();
+
             if c == '\'' {
                 // case: ''''
                 if self.chars.peek().map(|c| *c == '\'').unwrap_or(false) {
@@ -2506,34 +2516,38 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
                     unescaped.push('\'');
                     continue;
                 }
-                return Some(unescaped);
+                return Ok(unescaped);
             }
 
             if c != '\\' {
                 if self.reject_raw_nul && c == '\0' {
-                    return None;
+                    return Err(Some(loc));
                 }
                 unescaped.push(c);
                 continue;
             }
 
-            let c = match self.chars.next()? {
+            let c = match self.chars.next() {
+                Some(c) => c,
+                None => return Err(None),
+            };
+            let c = match c {
                 'b' => '\u{0008}',
                 'f' => '\u{000C}',
                 'n' => '\n',
                 'r' => '\r',
                 't' => '\t',
-                'u' => self.unescape_unicode_16()?,
-                'U' => self.unescape_unicode_32()?,
-                'x' => self.unescape_hex()?,
-                c if c.is_digit(8) => self.unescape_octal(c)?,
+                'u' => self.unescape_unicode_16().ok_or(None)?,
+                'U' => self.unescape_unicode_32().ok_or(None)?,
+                'x' => self.unescape_hex().ok_or(None)?,
+                c if c.is_digit(8) => self.unescape_octal(c).ok_or(None)?,
                 c => c,
             };
 
-            unescaped.push(Self::check_null(c)?);
+            unescaped.push(Self::check_null(c).ok_or(None)?);
         }
 
-        None
+        Err(None)
     }
 
     #[inline]
@@ -3661,8 +3675,11 @@ mod tests {
         assert_eq!(
             Tokenizer::new(&PostgreSqlDialect {}, "SELECT E'a\0b'").tokenize(),
             Err(TokenizerError {
-                message: "Unterminated encoded string literal".to_string(),
-                location: Location { line: 1, column: 8 },
+                message: "Raw NUL byte not allowed in source".to_string(),
+                location: Location {
+                    line: 1,
+                    column: 11
+                },
             })
         );
     }
@@ -3894,7 +3911,7 @@ mod tests {
         };
 
         assert_eq!(
-            unescape_single_quoted_string(&mut state, false),
+            unescape_single_quoted_string(&mut state, false).ok(),
             expected.map(|s| s.to_string())
         );
     }

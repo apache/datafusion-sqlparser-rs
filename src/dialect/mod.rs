@@ -1522,7 +1522,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect rejects a raw NUL byte inside quoted strings, identifiers, or dollar-quoted strings, since neither PostgreSQL nor SQLite can carry one in their SQL text framing.
+    /// Returns true if the dialect rejects a raw NUL byte inside quoted strings, identifiers, or dollar-quoted strings.
     fn disallows_raw_nul_in_quoted_source(&self) -> bool {
         false
     }

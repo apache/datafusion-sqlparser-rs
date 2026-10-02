@@ -1356,9 +1356,9 @@ impl<'a> Parser<'a> {
                             // SQLite has single-quoted identifiers
                             id_parts.push(Ident::with_quote('\'', s))
                         }
-                        Token::Placeholder(s) => {
-                            // Snowflake uses $1, $2, etc. for positional column references
-                            // in staged data queries like: SELECT t.$1 FROM @stage t
+                        Token::Placeholder(s)
+                            if self.dialect.supports_placeholder_as_field_name() =>
+                        {
                             id_parts.push(Ident::new(s))
                         }
                         Token::Mul => {
@@ -2108,7 +2108,7 @@ impl<'a> Parser<'a> {
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed string
                     }
-                    Token::Placeholder(s) => {
+                    Token::Placeholder(s) if self.dialect.supports_placeholder_as_field_name() => {
                         // Snowflake uses $1, $2, etc. for positional column references
                         // in staged data queries like: SELECT t.$1 FROM @stage t
                         let expr = Expr::Identifier(Ident::with_span(next_token.span, s));
@@ -2140,6 +2140,15 @@ impl<'a> Parser<'a> {
                             self.maybe_parse(|parser| {
                                 let expr = parser.parse_prefix()?;
                                 match &expr {
+                                    Expr::Value(ValueWithSpan {
+                                        value: Value::Placeholder(_),
+                                        ..
+                                    }) if !parser.dialect.supports_placeholder_as_field_name() => {
+                                        parser.expected_ref(
+                                            "an identifier or value",
+                                            parser.peek_token_ref(),
+                                        )
+                                    }
                                     Expr::CompoundFieldAccess { .. }
                                     | Expr::CompoundIdentifier(_)
                                     | Expr::Identifier(_)

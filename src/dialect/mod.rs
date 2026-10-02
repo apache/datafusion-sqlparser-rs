@@ -511,6 +511,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a `$1`-style placeholder directly after a period is a field
+    /// name, such as the positional column references in Snowflake staged data
+    /// queries `SELECT t.$1 FROM @stage t`.
+    fn supports_placeholder_as_field_name(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports numbers containing underscores, e.g. `10_000_000`
     fn supports_numeric_literal_underscores(&self) -> bool {
         false

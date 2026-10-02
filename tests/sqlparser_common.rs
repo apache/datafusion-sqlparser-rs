@@ -20433,3 +20433,41 @@ fn parse_bang_not_renders_apart_from_operand() {
     dialects.verified_stmt("SET eaac_cion = ! !o");
     dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
 }
+
+#[test]
+fn parse_placeholder_as_field_name() {
+    let supported = all_dialects_where(|d| d.supports_placeholder_as_field_name());
+    let select = supported.verified_only_select("SELECT t.$1, t.$2 FROM t");
+    assert_eq!(
+        select.projection,
+        vec![
+            SelectItem::UnnamedExpr(Expr::CompoundIdentifier(vec![
+                Ident::new("t"),
+                Ident::new("$1")
+            ])),
+            SelectItem::UnnamedExpr(Expr::CompoundIdentifier(vec![
+                Ident::new("t"),
+                Ident::new("$2")
+            ])),
+        ]
+    );
+    supported.verified_stmt("SELECT (t).$1 FROM t");
+    supported.verified_stmt("SELECT t.$name FROM t");
+
+    let unsupported = all_dialects_where(|d| {
+        !d.supports_placeholder_as_field_name() && !d.is_identifier_start('$')
+    });
+    for sql in [
+        "SELECT t.$name FROM t",
+        "SELECT t.$1 FROM t",
+        "SELECT c.$ame FROM c",
+        "SELECT (t).$1 FROM t",
+        "SELECT (t).$name FROM t",
+    ] {
+        assert!(unsupported.parse_sql_statements(sql).is_err());
+    }
+
+    // Bare placeholders are unaffected by the capability.
+    unsupported.verified_stmt("SELECT $1, $2 FROM t");
+    unsupported.verified_only_select("SELECT * FROM student WHERE id = $Id1");
+}

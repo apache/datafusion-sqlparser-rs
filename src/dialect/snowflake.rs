@@ -698,6 +698,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See <https://docs.snowflake.com/en/user-guide/querying-stage>
+    fn supports_placeholder_as_field_name(&self) -> bool {
+        true
+    }
+
     /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     fn supports_select_wildcard_replace(&self) -> bool {
         true

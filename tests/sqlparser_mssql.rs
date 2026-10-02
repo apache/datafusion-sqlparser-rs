@@ -2963,3 +2963,70 @@ fn parse_create_proc() {
         .expect_err("PROC should remain MSSQL-specific");
     ms_and_generic().verified_stmt("SELECT proc FROM jobs");
 }
+
+#[test]
+fn parse_mssql_deferred_join_conditions() {
+    let sql = "SELECT a.id FROM a LEFT JOIN b INNER JOIN c ON b.id = c.id ON a.id = b.id";
+    let statement = ms().one_statement_parses_to(
+        sql,
+        "SELECT a.id FROM a LEFT JOIN (b INNER JOIN c ON b.id = c.id) ON a.id = b.id",
+    );
+    let Statement::Query(query) = statement else {
+        unreachable!()
+    };
+    let select = query.body.as_select().unwrap();
+    let outer_join = only(&only(&select.from).joins);
+    assert!(matches!(&outer_join.join_operator,
+        JoinOperator::Left(JoinConstraint::On(expr)) | JoinOperator::LeftOuter(JoinConstraint::On(expr))
+            if expr.to_string() == "a.id = b.id"));
+    let TableFactor::NestedJoin {
+        table_with_joins,
+        alias,
+    } = &outer_join.relation
+    else {
+        panic!("expected right-nested join");
+    };
+    assert!(alias.is_none());
+    let inner_join = only(&table_with_joins.joins);
+    assert!(matches!(&inner_join.join_operator,
+        JoinOperator::Join(JoinConstraint::On(expr)) | JoinOperator::Inner(JoinConstraint::On(expr))
+            if expr.to_string() == "b.id = c.id"));
+
+    for (sql, expected) in [
+        (
+            "SELECT * FROM a JOIN b JOIN c ON b.id = c.id ON a.id = b.id",
+            "SELECT * FROM a JOIN (b JOIN c ON b.id = c.id) ON a.id = b.id",
+        ),
+        (
+            "SELECT * FROM a FULL JOIN b RIGHT JOIN c ON b.id = c.id ON a.id = b.id",
+            "SELECT * FROM a FULL JOIN (b RIGHT JOIN c ON b.id = c.id) ON a.id = b.id",
+        ),
+        (
+            "SELECT * FROM a JOIN b JOIN c JOIN d ON c.id = d.id ON b.id = c.id ON a.id = b.id",
+            "SELECT * FROM a JOIN (b JOIN (c JOIN d ON c.id = d.id) ON b.id = c.id) ON a.id = b.id",
+        ),
+    ] {
+        ms().one_statement_parses_to(sql, expected);
+    }
+}
+
+#[test]
+fn parse_mssql_immediate_join_conditions_remain_flat() {
+    let sql = "SELECT * FROM a LEFT JOIN b ON a.id = b.id INNER JOIN c ON b.id = c.id";
+    let select = ms_and_generic().verified_only_select(sql);
+    assert_eq!(select.from[0].joins.len(), 2);
+    assert!(select.from[0]
+        .joins
+        .iter()
+        .all(|join| matches!(join.relation, TableFactor::Table { .. })));
+}
+
+#[test]
+fn parse_mssql_deferred_join_rejects_malformed_condition() {
+    for sql in [
+        "SELECT * FROM a JOIN b JOIN c ON b.id = ON a.id = b.id",
+        "SELECT * FROM a LEFT JOIN b INNER JOIN c ON b.id = c.id ON",
+    ] {
+        assert!(ms().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}

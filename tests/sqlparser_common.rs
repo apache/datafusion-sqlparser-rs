@@ -20699,3 +20699,35 @@ fn parse_cte_materialization() {
         }
     }
 }
+
+#[test]
+fn parse_in_reports_furthest_failure() {
+    for (sql, expected) in [
+        (
+            "SELECT * FROM t WHERE x IN (SELECT y FROM u WHERE",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "SELECT * FROM t WHERE x IN (SELECT y FROM u ORDER BY",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "SELECT * FROM t WHERE x IN (SELECT 1 FROM u WHERE y IN (SELECT 2 FROM v",
+            "Expected: ), found: EOF",
+        ),
+        // The inner `IN` is read again for the outer list after its subquery
+        // arm was cached as failed.
+        (
+            "SELECT * FROM t WHERE x IN ((SELECT 1 FROM u WHERE y IN (SELECT 2 FROM v WHERE",
+            "Expected: an expression, found: EOF",
+        ),
+        // The list gets further than the query.
+        ("SELECT * FROM t WHERE x IN (a b", "Expected: ), found: b"),
+    ] {
+        assert_eq!(
+            ParserError::ParserError(expected.to_string()),
+            parse_sql_statements(sql).unwrap_err(),
+            "{sql}"
+        );
+    }
+}

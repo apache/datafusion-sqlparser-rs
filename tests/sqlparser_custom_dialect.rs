@@ -18,7 +18,7 @@
 //! Test the ability for dialects to override parsing
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Statement, Value},
+    ast::{BinaryOperator, Commit, Expr, Statement, Value},
     dialect::Dialect,
     keywords::Keyword,
     parser::{Parser, ParserError},
@@ -116,11 +116,11 @@ fn custom_statement_parser() -> Result<(), ParserError> {
                 for _ in 0..3 {
                     let _ = parser.next_token();
                 }
-                Some(Ok(Statement::Commit {
+                Some(Ok(Statement::Commit(Box::new(Commit {
                     chain: false,
                     end: false,
                     modifier: None,
-                }))
+                }))))
             } else {
                 None
             }

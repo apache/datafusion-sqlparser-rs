@@ -1522,6 +1522,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect rejects a raw NUL byte inside quoted strings, identifiers, or dollar-quoted strings, since neither PostgreSQL nor SQLite can carry one in their SQL text framing.
+    fn disallows_raw_nul_in_quoted_source(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports array type definition with brackets with
     /// an optional size. For example:
     /// ```CREATE TABLE my_table (arr1 INT[], arr2 INT[3])```

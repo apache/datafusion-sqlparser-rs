@@ -1011,6 +1011,20 @@ fn parse_n_prefix_not_national_string() {
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
 }
 
+#[test]
+fn parse_del_not_identifier() {
+    assert_eq!(
+        sqlite()
+            .parse_sql_statements("SELECT a\u{7f}b FROM t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: \u{7f}".to_string())
+    );
+
+    sqlite().verified_stmt("SELECT \"a\u{7f}b\" FROM t");
+
+    sqlite().verified_stmt("SELECT a\u{80}b FROM t");
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

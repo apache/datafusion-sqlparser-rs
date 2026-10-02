@@ -51,7 +51,7 @@ impl Dialect for SQLiteDialect {
         ch.is_ascii_lowercase()
             || ch.is_ascii_uppercase()
             || ch == '_'
-            || ('\u{007f}'..='\u{ffff}').contains(&ch)
+            || ('\u{0080}'..='\u{ffff}').contains(&ch)
     }
 
     fn supports_filter_during_aggregation(&self) -> bool {

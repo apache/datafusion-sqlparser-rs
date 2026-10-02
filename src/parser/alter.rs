@@ -19,10 +19,11 @@ use super::{Parser, ParserError};
 use crate::{
     ast::{
         helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
-        AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterUser,
-        AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
-        AlterUserPassword, AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind,
-        Password, ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
+        AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterTrigger,
+        AlterTriggerOperation, AlterUser, AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation,
+        AlterUserModifyMfaMethod, AlterUserPassword, AlterUserRemoveRoleDelegation,
+        AlterUserSetPolicy, Expr, MfaMethodKind, Password, ResetConfig, RoleOption, SetConfigValue,
+        Statement, UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -101,6 +102,50 @@ impl Parser<'_> {
                 },
             })
         }
+    }
+
+    /// Parse ALTER TRIGGER statement
+    /// ```sql
+    /// ALTER TRIGGER trigger_name ON table_name RENAME TO new_name
+    /// or
+    /// ALTER TRIGGER trigger_name ON table_name [ NO ] DEPENDS ON EXTENSION extension_name
+    /// ```
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertrigger.html)
+    pub fn parse_alter_trigger(&mut self) -> Result<AlterTrigger, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+
+        let operation = if self.parse_keyword(Keyword::RENAME) {
+            self.expect_keyword_is(Keyword::TO)?;
+            AlterTriggerOperation::Rename {
+                new_name: self.parse_identifier()?,
+            }
+        } else {
+            let no = self.parse_keyword(Keyword::NO);
+            if !self.parse_keyword(Keyword::DEPENDS) {
+                return self.expected_ref(
+                    if no {
+                        "DEPENDS after NO"
+                    } else {
+                        "RENAME, DEPENDS or NO DEPENDS after ALTER TRIGGER"
+                    },
+                    self.peek_token_ref(),
+                );
+            }
+            self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
+            AlterTriggerOperation::DependsOnExtension {
+                no,
+                extension_name: self.parse_object_name(false)?,
+            }
+        };
+
+        Ok(AlterTrigger {
+            name,
+            table_name,
+            operation,
+        })
     }
 
     /// Parse an `ALTER CONNECTOR` statement

@@ -988,6 +988,93 @@ fn test_non_bmp_identifiers() {
 }
 
 #[test]
+fn sqlite_is_operators() {
+    for (sql, op) in [
+        ("a IS b", BinaryOperator::Is),
+        ("a IS NOT b", BinaryOperator::IsNot),
+    ] {
+        assert_eq!(
+            sqlite().verified_expr(sql),
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }
+        );
+    }
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b + c"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Is,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Identifier(Ident::new("c"))),
+            }),
+        }
+    );
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b AND c IS NOT d"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Is,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("c"))),
+                op: BinaryOperator::IsNot,
+                right: Box::new(Expr::Identifier(Ident::new("d"))),
+            }),
+        }
+    );
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b = c"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Is,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("c"))),
+        }
+    );
+
+    match sqlite().verified_expr("a IS b IN (1)") {
+        Expr::InList {
+            expr,
+            list,
+            negated,
+        } => {
+            assert!(!negated);
+            assert_eq!(
+                *expr,
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("a"))),
+                    op: BinaryOperator::Is,
+                    right: Box::new(Expr::Identifier(Ident::new("b"))),
+                }
+            );
+            assert_eq!(list.len(), 1);
+            assert!(matches!(
+                list[0],
+                Expr::Value(ValueWithSpan {
+                    value: Value::Number(_, _),
+                    ..
+                })
+            ));
+        }
+        other => panic!("expected InList on top, got {other:?}"),
+    }
+}
+
+#[test]
 fn parse_create_table_string_column_names() {
     sqlite().verified_stmt("CREATE TABLE t ('a')");
     sqlite().verified_stmt(r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL)"#);

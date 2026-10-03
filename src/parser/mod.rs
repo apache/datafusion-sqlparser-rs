@@ -14799,6 +14799,7 @@ impl<'a> Parser<'a> {
             .into())
         } else {
             let body = self.parse_query_body(self.dialect.prec_unknown())?;
+            let clauses_loc = self.peek_token_ref().span.start;
 
             let order_by = self.parse_optional_order_by()?;
 
@@ -14850,7 +14851,7 @@ impl<'a> Parser<'a> {
                 Vec::new()
             };
 
-            Ok(Query {
+            let query = Query {
                 with,
                 body,
                 order_by,
@@ -14861,9 +14862,57 @@ impl<'a> Parser<'a> {
                 settings,
                 format_clause,
                 pipe_operators,
+            };
+            if !self
+                .dialect
+                .supports_duplicate_clauses_on_parenthesized_query()
+            {
+                Self::check_parenthesized_query_clauses(&query, clauses_loc)?;
             }
-            .into())
+            Ok(query.into())
         }
+    }
+
+    /// Rejects a clause that `query` sets again on the parenthesized query forming its body.
+    fn check_parenthesized_query_clauses(query: &Query, loc: Location) -> Result<(), ParserError> {
+        fn has_offset(query: &Query) -> bool {
+            matches!(
+                query.limit_clause,
+                Some(LimitClause::LimitOffset {
+                    offset: Some(_),
+                    ..
+                }) | Some(LimitClause::OffsetCommaLimit { .. })
+            )
+        }
+        fn has_limit(query: &Query) -> bool {
+            query.fetch.is_some()
+                || matches!(
+                    query.limit_clause,
+                    Some(LimitClause::LimitOffset { limit: Some(_), .. })
+                        | Some(LimitClause::OffsetCommaLimit { .. })
+                )
+        }
+
+        let mut body = &query.body;
+        while let SetExpr::Query(inner) = body.as_ref() {
+            if query.order_by.is_some() && inner.order_by.is_some() {
+                return parser_err!("multiple ORDER BY clauses not allowed", loc);
+            }
+            if has_offset(query) && has_offset(inner) {
+                return parser_err!("multiple OFFSET clauses not allowed", loc);
+            }
+            if has_limit(query) && has_limit(inner) {
+                return parser_err!("multiple LIMIT clauses not allowed", loc);
+            }
+            if let (Some(with), Some(_)) = (&query.with, &inner.with) {
+                return parser_err!(
+                    "multiple WITH clauses not allowed",
+                    with.with_token.0.span.start
+                );
+            }
+            body = &inner.body;
+        }
+        Ok(())
     }
 
     fn parse_pipe_operators(&mut self) -> Result<Vec<PipeOperator>, ParserError> {

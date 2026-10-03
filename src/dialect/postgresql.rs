@@ -324,6 +324,11 @@ impl Dialect for PostgreSqlDialect {
         false
     }
 
+    /// See `insertSelectOptions` in <https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/parser/gram.y>
+    fn supports_duplicate_clauses_on_parenthesized_query(&self) -> bool {
+        false
+    }
+
     /// Postgres supports `NOTNULL` as an alias for `IS NOT NULL`
     /// See: <https://www.postgresql.org/docs/17/functions-comparison.html>
     fn supports_notnull_operator(&self) -> bool {

@@ -741,6 +741,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a parenthesized query may set a clause that the enclosing query sets again, as in `(SELECT 1 LIMIT 1) LIMIT 2`.
+    fn supports_duplicate_clauses_on_parenthesized_query(&self) -> bool {
+        true
+    }
+
     /// Return true if the dialect supports "FROM-first" inserts.
     ///
     /// Example:

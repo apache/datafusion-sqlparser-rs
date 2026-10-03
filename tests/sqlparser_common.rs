@@ -20433,3 +20433,73 @@ fn parse_bang_not_renders_apart_from_operand() {
     dialects.verified_stmt("SET eaac_cion = ! !o");
     dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
 }
+
+#[test]
+fn parse_duplicate_clauses_on_parenthesized_query() {
+    let duplicates = [
+        ("(SELECT n FROM t LIMIT 2) LIMIT 1", Some(("LIMIT", 27))),
+        (
+            "(SELECT n FROM t ORDER BY n) ORDER BY n DESC",
+            Some(("ORDER BY", 30)),
+        ),
+        ("(SELECT n FROM t OFFSET 1) OFFSET 1", Some(("OFFSET", 28))),
+        (
+            "(SELECT n FROM t LIMIT 2) FETCH FIRST 1 ROWS ONLY",
+            Some(("LIMIT", 27)),
+        ),
+        (
+            "(SELECT n FROM t FETCH FIRST 2 ROWS ONLY) LIMIT 1",
+            Some(("LIMIT", 43)),
+        ),
+        (
+            "(SELECT n FROM t LIMIT 2 OFFSET 1) OFFSET 1",
+            Some(("OFFSET", 36)),
+        ),
+        ("((SELECT n FROM t LIMIT 2)) LIMIT 1", Some(("LIMIT", 29))),
+        (
+            "WITH x AS (SELECT 1) (WITH y AS (SELECT 2) SELECT 1)",
+            Some(("WITH", 1)),
+        ),
+        (
+            "WITH c AS ((SELECT 1 ORDER BY 1) ORDER BY 1) SELECT * FROM c",
+            Some(("ORDER BY", 34)),
+        ),
+        (
+            "SELECT * FROM ((SELECT n FROM t LIMIT 2) LIMIT 1) AS s",
+            None,
+        ),
+    ];
+
+    let rejecting = all_dialects_where(|d| !d.supports_duplicate_clauses_on_parenthesized_query());
+    for (sql, expected) in duplicates {
+        for dialect in &rejecting.dialects {
+            let err = Parser::parse_sql(dialect.as_ref(), sql).unwrap_err();
+            if let Some((clause, column)) = expected {
+                assert_eq!(
+                    err,
+                    ParserError::ParserError(format!(
+                        "multiple {clause} clauses not allowed at Line: 1, Column: {column}"
+                    )),
+                    "{sql}"
+                );
+            }
+        }
+    }
+
+    let accepting = all_dialects_where(|d| d.supports_duplicate_clauses_on_parenthesized_query());
+    for (sql, _) in duplicates {
+        accepting.verified_stmt(sql);
+    }
+
+    for sql in [
+        "(SELECT n FROM t ORDER BY n LIMIT 2) OFFSET 1",
+        "SELECT n FROM (SELECT n FROM t LIMIT 2) AS s LIMIT 1",
+        "(SELECT 1 LIMIT 1) UNION (SELECT 2 LIMIT 1) LIMIT 1",
+        "(SELECT 1 ORDER BY 1) UNION SELECT 2 ORDER BY 1",
+        "WITH x AS (SELECT 1) (SELECT 1 ORDER BY 1 LIMIT 1)",
+        "(WITH y AS (SELECT 2) SELECT 1) ORDER BY 1 LIMIT 1",
+        "(SELECT n FROM t ORDER BY n FOR UPDATE) FOR SHARE",
+    ] {
+        rejecting.verified_stmt(sql);
+    }
+}

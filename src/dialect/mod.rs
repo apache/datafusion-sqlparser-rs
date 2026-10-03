@@ -1120,6 +1120,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `TABLE` queries accept names with more than two parts.
+    fn supports_multipart_table_query_name(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `ARRAY` type without
     /// specifying an element type.
     ///

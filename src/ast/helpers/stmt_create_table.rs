@@ -28,8 +28,8 @@ use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions,
     DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
     InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
-    RowAccessPolicy, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableConstraint, TableVersion, Tag, WithData, WrappedCollection,
+    RowAccessPolicy, SqliteTableOptions, Statement, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WithData, WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -103,8 +103,8 @@ pub struct CreateTableBuilder {
     pub location: Option<String>,
     /// Optional `AS SELECT` query for the table.
     pub query: Option<Box<Query>>,
-    /// Whether `WITHOUT ROWID` is set.
-    pub without_rowid: bool,
+    /// SQLite `table-options`.
+    pub sqlite_table_options: SqliteTableOptions,
     /// Optional `LIKE` clause kind.
     pub like: Option<CreateTableLikeKind>,
     /// Optional `CLONE` source object name.
@@ -133,8 +133,6 @@ pub struct CreateTableBuilder {
     pub partition_of: Option<ObjectName>,
     /// Range of values associated with the partition (`FOR VALUES`)
     pub for_values: Option<ForValues>,
-    /// `STRICT` table flag.
-    pub strict: bool,
     /// Whether to copy grants from the source.
     pub copy_grants: bool,
     /// Optional flag for schema evolution support.
@@ -219,7 +217,7 @@ impl CreateTableBuilder {
             file_format: None,
             location: None,
             query: None,
-            without_rowid: false,
+            sqlite_table_options: SqliteTableOptions::default(),
             like: None,
             clone: None,
             version: None,
@@ -234,7 +232,6 @@ impl CreateTableBuilder {
             inherits: None,
             partition_of: None,
             for_values: None,
-            strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
             change_tracking: None,
@@ -356,9 +353,9 @@ impl CreateTableBuilder {
         self.query = query;
         self
     }
-    /// Set `WITHOUT ROWID` option.
-    pub fn without_rowid(mut self, without_rowid: bool) -> Self {
-        self.without_rowid = without_rowid;
+    /// Set the SQLite `table-options` list.
+    pub fn sqlite_table_options(mut self, sqlite_table_options: SqliteTableOptions) -> Self {
+        self.sqlite_table_options = sqlite_table_options;
         self
     }
     /// Set `LIKE` clause for the table.
@@ -432,12 +429,6 @@ impl CreateTableBuilder {
     /// Sets the range of values associated with the partition.
     pub fn for_values(mut self, for_values: Option<ForValues>) -> Self {
         self.for_values = for_values;
-        self
-    }
-
-    /// Set `STRICT` option.
-    pub fn strict(mut self, strict: bool) -> Self {
-        self.strict = strict;
         self
     }
     /// Enable copying grants from source object.
@@ -620,7 +611,7 @@ impl CreateTableBuilder {
             file_format: self.file_format,
             location: self.location,
             query: self.query,
-            without_rowid: self.without_rowid,
+            sqlite_table_options: self.sqlite_table_options,
             like: self.like,
             clone: self.clone,
             version: self.version,
@@ -635,7 +626,6 @@ impl CreateTableBuilder {
             inherits: self.inherits,
             partition_of: self.partition_of,
             for_values: self.for_values,
-            strict: self.strict,
             copy_grants: self.copy_grants,
             enable_schema_evolution: self.enable_schema_evolution,
             change_tracking: self.change_tracking,
@@ -706,7 +696,7 @@ impl From<CreateTable> for CreateTableBuilder {
             file_format: table.file_format,
             location: table.location,
             query: table.query,
-            without_rowid: table.without_rowid,
+            sqlite_table_options: table.sqlite_table_options,
             like: table.like,
             clone: table.clone,
             version: table.version,
@@ -721,7 +711,6 @@ impl From<CreateTable> for CreateTableBuilder {
             inherits: table.inherits,
             partition_of: table.partition_of,
             for_values: table.for_values,
-            strict: table.strict,
             copy_grants: table.copy_grants,
             enable_schema_evolution: table.enable_schema_evolution,
             change_tracking: table.change_tracking,

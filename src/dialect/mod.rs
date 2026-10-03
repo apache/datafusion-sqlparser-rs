@@ -132,7 +132,7 @@ pub use self::teradata::TeradataDialect;
 #[cfg(feature = "derive-dialect")]
 pub use sqlparser_derive::derive_dialect;
 
-use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
+use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectName, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -1017,6 +1017,19 @@ pub trait Dialect: Debug + Any {
     ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
         // return None to fall back to the default behavior
         Ok(None)
+    }
+
+    /// Dialect-specific parser for the name of a table in a table factor,
+    /// e.g. `t` in `SELECT * FROM t AS a`. The rest of the table factor,
+    /// such as the alias, is parsed by the default parser.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
+    fn parse_table_factor_name(
+        &self,
+        _parser: &mut Parser,
+    ) -> Option<Result<ObjectName, ParserError>> {
+        // return None to fall back to the default behavior
+        None
     }
 
     /// Decide the lexical Precedence of operators.
@@ -2271,6 +2284,13 @@ mod tests {
                 parser: &mut sqlparser::parser::Parser,
             ) -> Option<Result<Statement, sqlparser::parser::ParserError>> {
                 self.0.parse_statement(parser)
+            }
+
+            fn parse_table_factor_name(
+                &self,
+                parser: &mut sqlparser::parser::Parser,
+            ) -> Option<Result<ObjectName, sqlparser::parser::ParserError>> {
+                self.0.parse_table_factor_name(parser)
             }
 
             fn is_identifier_part(&self, ch: char) -> bool {

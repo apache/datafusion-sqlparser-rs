@@ -16374,6 +16374,43 @@ fn parse_deeply_nested_boolean_expr_does_not_stackoverflow() {
 fn parse_select_without_projection() {
     let dialects = all_dialects_where(|d| d.supports_empty_projections());
     dialects.verified_stmt("SELECT FROM users");
+    for sql in [
+        "SELECT",
+        "SELECT ALL",
+        "SELECT INTO t",
+        "SELECT WHERE true",
+        "SELECT GROUP BY () HAVING true",
+        "SELECT WINDOW w AS ()",
+        "SELECT ORDER BY 1",
+        "SELECT LIMIT 1",
+        "SELECT OFFSET 1",
+        "SELECT FETCH FIRST 1 ROWS ONLY",
+        "SELECT FOR UPDATE",
+        "SELECT UNION SELECT",
+        "SELECT INTERSECT SELECT",
+        "SELECT EXCEPT SELECT",
+        "SELECT EXISTS (SELECT)",
+        "SELECT * FROM (SELECT) AS t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT; SELECT")
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT WHERE").unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_empty_projections());
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT").unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
 }
 
 #[test]

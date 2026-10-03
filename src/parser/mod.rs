@@ -15462,7 +15462,7 @@ impl<'a> Parser<'a> {
         }
 
         let projection =
-            if self.dialect.supports_empty_projections() && self.peek_keyword(Keyword::FROM) {
+            if self.dialect.supports_empty_projections() && self.peek_empty_projection() {
                 vec![]
             } else {
                 self.parse_projection()?
@@ -15621,6 +15621,31 @@ impl<'a> Parser<'a> {
                 SelectFlavor::Standard
             },
         })
+    }
+
+    /// Returns true if the next token ends a `SELECT` target list before it begins.
+    fn peek_empty_projection(&self) -> bool {
+        match &self.peek_token_ref().token {
+            Token::EOF | Token::SemiColon | Token::RParen => true,
+            Token::Word(w) => matches!(
+                w.keyword,
+                Keyword::INTO
+                    | Keyword::FROM
+                    | Keyword::WHERE
+                    | Keyword::GROUP
+                    | Keyword::HAVING
+                    | Keyword::WINDOW
+                    | Keyword::ORDER
+                    | Keyword::LIMIT
+                    | Keyword::OFFSET
+                    | Keyword::FETCH
+                    | Keyword::FOR
+                    | Keyword::UNION
+                    | Keyword::INTERSECT
+                    | Keyword::EXCEPT
+            ),
+            _ => false,
+        }
     }
 
     /// Parses optimizer hints at the current token position.

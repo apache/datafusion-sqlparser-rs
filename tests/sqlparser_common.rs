@@ -20433,3 +20433,10 @@ fn parse_bang_not_renders_apart_from_operand() {
     dialects.verified_stmt("SET eaac_cion = ! !o");
     dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
 }
+
+#[test]
+fn parse_string_literal_alias() {
+    let dialects = all_dialects_where(|d| d.supports_string_literal_alias());
+    dialects.one_statement_parses_to("SELECT 1 'x'", "SELECT 1 AS 'x'");
+    dialects.verified_stmt("SELECT 1 AS 'x'");
+}

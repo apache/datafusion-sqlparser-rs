@@ -10126,3 +10126,33 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_string_literal_alias_rejected() {
+    for (sql, expected) in [
+        ("SELECT 1 'x'", "Expected: end of statement, found: 'x'"),
+        (
+            "SELECT (a) 'x' FROM t",
+            "Expected: end of statement, found: 'x'",
+        ),
+        (
+            "SELECT a AS 'x' FROM t",
+            "Expected: an identifier after AS, found: 'x'",
+        ),
+        (
+            "SELECT a FROM t 'x'",
+            "Expected: end of statement, found: 'x'",
+        ),
+        (
+            "SELECT a FROM t AS 'x'",
+            "Expected: an identifier after AS, found: 'x'",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+    pg().verified_stmt(r#"SELECT a AS "x" FROM t AS "y""#);
+}

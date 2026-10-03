@@ -8957,7 +8957,8 @@ impl<'a> Parser<'a> {
             }
             return Ok(SqliteTableOptions::default());
         };
-        let mut options = vec![first];
+        let mut options = Vec::with_capacity(2);
+        options.push(first);
         while self.consume_token(&Token::Comma) {
             match self.maybe_parse_sqlite_table_option() {
                 Some(option) => options.push(option),

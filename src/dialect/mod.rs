@@ -1259,6 +1259,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows string literals as column names in `CREATE TABLE`.
+    /// SQLite's grammar rule `nm ::= id | STRING | JOIN_KW` permits this.
+    fn supports_string_literal_column_names(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `a!` expressions
     fn supports_factorial_operator(&self) -> bool {
         false
@@ -1980,6 +1986,25 @@ pub trait Dialect: Debug + Any {
     ///
     /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-datatypes.html)
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect accepts `==` as an alternative to `=` in `UPDATE SET` assignments.
+    ///
+    /// See <https://www.sqlite.org/lang_update.html>
+    fn supports_double_eq_assignment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `CAST(expr AS)` with an empty type name.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT CAST(a AS)
+    /// ```
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html)
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
         false
     }
 }

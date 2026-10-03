@@ -515,6 +515,7 @@ define_keywords!(
     INCLUDING,
     INCREMENT,
     INCREMENTAL,
+    INDENT,
     INDEX,
     INDICATOR,
     INHERIT,

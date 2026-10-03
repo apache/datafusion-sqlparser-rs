@@ -1659,17 +1659,26 @@ impl<'a> Parser<'a> {
             Keyword::LAMBDA if self.dialect.supports_lambda_keyword_syntax() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
-            _ if self.dialect.supports_geometric_types() => match w.keyword {
-                Keyword::CIRCLE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Circle)?)),
-                Keyword::BOX => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricBox)?)),
-                Keyword::PATH => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricPath)?)),
-                Keyword::LINE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Line)?)),
-                Keyword::LSEG => Ok(Some(self.parse_geometric_type(GeometricTypeKind::LineSegment)?)),
-                Keyword::POINT => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Point)?)),
-                Keyword::POLYGON => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Polygon)?)),
-                _ => Ok(None),
+            _ => match self.geometric_type_kind(w.keyword) {
+                Some(kind) => Ok(Some(self.parse_geometric_type(kind)?)),
+                None => Ok(None),
             },
-            _ => Ok(None),
+        }
+    }
+
+    fn geometric_type_kind(&self, keyword: Keyword) -> Option<GeometricTypeKind> {
+        if !self.dialect.supports_geometric_types() {
+            return None;
+        }
+        match keyword {
+            Keyword::CIRCLE => Some(GeometricTypeKind::Circle),
+            Keyword::BOX => Some(GeometricTypeKind::GeometricBox),
+            Keyword::PATH => Some(GeometricTypeKind::GeometricPath),
+            Keyword::LINE => Some(GeometricTypeKind::Line),
+            Keyword::LSEG => Some(GeometricTypeKind::LineSegment),
+            Keyword::POINT => Some(GeometricTypeKind::Point),
+            Keyword::POLYGON => Some(GeometricTypeKind::Polygon),
+            _ => None,
         }
     }
 
@@ -1753,6 +1762,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Returns true if the custom type `name` starting with `first_keyword` and the
+    /// next token form a typed string.
+    fn peek_custom_typed_string(&self, first_keyword: Keyword, name: &ObjectName) -> bool {
+        let qualified = name.0.len() > 1;
+        self.dialect
+            .is_custom_type_typed_string(first_keyword, qualified)
+            && (qualified || self.geometric_type_kind(first_keyword).is_none())
+            && matches!(
+                self.peek_token_ref().token,
+                Token::SingleQuotedString(_)
+                    | Token::EscapedStringLiteral(_)
+                    | Token::UnicodeStringLiteral(_)
+                    | Token::DollarQuotedString(_)
+            )
+    }
+
     /// Parse an expression prefix.
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
@@ -1806,23 +1831,20 @@ impl<'a> Parser<'a> {
         // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
         // expression that should parse as the column name "date".
         let loc = self.peek_token_ref().span.start;
+        let first_keyword = match &self.peek_token_ref().token {
+            Token::Word(w) => Some(w.keyword),
+            _ => None,
+        };
         let opt_expr = self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval { .. } => parser.parse_interval(),
-                // PostgreSQL allows almost any identifier to be used as custom data type name,
-                // and we support that in `parse_data_type()`. But unlike Postgres we don't
-                // have a list of globally reserved keywords (since they vary across dialects),
-                // so given `NOT 'a' LIKE 'b'`, we'd accept `NOT` as a possible custom data type
-                // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
-                // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
-                // `type 'string'` syntax for the custom data types at all ...
-                //
-                // ... with the exception of `xml '...'` on dialects that support XML
-                // expressions, which is a valid PostgreSQL typed string literal.
+                // Custom names need dialect consent, else `NOT 'a'` would read as a typed string.
                 DataType::Custom(ref name, ref modifiers)
                     if modifiers.is_empty()
-                        && Self::is_simple_unquoted_object_name(name, "xml")
-                        && parser.dialect.supports_xml_expressions() =>
+                        && ((Self::is_simple_unquoted_object_name(name, "xml")
+                            && parser.dialect.supports_xml_expressions())
+                            || first_keyword
+                                .is_some_and(|kw| parser.peek_custom_typed_string(kw, name))) =>
                 {
                     Ok(Expr::TypedString(TypedString {
                         data_type: DataType::Custom(name.clone(), modifiers.clone()),

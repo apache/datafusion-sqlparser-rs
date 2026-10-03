@@ -8493,7 +8493,9 @@ fn parse_trim() {
 
     assert_eq!(
         ParserError::ParserError("Expected: ), found: 'xyz'".to_owned()),
-        parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
+        all_dialects_where(|d| !d.is_custom_type_typed_string(Keyword::NoKeyword, false))
+            .parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')")
+            .unwrap_err()
     );
 
     // dialects that support comma-separated TRIM syntax

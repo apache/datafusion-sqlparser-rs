@@ -1928,6 +1928,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a custom type name starting with `first_keyword` may precede
+    /// a string literal to form a typed string, as in PostgreSQL's `mood 'happy'`.
+    fn is_custom_type_typed_string(&self, _first_keyword: Keyword, _qualified: bool) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports aliased function arguments,
     /// e.g. `XMLFOREST(a AS x)` in PostgreSQL.
     fn supports_aliased_function_args(&self) -> bool {

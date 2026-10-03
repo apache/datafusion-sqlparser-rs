@@ -49,6 +49,160 @@ const RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::VIEW,
 ];
 
+/// [PostgreSQL reserved keywords](https://www.postgresql.org/docs/current/sql-keywords-appendix.html) known to [`Keyword`].
+const RESERVED_KEYWORDS: &[Keyword] = &[
+    Keyword::ALL,
+    Keyword::ANALYZE,
+    Keyword::AND,
+    Keyword::ANY,
+    Keyword::ARRAY,
+    Keyword::AS,
+    Keyword::ASC,
+    Keyword::ASYMMETRIC,
+    Keyword::BOTH,
+    Keyword::CASE,
+    Keyword::CAST,
+    Keyword::CHECK,
+    Keyword::COLLATE,
+    Keyword::COLUMN,
+    Keyword::CONSTRAINT,
+    Keyword::CREATE,
+    Keyword::CURRENT_CATALOG,
+    Keyword::CURRENT_DATE,
+    Keyword::CURRENT_ROLE,
+    Keyword::CURRENT_TIME,
+    Keyword::CURRENT_TIMESTAMP,
+    Keyword::CURRENT_USER,
+    Keyword::DEFAULT,
+    Keyword::DEFERRABLE,
+    Keyword::DESC,
+    Keyword::DISTINCT,
+    Keyword::DO,
+    Keyword::ELSE,
+    Keyword::END,
+    Keyword::EXCEPT,
+    Keyword::FALSE,
+    Keyword::FETCH,
+    Keyword::FOR,
+    Keyword::FOREIGN,
+    Keyword::FROM,
+    Keyword::GRANT,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::IN,
+    Keyword::INITIALLY,
+    Keyword::INTERSECT,
+    Keyword::INTO,
+    Keyword::LATERAL,
+    Keyword::LEADING,
+    Keyword::LIMIT,
+    Keyword::LOCALTIME,
+    Keyword::LOCALTIMESTAMP,
+    Keyword::NOT,
+    Keyword::NULL,
+    Keyword::OFFSET,
+    Keyword::ON,
+    Keyword::ONLY,
+    Keyword::OR,
+    Keyword::ORDER,
+    Keyword::PLACING,
+    Keyword::PRIMARY,
+    Keyword::REFERENCES,
+    Keyword::RETURNING,
+    Keyword::SELECT,
+    Keyword::SESSION_USER,
+    Keyword::SOME,
+    Keyword::SYMMETRIC,
+    Keyword::SYSTEM_USER,
+    Keyword::TABLE,
+    Keyword::THEN,
+    Keyword::TO,
+    Keyword::TRAILING,
+    Keyword::TRUE,
+    Keyword::UNION,
+    Keyword::UNIQUE,
+    Keyword::USER,
+    Keyword::USING,
+    Keyword::VARIADIC,
+    Keyword::WHEN,
+    Keyword::WHERE,
+    Keyword::WINDOW,
+    Keyword::WITH,
+];
+
+/// PostgreSQL non-reserved keywords that cannot be function or type names, known to [`Keyword`].
+const COL_NAME_KEYWORDS: &[Keyword] = &[
+    Keyword::BETWEEN,
+    Keyword::BIGINT,
+    Keyword::BIT,
+    Keyword::BOOLEAN,
+    Keyword::CHAR,
+    Keyword::CHARACTER,
+    Keyword::COALESCE,
+    Keyword::DEC,
+    Keyword::DECIMAL,
+    Keyword::EXISTS,
+    Keyword::EXTRACT,
+    Keyword::FLOAT,
+    Keyword::GROUPING,
+    Keyword::INOUT,
+    Keyword::INT,
+    Keyword::INTEGER,
+    Keyword::INTERVAL,
+    Keyword::JSON,
+    Keyword::JSON_TABLE,
+    Keyword::LEAST,
+    Keyword::NATIONAL,
+    Keyword::NCHAR,
+    Keyword::NONE,
+    Keyword::NORMALIZE,
+    Keyword::NULLIF,
+    Keyword::NUMERIC,
+    Keyword::OUT,
+    Keyword::OVERLAY,
+    Keyword::POSITION,
+    Keyword::PRECISION,
+    Keyword::REAL,
+    Keyword::ROW,
+    Keyword::SETOF,
+    Keyword::SMALLINT,
+    Keyword::SUBSTRING,
+    Keyword::TIME,
+    Keyword::TIMESTAMP,
+    Keyword::TREAT,
+    Keyword::TRIM,
+    Keyword::VALUES,
+    Keyword::VARCHAR,
+    Keyword::XMLNAMESPACES,
+    Keyword::XMLTABLE,
+];
+
+/// PostgreSQL reserved keywords that can be function or type names, known to [`Keyword`].
+const TYPE_FUNC_NAME_KEYWORDS: &[Keyword] = &[
+    Keyword::AUTHORIZATION,
+    Keyword::BINARY,
+    Keyword::COLLATION,
+    Keyword::CONCURRENTLY,
+    Keyword::CROSS,
+    Keyword::CURRENT_SCHEMA,
+    Keyword::FREEZE,
+    Keyword::FULL,
+    Keyword::ILIKE,
+    Keyword::INNER,
+    Keyword::IS,
+    Keyword::JOIN,
+    Keyword::LEFT,
+    Keyword::LIKE,
+    Keyword::NATURAL,
+    Keyword::NOTNULL,
+    Keyword::OUTER,
+    Keyword::OVERLAPS,
+    Keyword::RIGHT,
+    Keyword::SIMILAR,
+    Keyword::TABLESAMPLE,
+    Keyword::VERBOSE,
+];
+
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -355,6 +509,16 @@ impl Dialect for PostgreSqlDialect {
 
     fn supports_xml_expressions(&self) -> bool {
         true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-CONSTANTS-GENERIC>
+    fn is_custom_type_typed_string(&self, first_keyword: Keyword, qualified: bool) -> bool {
+        let not_a_type_name = if qualified {
+            TYPE_FUNC_NAME_KEYWORDS
+        } else {
+            COL_NAME_KEYWORDS
+        };
+        !RESERVED_KEYWORDS.contains(&first_keyword) && !not_a_type_name.contains(&first_keyword)
     }
 
     fn supports_aliased_function_args(&self) -> bool {

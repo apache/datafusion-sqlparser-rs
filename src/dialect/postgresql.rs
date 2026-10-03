@@ -114,6 +114,12 @@ impl Dialect for PostgreSqlDialect {
             || RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS.contains(kw)
     }
 
+    /// Aliases are identifiers, see `output_name` and `alias` in
+    /// <https://www.postgresql.org/docs/current/sql-select.html>
+    fn supports_string_literal_alias(&self) -> bool {
+        false
+    }
+
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
     fn is_custom_operator_part(&self, ch: char) -> bool {
         matches!(

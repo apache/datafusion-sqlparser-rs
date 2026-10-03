@@ -20699,3 +20699,11 @@ fn parse_cte_materialization() {
         }
     }
 }
+
+#[test]
+fn parse_string_literal_alias() {
+    let dialects = all_dialects_where(|d| d.supports_string_literal_alias());
+    dialects.one_statement_parses_to("SELECT 1 'x'", "SELECT 1 AS 'x'");
+    dialects.verified_stmt("SELECT 1 AS 'x'");
+    dialects.verified_stmt("SELECT a FROM t AS 'y'");
+}

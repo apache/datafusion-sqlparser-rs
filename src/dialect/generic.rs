@@ -81,6 +81,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_rows_from_table_factor(&self) -> bool {
+        true
+    }
+
     fn supports_start_transaction_modifier(&self) -> bool {
         true
     }

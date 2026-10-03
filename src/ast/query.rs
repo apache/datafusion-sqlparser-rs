@@ -1512,6 +1512,15 @@ pub enum TableFactor {
         /// Optional alias for the table function result.
         alias: Option<TableAlias>,
     },
+    /// `ROWS FROM(function_call [, ...]) [WITH ORDINALITY][ AS <alias> ]`
+    RowsFrom {
+        /// Table functions combined by `ROWS FROM`.
+        table_functions: Vec<TableFactor>,
+        /// Whether `WITH ORDINALITY` was specified to include ordinality.
+        with_ordinality: bool,
+        /// Optional alias for the `ROWS FROM` result.
+        alias: Option<TableAlias>,
+    },
     /// `e.g. LATERAL FLATTEN(<args>)[ AS <alias> ]`
     Function {
         /// Whether the function is LATERAL.
@@ -2313,6 +2322,20 @@ impl fmt::Display for TableFactor {
             }
             TableFactor::TableFunction { expr, alias } => {
                 write!(f, "TABLE({expr})")?;
+                if let Some(alias) = alias {
+                    write!(f, " {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::RowsFrom {
+                table_functions,
+                with_ordinality,
+                alias,
+            } => {
+                write!(f, "ROWS FROM({})", display_comma_separated(table_functions))?;
+                if *with_ordinality {
+                    write!(f, " WITH ORDINALITY")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }

@@ -140,6 +140,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/create-table-like.html>
+    fn supports_create_table_like_plain(&self) -> bool {
+        true
+    }
+
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
     fn supports_insert_set(&self) -> bool {
         true

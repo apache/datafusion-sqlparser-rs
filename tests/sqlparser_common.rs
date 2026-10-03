@@ -18862,7 +18862,7 @@ fn test_parse_default_with_collate_column_option() {
 
 #[test]
 fn parse_create_table_like() {
-    let dialects = all_dialects_except(|d| d.supports_create_table_like_parenthesized());
+    let dialects = all_dialects_where(|d| d.supports_create_table_like_plain());
     let sql = "CREATE TABLE new LIKE old";
     match dialects.verified_stmt(sql) {
         Statement::CreateTable(stmt) => {
@@ -18879,6 +18879,14 @@ fn parse_create_table_like() {
             )
         }
         _ => unreachable!(),
+    }
+    for keyword in ["LIKE", "ILIKE"] {
+        assert_eq!(
+            all_dialects_where(|d| !d.supports_create_table_like_plain())
+                .parse_sql_statements(&format!("CREATE TABLE new {keyword} old"))
+                .unwrap_err(),
+            ParserError::ParserError(format!("Expected: end of statement, found: {keyword}"))
+        );
     }
     let dialects = all_dialects_where(|d| d.supports_create_table_like_parenthesized());
     let sql = "CREATE TABLE new (LIKE old)";

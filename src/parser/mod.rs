@@ -9084,7 +9084,9 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 None
             }
-        } else if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
+        } else if self.dialect.supports_create_table_like_plain()
+            && (self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE))
+        {
             let name = self.parse_object_name(allow_unquoted_hyphen)?;
             Some(CreateTableLikeKind::Plain(CreateTableLike {
                 name,

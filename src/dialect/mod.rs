@@ -1644,17 +1644,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `CREATE TABLE new LIKE old`, without parentheses.
+    fn supports_create_table_like_plain(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports specifying which table to copy
     /// the schema from inside parenthesis.
     ///
-    /// Not parenthesized:
-    /// '''sql
-    /// CREATE TABLE new LIKE old ...
-    /// '''
-    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-table#label-create-table-like)
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like)
-    ///
-    /// Parenthesized:
     /// '''sql
     /// CREATE TABLE new (LIKE old ...)
     /// '''

@@ -179,4 +179,9 @@ impl Dialect for BigQueryDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like>
+    fn supports_create_table_like_plain(&self) -> bool {
+        true
+    }
 }

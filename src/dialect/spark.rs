@@ -128,6 +128,11 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
+    /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-ddl-create-table-like.html>
+    fn supports_create_table_like_plain(&self) -> bool {
+        true
+    }
+
     /// Parse the `DIV` keyword as integer division.
     ///
     /// Example: `SELECT 10 DIV 3` returns `3`.

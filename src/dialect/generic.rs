@@ -332,4 +332,8 @@ impl Dialect for GenericDialect {
     fn supports_alter_column_position(&self) -> bool {
         true
     }
+
+    fn supports_create_table_like_plain(&self) -> bool {
+        true
+    }
 }

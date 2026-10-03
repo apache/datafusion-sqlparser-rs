@@ -137,4 +137,9 @@ impl Dialect for DatabricksDialect {
     fn supports_pipe_operator(&self) -> bool {
         true
     }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-table-like>
+    fn supports_create_table_like_plain(&self) -> bool {
+        true
+    }
 }

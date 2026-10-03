@@ -225,6 +225,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-table#label-create-table-like>
+    fn supports_create_table_like_plain(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://docs.snowflake.com/en/sql-reference/functions/extract)
     fn supports_extract_comma_syntax(&self) -> bool {
         true

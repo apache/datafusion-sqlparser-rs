@@ -4476,7 +4476,7 @@ impl<'a> Parser<'a> {
         {
             return Ok(Expr::InList {
                 expr: Box::new(expr),
-                list: vec![self.parse_expr()?],
+                list: vec![self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?],
                 negated,
                 global,
             });

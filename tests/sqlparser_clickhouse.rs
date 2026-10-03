@@ -2138,6 +2138,71 @@ fn parse_global_in() {
     }
 }
 
+#[test]
+fn parse_in_unparenthesized_expr_precedence() {
+    for (sql, canonical, op) in [
+        (
+            "SELECT * FROM t WHERE x IN t2 AND y = 2",
+            "SELECT * FROM t WHERE x IN (t2) AND y = 2",
+            BinaryOperator::And,
+        ),
+        (
+            "SELECT * FROM t WHERE x GLOBAL IN t2 AND y = 2",
+            "SELECT * FROM t WHERE x GLOBAL IN (t2) AND y = 2",
+            BinaryOperator::And,
+        ),
+        (
+            "SELECT * FROM t WHERE x GLOBAL NOT IN t2 OR y = 2",
+            "SELECT * FROM t WHERE x GLOBAL NOT IN (t2) OR y = 2",
+            BinaryOperator::Or,
+        ),
+        (
+            "SELECT * FROM t WHERE x IN t2 = 1",
+            "SELECT * FROM t WHERE x IN (t2) = 1",
+            BinaryOperator::Eq,
+        ),
+    ] {
+        let select = clickhouse().verified_only_select_with_canonical(sql, canonical);
+        match select.selection.unwrap() {
+            BinaryOp { op: got, .. } => assert_eq!(got, op, "{sql}"),
+            other => panic!("{sql}: expected BinaryOp, got {other:?}"),
+        }
+    }
+
+    // Higher-precedence operators still belong to the IN operand.
+    clickhouse().one_statement_parses_to(
+        "SELECT * FROM t WHERE x IN 1 + 2",
+        "SELECT * FROM t WHERE x IN (1 + 2)",
+    );
+}
+
+#[test]
+fn global_in_bare_table_binds_before_and() {
+    let expr =
+        clickhouse().expr_parses_to("x GLOBAL IN t2 AND y = 2", "x GLOBAL IN (t2) AND y = 2");
+    assert!(matches!(
+        expr,
+        BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            ..
+        } if matches!(*left, Expr::InList { global: true, .. })
+    ));
+}
+
+#[test]
+fn global_in_bare_table_binds_before_equality() {
+    let expr = clickhouse().expr_parses_to("x GLOBAL IN t2 = 1", "x GLOBAL IN (t2) = 1");
+    assert!(matches!(
+        expr,
+        BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            ..
+        } if matches!(*left, Expr::InList { global: true, .. })
+    ));
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

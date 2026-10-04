@@ -131,6 +131,7 @@ define_keywords!(
     ASENSITIVE,
     ASOF,
     ASSERT,
+    ASSUME,
     ASYMMETRIC,
     ASYNC,
     AT,

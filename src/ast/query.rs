@@ -1493,6 +1493,10 @@ pub enum TableFactor {
         /// Optional index hints(mysql)
         /// See: <https://dev.mysql.com/doc/refman/8.4/en/index-hints.html>
         index_hints: Vec<TableIndexHints>,
+        /// Whether a trailing `*` was specified, e.g. `FROM tab*`, to explicitly
+        /// include descendant tables, as supported by
+        /// [Postgres](https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM).
+        has_trailing_asterisk: bool,
     },
     /// A derived table (a parenthesized subquery), optionally `LATERAL`.
     Derived {
@@ -2227,10 +2231,14 @@ impl fmt::Display for TableFactor {
                 json_path,
                 sample,
                 index_hints,
+                has_trailing_asterisk,
             } => {
                 name.fmt(f)?;
                 if let Some(json_path) = json_path {
                     json_path.fmt(f)?;
+                }
+                if *has_trailing_asterisk {
+                    write!(f, "*")?;
                 }
                 if !partitions.is_empty() {
                     write!(f, " PARTITION ({})", display_comma_separated(partitions))?;

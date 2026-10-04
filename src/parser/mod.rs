@@ -1128,11 +1128,11 @@ impl<'a> Parser<'a> {
         let table_names = self.parse_comma_separated(|p| {
             let only = p.parse_keyword(Keyword::ONLY);
             let name = p.parse_object_name(false)?;
-            let has_asterisk = p.consume_token(&Token::Mul);
+            let has_trailing_asterisk = p.consume_token(&Token::Mul);
             Ok(TruncateTableTarget {
                 name,
                 only,
-                has_asterisk,
+                has_trailing_asterisk,
             })
         })?;
 
@@ -16908,6 +16908,10 @@ impl<'a> Parser<'a> {
         } else {
             let name = self.parse_object_name(true)?;
 
+            // Postgres/Snowflake: `FROM tab*` explicitly includes descendant tables.
+            // https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM
+            let has_trailing_asterisk = self.consume_token(&Token::Mul);
+
             let json_path = match &self.peek_token_ref().token {
                 Token::LBracket if self.dialect.supports_partiql() => Some(self.parse_json_path()?),
                 _ => None,
@@ -16979,6 +16983,7 @@ impl<'a> Parser<'a> {
                 json_path,
                 sample,
                 index_hints,
+                has_trailing_asterisk,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
@@ -17029,6 +17034,7 @@ impl<'a> Parser<'a> {
             json_path: None,
             sample: None,
             index_hints: vec![],
+            has_trailing_asterisk: false,
         })
     }
 
@@ -19883,12 +19889,12 @@ impl<'a> Parser<'a> {
     fn parse_lock_table_target(&mut self) -> Result<LockTableTarget, ParserError> {
         let only = self.parse_keyword(Keyword::ONLY);
         let name = self.parse_object_name(false)?;
-        let has_asterisk = self.consume_token(&Token::Mul);
+        let has_trailing_asterisk = self.consume_token(&Token::Mul);
 
         Ok(LockTableTarget {
             name,
             only,
-            has_asterisk,
+            has_trailing_asterisk,
         })
     }
 

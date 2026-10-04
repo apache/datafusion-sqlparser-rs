@@ -2703,6 +2703,9 @@ impl fmt::Display for Join {
                         JoinConstraint::Using(attrs) => {
                             write!(f, " USING({})", display_comma_separated(attrs))
                         }
+                        JoinConstraint::UsingAlias(columns, alias) => {
+                            write!(f, " USING({}) AS {alias}", display_comma_separated(columns))
+                        }
                         _ => Ok(()),
                     }
                 }
@@ -2892,6 +2895,8 @@ pub enum JoinConstraint {
     On(Expr),
     /// `USING(...)` list of column names.
     Using(Vec<ObjectName>),
+    /// `USING(...) AS alias` list of column names with an alias for the joined columns.
+    UsingAlias(Vec<ObjectName>, Ident),
     /// `NATURAL` join (columns matched automatically).
     Natural,
     /// No constraint specified (e.g. `CROSS JOIN`).

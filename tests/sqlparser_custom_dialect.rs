@@ -18,7 +18,7 @@
 //! Test the ability for dialects to override parsing
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Statement, Value},
+    ast::{BinaryOperator, Expr, Ident, ObjectName, SetExpr, Statement, TableFactor, Value},
     dialect::Dialect,
     keywords::Keyword,
     parser::{Parser, ParserError},
@@ -324,4 +324,72 @@ fn custom_dialect_lambda_arrow_syntax_without_keyword() {
         &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
     );
     assert!(Parser::parse_sql(&dialect, "SELECT transform(xs, lambda x : x + 1)").is_err());
+}
+
+#[test]
+fn custom_table_factor_name_parser() -> Result<(), ParserError> {
+    // Parses `namespace:table` as a two-part name.
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn parse_table_factor_name(
+            &self,
+            parser: &mut Parser,
+        ) -> Option<Result<ObjectName, ParserError>> {
+            if parser.peek_nth_token_ref(1).token != Token::Colon {
+                return None;
+            }
+            Some((|| {
+                let namespace = parser.parse_identifier()?;
+                parser.expect_token(&Token::Colon)?;
+                let table = parser.parse_identifier()?;
+                Ok(ObjectName::from(vec![namespace, table]))
+            })())
+        }
+    }
+
+    let sql = "SELECT * FROM events:analytics AS a JOIN t2 ON a.id = t2.id";
+    let ast = Parser::parse_sql(&MyDialect {}, sql)?;
+    let Statement::Query(query) = only(&ast) else {
+        panic!("expected a query");
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        panic!("expected a select");
+    };
+    let from = only(&select.from);
+    let TableFactor::Table { name, alias, .. } = &from.relation else {
+        panic!("expected a table");
+    };
+    assert_eq!(
+        name,
+        &ObjectName::from(vec![Ident::new("events"), Ident::new("analytics")])
+    );
+    assert_eq!(alias.as_ref().map(|a| a.name.value.as_str()), Some("a"));
+    let TableFactor::Table { name, .. } = &only(&from.joins).relation else {
+        panic!("expected a joined table");
+    };
+    assert_eq!(name, &ObjectName::from(vec![Ident::new("t2")]));
+
+    // Names the hook declines fall back to the default parser.
+    let sql = "SELECT * FROM myschema.t AS a";
+    let ast = Parser::parse_sql(&MyDialect {}, sql)?;
+    assert_eq!(sql, ast[0].to_string());
+
+    // Errors from the hook are returned to the caller.
+    assert_eq!(
+        Parser::parse_sql(&MyDialect {}, "SELECT * FROM events:1"),
+        Err(ParserError::ParserError(
+            "Expected: identifier, found: 1 at Line: 1, Column: 22".to_string()
+        ))
+    );
+    Ok(())
 }

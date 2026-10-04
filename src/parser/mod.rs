@@ -16906,7 +16906,10 @@ impl<'a> Parser<'a> {
             // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {
-            let name = self.parse_object_name(true)?;
+            let name = match self.dialect.parse_table_factor_name(self) {
+                Some(name) => name?,
+                None => self.parse_object_name(true)?,
+            };
 
             let json_path = match &self.peek_token_ref().token {
                 Token::LBracket if self.dialect.supports_partiql() => Some(self.parse_json_path()?),

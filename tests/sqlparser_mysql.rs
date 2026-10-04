@@ -3369,6 +3369,7 @@ fn parse_substring_in_select() {
                             ))),
                             special: true,
                             shorthand: false,
+                            similar: false,
                         })],
                         exclude: None,
                         into: None,

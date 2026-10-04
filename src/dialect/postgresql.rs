@@ -180,6 +180,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_group_by_modifier(&self) -> bool {
+        true
+    }
+
     fn supports_alter_user_as_alter_role(&self) -> bool {
         true
     }

@@ -3158,10 +3158,11 @@ fn parse_select_group_by() {
 #[test]
 fn parse_select_group_by_all() {
     let sql = "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL";
-    let select = verified_only_select(sql);
+    let dialects = all_dialects_where(|d| !d.supports_group_by_modifier());
+    let select = dialects.verified_only_select(sql);
     assert_eq!(GroupByExpr::All(vec![]), select.group_by);
 
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL",
         "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL",
     );

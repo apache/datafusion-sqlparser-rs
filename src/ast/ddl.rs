@@ -3215,7 +3215,7 @@ impl fmt::Display for CreateTable {
             } => {
                 write!(
                     f,
-                    " SKEWED BY ({})) ON ({})",
+                    " SKEWED BY ({}) ON ({})",
                     display_comma_separated(columns),
                     display_comma_separated(on)
                 )?;

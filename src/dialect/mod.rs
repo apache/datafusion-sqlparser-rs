@@ -2299,7 +2299,7 @@ mod tests {
         }
 
         #[allow(clippy::needless_raw_string_hashes)]
-        let statement = r#"SELECT 'Wayne\'s World'"#;
+        let statement = r#"SELECT 'Wayne\'s World' FROM t"#;
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
         assert!(res1.is_ok());

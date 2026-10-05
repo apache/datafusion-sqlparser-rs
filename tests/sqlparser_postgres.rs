@@ -4145,6 +4145,25 @@ fn parse_xmlforest_aliased_arguments() {
 }
 
 #[test]
+fn parse_named_fn_args_scoped_to_their_functions() {
+    assert_eq!(
+        pg().parse_sql_statements("SELECT abs(a:b) FROM t")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ), found: :"
+    );
+    assert_eq!(
+        pg().parse_sql_statements("SELECT abs(a AS x) FROM t")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ), found: AS"
+    );
+
+    pg().verified_expr("JSON_OBJECT('a' : 'b')");
+    pg_and_generic().verified_only_select("SELECT XMLELEMENT(a AS x, b)");
+}
+
+#[test]
 fn parse_xmlparse() {
     // The parser only distinguishes the two modes, so the corpus covers those
     // plus a non-literal argument.

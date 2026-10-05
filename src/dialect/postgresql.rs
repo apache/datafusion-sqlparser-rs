@@ -28,6 +28,7 @@
 // limitations under the License.
 use log::debug;
 
+use crate::ast::ObjectName;
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -261,8 +262,8 @@ impl Dialect for PostgreSqlDialect {
     /// ```sql
     /// SELECT json_object('a': 'b')
     /// ```
-    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
-        true
+    fn supports_named_fn_args_with_colon_operator_for(&self, fn_name: Option<&ObjectName>) -> bool {
+        fn_name.is_some_and(|name| Parser::is_simple_unquoted_object_name(name, "json_object"))
     }
 
     /// See <https://www.postgresql.org/docs/current/functions-json.html>
@@ -357,8 +358,12 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    fn supports_aliased_function_args(&self) -> bool {
-        true
+    fn supports_aliased_function_args_for(&self, fn_name: Option<&ObjectName>) -> bool {
+        fn_name.is_some_and(|name| {
+            ["XMLFOREST", "XMLELEMENT", "XMLTABLE"]
+                .iter()
+                .any(|f| Parser::is_simple_unquoted_object_name(name, f))
+        })
     }
 
     /// Postgres supports query optimizer hints via the `pg_hint_plan` extension,

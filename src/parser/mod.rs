@@ -1745,7 +1745,7 @@ impl<'a> Parser<'a> {
 
     /// Returns true if the given [ObjectName] is a single unquoted
     /// identifier matching `expected` (case-insensitive).
-    fn is_simple_unquoted_object_name(name: &ObjectName, expected: &str) -> bool {
+    pub(crate) fn is_simple_unquoted_object_name(name: &ObjectName, expected: &str) -> bool {
         if let [ObjectNamePart::Identifier(ident)] = name.0.as_slice() {
             ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case(expected)
         } else {
@@ -2585,7 +2585,7 @@ impl<'a> Parser<'a> {
         {
             self.parse_xmlparse_argument_list()?
         } else {
-            self.parse_function_argument_list()?
+            self.parse_function_argument_list(&name)?
         };
         let mut parameters = FunctionArguments::None;
         // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
@@ -2594,7 +2594,7 @@ impl<'a> Parser<'a> {
             && self.consume_token(&Token::LParen)
         {
             parameters = FunctionArguments::List(args);
-            args = self.parse_function_argument_list()?;
+            args = self.parse_function_argument_list(&name)?;
         }
 
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
@@ -2673,7 +2673,7 @@ impl<'a> Parser<'a> {
     /// Parse time-related function `name` possibly followed by `(...)` arguments.
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         let args = if self.consume_token(&Token::LParen) {
-            FunctionArguments::List(self.parse_function_argument_list()?)
+            FunctionArguments::List(self.parse_function_argument_list(&name)?)
         } else {
             FunctionArguments::None
         };
@@ -19027,6 +19027,15 @@ impl<'a> Parser<'a> {
 
     /// Parse a single function argument, handling named and unnamed variants.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
+        self.parse_function_args_for(None)
+    }
+
+    /// Like [`Parser::parse_function_args`], but `fn_name`, when known, scopes
+    /// dialect-specific named-argument syntax to the functions that define it.
+    fn parse_function_args_for(
+        &mut self,
+        fn_name: Option<&ObjectName>,
+    ) -> Result<FunctionArg, ParserError> {
         // Parse the argument expression once, then check for a named-arg
         // operator. Parsing it speculatively and re-parsing on the unnamed
         // path is O(2^depth) on nested calls like `CAST(CASE (CAST(CASE (…`.
@@ -19035,7 +19044,7 @@ impl<'a> Parser<'a> {
             // A wildcard is never a named-arg name; only the unnamed form applies.
             if !matches!(expr, Expr::Wildcard(_) | Expr::QualifiedWildcard(..)) {
                 if let Some(operator) =
-                    self.maybe_parse(|p| p.parse_function_named_arg_operator())?
+                    self.maybe_parse(|p| p.parse_function_named_arg_operator(fn_name))?
                 {
                     let arg = self.parse_wildcard_expr()?.into();
                     return Ok(FunctionArg::ExprNamed {
@@ -19047,13 +19056,13 @@ impl<'a> Parser<'a> {
             }
             let arg_expr = self.function_arg_expr_from_wildcard(expr)?;
             return Ok(FunctionArg::Unnamed(
-                self.maybe_parse_aliased_function_arg(arg_expr)?,
+                self.maybe_parse_aliased_function_arg(arg_expr, fn_name)?,
             ));
         }
 
         let arg = self.maybe_parse(|p| {
             let name = p.parse_identifier()?;
-            let operator = p.parse_function_named_arg_operator()?;
+            let operator = p.parse_function_named_arg_operator(fn_name)?;
             let arg = p.parse_wildcard_expr()?.into();
             Ok(FunctionArg::Named {
                 name,
@@ -19067,7 +19076,7 @@ impl<'a> Parser<'a> {
         let wildcard_expr = self.parse_wildcard_expr()?;
         let arg_expr = self.function_arg_expr_from_wildcard(wildcard_expr)?;
         Ok(FunctionArg::Unnamed(
-            self.maybe_parse_aliased_function_arg(arg_expr)?,
+            self.maybe_parse_aliased_function_arg(arg_expr, fn_name)?,
         ))
     }
 
@@ -19101,10 +19110,11 @@ impl<'a> Parser<'a> {
     fn maybe_parse_aliased_function_arg(
         &mut self,
         arg_expr: FunctionArgExpr,
+        fn_name: Option<&ObjectName>,
     ) -> Result<FunctionArgExpr, ParserError> {
         Ok(match arg_expr {
             FunctionArgExpr::Expr(expr)
-                if self.dialect.supports_aliased_function_args()
+                if self.dialect.supports_aliased_function_args_for(fn_name)
                     && self.parse_keyword(Keyword::AS) =>
             {
                 FunctionArgExpr::Expr(Expr::Named {
@@ -19116,7 +19126,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {
+    fn parse_function_named_arg_operator(
+        &mut self,
+        fn_name: Option<&ObjectName>,
+    ) -> Result<FunctionArgOperator, ParserError> {
         if self.parse_keyword(Keyword::VALUE) {
             return Ok(FunctionArgOperator::Value);
         }
@@ -19135,7 +19148,11 @@ impl<'a> Parser<'a> {
             {
                 Ok(FunctionArgOperator::Assignment)
             }
-            Token::Colon if self.dialect.supports_named_fn_args_with_colon_operator() => {
+            Token::Colon
+                if self
+                    .dialect
+                    .supports_named_fn_args_with_colon_operator_for(fn_name) =>
+            {
                 Ok(FunctionArgOperator::Colon)
             }
             _ => {
@@ -19185,7 +19202,10 @@ impl<'a> Parser<'a> {
     /// FIRST_VALUE(x ORDER BY 1,2,3);
     /// FIRST_VALUE(x IGNORE NULL);
     /// ```
-    fn parse_function_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+    fn parse_function_argument_list(
+        &mut self,
+        fn_name: &ObjectName,
+    ) -> Result<FunctionArgumentList, ParserError> {
         let mut clauses = vec![];
 
         // Handle clauses that may exist with an empty argument list
@@ -19209,7 +19229,7 @@ impl<'a> Parser<'a> {
         }
 
         let duplicate_treatment = self.parse_duplicate_treatment()?;
-        let args = self.parse_comma_separated(Parser::parse_function_args)?;
+        let args = self.parse_comma_separated(|p| p.parse_function_args_for(Some(fn_name)))?;
 
         if self.parse_keyword(Keyword::WHERE) {
             clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));

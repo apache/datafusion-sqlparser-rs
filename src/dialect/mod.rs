@@ -132,7 +132,7 @@ pub use self::teradata::TeradataDialect;
 #[cfg(feature = "derive-dialect")]
 pub use sqlparser_derive::derive_dialect;
 
-use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
+use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectName, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -479,6 +479,14 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports named arguments of the form `FUN(a : '1', b : '2')`.
     fn supports_named_fn_args_with_colon_operator(&self) -> bool {
         false
+    }
+
+    /// Returns true if `fn_name` supports named arguments of the form
+    /// `FUN(a : '1', b : '2')`. Defaults to
+    /// [`Dialect::supports_named_fn_args_with_colon_operator`], ignoring `fn_name`.
+    fn supports_named_fn_args_with_colon_operator_for(&self, fn_name: Option<&ObjectName>) -> bool {
+        let _ = fn_name;
+        self.supports_named_fn_args_with_colon_operator()
     }
 
     /// Returns true if the dialect supports named arguments of the form `FUN(a := '1', b := '2')`.
@@ -1932,6 +1940,13 @@ pub trait Dialect: Debug + Any {
     /// e.g. `XMLFOREST(a AS x)` in PostgreSQL.
     fn supports_aliased_function_args(&self) -> bool {
         false
+    }
+
+    /// Returns true if `fn_name` supports `FUN(a AS x)`-style aliased arguments.
+    /// Defaults to [`Dialect::supports_aliased_function_args`], ignoring `fn_name`.
+    fn supports_aliased_function_args_for(&self, fn_name: Option<&ObjectName>) -> bool {
+        let _ = fn_name;
+        self.supports_aliased_function_args()
     }
 
     /// Returns true if the dialect supports `USING <format>` in `CREATE TABLE`.

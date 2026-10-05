@@ -362,3 +362,24 @@ fn test_substring() {
 fn test_pipe_operator() {
     spark().verified_stmt("SELECT * FROM t |> WHERE x > 1 |> SELECT x AS y |> ORDER BY y");
 }
+
+#[test]
+fn test_interval_literals() {
+    // A string carries its own units; a unit after it is still read.
+    for sql in [
+        "SELECT INTERVAL '2 months'",
+        "SELECT INTERVAL '-1 day 1 hour'",
+        "SELECT INTERVAL '1' DAY",
+        "SELECT INTERVAL 3 DAY",
+        "SELECT INTERVAL '1-2' YEAR TO MONTH",
+        "SELECT -INTERVAL '1 year'",
+        "SELECT INTERVAL '2 seconds' * 2",
+        "SELECT d + INTERVAL '1' DAY FROM t",
+    ] {
+        spark().verified_stmt(sql);
+    }
+    match spark().verified_expr("INTERVAL '2 months'") {
+        Expr::Interval(i) => assert!(i.leading_field.is_none()),
+        other => panic!("Expected an interval, got {other:?}"),
+    }
+}

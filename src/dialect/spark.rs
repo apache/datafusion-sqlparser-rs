@@ -100,8 +100,9 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
+    /// See <https://spark.apache.org/docs/latest/sql-ref-literals.html#interval-literal>
     fn require_interval_qualifier(&self) -> bool {
-        true
+        false
     }
 
     fn supports_bang_not_operator(&self) -> bool {

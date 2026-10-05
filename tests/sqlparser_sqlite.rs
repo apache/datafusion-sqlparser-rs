@@ -1489,6 +1489,24 @@ fn parse_on_conflict_target_predicate() {
     }
 }
 
+fn parse_colon_does_not_start_json_access() {
+    // SQLite rejects `SELECT c:se` (`near ":se": syntax error`); no `:` traversal.
+    assert!(sqlite().parse_sql_statements("SELECT c:se").is_err());
+    assert!(sqlite().parse_sql_statements("SELECT a:b FROM t").is_err());
+
+    let ast = sqlite().verified_only_select("SELECT :xxx");
+    assert_eq!(
+        ast.projection[0],
+        UnnamedExpr(Expr::Value(
+            (Value::Placeholder(":xxx".into())).with_empty_span()
+        )),
+    );
+
+    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("SELECT a:b FROM t")
+        .is_ok());
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

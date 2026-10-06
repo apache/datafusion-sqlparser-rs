@@ -86,6 +86,11 @@ impl Dialect for DatabricksDialect {
         kw != Keyword::INTERVAL && keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
+    /// See <https://spark.apache.org/docs/latest/sql-ref-literals.html#interval-literal>
+    fn supports_interval_multi_units(&self) -> bool {
+        true
+    }
+
     // See https://docs.databricks.com/en/sql/language-manual/functions/struct.html
     fn supports_struct_literal(&self) -> bool {
         true

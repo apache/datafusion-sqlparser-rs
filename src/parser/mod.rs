@@ -3481,6 +3481,39 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // The multi-units form, `INTERVAL 10 YEAR 20 MONTH`, means the same as
+        // the string form `INTERVAL '10 YEAR 20 MONTH'`, which is what it is
+        // read as.
+        if self.dialect.supports_interval_multi_units() {
+            if let (Some(first_value), Some(first_unit)) =
+                (Self::interval_unit_value(&value), leading_field.as_ref())
+            {
+                let mut text = format!("{first_value} {first_unit}");
+                let mut more = false;
+                while let Some((v, unit)) = self.maybe_parse(|p| {
+                    let v = p.parse_prefix()?;
+                    let v = Self::interval_unit_value(&v)
+                        .ok_or_else(|| ParserError::ParserError("not an interval value".into()))?;
+                    if !p.next_token_is_temporal_unit() {
+                        return p.expected_ref("an interval unit", p.peek_token_ref());
+                    }
+                    Ok((v, p.parse_date_time_field()?))
+                })? {
+                    text.push_str(&format!(" {v} {unit}"));
+                    more = true;
+                }
+                if more {
+                    return Ok(Expr::Interval(Interval {
+                        value: Box::new(Expr::value(Value::SingleQuotedString(text))),
+                        leading_field: None,
+                        leading_precision: None,
+                        last_field: None,
+                        fractional_seconds_precision: None,
+                    }));
+                }
+            }
+        }
+
         let (leading_precision, last_field, fsec_precision) =
             if leading_field == Some(DateTimeField::Second) {
                 // SQL mandates special syntax for `SECOND TO SECOND` literals.
@@ -3542,6 +3575,27 @@ impl<'a> Parser<'a> {
             },
             None => value,
         })
+    }
+
+    /// The text of one multi-units interval value: a number or string literal,
+    /// optionally signed.
+    fn interval_unit_value(value: &Expr) -> Option<String> {
+        match value {
+            Expr::Value(v) => match &v.value {
+                Value::Number(n, _) => Some(n.to_string()),
+                Value::SingleQuotedString(s) => Some(s.clone()),
+                _ => None,
+            },
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } => Self::interval_unit_value(expr).map(|v| format!("-{v}")),
+            Expr::UnaryOp {
+                op: UnaryOperator::Plus,
+                expr,
+            } => Self::interval_unit_value(expr),
+            _ => None,
+        }
     }
 
     /// Peek at the next token and determine if it is a temporal unit

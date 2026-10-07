@@ -310,6 +310,8 @@ pub struct Delete {
     pub tables: Vec<ObjectName>,
     /// FROM
     pub from: FromTable,
+    /// ClickHouse `ON CLUSTER`
+    pub on_cluster: Option<Ident>,
     /// USING (Snowflake, Postgres, MySQL)
     pub using: Option<Vec<TableWithJoins>>,
     /// WHERE
@@ -323,6 +325,8 @@ pub struct Delete {
     pub order_by: Vec<OrderByExpr>,
     /// LIMIT (MySQL)
     pub limit: Option<Expr>,
+    /// ClickHouse `SETTINGS`
+    pub settings: Option<Vec<Setting>>,
 }
 
 impl Display for Delete {
@@ -343,6 +347,9 @@ impl Display for Delete {
             FromTable::WithoutKeyword(from) => {
                 indented_list(f, from)?;
             }
+        }
+        if let Some(on_cluster) = &self.on_cluster {
+            write!(f, " ON CLUSTER {on_cluster}")?;
         }
         if let Some(output) = &self.output {
             SpaceOrNewline.fmt(f)?;
@@ -375,6 +382,11 @@ impl Display for Delete {
             SpaceOrNewline.fmt(f)?;
             Indent(limit).fmt(f)?;
         }
+        if let Some(settings) = &self.settings {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("SETTINGS")?;
+            indented_list(f, settings)?;
+        }
         Ok(())
     }
 }
@@ -393,6 +405,8 @@ pub struct Update {
     pub optimizer_hints: Vec<OptimizerHint>,
     /// TABLE
     pub table: TableWithJoins,
+    /// ClickHouse `ON CLUSTER`
+    pub on_cluster: Option<Ident>,
     /// Column assignments
     pub assignments: Vec<Assignment>,
     /// Table which provide value to be set
@@ -411,6 +425,8 @@ pub struct Update {
     pub order_by: Vec<OrderByExpr>,
     /// LIMIT
     pub limit: Option<Expr>,
+    /// ClickHouse `SETTINGS`
+    pub settings: Option<Vec<Setting>>,
 }
 
 impl Display for Update {
@@ -426,6 +442,9 @@ impl Display for Update {
             f.write_str(" ")?;
         }
         self.table.fmt(f)?;
+        if let Some(on_cluster) = &self.on_cluster {
+            write!(f, " ON CLUSTER {on_cluster}")?;
+        }
         if let Some(UpdateTableFromKind::BeforeSet(from)) = &self.from {
             SpaceOrNewline.fmt(f)?;
             f.write_str("FROM")?;
@@ -464,6 +483,11 @@ impl Display for Update {
         if let Some(limit) = &self.limit {
             SpaceOrNewline.fmt(f)?;
             write!(f, "LIMIT {limit}")?;
+        }
+        if let Some(settings) = &self.settings {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("SETTINGS")?;
+            indented_list(f, settings)?;
         }
         Ok(())
     }

@@ -2733,6 +2733,8 @@ fn parse_update_with_joins() {
             optimizer_hints,
             update_token: _,
             output: _,
+            on_cluster: None,
+            settings: None,
         }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {

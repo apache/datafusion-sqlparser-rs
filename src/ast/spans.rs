@@ -944,12 +944,14 @@ impl Spanned for Delete {
             optimizer_hints: _,
             tables,
             from,
+            on_cluster,
             using,
             selection,
             returning,
             output,
             order_by,
             limit,
+            settings,
         } = self;
 
         union_spans(
@@ -958,6 +960,7 @@ impl Spanned for Delete {
                     .iter()
                     .map(|i| i.span())
                     .chain(core::iter::once(from.span()))
+                    .chain(on_cluster.iter().map(|i| i.span))
                     .chain(
                         using
                             .iter()
@@ -967,7 +970,13 @@ impl Spanned for Delete {
                     .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                     .chain(output.iter().map(|i| i.span()))
                     .chain(order_by.iter().map(|i| i.span()))
-                    .chain(limit.iter().map(|i| i.span())),
+                    .chain(limit.iter().map(|i| i.span()))
+                    .chain(
+                        settings
+                            .iter()
+                            .flatten()
+                            .flat_map(|s| [s.key.span, s.value.span()]),
+                    ),
             ),
         )
     }
@@ -979,6 +988,7 @@ impl Spanned for Update {
             update_token,
             optimizer_hints: _,
             table,
+            on_cluster,
             assignments,
             from,
             selection,
@@ -987,18 +997,26 @@ impl Spanned for Update {
             or: _,
             order_by,
             limit,
+            settings,
         } = self;
 
         union_spans(
             core::iter::once(table.span())
                 .chain(core::iter::once(update_token.0.span))
+                .chain(on_cluster.iter().map(|i| i.span))
                 .chain(assignments.iter().map(|i| i.span()))
                 .chain(from.iter().map(|i| i.span()))
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(output.iter().map(|i| i.span()))
                 .chain(order_by.iter().map(|i| i.span()))
-                .chain(limit.iter().map(|i| i.span())),
+                .chain(limit.iter().map(|i| i.span()))
+                .chain(
+                    settings
+                        .iter()
+                        .flatten()
+                        .flat_map(|s| [s.key.span, s.value.span()]),
+                ),
         )
     }
 }

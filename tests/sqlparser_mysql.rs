@@ -1916,6 +1916,40 @@ fn parse_deprecated_mysql_unsigned_data_types() {
 }
 
 #[test]
+fn parse_zerofill() {
+    for data_type in [
+        "TINYINT",
+        "SMALLINT",
+        "MEDIUMINT",
+        "INT",
+        "INTEGER",
+        "BIGINT",
+        "INT2",
+        "INT4",
+        "INT8",
+        "DECIMAL",
+        "DEC",
+        "NUMERIC",
+        "FLOAT",
+        "FLOAT4",
+        "FLOAT8",
+        "DOUBLE",
+        "REAL",
+    ] {
+        mysql_and_generic().verified_stmt(&format!("CREATE TABLE t (a {data_type} ZEROFILL)"));
+    }
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT(10) UNSIGNED ZEROFILL)");
+    assert!(mysql_and_generic()
+        .parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)")
+        .is_err());
+    assert!(
+        all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
+            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)")
+            .is_err()
+    );
+}
+
+#[test]
 fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
 

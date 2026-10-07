@@ -1289,6 +1289,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `DO` statement
+    fn supports_do_statement(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LISTEN`, `UNLISTEN` and `NOTIFY` statements
     fn supports_listen_notify(&self) -> bool {
         false

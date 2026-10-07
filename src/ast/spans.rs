@@ -498,6 +498,7 @@ impl Spanned for Statement {
             Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
             Statement::LISTEN { .. } => Span::empty(),
+            Statement::Do { .. } => Span::empty(),
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),

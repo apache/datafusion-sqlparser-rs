@@ -231,6 +231,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_do_statement(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
     fn supports_exclude_constraint(&self) -> bool {
         true

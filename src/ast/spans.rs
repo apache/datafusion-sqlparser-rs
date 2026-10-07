@@ -2919,6 +2919,37 @@ WHERE id = 1
     }
 
     #[test]
+    fn test_delete_on_cluster_settings_span() {
+        let sql = r#"DELETE FROM foo ON CLUSTER c1
+WHERE x = 42
+SETTINGS lightweight_deletes_sync = 0"#;
+
+        let r = Parser::parse_sql(&crate::dialect::ClickHouseDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (1, 1).into());
+        assert_eq!(stmt_span.end, (3, 38).into());
+    }
+
+    #[test]
+    fn test_update_on_cluster_settings_span() {
+        let sql = r#"UPDATE foo ON CLUSTER c1
+SET bar = 3
+WHERE x = 42
+SETTINGS update_parallel_mode = 'auto'"#;
+
+        let r = Parser::parse_sql(&crate::dialect::ClickHouseDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (1, 1).into());
+        assert_eq!(stmt_span.end, (4, 39).into());
+    }
+
+    #[test]
     fn test_merge_statement_spans() {
         let sql = r#"
         -- plain merge statement; no RETURNING, no OUTPUT

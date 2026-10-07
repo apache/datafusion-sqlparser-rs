@@ -2117,12 +2117,30 @@ fn parse_delete_on_cluster_and_settings() {
         _ => unreachable!(),
     }
 
-    for sql in [
-        "DELETE FROM hits SETTINGS a = 1 WHERE x = 1",
-        "DELETE FROM hits WHERE x = 1 ON CLUSTER c1",
-        "DELETE FROM hits ON CLUSTER WHERE x = 1",
+    for (sql, err) in [
+        (
+            "DELETE FROM hits SETTINGS a = 1 WHERE x = 1",
+            "Expected: end of statement, found: WHERE",
+        ),
+        (
+            "DELETE FROM hits WHERE x = 1 ON CLUSTER c1",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "DELETE FROM hits ON CLUSTER 1 WHERE x = 1",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "DELETE FROM hits WHERE x = 1 SETTINGS a",
+            "Expected: =, found: EOF",
+        ),
     ] {
-        assert!(clickhouse_and_generic().parse_sql_statements(sql).is_err());
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err(),
+            ParserError(err.to_string())
+        );
     }
     assert!(all_dialects_where(|d| !d.supports_settings())
         .parse_sql_statements("DELETE FROM hits WHERE x = 1 SETTINGS a = 1")
@@ -2157,12 +2175,30 @@ fn parse_update_on_cluster_and_settings() {
         _ => unreachable!(),
     }
 
-    for sql in [
-        "UPDATE hits SET x = 1 ON CLUSTER c1 WHERE y = 2",
-        "UPDATE hits SET x = 1 SETTINGS a = 1 WHERE y = 2",
-        "UPDATE hits ON CLUSTER SET x = 1 WHERE y = 2",
+    for (sql, err) in [
+        (
+            "UPDATE hits SET x = 1 ON CLUSTER c1 WHERE y = 2",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "UPDATE hits SET x = 1 SETTINGS a = 1 WHERE y = 2",
+            "Expected: end of statement, found: WHERE",
+        ),
+        (
+            "UPDATE hits ON CLUSTER 1 SET x = 1 WHERE y = 2",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a",
+            "Expected: =, found: EOF",
+        ),
     ] {
-        assert!(clickhouse_and_generic().parse_sql_statements(sql).is_err());
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err(),
+            ParserError(err.to_string())
+        );
     }
     assert!(all_dialects_where(|d| !d.supports_settings())
         .parse_sql_statements("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a = 1")

@@ -2172,13 +2172,15 @@ impl<'a> Parser<'a> {
                             Some(expr) => {
                                 chain.push(AccessExpr::Dot(expr));
                             }
-                            // If the expression is not a valid suffix, fall back to
-                            // parsing as an identifier. This handles cases like `T.interval`
-                            // where `interval` is a keyword but should be treated as an identifier.
+                            // A following `(` builds a qualified call instead, e.g. `pg_catalog.floor(3)`.
                             None => {
-                                chain.push(AccessExpr::Dot(Expr::Identifier(
-                                    self.parse_identifier()?,
-                                )));
+                                let ident = self.parse_identifier()?;
+                                let field = if self.peek_token_ref().token == Token::LParen {
+                                    self.parse_function(ObjectName::from(vec![ident]))?
+                                } else {
+                                    Expr::Identifier(ident)
+                                };
+                                chain.push(AccessExpr::Dot(field));
                             }
                         }
                     }

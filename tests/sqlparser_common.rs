@@ -16091,6 +16091,84 @@ fn test_keywords_as_column_names_after_dot() {
 }
 
 #[test]
+fn test_qualified_keyword_function_calls() {
+    let pg = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
+
+    for (qualifier, func) in [
+        ("public", "floor"),
+        ("pg_catalog", "floor"),
+        ("pg_catalog", "ceil"),
+    ] {
+        let sql = format!("SELECT {qualifier}.{func}(3)");
+        match expr_from_projection(&pg.verified_only_select(&sql).projection[0]) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+                ..
+            }) => {
+                assert_eq!(
+                    name,
+                    &ObjectName::from(vec![Ident::new(qualifier), Ident::new(func)])
+                );
+                assert_eq!(
+                    args,
+                    &[FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+                        number("3")
+                    )))]
+                );
+            }
+            other => panic!("Expected a qualified function call, got: {other:?}"),
+        }
+    }
+
+    // Each of these keywords has its own inline grammar, e.g. `EXTRACT(field FROM x)`,
+    // `OVERLAY(x PLACING y FROM z)`, `POSITION(x IN y)`, `CONVERT(x, type)`. Qualified,
+    // every one is an ordinary function call instead.
+    for (func, sql_args) in [
+        ("extract", "3"),
+        ("trim", "'abc'"),
+        ("substring", "'abc', 1, 2"),
+        ("overlay", "'abc', 'xy', 1"),
+        ("position", "'a', 'b'"),
+        ("convert", "'abc', 1"),
+        ("array", "1, 2, 3"),
+    ] {
+        let sql = format!("SELECT pg_catalog.{func}({sql_args})");
+        match expr_from_projection(&pg.verified_only_select(&sql).projection[0]) {
+            Expr::Function(Function { name, .. }) => assert_eq!(
+                name,
+                &ObjectName::from(vec![Ident::new("pg_catalog"), Ident::new(func)])
+            ),
+            other => panic!("Expected a qualified function call, got: {other:?}"),
+        }
+    }
+
+    // Qualifying the name selects plain function-call syntax, so the inline grammar
+    // that only applies to the bare keyword no longer parses.
+    pg.parse_sql_statements("SELECT pg_catalog.overlay('abc' PLACING 'xy' FROM 1)")
+        .unwrap_err();
+    pg.parse_sql_statements("SELECT pg_catalog.position('a' IN 'b')")
+        .unwrap_err();
+
+    // Unqualified calls still parse as the dedicated FLOOR/CEIL expression.
+    match expr_from_projection(&pg.verified_only_select("SELECT FLOOR(3)").projection[0]) {
+        Expr::Floor { .. } => {}
+        other => panic!("Expected Expr::Floor, got: {other:?}"),
+    }
+
+    // Keyword column identifiers after a dot, without parentheses, are untouched.
+    match expr_from_projection(
+        &pg.verified_only_select("SELECT t.interval FROM tbl t")
+            .projection[0],
+    ) {
+        Expr::CompoundIdentifier(idents) => {
+            assert_eq!(idents, &vec![Ident::new("t"), Ident::new("interval")])
+        }
+        other => panic!("Expected CompoundIdentifier, got: {other:?}"),
+    }
+}
+
+#[test]
 fn parse_create_table_with_bit_types() {
     let sql = "CREATE TABLE t (a BIT, b BIT VARYING, c BIT(42), d BIT VARYING(43))";
     match verified_stmt(sql) {

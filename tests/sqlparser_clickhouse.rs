@@ -2084,6 +2084,91 @@ fn parse_tuple_element_access() {
     }
 }
 
+#[test]
+fn parse_delete_on_cluster_and_settings() {
+    clickhouse_and_generic().verified_stmt("DELETE FROM db.hits ON CLUSTER c1 WHERE x = 1");
+    clickhouse_and_generic().verified_stmt("DELETE FROM hits ON CLUSTER '{cluster}' WHERE x = 1");
+    clickhouse_and_generic()
+        .verified_stmt("DELETE FROM hits WHERE x = 1 SETTINGS lightweight_deletes_sync = 0");
+
+    match clickhouse_and_generic()
+        .verified_stmt("DELETE FROM hits ON CLUSTER c1 WHERE x = 1 SETTINGS a = 1, b = 'x'")
+    {
+        Statement::Delete(Delete {
+            on_cluster,
+            settings,
+            ..
+        }) => {
+            assert_eq!(on_cluster, Some(Ident::new("c1")));
+            assert_eq!(
+                settings,
+                Some(vec![
+                    Setting {
+                        key: Ident::new("a"),
+                        value: Expr::value(number("1")),
+                    },
+                    Setting {
+                        key: Ident::new("b"),
+                        value: Expr::value(Value::SingleQuotedString("x".into())),
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for sql in [
+        "DELETE FROM hits SETTINGS a = 1 WHERE x = 1",
+        "DELETE FROM hits WHERE x = 1 ON CLUSTER c1",
+        "DELETE FROM hits ON CLUSTER WHERE x = 1",
+    ] {
+        assert!(clickhouse_and_generic().parse_sql_statements(sql).is_err());
+    }
+    assert!(all_dialects_where(|d| !d.supports_settings())
+        .parse_sql_statements("DELETE FROM hits WHERE x = 1 SETTINGS a = 1")
+        .is_err());
+}
+
+#[test]
+fn parse_update_on_cluster_and_settings() {
+    clickhouse_and_generic().verified_stmt("UPDATE db.hits ON CLUSTER c1 SET x = 1 WHERE y = 2");
+    clickhouse_and_generic()
+        .verified_stmt("UPDATE hits ON CLUSTER '{cluster}' SET x = 1, z = 2 WHERE y = 2");
+    clickhouse_and_generic()
+        .verified_stmt("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS update_parallel_mode = 'auto'");
+
+    match clickhouse_and_generic()
+        .verified_stmt("UPDATE hits ON CLUSTER c1 SET x = 1 WHERE y = 2 SETTINGS a = 1")
+    {
+        Statement::Update(Update {
+            on_cluster,
+            settings,
+            ..
+        }) => {
+            assert_eq!(on_cluster, Some(Ident::new("c1")));
+            assert_eq!(
+                settings,
+                Some(vec![Setting {
+                    key: Ident::new("a"),
+                    value: Expr::value(number("1")),
+                }])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for sql in [
+        "UPDATE hits SET x = 1 ON CLUSTER c1 WHERE y = 2",
+        "UPDATE hits SET x = 1 SETTINGS a = 1 WHERE y = 2",
+        "UPDATE hits ON CLUSTER SET x = 1 WHERE y = 2",
+    ] {
+        assert!(clickhouse_and_generic().parse_sql_statements(sql).is_err());
+    }
+    assert!(all_dialects_where(|d| !d.supports_settings())
+        .parse_sql_statements("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a = 1")
+        .is_err());
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

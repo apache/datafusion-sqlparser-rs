@@ -944,12 +944,14 @@ impl Spanned for Delete {
             optimizer_hints: _,
             tables,
             from,
+            on_cluster,
             using,
             selection,
             returning,
             output,
             order_by,
             limit,
+            settings,
         } = self;
 
         union_spans(
@@ -958,6 +960,7 @@ impl Spanned for Delete {
                     .iter()
                     .map(|i| i.span())
                     .chain(core::iter::once(from.span()))
+                    .chain(on_cluster.iter().map(|i| i.span))
                     .chain(
                         using
                             .iter()
@@ -967,7 +970,13 @@ impl Spanned for Delete {
                     .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                     .chain(output.iter().map(|i| i.span()))
                     .chain(order_by.iter().map(|i| i.span()))
-                    .chain(limit.iter().map(|i| i.span())),
+                    .chain(limit.iter().map(|i| i.span()))
+                    .chain(
+                        settings
+                            .iter()
+                            .flatten()
+                            .flat_map(|s| [s.key.span, s.value.span()]),
+                    ),
             ),
         )
     }
@@ -979,6 +988,7 @@ impl Spanned for Update {
             update_token,
             optimizer_hints: _,
             table,
+            on_cluster,
             assignments,
             from,
             selection,
@@ -987,18 +997,26 @@ impl Spanned for Update {
             or: _,
             order_by,
             limit,
+            settings,
         } = self;
 
         union_spans(
             core::iter::once(table.span())
                 .chain(core::iter::once(update_token.0.span))
+                .chain(on_cluster.iter().map(|i| i.span))
                 .chain(assignments.iter().map(|i| i.span()))
                 .chain(from.iter().map(|i| i.span()))
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(output.iter().map(|i| i.span()))
                 .chain(order_by.iter().map(|i| i.span()))
-                .chain(limit.iter().map(|i| i.span())),
+                .chain(limit.iter().map(|i| i.span()))
+                .chain(
+                    settings
+                        .iter()
+                        .flatten()
+                        .flat_map(|s| [s.key.span, s.value.span()]),
+                ),
         )
     }
 }
@@ -2898,6 +2916,37 @@ WHERE id = 1
 
         assert_eq!(stmt_span.start, (2, 7).into());
         assert_eq!(stmt_span.end, (4, 24).into());
+    }
+
+    #[test]
+    fn test_delete_on_cluster_settings_span() {
+        let sql = r#"DELETE FROM foo ON CLUSTER c1
+WHERE x = 42
+SETTINGS lightweight_deletes_sync = 0"#;
+
+        let r = Parser::parse_sql(&crate::dialect::ClickHouseDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (1, 1).into());
+        assert_eq!(stmt_span.end, (3, 38).into());
+    }
+
+    #[test]
+    fn test_update_on_cluster_settings_span() {
+        let sql = r#"UPDATE foo ON CLUSTER c1
+SET bar = 3
+WHERE x = 42
+SETTINGS update_parallel_mode = 'auto'"#;
+
+        let r = Parser::parse_sql(&crate::dialect::ClickHouseDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (1, 1).into());
+        assert_eq!(stmt_span.end, (4, 39).into());
     }
 
     #[test]

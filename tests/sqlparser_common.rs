@@ -489,6 +489,7 @@ fn parse_update_set_from() {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
             },
+            on_cluster: None,
             assignments: vec![Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("name")])),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
@@ -562,7 +563,8 @@ fn parse_update_set_from() {
             output: None,
             or: None,
             order_by: vec![],
-            limit: None
+            limit: None,
+            settings: None,
         })
     );
 
@@ -586,6 +588,8 @@ fn parse_update_with_table_alias() {
             optimizer_hints,
             update_token: _,
             output: _,
+            on_cluster: None,
+            settings: None,
         }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {

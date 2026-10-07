@@ -776,11 +776,13 @@ fn parse_typed_struct_syntax_bigquery() {
                         value: "t".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                     Ident {
                         value: "str_col".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                 ]),
             ],
@@ -790,6 +792,7 @@ fn parse_typed_struct_syntax_bigquery() {
                         value: "x".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     field_type: DataType::Int64,
                     options: None,
@@ -799,6 +802,7 @@ fn parse_typed_struct_syntax_bigquery() {
                         value: "y".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     field_type: DataType::String(None),
                     options: None,
@@ -813,6 +817,7 @@ fn parse_typed_struct_syntax_bigquery() {
                 value: "nested_col".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })],
             fields: vec![
                 StructField {
@@ -848,6 +853,7 @@ fn parse_typed_struct_syntax_bigquery() {
                 value: "nested_col".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })],
             fields: vec![
                 StructField {
@@ -1149,11 +1155,13 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                         value: "t".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                     Ident {
                         value: "str_col".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                 ]),
             ],
@@ -1163,6 +1171,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                         value: "x".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     field_type: DataType::Int64,
                     options: None,
@@ -1172,6 +1181,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                         value: "y".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     field_type: DataType::String(None),
                     options: None,
@@ -1190,6 +1200,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                 value: "nested_col".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })],
             fields: vec![
                 StructField {
@@ -2716,6 +2727,7 @@ fn test_export_data() {
                             value: "SELECT".to_string(),
                             quote_style: None,
                             keyword: Keyword::SELECT,
+                            raw: false,
                         }),
                         Span::empty()
                     )),
@@ -2822,6 +2834,7 @@ fn test_export_data() {
                             value: "SELECT".to_string(),
                             quote_style: None,
                             keyword: Keyword::SELECT,
+                            raw: false,
                         }),
                         Span::empty()
                     )),

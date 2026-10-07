@@ -154,17 +154,20 @@ fn parse_flush() {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
                         span: Span::empty(),
+                        raw: false,
                     },
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`'),
                         span: Span::empty(),
+                        raw: false,
                     }
                 ]),
                 ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }])
             ]
         }
@@ -194,17 +197,20 @@ fn parse_flush() {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
                         span: Span::empty(),
+                        raw: false,
                     },
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`'),
                         span: Span::empty(),
+                        raw: false,
                     }
                 ]),
                 ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }])
             ]
         }
@@ -223,17 +229,20 @@ fn parse_flush() {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
                         span: Span::empty(),
+                        raw: false,
                     },
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`'),
                         span: Span::empty(),
+                        raw: false,
                     }
                 ]),
                 ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }])
             ]
         }
@@ -1471,6 +1480,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                     value: "quoted ` identifier".into(),
                     quote_style: Some('`'),
                     span: Span::empty(),
+                    raw: false,
                 }))],
                 exclude: None,
                 into: None,
@@ -1528,6 +1538,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                     value: "quoted `` identifier".into(),
                     quote_style: Some('`'),
                     span: Span::empty(),
+                    raw: false,
                 }))],
                 exclude: None,
                 into: None,
@@ -1577,6 +1588,7 @@ fn parse_escaped_backticks_with_escape() {
                     value: "`quoted identifier`".into(),
                     quote_style: Some('`'),
                     span: Span::empty(),
+                    raw: false,
                 }))],
                 exclude: None,
                 into: None,
@@ -1630,6 +1642,7 @@ fn parse_escaped_backticks_with_no_escape() {
                     value: "``quoted identifier``".into(),
                     quote_style: Some('`'),
                     span: Span::empty(),
+                    raw: false,
                 }))],
                 exclude: None,
                 into: None,
@@ -2817,6 +2830,7 @@ fn parse_update_with_order_by() {
                         value: "foo".to_owned(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     options: OrderByOptions {
                         sort: Some(OrderBySort::Asc),
@@ -2844,6 +2858,7 @@ fn parse_update_with_order_by_and_limit() {
                         value: "foo".to_owned(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     options: OrderByOptions {
                         sort: Some(OrderBySort::Asc),
@@ -2870,6 +2885,7 @@ fn parse_delete_with_order_by() {
                         value: "id".to_owned(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     options: OrderByOptions {
                         sort: Some(OrderBySort::Desc),
@@ -2954,6 +2970,7 @@ fn parse_alter_table_add_column() {
                         value: String::from("foo"),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })),
                 },]
             );
@@ -3002,6 +3019,7 @@ fn parse_alter_table_add_columns() {
                             value: String::from("foo"),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                     },
                 ]
@@ -3075,6 +3093,7 @@ fn parse_alter_table_change_column() {
             value: String::from("foo"),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         })),
     };
     let sql4 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER foo";
@@ -3115,6 +3134,7 @@ fn parse_alter_table_change_column_with_column_position() {
             value: String::from("total_count"),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         })),
     };
 
@@ -3172,6 +3192,7 @@ fn parse_alter_table_modify_column() {
             value: String::from("foo"),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         })),
     };
     let sql4 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER foo";
@@ -3319,6 +3340,7 @@ fn parse_alter_table_modify_column_with_column_position() {
             value: String::from("total_count"),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         })),
     };
 
@@ -3360,6 +3382,7 @@ fn parse_substring_in_select() {
                                 value: "description".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             })),
                             substring_from: Some(Box::new(Expr::Value(
                                 (number("0")).with_empty_span()
@@ -3377,6 +3400,7 @@ fn parse_substring_in_select() {
                                 value: "test".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             }])),
                             joins: vec![]
                         }],
@@ -4430,12 +4454,14 @@ fn test_variable_assignment_using_colon_equal() {
                             value: "@price".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                         op: BinaryOperator::Assignment,
                         right: Box::new(Expr::Identifier(Ident {
                             value: "price".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                     }),
                     SelectItem::UnnamedExpr(Expr::BinaryOp {
@@ -4443,6 +4469,7 @@ fn test_variable_assignment_using_colon_equal() {
                             value: "@tax".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                         op: BinaryOperator::Assignment,
                         right: Box::new(Expr::BinaryOp {
@@ -4450,6 +4477,7 @@ fn test_variable_assignment_using_colon_equal() {
                                 value: "price".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             })),
                             op: BinaryOperator::Multiply,
                             right: Box::new(Expr::Value(
@@ -4467,6 +4495,7 @@ fn test_variable_assignment_using_colon_equal() {
                         value: "id".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value((test_utils::number("1")).with_empty_span())),
@@ -4490,6 +4519,7 @@ fn test_variable_assignment_using_colon_equal() {
                             value: "price".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })
                     ])),
                     value: Expr::BinaryOp {
@@ -4497,6 +4527,7 @@ fn test_variable_assignment_using_colon_equal() {
                             value: "@new_price".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                         op: BinaryOperator::Assignment,
                         right: Box::new(Expr::BinaryOp {
@@ -4504,6 +4535,7 @@ fn test_variable_assignment_using_colon_equal() {
                                 value: "price".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             })),
                             op: BinaryOperator::Multiply,
                             right: Box::new(Expr::Value(

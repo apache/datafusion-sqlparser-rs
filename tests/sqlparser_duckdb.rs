@@ -283,6 +283,7 @@ fn test_select_union_by_name() {
                         value: "capitals".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }])),
                     joins: vec![],
                 }],
@@ -316,6 +317,7 @@ fn test_select_union_by_name() {
                         value: "weather".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }])),
                     joins: vec![],
                 }],
@@ -348,7 +350,8 @@ fn test_duckdb_install() {
             extension_name: Ident {
                 value: "tpch".to_string(),
                 quote_style: None,
-                span: Span::empty()
+                span: Span::empty(),
+                raw: false,
             }
         }
     );
@@ -362,7 +365,8 @@ fn test_duckdb_load_extension() {
             extension_name: Ident {
                 value: "my_extension".to_string(),
                 quote_style: None,
-                span: Span::empty()
+                span: Span::empty(),
+                raw: false,
             }
         },
         stmt

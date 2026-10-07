@@ -4392,6 +4392,7 @@ impl<'a> Parser<'a> {
                 // some experimentation suggests that snowflake permits
                 // any keyword here unquoted.
                 keyword: _,
+                raw: _,
             }) => Ok(JsonPathElem::Dot {
                 key: value,
                 quoted: quote_style.is_some(),
@@ -13847,6 +13848,7 @@ impl<'a> Parser<'a> {
                         value: Token::Mul.to_string(),
                         quote_style: None,
                         span,
+                        raw: false,
                     }));
                 } else if dialect_of!(self is BigQueryDialect) && in_table_clause {
                     let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
@@ -13902,6 +13904,7 @@ impl<'a> Parser<'a> {
                                 value: value.into(),
                                 quote_style: ident.quote_style,
                                 span: ident.span,
+                                raw: false,
                             })
                         })
                         .collect::<Vec<_>>(),
@@ -21487,6 +21490,7 @@ impl Word {
             value: self.value.clone(),
             quote_style: self.quote_style,
             span,
+            raw: self.raw,
         }
     }
 
@@ -21499,6 +21503,7 @@ impl Word {
             value: self.value,
             quote_style: self.quote_style,
             span,
+            raw: self.raw,
         }
     }
 }
@@ -22150,16 +22155,19 @@ mod tests {
                 value: "CATALOG".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             Ident {
                 value: "F(o)o. \"bar".to_string(),
                 quote_style: Some('"'),
                 span: Span::empty(),
+                raw: false,
             },
             Ident {
                 value: "table".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
         ];
         dialect.run_parser_method(r#"CATALOG."F(o)o. ""bar".table"#, |parser| {
@@ -22173,11 +22181,13 @@ mod tests {
                 value: "CATALOG".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             Ident {
                 value: "table".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
         ];
         dialect.run_parser_method("CATALOG . table", |parser| {

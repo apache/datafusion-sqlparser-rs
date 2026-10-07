@@ -51,6 +51,7 @@ fn parse_map_access_expr() {
                     value: "string_values".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 })),
                 access_chain: vec![AccessExpr::Subscript(Subscript::Index {
                     index: call(
@@ -986,6 +987,7 @@ fn parse_create_view_with_fields_data_types() {
                                 value: "int".into(),
                                 quote_style: Some('"'),
                                 span: Span::empty(),
+                                raw: false,
                             }]),
                             vec![]
                         )),
@@ -998,6 +1000,7 @@ fn parse_create_view_with_fields_data_types() {
                                 value: "String".into(),
                                 quote_style: Some('"'),
                                 span: Span::empty(),
+                                raw: false,
                             }]),
                             vec![]
                         )),

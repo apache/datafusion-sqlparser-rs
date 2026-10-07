@@ -135,6 +135,7 @@
 //!     value: "name".into(),
 //!     quote_style: None,
 //!     span: Span::empty(),
+//!     raw: false,
 //! };
 //! ```
 //!

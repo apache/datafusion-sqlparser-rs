@@ -255,6 +255,12 @@ pub struct Ident {
     pub quote_style: Option<char>,
     /// The span of the identifier in the original SQL string.
     pub span: Span,
+    /// True when `value` is the exact, already-escaped source text, as
+    /// produced by parsing with [`crate::tokenizer::Tokenizer::with_unescape`]
+    /// set to `false`, and so must be displayed unchanged. False (the
+    /// default) means `value` is fully unescaped and every occurrence of
+    /// the closing quote character must be doubled on display.
+    pub raw: bool,
 }
 
 impl PartialEq for Ident {
@@ -264,6 +270,8 @@ impl PartialEq for Ident {
             quote_style,
             // exhaustiveness check; we ignore spans in comparisons
             span: _,
+            // exhaustiveness check; raw only affects display, not identity
+            raw: _,
         } = self;
 
         value == &other.value && quote_style == &other.quote_style
@@ -277,6 +285,8 @@ impl core::hash::Hash for Ident {
             quote_style,
             // exhaustiveness check; we ignore spans in hashes
             span: _,
+            // exhaustiveness check; raw only affects display, not identity
+            raw: _,
         } = self;
 
         value.hash(state);
@@ -299,6 +309,8 @@ impl Ord for Ident {
             quote_style,
             // exhaustiveness check; we ignore spans in ordering
             span: _,
+            // exhaustiveness check; raw only affects display, not identity
+            raw: _,
         } = self;
 
         let Ident {
@@ -306,6 +318,8 @@ impl Ord for Ident {
             quote_style: other_quote_style,
             // exhaustiveness check; we ignore spans in ordering
             span: _,
+            // exhaustiveness check; raw only affects display, not identity
+            raw: _,
         } = other;
 
         // First compare by value, then by quote_style
@@ -325,6 +339,7 @@ impl Ident {
             value: value.into(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }
     }
 
@@ -339,6 +354,7 @@ impl Ident {
             value: value.into(),
             quote_style: Some(quote),
             span: Span::empty(),
+            raw: false,
         }
     }
 
@@ -351,6 +367,7 @@ impl Ident {
             value: value.into(),
             quote_style: None,
             span,
+            raw: false,
         }
     }
 
@@ -364,6 +381,7 @@ impl Ident {
             value: value.into(),
             quote_style: Some(quote),
             span,
+            raw: false,
         }
     }
 }
@@ -374,6 +392,7 @@ impl From<&str> for Ident {
             value: value.to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }
     }
 }
@@ -382,20 +401,39 @@ pub(crate) fn fmt_ident(
     f: &mut fmt::Formatter,
     value: &str,
     quote_style: Option<char>,
+    raw: bool,
 ) -> fmt::Result {
-    match quote_style {
-        Some('[') => write!(f, "[{value}]"),
-        Some(q) => {
-            let escaped = value::escape_quoted_string(value, q);
-            write!(f, "{q}{escaped}{q}")
-        }
-        None => f.write_str(value),
+    let (open, close) = match quote_style {
+        Some('[') => ('[', ']'),
+        Some(q) => (q, q),
+        None => return f.write_str(value),
+    };
+    if raw {
+        write!(f, "{open}{value}{close}")
+    } else {
+        fmt_quoted_ident(f, open, close, value)
     }
+}
+
+/// Writes `value` between `open` and `close`, doubling every occurrence of
+/// `close` so the result re-tokenizes to the same value. Only used for a
+/// fully unescaped (non-`raw`) value; a `raw` value is already exactly the
+/// source text and is written out unchanged instead.
+fn fmt_quoted_ident(f: &mut fmt::Formatter, open: char, close: char, value: &str) -> fmt::Result {
+    write!(f, "{open}")?;
+    for ch in value.chars() {
+        if ch == close {
+            write!(f, "{close}{close}")?;
+        } else {
+            write!(f, "{ch}")?;
+        }
+    }
+    write!(f, "{close}")
 }
 
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt_ident(f, &self.value, self.quote_style)
+        fmt_ident(f, &self.value, self.quote_style, self.raw)
     }
 }
 

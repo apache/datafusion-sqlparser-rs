@@ -417,16 +417,20 @@ impl Token {
             keyword: keyword_lookup(word, quote_style),
             value: word.to_string(),
             quote_style,
+            raw: false,
         })
     }
 
     /// Like [`Self::make_word`] but takes ownership of the word `String`,
     /// avoiding an extra allocation when the caller already has an owned value.
-    fn make_word_owned(word: String, quote_style: Option<char>) -> Self {
+    /// `raw` is true when `word` is the exact, already-escaped source text,
+    /// produced by tokenizing with `unescape: false`.
+    fn make_word_owned(word: String, quote_style: Option<char>, raw: bool) -> Self {
         Token::Word(Word {
             keyword: keyword_lookup(&word, quote_style),
             value: word,
             quote_style,
+            raw,
         })
     }
 }
@@ -466,11 +470,15 @@ pub struct Word {
     /// If the word was not quoted and it matched one of the known keywords,
     /// this will have one of the values from dialect::keywords, otherwise empty
     pub keyword: Keyword,
+    /// True when `value` is the exact, already-escaped source text, as
+    /// produced by tokenizing with [`Tokenizer::with_unescape`] set to
+    /// `false`, and so must be displayed unchanged.
+    pub raw: bool,
 }
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        crate::ast::fmt_ident(f, &self.value, self.quote_style)
+        crate::ast::fmt_ident(f, &self.value, self.quote_style, self.raw)
     }
 }
 
@@ -906,12 +914,18 @@ impl<'a> Tokenizer<'a> {
     /// # Example
     ///
     /// ```
-    /// # use sqlparser::tokenizer::{Token, Tokenizer};
+    /// # use sqlparser::tokenizer::{Token, Tokenizer, Word};
     /// # use sqlparser::dialect::GenericDialect;
+    /// # use sqlparser::keywords::Keyword;
     /// # let dialect = GenericDialect{};
     /// let query = r#""Foo "" Bar""#;
     /// let unescaped = Token::make_word(r#"Foo " Bar"#, Some('"'));
-    /// let original  = Token::make_word(r#"Foo "" Bar"#, Some('"'));
+    /// let original = Token::Word(Word {
+    ///     value: r#"Foo "" Bar"#.to_string(),
+    ///     quote_style: Some('"'),
+    ///     keyword: Keyword::NoKeyword,
+    ///     raw: true,
+    /// });
     ///
     /// // Parsing with unescaping (default)
     /// let tokens = Tokenizer::new(&dialect, &query).tokenize().unwrap();
@@ -1053,7 +1067,7 @@ impl<'a> Tokenizer<'a> {
             return Ok(Some(Token::Number(s, false)));
         }
 
-        Ok(Some(Token::make_word_owned(word, None)))
+        Ok(Some(Token::make_word_owned(word, None, false)))
     }
 
     /// Get the next token or return None
@@ -1111,7 +1125,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "b" or "B"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word_owned(s, None)))
+                            Ok(Some(Token::make_word_owned(s, None, false)))
                         }
                     }
                 }
@@ -1138,7 +1152,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "r" or "R"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word_owned(s, None)))
+                            Ok(Some(Token::make_word_owned(s, None, false)))
                         }
                     }
                 }
@@ -1163,13 +1177,13 @@ impl<'a> Tokenizer<'a> {
                                     .map(|s| Some(Token::NationalQuoteDelimitedStringLiteral(s)))
                             } else {
                                 let s = self.tokenize_word(String::from_iter([n, q]), chars);
-                                Ok(Some(Token::make_word_owned(s, None)))
+                                Ok(Some(Token::make_word_owned(s, None, false)))
                             }
                         }
                         _ => {
                             // regular identifier starting with an "N"
                             let s = self.tokenize_word(n, chars);
-                            Ok(Some(Token::make_word_owned(s, None)))
+                            Ok(Some(Token::make_word_owned(s, None, false)))
                         }
                     }
                 }
@@ -1180,7 +1194,7 @@ impl<'a> Tokenizer<'a> {
                             .map(|s| Some(Token::QuoteDelimitedStringLiteral(s)))
                     } else {
                         let s = self.tokenize_word(q, chars);
-                        Ok(Some(Token::make_word_owned(s, None)))
+                        Ok(Some(Token::make_word_owned(s, None, false)))
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
@@ -1196,7 +1210,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "E" or "e"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word_owned(s, None)))
+                            Ok(Some(Token::make_word_owned(s, None, false)))
                         }
                     }
                 }
@@ -1215,7 +1229,7 @@ impl<'a> Tokenizer<'a> {
                     }
                     // regular identifier starting with an "U" or "u"
                     let s = self.tokenize_word(x, chars);
-                    Ok(Some(Token::make_word_owned(s, None)))
+                    Ok(Some(Token::make_word_owned(s, None, false)))
                 }
                 // The spec only allows an uppercase 'X' to introduce a hex
                 // string, but PostgreSQL, at least, allows a lowercase 'x' too.
@@ -1230,7 +1244,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "X"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word_owned(s, None)))
+                            Ok(Some(Token::make_word_owned(s, None, false)))
                         }
                     }
                 }
@@ -1279,7 +1293,11 @@ impl<'a> Tokenizer<'a> {
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(ch) => {
                     let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                    Ok(Some(Token::make_word_owned(word, Some(quote_start))))
+                    Ok(Some(Token::make_word_owned(
+                        word,
+                        Some(quote_start),
+                        !self.unescape,
+                    )))
                 }
                 // Potentially nested delimited (quoted) identifier
                 quote_start
@@ -1303,15 +1321,18 @@ impl<'a> Tokenizer<'a> {
 
                     let Some(nested_quote_start) = nested_quote_start else {
                         let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                        return Ok(Some(Token::make_word_owned(word, Some(quote_start))));
+                        return Ok(Some(Token::make_word_owned(
+                            word,
+                            Some(quote_start),
+                            !self.unescape,
+                        )));
                     };
 
-                    let mut word = vec![];
                     let quote_end = Word::matching_end_quote(quote_start);
                     let nested_quote_end = Word::matching_end_quote(nested_quote_start);
                     let error_loc = chars.location();
 
-                    chars.next(); // skip the first delimiter
+                    chars.next(); // skip the outer opening delimiter
                     peeking_take_while(chars, |ch| ch.is_whitespace());
                     if chars.peek() != Some(&nested_quote_start) {
                         return self.tokenizer_error(
@@ -1319,9 +1340,11 @@ impl<'a> Tokenizer<'a> {
                             format!("Expected nested delimiter '{nested_quote_start}' before EOF."),
                         );
                     }
-                    word.push(nested_quote_start.into());
-                    word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
-                    word.push(nested_quote_end.into());
+                    // `["foo"]` names the same identifier as `"foo"`. Tokenize
+                    // the inner quoted identifier directly so its own escaping
+                    // is handled normally, and drop the outer bracket, which
+                    // carries no information of its own.
+                    let word = self.tokenize_quoted_identifier(nested_quote_end, chars)?;
                     peeking_take_while(chars, |ch| ch.is_whitespace());
                     if chars.peek() != Some(&quote_end) {
                         return self.tokenizer_error(
@@ -1329,11 +1352,12 @@ impl<'a> Tokenizer<'a> {
                             format!("Expected close delimiter '{quote_end}' before EOF."),
                         );
                     }
-                    chars.next(); // skip close delimiter
+                    chars.next(); // skip outer closing delimiter
 
                     Ok(Some(Token::make_word_owned(
-                        word.concat(),
-                        Some(quote_start),
+                        word,
+                        Some(nested_quote_start),
+                        !self.unescape,
                     )))
                 }
                 // numbers and period
@@ -1460,12 +1484,12 @@ impl<'a> Tokenizer<'a> {
 
                             if !word.is_empty() {
                                 s += word.as_str();
-                                return Ok(Some(Token::make_word_owned(s, None)));
+                                return Ok(Some(Token::make_word_owned(s, None, false)));
                             }
                         } else if prev_token == Some(&Token::Period) {
                             // If the previous token was a period, thus not belonging to a number,
                             // the value we have is part of an identifier.
-                            return Ok(Some(Token::make_word_owned(s, None)));
+                            return Ok(Some(Token::make_word_owned(s, None, false)));
                         }
                     }
 
@@ -2753,6 +2777,7 @@ mod tests {
                 value: "foo".to_string(),
                 quote_style: None,
                 keyword: Keyword::NoKeyword,
+                raw: false,
             }),
             Token::DoubleEq,
             Token::SingleQuotedString("1".to_string()),
@@ -3485,6 +3510,7 @@ mod tests {
                     value: "comment".to_string(),
                     quote_style: None,
                     keyword: Keyword::COMMENT,
+                    raw: false,
                 }),
                 Token::Mul,
                 Token::Div,
@@ -3746,11 +3772,26 @@ mod tests {
             .unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a "" b"#, Some('"')),
+            Token::Word(Word {
+                value: r#"a "" b"#.to_string(),
+                quote_style: Some('"'),
+                keyword: Keyword::NoKeyword,
+                raw: true,
+            }),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a """#, Some('"')),
+            Token::Word(Word {
+                value: r#"a """#.to_string(),
+                quote_style: Some('"'),
+                keyword: Keyword::NoKeyword,
+                raw: true,
+            }),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"c """""#, Some('"')),
+            Token::Word(Word {
+                value: r#"c """""#.to_string(),
+                quote_style: Some('"'),
+                keyword: Keyword::NoKeyword,
+                raw: true,
+            }),
             Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
@@ -4365,12 +4406,14 @@ mod tests {
                 value: "table".to_string(),
                 quote_style: None,
                 keyword: Keyword::TABLE,
+                raw: false,
             }),
             Token::Period,
             Token::Word(Word {
                 value: "_col".to_string(),
                 quote_style: None,
                 keyword: Keyword::NoKeyword,
+                raw: false,
             }),
         ];
 
@@ -4419,6 +4462,7 @@ mod tests {
                 value: "word".to_string(),
                 quote_style: None,
                 keyword: Keyword::NoKeyword,
+                raw: false,
             }),
             Token::Whitespace(Whitespace::Space),
             Token::Number("1".to_string(), false),
@@ -4439,6 +4483,7 @@ mod tests {
                 value: "KEY_BLOCK_SIZE".to_string(),
                 quote_style: None,
                 keyword: Keyword::KEY_BLOCK_SIZE,
+                raw: false,
             }),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
@@ -4583,6 +4628,7 @@ mod tests {
                 value: "a\"b".to_string(),
                 quote_style: Some('"'),
                 keyword: Keyword::NoKeyword,
+                raw: false,
             }
             .to_string(),
             "\"a\"\"b\""
@@ -4592,6 +4638,7 @@ mod tests {
                 value: "a`b".to_string(),
                 quote_style: Some('`'),
                 keyword: Keyword::NoKeyword,
+                raw: false,
             }
             .to_string(),
             "`a``b`"
@@ -4601,6 +4648,7 @@ mod tests {
                 value: "a b".to_string(),
                 quote_style: Some('['),
                 keyword: Keyword::NoKeyword,
+                raw: false,
             }
             .to_string(),
             "[a b]"

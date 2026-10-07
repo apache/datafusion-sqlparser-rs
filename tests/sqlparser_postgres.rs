@@ -1760,6 +1760,7 @@ fn parse_copy_to() {
                                 value: "a".into(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             },
                         },
                         SelectItem::ExprWithAlias {
@@ -1770,6 +1771,7 @@ fn parse_copy_to() {
                                 value: "b".into(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             },
                         }
                     ],
@@ -1912,6 +1914,7 @@ fn parse_set() {
                 value: "b".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })],
         })
     );
@@ -1973,6 +1976,7 @@ fn parse_set() {
                 value: "b".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })],
         })
     );
@@ -2044,6 +2048,7 @@ fn parse_set_role() {
                 value: "rolename".to_string(),
                 quote_style: Some('\"'),
                 span: Span::empty(),
+                raw: false,
             }),
         })
     );
@@ -2059,6 +2064,7 @@ fn parse_set_role() {
                 value: "rolename".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
+                raw: false,
             }),
         })
     );
@@ -2392,6 +2398,7 @@ fn parse_pg_on_conflict() {
                             value: "dsize".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                         op: BinaryOperator::Gt,
                         right: Box::new(Expr::Value(
@@ -2439,6 +2446,7 @@ fn parse_pg_on_conflict() {
                             value: "dsize".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                         op: BinaryOperator::Gt,
                         right: Box::new(Expr::Value(
@@ -2790,6 +2798,7 @@ fn parse_array_index_expr() {
                         value: "baz".to_string(),
                         quote_style: Some('"'),
                         span: Span::empty(),
+                        raw: false,
                     })
                 }),
                 AccessExpr::Subscript(Subscript::Index {
@@ -2797,6 +2806,7 @@ fn parse_array_index_expr() {
                         value: "fooz".to_string(),
                         quote_style: Some('"'),
                         span: Span::empty(),
+                        raw: false,
                     })
                 }),
             ],
@@ -3111,6 +3121,7 @@ fn parse_create_indices_with_operator_classes() {
                             value: "concat_users_name".to_owned(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
@@ -3122,6 +3133,7 @@ fn parse_create_indices_with_operator_classes() {
                                         value: "first_name".to_owned(),
                                         quote_style: None,
                                         span: Span::empty(),
+                                        raw: false,
                                     },
                                 ))),
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
@@ -3129,6 +3141,7 @@ fn parse_create_indices_with_operator_classes() {
                                         value: "last_name".to_owned(),
                                         quote_style: None,
                                         span: Span::empty(),
+                                        raw: false,
                                     },
                                 ))),
                             ],
@@ -3203,7 +3216,8 @@ fn parse_create_indices_with_operator_classes() {
                                 expr: Expr::Identifier(Ident {
                                     value: "column_name".to_owned(),
                                     quote_style: None,
-                                    span: Span::empty()
+                                    span: Span::empty(),
+                                    raw: false,
                                 }),
                                 options: OrderByOptions {
                                     sort: None,
@@ -4393,6 +4407,7 @@ fn parse_custom_operator() {
                 value: "relname".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })),
             op: BinaryOperator::PGCustomBinaryOperator(vec![
                 "database".into(),
@@ -4415,6 +4430,7 @@ fn parse_custom_operator() {
                 value: "relname".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
             right: Box::new(Expr::Value(
@@ -4433,6 +4449,7 @@ fn parse_custom_operator() {
                 value: "relname".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
             right: Box::new(Expr::Value(
@@ -4555,12 +4572,14 @@ fn parse_alter_role() {
                 value: "old_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }
             },
         }
@@ -4574,6 +4593,7 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::WithOptions {
                 options: vec![
@@ -4606,6 +4626,7 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::WithOptions {
                 options: vec![
@@ -4630,12 +4651,14 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 config_value: SetConfigValue::FromCurrent,
                 in_database: None
@@ -4651,12 +4674,14 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 config_value: SetConfigValue::Value(Expr::Value(
                     (number("100000")).with_empty_span()
@@ -4665,6 +4690,7 @@ fn parse_alter_role() {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]))
             },
         }]
@@ -4678,12 +4704,14 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 config_value: SetConfigValue::Value(Expr::Value(
                     (number("100000")).with_empty_span()
@@ -4692,6 +4720,7 @@ fn parse_alter_role() {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]))
             },
         }
@@ -4705,18 +4734,21 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 config_value: SetConfigValue::Default,
                 in_database: Some(ObjectName::from(vec![Ident {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]))
             },
         }
@@ -4730,6 +4762,7 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::Reset {
                 config_name: ResetConfig::ALL,
@@ -4746,17 +4779,20 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::Reset {
                 config_name: ResetConfig::ConfigName(ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }])),
                 in_database: Some(ObjectName::from(vec![Ident {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]))
             },
         }
@@ -5330,6 +5366,7 @@ fn parse_drop_function() {
                     value: "test_func".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 args: None
             }],
@@ -5347,6 +5384,7 @@ fn parse_drop_function() {
                     value: "test_func".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 args: Some(vec![
                     OperateFunctionArg::with_name("a", DataType::Integer(None)),
@@ -5375,6 +5413,7 @@ fn parse_drop_function() {
                         value: "test_func1".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }]),
                     args: Some(vec![
                         OperateFunctionArg::with_name("a", DataType::Integer(None)),
@@ -5393,6 +5432,7 @@ fn parse_drop_function() {
                         value: "test_func2".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }]),
                     args: Some(vec![
                         OperateFunctionArg::with_name("a", DataType::Varchar(None)),
@@ -5423,6 +5463,7 @@ fn parse_drop_domain() {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }]),
             drop_behavior: None
         })
@@ -5437,6 +5478,7 @@ fn parse_drop_domain() {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }]),
             drop_behavior: None
         })
@@ -5451,6 +5493,7 @@ fn parse_drop_domain() {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }]),
             drop_behavior: Some(DropBehavior::Cascade)
         })
@@ -5466,6 +5509,7 @@ fn parse_drop_domain() {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }]),
             drop_behavior: Some(DropBehavior::Restrict)
         })
@@ -5484,6 +5528,7 @@ fn parse_drop_procedure() {
                     value: "test_proc".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 args: None
             }],
@@ -5501,6 +5546,7 @@ fn parse_drop_procedure() {
                     value: "test_proc".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]),
                 args: Some(vec![
                     OperateFunctionArg::with_name("a", DataType::Integer(None)),
@@ -5529,6 +5575,7 @@ fn parse_drop_procedure() {
                         value: "test_proc1".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }]),
                     args: Some(vec![
                         OperateFunctionArg::with_name("a", DataType::Integer(None)),
@@ -5547,6 +5594,7 @@ fn parse_drop_procedure() {
                         value: "test_proc2".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }]),
                     args: Some(vec![
                         OperateFunctionArg::with_name("a", DataType::Varchar(None)),
@@ -5639,6 +5687,7 @@ fn parse_dollar_quoted_string() {
                 value: "col_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
         },
     );
@@ -6101,6 +6150,7 @@ fn test_simple_postgres_insert_with_alias() {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }])),
             table_alias: Some(TableAliasWithoutColumns {
                 explicit: true,
@@ -6108,6 +6158,7 @@ fn test_simple_postgres_insert_with_alias() {
                     value: "test_table".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }
             }),
             columns: vec![
@@ -6115,11 +6166,13 @@ fn test_simple_postgres_insert_with_alias() {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }),
                 ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 })
             ],
             by_name: false,
@@ -6182,6 +6235,7 @@ fn test_simple_postgres_insert_with_alias() {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }])),
             table_alias: Some(TableAliasWithoutColumns {
                 explicit: true,
@@ -6189,6 +6243,7 @@ fn test_simple_postgres_insert_with_alias() {
                     value: "test_table".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }
             }),
             columns: vec![
@@ -6196,11 +6251,13 @@ fn test_simple_postgres_insert_with_alias() {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }),
                 ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 })
             ],
             by_name: false,
@@ -6265,6 +6322,7 @@ fn test_simple_insert_with_quoted_alias() {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }])),
             table_alias: Some(TableAliasWithoutColumns {
                 explicit: true,
@@ -6272,6 +6330,7 @@ fn test_simple_insert_with_quoted_alias() {
                     value: "Test_Table".to_string(),
                     quote_style: Some('"'),
                     span: Span::empty(),
+                    raw: false,
                 }
             }),
             columns: vec![
@@ -6279,11 +6338,13 @@ fn test_simple_insert_with_quoted_alias() {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }),
                 ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 })
             ],
             by_name: false,
@@ -7202,6 +7263,7 @@ fn check_arrow_precedence(sql: &str, arrow_operator: BinaryOperator) {
                     value: "foo".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 })),
                 op: arrow_operator,
                 right: Box::new(Expr::Value(
@@ -7237,6 +7299,7 @@ fn arrow_cast_precedence() {
                 value: "foo".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })),
             op: BinaryOperator::Arrow,
             right: Box::new(Expr::Cast {
@@ -7546,11 +7609,13 @@ fn parse_create_server() {
                 value: "server_type".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
+                raw: false,
             }),
             version: Some(Ident {
                 value: "server_version".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
+                raw: false,
             }),
             foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
             options: None,
@@ -7571,6 +7636,7 @@ fn parse_create_server() {
                             value: "foo".to_string(),
                             quote_style: Some('\''),
                             span: Span::empty(),
+                            raw: false,
                         },
                     },
                     CreateServerOption {
@@ -7579,6 +7645,7 @@ fn parse_create_server() {
                             value: "foodb".to_string(),
                             quote_style: Some('\''),
                             span: Span::empty(),
+                            raw: false,
                         },
                     },
                     CreateServerOption {
@@ -7587,6 +7654,7 @@ fn parse_create_server() {
                             value: "5432".to_string(),
                             quote_style: Some('\''),
                             span: Span::empty(),
+                            raw: false,
                         },
                     },
                 ]),
@@ -9668,6 +9736,7 @@ fn parse_create_foreign_table() {
                 value: "public".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
+                raw: false,
             },
         }])
     );

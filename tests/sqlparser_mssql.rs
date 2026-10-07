@@ -177,6 +177,7 @@ fn parse_create_procedure() {
                         value: "@foo".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                     data_type: DataType::Int(None),
                     mode: None,
@@ -187,6 +188,7 @@ fn parse_create_procedure() {
                         value: "@bar".into(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                     data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 256,
@@ -200,6 +202,7 @@ fn parse_create_procedure() {
                 value: "test".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }]),
             language: None,
         }
@@ -513,6 +516,7 @@ fn parse_mssql_openjson() {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
                                 span: Span::empty(),
+                                raw: false,
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
                             path: Some("$.id_list".into()),
@@ -567,6 +571,7 @@ fn parse_mssql_openjson() {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
                                 span: Span::empty(),
+                                raw: false,
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
                             path: Some("$.id_list".into()),
@@ -621,6 +626,7 @@ fn parse_mssql_openjson() {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
                                 span: Span::empty(),
+                                raw: false,
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
                             path: None,
@@ -784,6 +790,7 @@ fn parse_mssql_create_role() {
                     value: "helena".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }]))
             );
         }
@@ -801,12 +808,14 @@ fn parse_alter_role() {
                 value: "old_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }
             },
         }]
@@ -820,12 +829,14 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::AddMember {
                 member_name: Ident {
                     value: "new_member".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }
             },
         }
@@ -839,12 +850,14 @@ fn parse_alter_role() {
                 value: "role_name".into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             operation: AlterRoleOperation::DropMember {
                 member_name: Ident {
                     value: "old_member".into(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }
             },
         }
@@ -935,6 +948,26 @@ fn parse_table_name_in_square_brackets() {
         &Expr::Identifier(Ident::with_quote('[', "a column")),
         expr_from_projection(&select.projection[0]),
     );
+}
+
+#[test]
+fn parse_square_bracket_identifier_with_escaped_bracket() {
+    let select = ms().verified_only_select(r#"SELECT [a]]b] FROM t"#);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a]b")),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    ms().verified_stmt(r#"SELECT a FROM [t]]u]"#);
+    ms().verified_stmt(r#"SELECT [a]]]]b] FROM t"#);
+
+    // Parsed with `unescape: false`, the bracket content is the exact
+    // source text and must round-trip unchanged, including runs of `]]`.
+    let no_escape = TestedDialects::new_with_options(
+        vec![Box::new(MsSqlDialect {})],
+        ParserOptions::new().with_unescape(false),
+    );
+    no_escape.verified_stmt(r#"SELECT [a]]]]b] FROM t"#);
 }
 
 #[test]
@@ -1361,6 +1394,7 @@ fn parse_substring_in_select() {
                                 value: "description".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             })),
                             substring_from: Some(Box::new(Expr::Value(
                                 (number("0")).with_empty_span()
@@ -1378,6 +1412,7 @@ fn parse_substring_in_select() {
                                 value: "test".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             }])),
                             joins: vec![]
                         }],
@@ -1425,6 +1460,7 @@ fn parse_mssql_declare() {
                         value: "@foo".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }],
                     data_type: None,
                     assignment: None,
@@ -1440,6 +1476,7 @@ fn parse_mssql_declare() {
                         value: "@bar".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }],
                     data_type: Some(Int(None)),
                     assignment: None,
@@ -1455,6 +1492,7 @@ fn parse_mssql_declare() {
                         value: "@baz".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }],
                     data_type: Some(Text),
                     assignment: Some(MsSqlAssignment(Box::new(Expr::Value(
@@ -1585,7 +1623,8 @@ fn test_mssql_while_statement() {
                     token: Token::Word(Word {
                         value: "WHILE".to_string(),
                         quote_style: None,
-                        keyword: Keyword::WHILE
+                        keyword: Keyword::WHILE,
+                        raw: false
                     }),
                     span: Span::empty()
                 }),
@@ -1783,11 +1822,13 @@ fn parse_create_table_with_valid_options() {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                     value: Expr::Identifier(Ident {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })
                 },
                 SqlOption::Partition {
@@ -1832,6 +1873,7 @@ fn parse_create_table_with_valid_options() {
                                 value: "column_a".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             },
                             asc: Some(true),
                         },
@@ -1840,6 +1882,7 @@ fn parse_create_table_with_valid_options() {
                                 value: "column_b".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             },
                             asc: Some(false),
                         },
@@ -1848,6 +1891,7 @@ fn parse_create_table_with_valid_options() {
                                 value: "column_c".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             },
                             asc: None,
                         },
@@ -1862,6 +1906,7 @@ fn parse_create_table_with_valid_options() {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                     value: Expr::Function(
                         Function {
@@ -1871,6 +1916,7 @@ fn parse_create_table_with_valid_options() {
                                         value: "HASH".to_string(),
                                         quote_style: None,
                                         span: Span::empty(),
+                                        raw: false,
                                     },
                                 ],
                             ),
@@ -1887,6 +1933,7 @@ fn parse_create_table_with_valid_options() {
                                                         value: "column_a".to_string(),
                                                         quote_style: None,
                                                         span: Span::empty(),
+                                                        raw: false,
                                                     },
                                                 ),
                                             ),
@@ -1898,6 +1945,7 @@ fn parse_create_table_with_valid_options() {
                                                         value: "column_b".to_string(),
                                                         quote_style: None,
                                                         span: Span::empty(),
+                                                        raw: false,
                                                     },
                                                 ),
                                             ),
@@ -1935,6 +1983,7 @@ fn parse_create_table_with_valid_options() {
                     value: "mytable".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },],),
                 columns: vec![
                     ColumnDef {
@@ -1942,6 +1991,7 @@ fn parse_create_table_with_valid_options() {
                             value: "column_a".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         },
                         data_type: Int(None,),
                         options: vec![],
@@ -1951,6 +2001,7 @@ fn parse_create_table_with_valid_options() {
                             value: "column_b".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         },
                         data_type: Int(None,),
                         options: vec![],
@@ -1960,6 +2011,7 @@ fn parse_create_table_with_valid_options() {
                             value: "column_c".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         },
                         data_type: Int(None,),
                         options: vec![],
@@ -2135,12 +2187,14 @@ fn parse_create_table_with_identity_column() {
                     value: "mytable".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },],),
                 columns: vec![ColumnDef {
                     name: Ident {
                         value: "columnA".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     },
                     data_type: Int(None,),
 
@@ -2385,6 +2439,7 @@ fn parse_mssql_varbinary_max_length() {
                     value: "example".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }])
             );
             assert_eq!(
@@ -2410,6 +2465,7 @@ fn parse_mssql_varbinary_max_length() {
                     value: "example".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }])
             );
             assert_eq!(

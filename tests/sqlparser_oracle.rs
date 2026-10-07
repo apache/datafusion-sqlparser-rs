@@ -435,7 +435,8 @@ fn test_insert_with_table_alias() {
                     alias: Ident {
                         value: table_alias,
                         quote_style: None,
-                        span: _
+                        span: _,
+                        raw: _,
                     }
                 }),
                 ..
@@ -445,6 +446,7 @@ fn test_insert_with_table_alias() {
                 value: exp_table_name.into(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }])
         ));
     }

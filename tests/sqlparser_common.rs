@@ -1554,6 +1554,7 @@ fn parse_select_with_date_column_name() {
             value: "date".into(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -2284,6 +2285,7 @@ fn parse_null_like() {
                 value: "col_null".to_owned(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
         },
         select.projection[0]
@@ -2301,6 +2303,7 @@ fn parse_null_like() {
                 value: "null_col".to_owned(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
         },
         select.projection[1]
@@ -3775,6 +3778,7 @@ fn parse_listagg() {
                         value: "id".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     options: OrderByOptions {
                         sort: None,
@@ -3787,6 +3791,7 @@ fn parse_listagg() {
                         value: "username".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }),
                     options: OrderByOptions {
                         sort: None,
@@ -5220,6 +5225,7 @@ fn parse_alter_table() {
                         value: "classification".to_string(),
                         quote_style: Some('\''),
                         span: Span::empty(),
+                        raw: false,
                     },
                     value: Expr::Value(
                         (Value::SingleQuotedString("parquet".to_string())).with_empty_span()
@@ -5241,6 +5247,7 @@ fn parse_alter_table() {
                             value: "autovacuum_vacuum_scale_factor".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         },
                         value: Expr::Value(test_utils::number("0.01").with_empty_span()),
                     },
@@ -5249,6 +5256,7 @@ fn parse_alter_table() {
                             value: "autovacuum_vacuum_threshold".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         },
                         value: Expr::Value(test_utils::number("500").with_empty_span()),
                     }
@@ -6198,6 +6206,7 @@ fn test_parse_named_window() {
                         value: "MIN".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }]),
                     uses_odbc_syntax: false,
                     parameters: FunctionArguments::None,
@@ -6208,6 +6217,7 @@ fn test_parse_named_window() {
                                 value: "c12".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             }),
                         ))],
                         clauses: vec![],
@@ -6218,6 +6228,7 @@ fn test_parse_named_window() {
                         value: "window1".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })),
                     within_group: vec![],
                 }),
@@ -6225,6 +6236,7 @@ fn test_parse_named_window() {
                     value: "min1".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },
             },
             SelectItem::ExprWithAlias {
@@ -6233,6 +6245,7 @@ fn test_parse_named_window() {
                         value: "MAX".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }]),
                     uses_odbc_syntax: false,
                     parameters: FunctionArguments::None,
@@ -6243,6 +6256,7 @@ fn test_parse_named_window() {
                                 value: "c12".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
+                                raw: false,
                             }),
                         ))],
                         clauses: vec![],
@@ -6253,6 +6267,7 @@ fn test_parse_named_window() {
                         value: "window2".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })),
                     within_group: vec![],
                 }),
@@ -6260,6 +6275,7 @@ fn test_parse_named_window() {
                     value: "max1".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },
             },
         ],
@@ -6270,6 +6286,7 @@ fn test_parse_named_window() {
                 value: "aggregate_test_100".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }])),
             joins: vec![],
         }],
@@ -6287,6 +6304,7 @@ fn test_parse_named_window() {
                     value: "window1".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },
                 NamedWindowExpr::WindowSpec(WindowSpec {
                     window_name: None,
@@ -6296,6 +6314,7 @@ fn test_parse_named_window() {
                             value: "C12".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         }),
                         options: OrderByOptions {
                             sort: None,
@@ -6311,6 +6330,7 @@ fn test_parse_named_window() {
                     value: "window2".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },
                 NamedWindowExpr::WindowSpec(WindowSpec {
                     window_name: None,
@@ -6318,6 +6338,7 @@ fn test_parse_named_window() {
                         value: "C11".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })],
                     order_by: vec![],
                     window_frame: None,
@@ -6909,6 +6930,7 @@ fn interval_disallow_interval_expr_gt() {
                 value: "x".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             })),
         }
     )
@@ -6976,6 +6998,7 @@ fn parse_interval_and_or_xor() {
                 value: "col".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }))],
             exclude: None,
             into: None,
@@ -6984,6 +7007,7 @@ fn parse_interval_and_or_xor() {
                     value: "test".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 }])),
                 joins: vec![],
             }],
@@ -6995,6 +7019,7 @@ fn parse_interval_and_or_xor() {
                         value: "d3_date".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
@@ -7002,6 +7027,7 @@ fn parse_interval_and_or_xor() {
                             value: "d1_date".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
@@ -7021,6 +7047,7 @@ fn parse_interval_and_or_xor() {
                         value: "d2_date".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     })),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
@@ -7028,6 +7055,7 @@ fn parse_interval_and_or_xor() {
                             value: "d1_date".to_string(),
                             quote_style: None,
                             span: Span::empty(),
+                            raw: false,
                         })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
@@ -7122,6 +7150,7 @@ fn parse_at_timezone() {
                 value: "hour".to_string(),
                 quote_style: Some('"'),
                 span: Span::empty(),
+                raw: false,
             },
         },
         only(&select.projection),
@@ -8228,6 +8257,7 @@ fn parse_recursive_cte() {
                 value: "nums".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             columns: vec![TableAliasColumnDef::from_name("val")],
             at: None,
@@ -9412,6 +9442,7 @@ fn lateral_function() {
                 value: "customer".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             }])),
             joins: vec![Join {
                 relation: TableFactor::Function {
@@ -10135,11 +10166,13 @@ fn parse_grant() {
                                     value: "shape".into(),
                                     quote_style: None,
                                     span: Span::empty(),
+                                    raw: false,
                                 },
                                 Ident {
                                     value: "size".into(),
                                     quote_style: None,
                                     span: Span::empty(),
+                                    raw: false,
                                 },
                             ])
                         },
@@ -10836,6 +10869,7 @@ fn test_lock_table() {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }])
     );
     assert!(lock.nonblock.is_none());
@@ -10851,6 +10885,7 @@ fn test_lock_table() {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }])
     );
     assert!(lock.nonblock.is_none());
@@ -10866,6 +10901,7 @@ fn test_lock_table() {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }])
     );
     assert!(lock.nonblock.is_none());
@@ -10877,6 +10913,7 @@ fn test_lock_table() {
             value: "student".to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }])
     );
     assert!(lock.nonblock.is_none());
@@ -10895,6 +10932,7 @@ fn test_lock_nonblock() {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }])
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::SkipLocked);
@@ -10910,6 +10948,7 @@ fn test_lock_nonblock() {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }])
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::Nowait);
@@ -11914,6 +11953,7 @@ fn parse_pivot_table() {
                     value: "p".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },
                 columns: vec![
                     TableAliasColumnDef::from_name("c"),
@@ -12844,11 +12884,13 @@ fn parse_execute_stored_procedure() {
                 value: "my_schema".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
             Ident {
                 value: "my_stored_procedure".to_string(),
                 quote_style: None,
                 span: Span::empty(),
+                raw: false,
             },
         ])),
         parameters: vec![
@@ -13048,12 +13090,14 @@ fn parse_unload() {
                 value: "s3://...".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
+                raw: false,
             },
             with: vec![SqlOption::KeyValue {
                 key: Ident {
                     value: "format".to_string(),
                     quote_style: None,
                     span: Span::empty(),
+                    raw: false,
                 },
                 value: Expr::Value(
                     (Value::SingleQuotedString("AVRO".to_string())).with_empty_span()
@@ -14645,6 +14689,7 @@ fn test_extract_seconds_single_quote_ok() {
                 value: "seconds".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
+                raw: false,
             }),
             syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Cast {
@@ -15776,6 +15821,7 @@ fn test_load_extension() {
                     value: "filename".to_string(),
                     quote_style: Some('\''),
                     span: Span::empty(),
+                    raw: false,
                 },
                 extension_name
             );
@@ -16088,6 +16134,20 @@ fn test_keywords_as_column_names_after_dot() {
         }
         _ => panic!("Expected CompoundIdentifier for T.case"),
     }
+}
+
+#[test]
+fn test_quoted_identifier_escaping_with_adjacent_pairs() {
+    let double_quote =
+        TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+    let select = double_quote.verified_only_select(r#"SELECT "a""""b" FROM t"#);
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Identifier(ident) => assert_eq!(ident, &Ident::with_quote('"', "a\"\"b")),
+        other => panic!("Expected Identifier, got: {other:?}"),
+    }
+
+    let backtick = TestedDialects::new(vec![Box::new(MySqlDialect {})]);
+    backtick.verified_stmt("SELECT a FROM `t````u`");
 }
 
 #[test]
@@ -16812,6 +16872,7 @@ fn test_select_from_first() {
                         value: "capitals".to_string(),
                         quote_style: None,
                         span: Span::empty(),
+                        raw: false,
                     }])),
                     joins: vec![],
                 }],
@@ -16863,6 +16924,7 @@ fn test_select_from_first_with_cte() {
             value: "test".to_string(),
             quote_style: None,
             span: Span::empty(),
+            raw: false,
         }])),
         joins: vec![],
     }];
@@ -18290,7 +18352,8 @@ fn parse_create_procedure_with_language() {
                     span: Span {
                         start: Location::empty(),
                         end: Location::empty()
-                    }
+                    },
+                    raw: false,
                 })
             );
         }
@@ -18322,6 +18385,7 @@ fn parse_create_procedure_with_parameter_modes() {
                             value: "a".into(),
                             quote_style: None,
                             span: fake_span,
+                            raw: false,
                         },
                         data_type: DataType::Integer(None),
                         mode: Some(ArgMode::In),
@@ -18332,6 +18396,7 @@ fn parse_create_procedure_with_parameter_modes() {
                             value: "b".into(),
                             quote_style: None,
                             span: fake_span,
+                            raw: false,
                         },
                         data_type: DataType::Text,
                         mode: Some(ArgMode::Out),
@@ -18342,6 +18407,7 @@ fn parse_create_procedure_with_parameter_modes() {
                             value: "c".into(),
                             quote_style: None,
                             span: fake_span,
+                            raw: false,
                         },
                         data_type: DataType::Timestamp(None, TimezoneInfo::None),
                         mode: Some(ArgMode::InOut),
@@ -18352,6 +18418,7 @@ fn parse_create_procedure_with_parameter_modes() {
                             value: "d".into(),
                             quote_style: None,
                             span: fake_span,
+                            raw: false,
                         },
                         data_type: DataType::Bool,
                         mode: None,
@@ -19597,6 +19664,7 @@ fn test_parse_set_session_authorization() {
                 value: "username".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
+                raw: false,
             }),
         }))
     );

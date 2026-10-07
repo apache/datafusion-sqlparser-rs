@@ -34,6 +34,7 @@ fn test_square_brackets_over_db_schema_table_name() {
             value: "col1".to_string(),
             quote_style: Some('['),
             span: Span::empty(),
+            raw: false,
         })),
     );
     assert_eq!(
@@ -44,11 +45,13 @@ fn test_square_brackets_over_db_schema_table_name() {
                     value: "test_schema".to_string(),
                     quote_style: Some('['),
                     span: Span::empty(),
+                    raw: false,
                 },
                 Ident {
                     value: "test_table".to_string(),
                     quote_style: Some('['),
                     span: Span::empty(),
+                    raw: false,
                 }
             ])),
             joins: vec![],
@@ -76,6 +79,7 @@ fn test_double_quotes_over_db_schema_table_name() {
             value: "col1".to_string(),
             quote_style: Some('"'),
             span: Span::empty(),
+            raw: false,
         })),
     );
     assert_eq!(
@@ -86,11 +90,13 @@ fn test_double_quotes_over_db_schema_table_name() {
                     value: "test_schema".to_string(),
                     quote_style: Some('"'),
                     span: Span::empty(),
+                    raw: false,
                 },
                 Ident {
                     value: "test_table".to_string(),
                     quote_style: Some('"'),
                     span: Span::empty(),
+                    raw: false,
                 }
             ])),
             joins: vec![],
@@ -380,12 +386,25 @@ fn test_parse_select_numbered_columns() {
 
 #[test]
 fn test_parse_nested_quoted_identifier() {
-    redshift().verified_stmt(r#"SELECT 1 AS ["1"] FROM a"#);
-    redshift().verified_stmt(r#"SELECT 1 AS ["[="] FROM a"#);
-    redshift().verified_stmt(r#"SELECT 1 AS ["=]"] FROM a"#);
-    redshift().verified_stmt(r#"SELECT 1 AS ["a[b]"] FROM a"#);
+    // `["foo"]` names the same identifier as `"foo"` and now re-serializes
+    // to the plain double-quoted form, with the outer bracket dropped.
+    redshift().one_statement_parses_to(r#"SELECT 1 AS ["1"] FROM a"#, r#"SELECT 1 AS "1" FROM a"#);
+    redshift()
+        .one_statement_parses_to(r#"SELECT 1 AS ["[="] FROM a"#, r#"SELECT 1 AS "[=" FROM a"#);
+    redshift()
+        .one_statement_parses_to(r#"SELECT 1 AS ["=]"] FROM a"#, r#"SELECT 1 AS "=]" FROM a"#);
+    redshift().one_statement_parses_to(
+        r#"SELECT 1 AS ["a[b]"] FROM a"#,
+        r#"SELECT 1 AS "a[b]" FROM a"#,
+    );
+    // An escaped quote inside the nested segment is unescaped and
+    // re-escaped like any other double-quoted identifier.
+    redshift().one_statement_parses_to(
+        r#"SELECT 1 AS ["a""b"] FROM a"#,
+        r#"SELECT 1 AS "a""b" FROM a"#,
+    );
     // trim spaces
-    redshift().one_statement_parses_to(r#"SELECT 1 AS [ " 1 " ]"#, r#"SELECT 1 AS [" 1 "]"#);
+    redshift().one_statement_parses_to(r#"SELECT 1 AS [ " 1 " ]"#, r#"SELECT 1 AS " 1 ""#);
     // invalid query
     assert!(redshift()
         .parse_sql_statements(r#"SELECT 1 AS ["1]"#)

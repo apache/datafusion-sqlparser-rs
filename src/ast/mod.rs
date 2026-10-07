@@ -4930,6 +4930,17 @@ pub enum Statement {
         channel: Ident,
     },
     /// ```sql
+    /// DO [ LANGUAGE lang_name ] code
+    /// ```
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-do.html>
+    Do {
+        /// Optional procedural language name.
+        language: Option<Ident>,
+        /// The anonymous code block, a string literal.
+        code: ValueWithSpan,
+    },
+    /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
     /// send a notification event together with an optional "payload" string to channel
@@ -6505,6 +6516,13 @@ impl fmt::Display for Statement {
             Statement::UNLISTEN { channel } => {
                 write!(f, "UNLISTEN {channel}")?;
                 Ok(())
+            }
+            Statement::Do { language, code } => {
+                write!(f, "DO ")?;
+                if let Some(language) = language {
+                    write!(f, "LANGUAGE {language} ")?;
+                }
+                write!(f, "{code}")
             }
             Statement::NOTIFY { channel, payload } => {
                 write!(f, "NOTIFY {channel}")?;

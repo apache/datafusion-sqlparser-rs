@@ -717,6 +717,7 @@ impl<'a> Parser<'a> {
                 Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
                 Keyword::UNLISTEN if self.dialect.supports_listen_notify() => self.parse_unlisten(),
                 Keyword::NOTIFY if self.dialect.supports_listen_notify() => self.parse_notify(),
+                Keyword::DO if self.dialect.supports_do_statement() => self.parse_do(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => {
@@ -1504,6 +1505,30 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(Statement::UNLISTEN { channel })
+    }
+
+    /// Parse `DO` statement.
+    pub fn parse_do(&mut self) -> Result<Statement, ParserError> {
+        let mut language = self.parse_do_language()?;
+        match &self.peek_token_ref().token {
+            Token::SingleQuotedString(_)
+            | Token::DollarQuotedString(_)
+            | Token::EscapedStringLiteral(_) => {}
+            _ => return self.expected_ref("string literal", self.peek_token_ref()),
+        }
+        let code = self.parse_value()?;
+        if language.is_none() {
+            language = self.parse_do_language()?;
+        }
+        Ok(Statement::Do { language, code })
+    }
+
+    fn parse_do_language(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.parse_keyword(Keyword::LANGUAGE) {
+            Ok(Some(self.parse_identifier()?))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Parse `NOTIFY` statement.

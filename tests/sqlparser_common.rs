@@ -6755,7 +6755,9 @@ fn parse_interval_dont_require_unit() {
 
 #[test]
 fn parse_interval_require_unit() {
-    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_where(|d| {
+        d.require_interval_qualifier() && !d.supports_interval_string_without_qualifier()
+    });
     let sql = "SELECT INTERVAL '1 DAY'";
     let err = dialects.parse_sql_statements(sql).unwrap_err();
     assert_eq!(
@@ -6765,8 +6767,65 @@ fn parse_interval_require_unit() {
 }
 
 #[test]
+fn parse_interval_string_without_qualifier() {
+    let dialects = all_dialects_where(|d| d.supports_interval_string_without_qualifier());
+    for sql in [
+        "SELECT INTERVAL '2 months'",
+        "SELECT INTERVAL '1' DAY",
+        "SELECT INTERVAL '1-2' YEAR TO MONTH",
+        "SELECT INTERVAL -'1' DAY",
+        "SELECT INTERVAL 3 DAY",
+        "SELECT INTERVAL -1 DAY, INTERVAL +2 HOURS",
+        "SELECT INTERVAL '2 seconds' * 2",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    for sql in [
+        "SELECT INTERVAL 1",
+        "SELECT INTERVAL 1 + 1 DAY",
+        "SELECT INTERVAL x DAY",
+    ] {
+        assert!(
+            dialects.parse_sql_statements(sql).is_err(),
+            "{sql} should not parse"
+        );
+    }
+    dialects.verified_stmt("SELECT interval, x FROM t");
+    dialects.verified_stmt("SELECT max(interval) FROM t WHERE interval > 1");
+    dialects.one_statement_parses_to(
+        "SELECT INTERVAL -'2 months'",
+        "SELECT INTERVAL - '2 months'",
+    );
+}
+
+#[test]
+fn parse_interval_number_without_unit_error() {
+    for sql in ["SELECT INTERVAL 1", "SELECT INTERVAL -1"] {
+        for dialect in all_dialects().dialects {
+            if let Err(e) = Parser::parse_sql(&*dialect, sql) {
+                assert_eq!(
+                    e.to_string(),
+                    "sql parser error: INTERVAL requires a unit after the literal value",
+                    "{sql} with {dialect:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn parse_interval_expression_value() {
+    let dialects = all_dialects_where(|d| {
+        d.require_interval_qualifier() && !d.supports_interval_string_without_qualifier()
+    });
+    dialects.verified_stmt("SELECT INTERVAL 1 + 1 DAY");
+}
+
+#[test]
 fn parse_interval_require_qualifier() {
-    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_where(|d| {
+        d.require_interval_qualifier() && !d.supports_interval_string_without_qualifier()
+    });
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = dialects.verified_only_select(sql);

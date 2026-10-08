@@ -754,30 +754,49 @@ pub struct With {
     pub with_token: AttachedToken,
     /// Whether the `WITH` is recursive (`WITH RECURSIVE`).
     pub recursive: bool,
-    /// The list of CTEs declared by this `WITH` clause.
-    pub cte_tables: Vec<Cte>,
-    /// Optional XML namespace definitions (`WITH XMLNAMESPACES (...)`).
-    pub xml_namespaces: Vec<XmlNamespaceDefinition>,
+    /// The expressions declared by this `WITH` clause.
+    pub exprs: Vec<WithExpression>,
 }
 
 impl fmt::Display for With {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("WITH ")?;
-        if !self.xml_namespaces.is_empty() {
-            write!(
-                f,
-                "XMLNAMESPACES ({})",
-                display_comma_separated(&self.xml_namespaces)
-            )?;
-            if !self.cte_tables.is_empty() {
-                f.write_str(", ")?;
-            }
-        }
         if self.recursive {
             f.write_str("RECURSIVE ")?;
         }
-        display_comma_separated(&self.cte_tables).fmt(f)?;
+        display_comma_separated(&self.exprs).fmt(f)?;
         Ok(())
+    }
+}
+
+/// A single expression in a `WITH` clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WithExpression {
+    /// A common table expression.
+    Cte(Cte),
+    /// A common scalar expression.
+    ///
+    /// [ClickHouse]: https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions
+    Cse(ExprWithAlias),
+    /// An XML namespace declaration list.
+    ///
+    /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/xml/with-xmlnamespaces
+    XmlNamespaces(Vec<XmlNamespaceDefinition>),
+}
+
+impl fmt::Display for WithExpression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WithExpression::Cte(cte) => cte.fmt(f),
+            WithExpression::Cse(cse) => cse.fmt(f),
+            WithExpression::XmlNamespaces(namespaces) => write!(
+                f,
+                "XMLNAMESPACES ({})",
+                display_comma_separated(namespaces)
+            ),
+        }
     }
 }
 

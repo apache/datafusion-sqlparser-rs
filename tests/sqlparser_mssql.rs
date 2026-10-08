@@ -2928,12 +2928,26 @@ fn parse_mssql_money_constants() {
 
 #[test]
 fn parse_xmlnamespaces() {
-    ms().verified_stmt(
+    let query = ms().verified_query(
         "WITH XMLNAMESPACES ('urn:test' AS ns) SELECT 1 AS [ns:Value] FOR XML PATH('ns:Root')",
     );
-    ms().verified_stmt(
+    let with = query.with.as_ref().unwrap();
+    assert_eq!(with.exprs.len(), 1);
+    match &with.exprs[0] {
+        WithExpression::XmlNamespaces(namespaces) => {
+            assert_eq!(namespaces.len(), 1);
+            assert_eq!(namespaces[0].to_string(), "'urn:test' AS ns");
+        }
+        other => panic!("expected XMLNAMESPACES, got {other:?}"),
+    }
+
+    let query = ms().verified_query(
         "WITH XMLNAMESPACES ('urn:example' AS ns), t AS (SELECT 1 AS id) SELECT id FROM t",
     );
+    let with = query.with.as_ref().unwrap();
+    assert_eq!(with.exprs.len(), 2);
+    assert!(matches!(with.exprs[0], WithExpression::XmlNamespaces(_)));
+    assert!(matches!(with.exprs[1], WithExpression::Cte(_)));
 }
 
 #[test]

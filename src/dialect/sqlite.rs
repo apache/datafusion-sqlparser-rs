@@ -142,4 +142,9 @@ impl Dialect for SQLiteDialect {
     fn supports_national_string_literal(&self) -> bool {
         false
     }
+
+    /// See <https://sqlite.org/lang_select.html>
+    fn supports_values_subquery_expr(&self) -> bool {
+        true
+    }
 }

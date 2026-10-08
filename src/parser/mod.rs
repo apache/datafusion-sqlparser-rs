@@ -21205,10 +21205,12 @@ impl<'a> Parser<'a> {
         self.tokens
     }
 
-    /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH
+    /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH,
+    /// or VALUES where [`Dialect::supports_values_subquery_expr`] holds
     fn peek_sub_query(&mut self) -> bool {
         self.peek_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
             .is_some()
+            || (self.dialect.supports_values_subquery_expr() && self.peek_keyword(Keyword::VALUES))
     }
 
     pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {

@@ -306,6 +306,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/current/sql-values.html>
+    fn supports_values_subquery_expr(&self) -> bool {
+        true
+    }
+
     fn supports_order_by_using_operator(&self) -> bool {
         true
     }

@@ -143,6 +143,11 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    /// See <https://duckdb.org/docs/stable/sql/query_syntax/values>
+    fn supports_values_subquery_expr(&self) -> bool {
+        true
+    }
+
     fn supports_nested_comments(&self) -> bool {
         true
     }

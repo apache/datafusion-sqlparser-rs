@@ -133,6 +133,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_values_subquery_expr(&self) -> bool {
+        true
+    }
+
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }

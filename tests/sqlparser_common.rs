@@ -20433,3 +20433,30 @@ fn parse_bang_not_renders_apart_from_operand() {
     dialects.verified_stmt("SET eaac_cion = ! !o");
     dialects.one_statement_parses_to("SET eaac_cion = ! ! o", "SET eaac_cion = ! !o");
 }
+
+#[test]
+fn parse_values_subquery_expr() {
+    let dialects = all_dialects_where(|d| d.supports_values_subquery_expr());
+    let select = dialects.verified_only_select("SELECT (VALUES (1), (2))");
+    match expr_from_projection(only(&select.projection)) {
+        Expr::Subquery(query) => assert!(matches!(*query.body, SetExpr::Values(_))),
+        expr => panic!("expected a subquery, got {expr:?}"),
+    }
+    match dialects.verified_expr("1 = ANY(VALUES (1), (2))") {
+        Expr::AnyOp { right, .. } => assert!(matches!(*right, Expr::Subquery(_))),
+        expr => panic!("expected ANY over a subquery, got {expr:?}"),
+    }
+    dialects.verified_stmt("SELECT (VALUES (1) LIMIT 1) + 1");
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT (VALUES 1)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: (, found: 1".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_values_subquery_expr());
+    match dialects.verified_expr("(VALUES(1))") {
+        Expr::Nested(expr) => assert!(matches!(*expr, Expr::Function(_))),
+        expr => panic!("expected a nested function call, got {expr:?}"),
+    }
+}

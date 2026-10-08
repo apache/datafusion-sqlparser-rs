@@ -1189,6 +1189,19 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `VALUES` starts a subquery in expression position,
+    /// rather than calling a function named `VALUES` (MySQL).
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT (VALUES (1)), 1 = ANY (VALUES (1), (2));
+    /// ```
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-values.html)
+    fn supports_values_subquery_expr(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect allows dollar placeholders
     /// e.g. `SELECT $var` (SQLite)
     fn supports_dollar_placeholder(&self) -> bool {

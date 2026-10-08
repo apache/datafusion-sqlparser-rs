@@ -193,6 +193,11 @@ impl Dialect for SQLiteDialect {
         false
     }
 
+    /// See <https://sqlite.org/lang_select.html>
+    fn supports_values_subquery_expr(&self) -> bool {
+        true
+    }
+
     fn supports_parens_around_table_factor(&self) -> bool {
         true
     }

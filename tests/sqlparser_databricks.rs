@@ -769,3 +769,64 @@ fn parse_databricks_collated_data_types() {
         .parse_sql_statements("CREATE TABLE t (c ARRAY<STRING COLLATE UTF8_LCASE>)")
         .is_err());
 }
+
+#[test]
+fn test_interval_literals() {
+    for sql in [
+        "SELECT INTERVAL '2 months'",
+        "SELECT INTERVAL '-1 day 1 hour'",
+        "SELECT INTERVAL '1' DAY",
+        "SELECT INTERVAL 3 DAY",
+        "SELECT INTERVAL '1-2' YEAR TO MONTH",
+        "SELECT -INTERVAL '1 year'",
+        "SELECT INTERVAL '2 seconds' * 2",
+        "SELECT d + INTERVAL '1' DAY FROM t",
+    ] {
+        databricks().verified_stmt(sql);
+    }
+    match databricks().verified_expr("INTERVAL '2 months'") {
+        Expr::Interval(i) => assert!(i.leading_field.is_none()),
+        other => panic!("Expected an interval, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_interval_numeric_requires_unit() {
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("SELECT INTERVAL 1")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: INTERVAL requires a unit after the literal value"
+    );
+}
+
+#[test]
+fn test_interval_rejects_value_arithmetic() {
+    assert!(databricks()
+        .parse_sql_statements("SELECT INTERVAL 1 + 1 DAY")
+        .is_err());
+}
+
+#[test]
+fn test_interval_preserves_column_query() {
+    let query = databricks()
+        .run_parser_method("SELECT interval FROM t", |parser| parser.parse_query())
+        .unwrap();
+    let SetExpr::Select(select) = *query.body else {
+        panic!("Expected SELECT");
+    };
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: table("t"),
+            joins: vec![],
+        }]
+    );
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
+            "interval"
+        )))]
+    );
+}

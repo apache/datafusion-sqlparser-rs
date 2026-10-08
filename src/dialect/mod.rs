@@ -1228,6 +1228,22 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if an interval string may omit the qualifier,
+    /// e.g. `INTERVAL '2 months'`. The value must then be a literal.
+    ///
+    /// When `true`:
+    /// * `INTERVAL '2 months'` and `INTERVAL -'1' DAY` are VALID
+    /// * `INTERVAL 1` and `INTERVAL 1 + 1 DAY` are INVALID
+    fn supports_interval_string_without_qualifier(&self) -> bool {
+        false
+    }
+
+    /// Returns true if an interval literal may list several value / unit pairs,
+    /// e.g. `INTERVAL 10 YEAR 20 MONTH`.
+    fn supports_interval_multi_units(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `EXPLAIN` statements with utility options
     /// e.g. `EXPLAIN (ANALYZE TRUE, BUFFERS TRUE) SELECT * FROM tbl;`
     fn supports_explain_with_utility_options(&self) -> bool {

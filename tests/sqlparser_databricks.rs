@@ -772,7 +772,6 @@ fn parse_databricks_collated_data_types() {
 
 #[test]
 fn test_interval_literals() {
-    // A string carries its own units; a unit after it is still read.
     for sql in [
         "SELECT INTERVAL '2 months'",
         "SELECT INTERVAL '-1 day 1 hour'",
@@ -789,4 +788,45 @@ fn test_interval_literals() {
         Expr::Interval(i) => assert!(i.leading_field.is_none()),
         other => panic!("Expected an interval, got {other:?}"),
     }
+}
+
+#[test]
+fn test_interval_numeric_requires_unit() {
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("SELECT INTERVAL 1")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: INTERVAL requires a unit after the literal value"
+    );
+}
+
+#[test]
+fn test_interval_rejects_value_arithmetic() {
+    assert!(databricks()
+        .parse_sql_statements("SELECT INTERVAL 1 + 1 DAY")
+        .is_err());
+}
+
+#[test]
+fn test_interval_preserves_column_query() {
+    let query = databricks()
+        .run_parser_method("SELECT interval FROM t", |parser| parser.parse_query())
+        .unwrap();
+    let SetExpr::Select(select) = *query.body else {
+        panic!("Expected SELECT");
+    };
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: table("t"),
+            joins: vec![],
+        }]
+    );
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
+            "interval"
+        )))]
+    );
 }

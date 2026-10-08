@@ -1902,7 +1902,16 @@ impl<'a> Parser<'a> {
                     Err(e) => {
                         self.failed_reserved_word_prefix_positions
                             .insert(next_token_index, (&e).into());
-                        if !self.dialect.is_reserved_for_identifier(w.keyword) {
+                        // `INTERVAL 1` is a malformed interval, not a name.
+                        let interval_number = w.keyword == Keyword::INTERVAL
+                            && match &self.peek_token_ref().token {
+                                Token::Number(..) => true,
+                                Token::Plus | Token::Minus => {
+                                    matches!(self.peek_nth_token_ref(1).token, Token::Number(..))
+                                }
+                                _ => false,
+                            };
+                        if !interval_number && !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)
                             }) {
@@ -3431,13 +3440,29 @@ impl<'a> Parser<'a> {
         // to match the different flavours of INTERVAL syntax, we only allow expressions
         // if the dialect requires an interval qualifier,
         // see https://github.com/sqlparser-rs/sqlparser-rs/pull/1398 for more details
-        let value = if self.dialect.require_interval_qualifier() {
+        let literal_value = self.dialect.supports_interval_string_without_qualifier();
+        let value = if literal_value {
+            // otherwise `interval` is read as a name
+            self.parse_interval_literal_value()?
+        } else if self.dialect.require_interval_qualifier() {
             // parse a whole expression so `INTERVAL 1 + 1 DAY` is valid
             self.parse_expr()?
         } else {
             // parse a prefix expression so `INTERVAL 1 DAY` is valid, but `INTERVAL 1 + 1 DAY` is not
             // this also means that `INTERVAL '5 days' > INTERVAL '1 day'` treated properly
             self.parse_prefix()?
+        };
+        // only an unsigned string may omit the qualifier
+        let qualifier_required = if literal_value {
+            !matches!(
+                &value,
+                Expr::Value(ValueWithSpan {
+                    value: Value::SingleQuotedString(_),
+                    ..
+                })
+            )
+        } else {
+            self.dialect.require_interval_qualifier()
         };
 
         // Following the string literal is a qualifier which indicates the units
@@ -3447,7 +3472,7 @@ impl<'a> Parser<'a> {
         // this more general implementation.
         let leading_field = if self.next_token_is_temporal_unit() {
             Some(self.parse_date_time_field()?)
-        } else if self.dialect.require_interval_qualifier() {
+        } else if qualifier_required {
             return parser_err!(
                 "INTERVAL requires a unit after the literal value",
                 self.peek_token_ref().span.start
@@ -3488,6 +3513,35 @@ impl<'a> Parser<'a> {
             last_field,
             fractional_seconds_precision: fsec_precision,
         }))
+    }
+
+    /// A signed number or string literal.
+    fn parse_interval_literal_value(&mut self) -> Result<Expr, ParserError> {
+        let sign = match self.peek_token_ref().token {
+            Token::Plus => Some(UnaryOperator::Plus),
+            Token::Minus => Some(UnaryOperator::Minus),
+            _ => None,
+        };
+        if sign.is_some() {
+            self.advance_token();
+        }
+        let next = self.next_token();
+        let value = match next.token {
+            Token::Number(n, l) => {
+                Expr::value(Value::Number(Self::parse(n, next.span.start)?, l).with_span(next.span))
+            }
+            Token::SingleQuotedString(s) => {
+                Expr::value(Value::SingleQuotedString(s).with_span(next.span))
+            }
+            _ => return self.expected("an expression", next),
+        };
+        Ok(match sign {
+            Some(op) => Expr::UnaryOp {
+                op,
+                expr: Box::new(value),
+            },
+            None => value,
+        })
     }
 
     /// Peek at the next token and determine if it is a temporal unit

@@ -791,11 +791,9 @@ impl fmt::Display for WithExpression {
         match self {
             WithExpression::Cte(cte) => cte.fmt(f),
             WithExpression::Cse(cse) => cse.fmt(f),
-            WithExpression::XmlNamespaces(namespaces) => write!(
-                f,
-                "XMLNAMESPACES ({})",
-                display_comma_separated(namespaces)
-            ),
+            WithExpression::XmlNamespaces(namespaces) => {
+                write!(f, "XMLNAMESPACES ({})", display_comma_separated(namespaces))
+            }
         }
     }
 }

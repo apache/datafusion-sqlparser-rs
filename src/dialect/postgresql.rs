@@ -236,6 +236,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// see <https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS>
+    fn supports_window_frame_exclusion(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/13/functions-math.html>
     fn supports_factorial_operator(&self) -> bool {
         true

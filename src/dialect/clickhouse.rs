@@ -170,6 +170,11 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    /// See <https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions>
+    fn supports_common_scalar_expressions(&self) -> bool {
+        true
+    }
+
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }

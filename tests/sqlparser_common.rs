@@ -11749,6 +11749,31 @@ fn parse_with_recursion_limit() {
 }
 
 #[test]
+fn parse_with_recursion_limit_counts_set_operation_folds() {
+    let dialect = GenericDialect {};
+
+    let chain = |n: usize| format!("{}SELECT 1", "SELECT 1 UNION ALL ".repeat(n));
+
+    // A flat chain of set operations parses iteratively, but every fold still
+    // nests the AST one level deeper, so the chain length must be bounded by
+    // the recursion limit as well.
+    let res = Parser::parse_sql(&dialect, &chain(100));
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+
+    // Chains well within the limit still parse.
+    let res = Parser::parse_sql(&dialect, &chain(10));
+    assert!(res.is_ok(), "{res:?}");
+
+    // An explicit limit bounds the number of folds.
+    let res = Parser::new(&dialect)
+        .try_with_sql(&chain(30))
+        .expect("tokenize to work")
+        .with_recursion_limit(20)
+        .parse_statements();
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
 fn parse_escaped_string_with_unescape() {
     fn assert_mysql_query_value(dialects: &TestedDialects, sql: &str, quoted: &str) {
         match dialects.one_statement_parses_to(sql, "") {

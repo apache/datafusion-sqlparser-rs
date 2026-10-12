@@ -105,6 +105,16 @@ fn nested_queries_hit_recursion_limit_without_default_features() {
 }
 
 #[test]
+fn set_operation_chains_hit_recursion_limit_without_default_features() {
+    let dialect = GenericDialect {};
+    let sql = format!("{}SELECT 1", "SELECT 1 UNION ALL ".repeat(100));
+
+    let result = Parser::parse_sql(&dialect, &sql);
+
+    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
 fn nested_table_factors_hit_recursion_limit_without_default_features() {
     let dialect = GenericDialect {};
     let sql = format!("SELECT * FROM {}t{}", "(".repeat(100), ")".repeat(100));

@@ -15326,6 +15326,11 @@ impl<'a> Parser<'a> {
         mut expr: SetExpr,
         precedence: u8,
     ) -> Result<Box<SetExpr>, ParserError> {
+        // A flat chain of set operations parses iteratively, but each folded
+        // operator still nests the AST one level deeper. Reserve one level of
+        // recursion budget per fold so downstream recursive consumers (derived
+        // `Clone`, visitors, planners) are bounded exactly as for nesting.
+        let mut fold_guards = Vec::new();
         loop {
             // The query can be optionally followed by a set operator:
             let op = self.parse_set_operator(&self.peek_token().token);
@@ -15342,6 +15347,7 @@ impl<'a> Parser<'a> {
             if precedence >= next_precedence {
                 break;
             }
+            fold_guards.push(self.recursion_counter.try_decrease()?);
             self.next_token(); // skip past the set operator
             let set_quantifier = self.parse_set_quantifier(&op);
             expr = SetExpr::SetOperation {

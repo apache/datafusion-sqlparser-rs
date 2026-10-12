@@ -461,6 +461,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `GLOBAL IN` and `GLOBAL NOT IN`.
+    fn supports_global_in(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE | TRY | CATCH} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
         false
@@ -914,6 +919,20 @@ pub trait Dialect: Debug + Any {
                 Ok(p!(Is))
             }
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
+            Token::Word(w) if w.keyword == Keyword::GLOBAL && self.supports_global_in() => {
+                match (
+                    &parser.peek_nth_token_ref(1).token,
+                    &parser.peek_nth_token_ref(2).token,
+                ) {
+                    (Token::Word(w), _) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                    (Token::Word(w), Token::Word(w2))
+                        if w.keyword == Keyword::NOT && w2.keyword == Keyword::IN =>
+                    {
+                        Ok(p!(Between))
+                    }
+                    _ => Ok(self.prec_unknown()),
+                }
+            }
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),

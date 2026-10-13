@@ -276,7 +276,7 @@ impl ParserOptions {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum ParserState {
     /// The default state of the parser.
     Normal,
@@ -355,6 +355,15 @@ pub struct Parser<'a> {
     /// `parse_table_factor`. See [`Parser::parse_table_factor`] for the 2^N
     /// pattern this guards.
     failed_derived_table_factor_positions: BTreeSet<usize>,
+    /// Cached failures of the speculative `POSITION(<expr> IN <expr>)` arm.
+    /// See [`Parser::parse_position_expr`] for the 2^N pattern this guards.
+    /// Keyed by state too, since `PRIOR` parses differently in `CONNECT BY`.
+    failed_position_syntax_positions: BTreeSet<(usize, ParserState)>,
+    /// Cached failures from the speculative subquery arm of [`Parser::parse_in`],
+    /// which `IN` lists nested in a leading subquery would otherwise retry at
+    /// every level, taking 2^N time. Maps the arm's start to where a parsed
+    /// query lacked its `)`.
+    failed_in_subquery_positions: BTreeMap<usize, Option<usize>>,
 }
 
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
@@ -401,6 +410,8 @@ impl<'a> Parser<'a> {
             failed_prefix_positions: BTreeMap::new(),
             failed_reserved_word_prefix_positions: BTreeMap::new(),
             failed_derived_table_factor_positions: BTreeSet::new(),
+            failed_position_syntax_positions: BTreeSet::new(),
+            failed_in_subquery_positions: BTreeMap::new(),
         }
     }
 
@@ -469,6 +480,8 @@ impl<'a> Parser<'a> {
         self.failed_prefix_positions.clear();
         self.failed_reserved_word_prefix_positions.clear();
         self.failed_derived_table_factor_positions.clear();
+        self.failed_position_syntax_positions.clear();
+        self.failed_in_subquery_positions.clear();
         self
     }
 
@@ -2925,7 +2938,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword_is(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
+        let data_type = if self.dialect.supports_cast_empty_data_type_to_unspecified()
+            && self.peek_token_ref().token == Token::RParen
+        {
+            DataType::Unspecified
+        } else {
+            self.parse_data_type()?
+        };
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
@@ -3010,6 +3029,12 @@ impl<'a> Parser<'a> {
     /// Parse a `POSITION` expression.
     pub fn parse_position_expr(&mut self, ident: Ident) -> Result<Expr, ParserError> {
         let between_prec = self.dialect.prec_value(Precedence::Between);
+        // Memoize a failed `IN` form: the function-call fallback re-parses the
+        // same argument, so nested `POSITION(POSITION(...))` would take 2^N.
+        let memo_key = (self.index, self.state);
+        if self.failed_position_syntax_positions.contains(&memo_key) {
+            return self.parse_function(ObjectName::from(vec![ident]));
+        }
         let position_expr = self.maybe_parse(|p| {
             // PARSE SELECT POSITION('@' in field)
             p.expect_token(&Token::LParen)?;
@@ -3028,7 +3053,10 @@ impl<'a> Parser<'a> {
             Some(expr) => Ok(expr),
             // Snowflake supports `position` as an ordinary function call
             // without the special `IN` syntax.
-            None => self.parse_function(ObjectName::from(vec![ident])),
+            None => {
+                self.failed_position_syntax_positions.insert(memo_key);
+                self.parse_function(ObjectName::from(vec![ident]))
+            }
         }
     }
 
@@ -4142,6 +4170,11 @@ impl<'a> Parser<'a> {
                         time_zone: Box::new(self.parse_subexpr(precedence)?),
                     })
                 }
+                Keyword::GLOBAL if self.dialect.supports_global_in() => {
+                    let negated = self.parse_keyword(Keyword::NOT);
+                    self.expect_keyword_is(Keyword::IN)?;
+                    self.parse_in(expr, negated, true)
+                }
                 Keyword::NOT
                 | Keyword::IN
                 | Keyword::BETWEEN
@@ -4171,7 +4204,7 @@ impl<'a> Parser<'a> {
                     } else if negated && null {
                         Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::IN) {
-                        self.parse_in(expr, negated)
+                        self.parse_in(expr, negated, false)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
                         self.parse_between(expr, negated)
                     } else if self.parse_keyword(Keyword::LIKE) {
@@ -4434,11 +4467,16 @@ impl<'a> Parser<'a> {
         Ok(JsonPath { path })
     }
 
-    /// Parses the parens following the `[ NOT ] IN` operator.
-    pub fn parse_in(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+    /// Parses the parens following the `[ GLOBAL ] [ NOT ] IN` operator.
+    pub fn parse_in(
+        &mut self,
+        expr: Expr,
+        negated: bool,
+        global: bool,
+    ) -> Result<Expr, ParserError> {
         // BigQuery allows `IN UNNEST(array_expression)`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
-        if self.parse_keyword(Keyword::UNNEST) {
+        if !global && self.parse_keyword(Keyword::UNNEST) {
             self.expect_token(&Token::LParen)?;
             let array_expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
@@ -4453,29 +4491,59 @@ impl<'a> Parser<'a> {
         {
             return Ok(Expr::InList {
                 expr: Box::new(expr),
-                list: vec![self.parse_expr()?],
+                list: vec![self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?],
                 negated,
+                global,
             });
         }
         self.expect_token(&Token::LParen)?;
-        let in_op = match self.maybe_parse(|p| p.parse_query())? {
-            Some(subquery) => Expr::InSubquery {
-                expr: Box::new(expr),
-                subquery,
-                negated,
-            },
-            None => Expr::InList {
-                expr: Box::new(expr),
-                list: if self.dialect.supports_in_empty_list() {
-                    self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?
-                } else {
-                    self.parse_comma_separated(Parser::parse_expr)?
-                },
-                negated,
-            },
+        // A leading query is the whole subquery only when `)` follows it,
+        // otherwise it is the first item of a list, as in `IN ((SELECT 1), 2)`.
+        let start = self.index;
+        // Where a parsed query lacked its `)`. Reported if the list fails no
+        // further in, since that error would sit inside the query.
+        let missing_rparen = match self.failed_in_subquery_positions.get(&start) {
+            Some(&cached) => cached,
+            None => {
+                let mut missing_rparen = None;
+                if let Some(subquery) = self.maybe_parse(|p| p.parse_query())? {
+                    if self.consume_token(&Token::RParen) {
+                        return Ok(Expr::InSubquery {
+                            expr: Box::new(expr),
+                            subquery,
+                            negated,
+                            global,
+                        });
+                    }
+                    missing_rparen = Some(self.index);
+                    self.index = start;
+                }
+                self.failed_in_subquery_positions
+                    .insert(start, missing_rparen);
+                missing_rparen
+            }
         };
-        self.expect_token(&Token::RParen)?;
-        Ok(in_op)
+        let list = if self.dialect.supports_in_empty_list() {
+            self.parse_comma_separated0(Parser::parse_expr, Token::RParen)
+        } else {
+            self.parse_comma_separated(Parser::parse_expr)
+        };
+        match list.and_then(|list| self.expect_token(&Token::RParen).map(|_| list)) {
+            Ok(list) => Ok(Expr::InList {
+                expr: Box::new(expr),
+                list,
+                negated,
+                global,
+            }),
+            Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
+            Err(e) => match missing_rparen {
+                Some(index) if self.index <= index => {
+                    self.index = index;
+                    self.expected_ref(")", self.peek_token_ref())
+                }
+                _ => Err(e),
+            },
+        }
     }
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.
@@ -9471,6 +9539,10 @@ impl<'a> Parser<'a> {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = &self.peek_token_ref().token {
+                columns.push(self.parse_column_def()?);
+            } else if matches!(&self.peek_token_ref().token, Token::SingleQuotedString(_))
+                && self.dialect.supports_string_literal_column_names()
+            {
                 columns.push(self.parse_column_def()?);
             } else {
                 return self.expected_ref(
@@ -18958,7 +19030,13 @@ impl<'a> Parser<'a> {
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
         let target = self.parse_assignment_target()?;
-        self.expect_token(&Token::Eq)?;
+        if self.dialect.supports_double_eq_assignment() {
+            if !self.consume_token(&Token::Eq) && !self.consume_token(&Token::DoubleEq) {
+                return self.expected("= or == (for assignment)", self.peek_token());
+            }
+        } else {
+            self.expect_token(&Token::Eq)?;
+        }
         let value = self.parse_expr()?;
         Ok(Assignment { target, value })
     }
@@ -19289,6 +19367,13 @@ impl<'a> Parser<'a> {
             } if self.dialect.supports_eq_alias_assignment()
                 && matches!(left.as_ref(), Expr::Identifier(_)) =>
             {
+                if matches!(right.as_ref(), Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none())
+                {
+                    return parser_err!(
+                        format!("Expected an expression, found: {right}"),
+                        self.peek_token_ref().span.start
+                    );
+                }
                 let Expr::Identifier(alias) = *left else {
                     return parser_err!(
                         "BUG: expected identifier expression as alias",

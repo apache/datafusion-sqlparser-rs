@@ -925,3 +925,20 @@ fn test_duckdb_lambda_function() {
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
 }
+
+#[test]
+fn test_duckdb_nested_block_comments() {
+    duckdb().one_statement_parses_to(
+        "SELECT a /* outer /* inner */ still comment */ FROM t",
+        "SELECT a FROM t",
+    );
+
+    let err = duckdb()
+        .parse_sql_statements("SELECT a /* outer /* inner */ FROM t")
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Unexpected EOF while in a multi-line comment"),
+        "{err}"
+    );
+}

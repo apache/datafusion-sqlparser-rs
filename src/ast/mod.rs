@@ -4942,12 +4942,7 @@ pub enum Statement {
     /// ```
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-do.html>
-    Do {
-        /// Optional procedural language name.
-        language: Option<Ident>,
-        /// The anonymous code block, a string literal.
-        code: ValueWithSpan,
-    },
+    Do(DoStatement),
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
@@ -6525,13 +6520,7 @@ impl fmt::Display for Statement {
                 write!(f, "UNLISTEN {channel}")?;
                 Ok(())
             }
-            Statement::Do { language, code } => {
-                write!(f, "DO ")?;
-                if let Some(language) = language {
-                    write!(f, "LANGUAGE {language} ")?;
-                }
-                write!(f, "{code}")
-            }
+            Statement::Do(s) => write!(f, "{s}"),
             Statement::NOTIFY { channel, payload } => {
                 write!(f, "NOTIFY {channel}")?;
                 if let Some(payload) = payload {
@@ -11607,6 +11596,33 @@ impl fmt::Display for WaitForStatement {
     }
 }
 
+/// PostgreSQL `DO` statement, executing an anonymous code block.
+///
+/// ```sql
+/// DO [ LANGUAGE lang_name ] code
+/// ```
+///
+/// See <https://www.postgresql.org/docs/current/sql-do.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DoStatement {
+    /// Optional procedural language name.
+    pub language: Option<Ident>,
+    /// The anonymous code block, a string literal.
+    pub code: ValueWithSpan,
+}
+
+impl fmt::Display for DoStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DO ")?;
+        if let Some(language) = &self.language {
+            write!(f, "LANGUAGE {language} ")?;
+        }
+        write!(f, "{}", self.code)
+    }
+}
+
 /// Represents a `Return` statement.
 ///
 /// [MsSql triggers](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql)
@@ -12456,6 +12472,12 @@ impl From<RaiseStatement> for Statement {
 impl From<ThrowStatement> for Statement {
     fn from(t: ThrowStatement) -> Self {
         Self::Throw(t)
+    }
+}
+
+impl From<DoStatement> for Statement {
+    fn from(d: DoStatement) -> Self {
+        Self::Do(d)
     }
 }
 

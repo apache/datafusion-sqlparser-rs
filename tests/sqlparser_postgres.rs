@@ -2266,6 +2266,56 @@ fn parse_prepare() {
 }
 
 #[test]
+fn parse_pg_on_conflict_target_predicate() {
+    for (sql, action_selection) in [
+        (
+            "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT(a) WHERE b > 0 DO NOTHING",
+            None,
+        ),
+        (
+            "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT(a) WHERE b > 0 DO UPDATE SET b = EXCLUDED.b",
+            None,
+        ),
+        // The target's predicate and the action's condition are separate clauses.
+        (
+            "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT(a, c) WHERE b > 0 DO UPDATE SET b = EXCLUDED.b WHERE t.b < 10",
+            Some("t.b < 10"),
+        ),
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::Insert(Insert {
+                on:
+                    Some(OnInsert::OnConflict(OnConflict {
+                        conflict_target: Some(ConflictTarget::Columns(_)),
+                        conflict_target_predicate: Some(predicate),
+                        action,
+                    })),
+                ..
+            }) => {
+                assert_eq!(predicate.to_string(), "b > 0");
+                let selection = match action {
+                    OnConflictAction::DoUpdate(DoUpdate { selection, .. }) => selection,
+                    OnConflictAction::DoNothing => None,
+                };
+                assert_eq!(selection.map(|e| e.to_string()).as_deref(), action_selection);
+            }
+            statement => panic!("Expected INSERT statement, got: {statement:?}"),
+        }
+    }
+
+    // A predicate only follows a column list: not `ON CONSTRAINT`, not an omitted target.
+    for sql in [
+        "INSERT INTO t (a) VALUES (1) ON CONFLICT ON CONSTRAINT t_a WHERE a > 0 DO NOTHING",
+        "INSERT INTO t (a) VALUES (1) ON CONFLICT WHERE a > 0 DO NOTHING",
+    ] {
+        assert!(
+            pg_and_generic().parse_sql_statements(sql).is_err(),
+            "{sql} should not parse"
+        );
+    }
+}
+
+#[test]
 fn parse_pg_on_conflict() {
     let stmt = pg_and_generic().verified_stmt(
         "INSERT INTO distributors (did, dname) \
@@ -2278,6 +2328,7 @@ fn parse_pg_on_conflict() {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
+                    conflict_target_predicate: None,
                     action,
                 })),
             ..
@@ -2310,6 +2361,7 @@ fn parse_pg_on_conflict() {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
+                    conflict_target_predicate: None,
                     action,
                 })),
             ..
@@ -2352,6 +2404,7 @@ fn parse_pg_on_conflict() {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: None,
+                    conflict_target_predicate: None,
                     action,
                 })),
             ..
@@ -2372,6 +2425,7 @@ fn parse_pg_on_conflict() {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
+                    conflict_target_predicate: None,
                     action,
                 })),
             ..
@@ -2416,6 +2470,7 @@ fn parse_pg_on_conflict() {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::OnConstraint(cname)),
+                    conflict_target_predicate: None,
                     action,
                 })),
             ..

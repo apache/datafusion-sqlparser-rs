@@ -18785,6 +18785,17 @@ impl<'a> Parser<'a> {
                             None
                         };
 
+                    // PostgreSQL: `( column [, ...] ) [ WHERE index_predicate ]`. The predicate
+                    // only follows a column list, never `ON CONSTRAINT` or an omitted target.
+                    let conflict_target_predicate =
+                        if matches!(conflict_target, Some(ConflictTarget::Columns(_)))
+                            && self.parse_keyword(Keyword::WHERE)
+                        {
+                            Some(self.parse_expr()?)
+                        } else {
+                            None
+                        };
+
                     self.expect_keyword_is(Keyword::DO)?;
                     let action = if self.parse_keyword(Keyword::NOTHING) {
                         OnConflictAction::DoNothing
@@ -18805,6 +18816,7 @@ impl<'a> Parser<'a> {
 
                     Some(OnInsert::OnConflict(OnConflict {
                         conflict_target,
+                        conflict_target_predicate,
                         action,
                     }))
                 } else {

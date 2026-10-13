@@ -6905,6 +6905,11 @@ pub struct TableAliasWithoutColumns {
 pub struct OnConflict {
     /// Optional conflict target specifying columns or constraint.
     pub conflict_target: Option<ConflictTarget>,
+    /// PostgreSQL `WHERE index_predicate` after a column-list conflict target, which lets a
+    /// partial unique index be inferred as the arbiter: `ON CONFLICT (a) WHERE b > 0 DO ...`.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-insert.html>
+    pub conflict_target_predicate: Option<Expr>,
     /// Action to take when a conflict occurs.
     pub action: OnConflictAction,
 }
@@ -6957,6 +6962,9 @@ impl fmt::Display for OnConflict {
         write!(f, " ON CONFLICT")?;
         if let Some(target) = &self.conflict_target {
             write!(f, "{target}")?;
+        }
+        if let Some(predicate) = &self.conflict_target_predicate {
+            write!(f, " WHERE {predicate}")?;
         }
         write!(f, " {}", self.action)
     }

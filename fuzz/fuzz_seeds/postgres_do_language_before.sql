@@ -1,0 +1,1 @@
+DO LANGUAGE plpgsql $$DECLARE n int; BEGIN SELECT count(*) INTO n FROM t; END$$

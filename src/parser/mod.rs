@@ -1535,7 +1535,7 @@ impl<'a> Parser<'a> {
         if language.is_none() {
             language = self.parse_do_language()?;
         }
-        Ok(Statement::Do { language, code })
+        Ok(Statement::Do(DoStatement { language, code }))
     }
 
     fn parse_do_language(&mut self) -> Result<Option<Ident>, ParserError> {

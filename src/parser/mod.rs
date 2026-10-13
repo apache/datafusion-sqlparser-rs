@@ -1934,13 +1934,12 @@ impl<'a> Parser<'a> {
                             .insert(next_token_index, (&e).into());
                         // `INTERVAL 1` is a malformed interval, not a name.
                         let interval_number = w.keyword == Keyword::INTERVAL
-                            && match &self.peek_token_ref().token {
-                                Token::Number(..) => true,
-                                Token::Plus | Token::Minus => {
-                                    matches!(self.peek_nth_token_ref(1).token, Token::Number(..))
-                                }
-                                _ => false,
-                            };
+                            && matches!(
+                                self.peek_token_ref().token,
+                                Token::Number(..)
+                                    | Token::SingleQuotedString(_)
+                                    | Token::DoubleQuotedString(_)
+                            );
                         if !interval_number && !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)
@@ -2785,7 +2784,11 @@ impl<'a> Parser<'a> {
                 None
             } else {
                 Some(Box::new(match &self.peek_token_ref().token {
-                    Token::SingleQuotedString(_) => self.parse_interval()?,
+                    Token::SingleQuotedString(_)
+                        if !self.dialect.supports_interval_string_without_qualifier() =>
+                    {
+                        self.parse_interval()?
+                    }
                     _ => self.parse_expr()?,
                 }))
             };
@@ -3512,7 +3515,7 @@ impl<'a> Parser<'a> {
             !matches!(
                 &value,
                 Expr::Value(ValueWithSpan {
-                    value: Value::SingleQuotedString(_),
+                    value: Value::SingleQuotedString(_) | Value::DoubleQuotedString(_),
                     ..
                 })
             )
@@ -3587,6 +3590,9 @@ impl<'a> Parser<'a> {
             }
             Token::SingleQuotedString(s) => {
                 Expr::value(Value::SingleQuotedString(s).with_span(next.span))
+            }
+            Token::DoubleQuotedString(s) => {
+                Expr::value(Value::DoubleQuotedString(s).with_span(next.span))
             }
             _ => return self.expected("an expression", next),
         };

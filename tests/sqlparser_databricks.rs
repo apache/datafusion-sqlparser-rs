@@ -784,3 +784,9 @@ fn parse_databricks_collated_data_types() {
         ))
     );
 }
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    databricks().verified_stmt("SELECT * FROM limit");
+    databricks().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}

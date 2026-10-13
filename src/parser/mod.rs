@@ -17005,6 +17005,16 @@ impl<'a> Parser<'a> {
             // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {
+            // Unquoted reserved keywords, e.g. `ON`, are not table names.
+            let peek_keyword = if let Token::Word(w) = &self.peek_token_ref().token {
+                w.keyword
+            } else {
+                Keyword::NoKeyword
+            };
+            if !self.dialect.is_table_factor(&peek_keyword, self) {
+                return self.expected_ref("table name", self.peek_token_ref());
+            }
+
             let name = self.parse_object_name(true)?;
 
             let json_path = match &self.peek_token_ref().token {

@@ -16,6 +16,8 @@
 // under the License.
 
 use crate::dialect::Dialect;
+use crate::keywords::Keyword;
+use crate::parser::Parser;
 
 /// A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -30,6 +32,12 @@ impl Dialect for ClickHouseDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
+    }
+
+    /// ClickHouse keywords are not reserved, so any of them can be a table name.
+    /// See <https://clickhouse.com/docs/en/sql-reference/syntax>
+    fn is_table_factor(&self, _kw: &Keyword, _parser: &mut Parser) -> bool {
+        true
     }
 
     /// ClickHouse accepts both backticks and double quotes, but its own

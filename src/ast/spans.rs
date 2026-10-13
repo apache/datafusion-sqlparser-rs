@@ -500,6 +500,7 @@ impl Spanned for Statement {
             Statement::LISTEN { .. } => Span::empty(),
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
+            Statement::LoadDataInfile(_) => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
             Statement::RenameTable { .. } => Span::empty(),
             Statement::RaisError { .. } => Span::empty(),

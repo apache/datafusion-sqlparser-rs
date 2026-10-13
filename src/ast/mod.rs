@@ -4971,6 +4971,10 @@ pub enum Statement {
         /// Optional table format information.
         table_format: Option<HiveLoadDataFormat>,
     },
+    /// MySQL `LOAD DATA ... INFILE`
+    ///
+    /// See MySQL <https://dev.mysql.com/doc/refman/8.4/en/load-data.html>
+    LoadDataInfile(LoadDataInfile),
     /// ```sql
     /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
     /// ```
@@ -5611,6 +5615,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::LoadDataInfile(load) => load.fmt(f),
             Statement::CreateVirtualTable {
                 name,
                 if_not_exists,
@@ -8837,6 +8842,194 @@ pub struct HiveLoadDataFormat {
     pub serde: Expr,
     /// Input format expression.
     pub input_format: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// MySQL `LOAD DATA ... INFILE` statement.
+///
+/// See <https://dev.mysql.com/doc/refman/8.4/en/load-data.html>
+pub struct LoadDataInfile {
+    /// `LOW_PRIORITY` or `CONCURRENT`.
+    pub priority: Option<LoadDataPriority>,
+    /// Whether `LOCAL` is present.
+    pub local: bool,
+    /// Path of the input file.
+    pub infile: String,
+    /// `REPLACE` or `IGNORE` before `INTO TABLE`.
+    pub duplicates: Option<LoadDataDuplicates>,
+    /// Target table name.
+    pub table_name: ObjectName,
+    /// `PARTITION (p, ...)`.
+    pub partitions: Option<Vec<Ident>>,
+    /// `CHARACTER SET charset`.
+    pub character_set: Option<Ident>,
+    /// `FIELDS` (or `COLUMNS`) options.
+    pub fields: Option<LoadDataFields>,
+    /// `LINES` options.
+    pub lines: Option<LoadDataLines>,
+    /// `IGNORE n LINES` (or `ROWS`).
+    pub ignore_lines: Option<u64>,
+    /// Columns (or user variables) receiving the input fields.
+    pub columns: Vec<Ident>,
+    /// `SET col = expr, ...`.
+    pub set: Vec<Assignment>,
+}
+
+impl fmt::Display for LoadDataInfile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LOAD DATA")?;
+        if let Some(priority) = &self.priority {
+            write!(f, " {priority}")?;
+        }
+        if self.local {
+            write!(f, " LOCAL")?;
+        }
+        write!(
+            f,
+            " INFILE '{}'",
+            value::escape_single_quote_string(&self.infile)
+        )?;
+        if let Some(duplicates) = &self.duplicates {
+            write!(f, " {duplicates}")?;
+        }
+        write!(f, " INTO TABLE {}", self.table_name)?;
+        if let Some(partitions) = &self.partitions {
+            write!(f, " PARTITION ({})", display_comma_separated(partitions))?;
+        }
+        if let Some(character_set) = &self.character_set {
+            write!(f, " CHARACTER SET {character_set}")?;
+        }
+        if let Some(fields) = &self.fields {
+            write!(f, " {fields}")?;
+        }
+        if let Some(lines) = &self.lines {
+            write!(f, " {lines}")?;
+        }
+        if let Some(n) = self.ignore_lines {
+            write!(f, " IGNORE {n} LINES")?;
+        }
+        if !self.columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if !self.set.is_empty() {
+            write!(f, " SET {}", display_comma_separated(&self.set))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Priority modifier of MySQL `LOAD DATA`.
+pub enum LoadDataPriority {
+    /// `LOW_PRIORITY`
+    LowPriority,
+    /// `CONCURRENT`
+    Concurrent,
+}
+
+impl fmt::Display for LoadDataPriority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            LoadDataPriority::LowPriority => "LOW_PRIORITY",
+            LoadDataPriority::Concurrent => "CONCURRENT",
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// How MySQL `LOAD DATA` treats rows that duplicate an existing unique key.
+pub enum LoadDataDuplicates {
+    /// `REPLACE`
+    Replace,
+    /// `IGNORE`
+    Ignore,
+}
+
+impl fmt::Display for LoadDataDuplicates {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            LoadDataDuplicates::Replace => "REPLACE",
+            LoadDataDuplicates::Ignore => "IGNORE",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `FIELDS` options of MySQL `LOAD DATA`.
+pub struct LoadDataFields {
+    /// `TERMINATED BY 's'`.
+    pub terminated_by: Option<String>,
+    /// Whether `OPTIONALLY` precedes `ENCLOSED BY`.
+    pub optionally_enclosed: bool,
+    /// `ENCLOSED BY 'c'`.
+    pub enclosed_by: Option<String>,
+    /// `ESCAPED BY 'c'`.
+    pub escaped_by: Option<String>,
+}
+
+impl fmt::Display for LoadDataFields {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "FIELDS")?;
+        if let Some(s) = &self.terminated_by {
+            write!(
+                f,
+                " TERMINATED BY '{}'",
+                value::escape_single_quote_string(s)
+            )?;
+        }
+        if let Some(s) = &self.enclosed_by {
+            let optionally = if self.optionally_enclosed {
+                " OPTIONALLY"
+            } else {
+                ""
+            };
+            write!(
+                f,
+                "{optionally} ENCLOSED BY '{}'",
+                value::escape_single_quote_string(s)
+            )?;
+        }
+        if let Some(s) = &self.escaped_by {
+            write!(f, " ESCAPED BY '{}'", value::escape_single_quote_string(s))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `LINES` options of MySQL `LOAD DATA`.
+pub struct LoadDataLines {
+    /// `STARTING BY 's'`.
+    pub starting_by: Option<String>,
+    /// `TERMINATED BY 's'`.
+    pub terminated_by: Option<String>,
+}
+
+impl fmt::Display for LoadDataLines {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LINES")?;
+        if let Some(s) = &self.starting_by {
+            write!(f, " STARTING BY '{}'", value::escape_single_quote_string(s))?;
+        }
+        if let Some(s) = &self.terminated_by {
+            write!(
+                f,
+                " TERMINATED BY '{}'",
+                value::escape_single_quote_string(s)
+            )?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

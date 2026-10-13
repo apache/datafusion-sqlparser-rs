@@ -15541,8 +15541,9 @@ fn parse_load_data() {
     let dialects = all_dialects_where(|d| d.supports_load_data());
     let only_supports_load_extension_dialects =
         all_dialects_where(|d| !d.supports_load_data() && d.supports_load_extension());
-    let not_supports_load_dialects =
-        all_dialects_where(|d| !d.supports_load_data() && !d.supports_load_extension());
+    let not_supports_load_dialects = all_dialects_where(|d| {
+        !d.supports_load_data() && !d.supports_load_extension() && !d.supports_load_data_infile()
+    });
 
     let sql = "LOAD DATA INPATH '/local/path/to/data.txt' INTO TABLE test.my_table";
     match dialects.verified_stmt(sql) {

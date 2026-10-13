@@ -72,6 +72,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_load_data_infile(&self) -> bool {
+        true
+    }
+
     /// see <https://dev.mysql.com/doc/refman/8.4/en/string-functions.html#function_concat>
     fn supports_string_literal_concatenation(&self) -> bool {
         true

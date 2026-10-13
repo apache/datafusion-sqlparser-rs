@@ -1,0 +1,1 @@
+UPDATE db.t ON CLUSTER c1 SET a = a + 1, b = 'z' WHERE c IS NOT NULL SETTINGS update_parallel_mode = 'auto'

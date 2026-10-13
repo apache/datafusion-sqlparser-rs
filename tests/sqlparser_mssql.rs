@@ -82,7 +82,12 @@ fn parse_table_time_travel() {
     );
 
     let sql = "SELECT 1 FROM t1 FOR SYSTEM TIME AS OF 'some_timestamp'".to_string();
-    assert!(ms().parse_sql_statements(&sql).is_err());
+    assert_eq!(
+        ms().parse_sql_statements(&sql),
+        Err(ParserError::ParserError(
+            "Expected: one of UPDATE or SHARE, found: SYSTEM".to_owned()
+        ))
+    );
 }
 
 #[test]
@@ -955,9 +960,12 @@ fn parse_for_clause() {
 
 #[test]
 fn dont_parse_trailing_for() {
-    assert!(ms()
-        .run_parser_method("SELECT * FROM foo FOR", |p| p.parse_query())
-        .is_err());
+    assert_eq!(
+        ms().run_parser_method("SELECT * FROM foo FOR", |p| p.parse_query()),
+        Err(ParserError::ParserError(
+            "Expected: one of UPDATE or SHARE, found: EOF".to_owned()
+        ))
+    );
 }
 
 #[test]
@@ -1737,7 +1745,12 @@ fn test_parse_waitfor() {
 
     // Error: WAITFOR without DELAY or TIME
     let res = ms_and_generic().parse_sql_statements("WAITFOR '00:00:05'");
-    assert!(res.is_err());
+    assert_eq!(
+        res,
+        Err(ParserError::ParserError(
+            "Expected: DELAY or TIME, found: '00:00:05'".to_owned()
+        ))
+    );
 }
 
 #[test]
@@ -2632,26 +2645,56 @@ ELSE
 #[test]
 fn test_sql_keywords_as_table_aliases() {
     // Some keywords that should not be parsed as an alias implicitly or explicitly
-    let reserved_kws = vec!["IF", "ELSE"];
-    for kw in reserved_kws {
-        for explicit in &["", "AS "] {
-            assert!(tsql()
-                .parse_sql_statements(&format!("SELECT * FROM tbl {explicit}{kw}"))
-                .is_err());
-        }
+    for (sql, err) in [
+        (
+            "SELECT * FROM tbl IF",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "SELECT * FROM tbl AS IF",
+            "Expected: an identifier after AS, found: IF",
+        ),
+        (
+            "SELECT * FROM tbl ELSE",
+            "Expected: an SQL statement, found: ELSE",
+        ),
+        (
+            "SELECT * FROM tbl AS ELSE",
+            "Expected: an identifier after AS, found: ELSE",
+        ),
+    ] {
+        assert_eq!(
+            tsql().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_owned()))
+        );
     }
 }
 
 #[test]
 fn test_sql_keywords_as_column_aliases() {
     // Some keywords that should not be parsed as an alias implicitly or explicitly
-    let reserved_kws = vec!["IF", "ELSE"];
-    for kw in reserved_kws {
-        for explicit in &["", "AS "] {
-            assert!(tsql()
-                .parse_sql_statements(&format!("SELECT col {explicit}{kw} FROM tbl"))
-                .is_err());
-        }
+    for (sql, err) in [
+        (
+            "SELECT col IF FROM tbl",
+            "Expected: an SQL statement, found: tbl",
+        ),
+        (
+            "SELECT col AS IF FROM tbl",
+            "Expected: an identifier after AS, found: IF",
+        ),
+        (
+            "SELECT col ELSE FROM tbl",
+            "Expected: an SQL statement, found: ELSE",
+        ),
+        (
+            "SELECT col AS ELSE FROM tbl",
+            "Expected: an identifier after AS, found: ELSE",
+        ),
+    ] {
+        assert_eq!(
+            tsql().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_owned()))
+        );
     }
 }
 

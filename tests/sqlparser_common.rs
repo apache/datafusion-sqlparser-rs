@@ -21090,7 +21090,7 @@ fn parse_do_statement() {
     let dialects = all_dialects_where(|d| d.supports_do_statement());
 
     match dialects.verified_stmt("DO $$BEGIN RAISE NOTICE 'hi'; END$$") {
-        Statement::Do { language, code } => {
+        Statement::Do(DoStatement { language, code }) => {
             assert_eq!(language, None);
             assert_eq!(
                 code.value,
@@ -21104,7 +21104,7 @@ fn parse_do_statement() {
     }
 
     match dialects.verified_stmt("DO LANGUAGE plpgsql $body$BEGIN NULL; END$body$") {
-        Statement::Do { language, .. } => {
+        Statement::Do(DoStatement { language, .. }) => {
             assert_eq!(language, Some(Ident::new("plpgsql")));
         }
         _ => unreachable!(),

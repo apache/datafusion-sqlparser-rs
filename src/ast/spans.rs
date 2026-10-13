@@ -44,10 +44,10 @@ use super::{
     OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
     PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
     RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement,
+    Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor,
+    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values,
+    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -971,12 +971,7 @@ impl Spanned for Delete {
                     .chain(output.iter().map(|i| i.span()))
                     .chain(order_by.iter().map(|i| i.span()))
                     .chain(limit.iter().map(|i| i.span()))
-                    .chain(
-                        settings
-                            .iter()
-                            .flatten()
-                            .flat_map(|s| [s.key.span, s.value.span()]),
-                    ),
+                    .chain(settings.iter().flatten().map(|i| i.span())),
             ),
         )
     }
@@ -1011,12 +1006,7 @@ impl Spanned for Update {
                 .chain(output.iter().map(|i| i.span()))
                 .chain(order_by.iter().map(|i| i.span()))
                 .chain(limit.iter().map(|i| i.span()))
-                .chain(
-                    settings
-                        .iter()
-                        .flatten()
-                        .flat_map(|s| [s.key.span, s.value.span()]),
-                ),
+                .chain(settings.iter().flatten().map(|i| i.span())),
         )
     }
 }
@@ -1478,6 +1468,14 @@ impl Spanned for Assignment {
         let Assignment { target, value } = self;
 
         target.span().union(&value.span())
+    }
+}
+
+impl Spanned for Setting {
+    fn span(&self) -> Span {
+        let Setting { key, value } = self;
+
+        key.span.union(&value.span())
     }
 }
 

@@ -3013,3 +3013,9 @@ fn parse_mssql_declare_comma_list_display() {
     ms().verified_stmt("DECLARE @a INT = 1, @b TEXT = 'x'");
     ms().verified_stmt("DECLARE @foo CURSOR, @bar INT");
 }
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    ms().verified_stmt("SELECT * FROM limit");
+    ms().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}

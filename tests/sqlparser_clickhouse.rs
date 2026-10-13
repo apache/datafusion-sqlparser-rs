@@ -2418,3 +2418,11 @@ fn parse_create_table_engine_name_quoting() {
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
     clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
 }
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    for table_name in ["into", "limit", "having", "where", "on"] {
+        clickhouse().verified_stmt(&format!("SELECT * FROM {table_name}"));
+        clickhouse().verified_stmt(&format!("SELECT * FROM t JOIN {table_name} ON true"));
+    }
+}

@@ -576,3 +576,9 @@ fn hive() -> TestedDialects {
 fn hive_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})])
 }
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    hive().verified_stmt("SELECT * FROM limit");
+    hive().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}

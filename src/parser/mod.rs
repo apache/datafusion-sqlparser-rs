@@ -22280,28 +22280,54 @@ mod tests {
     fn test_replace_into_placeholders() {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert_eq!(
+            ParserError::ParserError(
+                "Expected: an expression, found: & at Line: 1, Column: 28".to_string()
+            ),
+            Parser::parse_sql(&GenericDialect {}, sql).unwrap_err()
+        );
     }
 
     #[test]
     fn test_replace_into_set_placeholder() {
         let sql = "REPLACE INTO t SET ?";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert_eq!(
+            ParserError::ParserError(
+                "Expected: SELECT, VALUES, or a subquery in the query body, found: SET at Line: 1, Column: 16"
+                    .to_string()
+            ),
+            Parser::parse_sql(&GenericDialect {}, sql).unwrap_err()
+        );
     }
 
     #[test]
     fn test_replace_incomplete() {
         let sql = r#"REPLACE"#;
 
-        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+        assert_eq!(
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            Parser::parse_sql(&MySqlDialect {}, sql).unwrap_err()
+        );
     }
 
     #[test]
     fn test_placeholder_invalid_whitespace() {
-        for w in ["  ", "/*invalid*/"] {
+        for (w, expected) in [
+            (
+                "  ",
+                "Expected: placeholder, found:   at Line: 3, Column: 4",
+            ),
+            (
+                "/*invalid*/",
+                "Expected: placeholder, found: /*invalid*/ at Line: 3, Column: 4",
+            ),
+        ] {
             let sql = format!("\nSELECT\n  :{w}fooBar");
-            assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
+            assert_eq!(
+                ParserError::ParserError(expected.to_string()),
+                Parser::parse_sql(&GenericDialect, &sql).unwrap_err()
+            );
         }
     }
 }

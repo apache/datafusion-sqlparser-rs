@@ -23414,3 +23414,58 @@ fn display_create_procedure_begin_atomic_propagates_write_errors() {
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }
+
+#[test]
+fn parse_do_statement() {
+    let dialects = all_dialects_where(|d| d.supports_do_statement());
+
+    match dialects.verified_stmt("DO $$BEGIN RAISE NOTICE 'hi'; END$$") {
+        Statement::Do { language, code } => {
+            assert_eq!(language, None);
+            assert_eq!(
+                code.value,
+                Value::DollarQuotedString(DollarQuotedString {
+                    value: "BEGIN RAISE NOTICE 'hi'; END".to_string(),
+                    tag: None,
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("DO LANGUAGE plpgsql $body$BEGIN NULL; END$body$") {
+        Statement::Do { language, .. } => {
+            assert_eq!(language, Some(Ident::new("plpgsql")));
+        }
+        _ => unreachable!(),
+    }
+
+    dialects.verified_stmt("DO 'BEGIN NULL; END'");
+    dialects.one_statement_parses_to(
+        "DO $$BEGIN NULL; END$$ LANGUAGE plpgsql",
+        "DO LANGUAGE plpgsql $$BEGIN NULL; END$$",
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("DO LANGUAGE plpgsql $$BEGIN NULL; END$$ LANGUAGE sql")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: LANGUAGE".to_string())
+    );
+
+    assert_eq!(
+        dialects.parse_sql_statements("DO 1").unwrap_err(),
+        ParserError::ParserError("Expected: string literal, found: 1".to_string())
+    );
+    assert_eq!(
+        dialects.parse_sql_statements("DO LANGUAGE").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_do_statement());
+    assert_eq!(
+        dialects
+            .parse_sql_statements("DO $$BEGIN NULL; END$$")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: DO".to_string())
+    );
+}

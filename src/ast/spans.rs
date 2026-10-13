@@ -35,8 +35,9 @@ use super::{
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
     CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
-    Cte, Delete, DoUpdate, DropRule, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem,
-    Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
+    Cte, Delete, DoStatement, DoUpdate, DropRule, ExceptSelectItem, ExcludeConstraintElement,
+    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
+    FunctionArgExpr,
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
     Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
@@ -501,7 +502,7 @@ impl Spanned for Statement {
             Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
             Statement::LISTEN { .. } => Span::empty(),
-            Statement::Do { .. } => Span::empty(),
+            Statement::Do(s) => s.span(),
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
@@ -2869,6 +2870,18 @@ impl Spanned for CreateUserMapping {
     }
 }
 
+impl Spanned for DoStatement {
+    fn span(&self) -> Span {
+        let DoStatement { language, code } = self;
+        union_spans(
+            language
+                .iter()
+                .map(|l| l.span)
+                .chain(core::iter::once(code.span)),
+        )
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::ast::Value;
@@ -3594,5 +3607,14 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let stmt = &Parser::parse_sql(dialect, sql).unwrap()[0];
             assert_eq!(test.get_source(stmt.span()), expected, "{sql}");
         }
+    }
+
+    #[test]
+    fn test_do_statement_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "DO LANGUAGE plpgsql $$BEGIN NULL; END$$";
+        let test = SpanTest::new(dialect, sql);
+        let r = Parser::parse_sql(dialect, sql).unwrap();
+        assert_eq!(test.get_source(r[0].span()), "plpgsql $$BEGIN NULL; END$$");
     }
 }

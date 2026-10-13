@@ -1,1 +1,0 @@
-DELETE FROM db.t ON CLUSTER '{cluster}' WHERE a < 0 SETTINGS lightweight_deletes_sync = 0, mutations_sync = 2

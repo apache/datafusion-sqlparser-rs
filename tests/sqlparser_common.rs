@@ -16348,6 +16348,46 @@ fn overflow() {
 }
 
 #[test]
+fn long_set_operation_chain_display_does_not_stack_overflow() {
+    // `SetExpr`'s `Display` recurses once per branch of a set-operation chain.
+    // Print on a small stack: with the default test-thread stack the check
+    // would depend on the platform's stack size, while without the
+    // recursive-protection attribute a chain this long overflows this stack.
+    fn drop_chain_iteratively(mut expr: Box<SetExpr>) {
+        // The chain's recursive drop glue would overflow the small stack as
+        // well; tear it down iteratively so this test isolates `Display`.
+        loop {
+            match *expr {
+                SetExpr::SetOperation { left, .. } => expr = left,
+                _ => return,
+            }
+        }
+    }
+
+    std::thread::Builder::new()
+        .stack_size(256 * 1024)
+        .spawn(|| {
+            let mut sql = String::from("SELECT 1");
+            for i in 2..=25_000 {
+                sql.push_str(&format!(" UNION ALL SELECT {i}"));
+            }
+
+            let mut statements = Parser::parse_sql(&GenericDialect {}, &sql).unwrap();
+            let statement = statements.pop().unwrap();
+            assert_eq!(statement.to_string(), sql);
+
+            let Statement::Query(query) = statement else {
+                panic!("expected a query");
+            };
+            let Query { body, .. } = *query;
+            drop_chain_iteratively(body);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn parse_deeply_nested_boolean_expr_does_not_stackoverflow() {
     fn build_nested_expr(depth: usize) -> String {
         if depth == 0 {

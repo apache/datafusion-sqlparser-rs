@@ -2261,9 +2261,12 @@ fn parse_delete_on_cluster_and_settings() {
             ParserError(err.to_string())
         );
     }
-    assert!(all_dialects_where(|d| !d.supports_settings())
-        .parse_sql_statements("DELETE FROM hits WHERE x = 1 SETTINGS a = 1")
-        .is_err());
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_settings())
+            .parse_sql_statements("DELETE FROM hits WHERE x = 1 SETTINGS a = 1")
+            .unwrap_err(),
+        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+    );
 }
 
 #[test]
@@ -2319,9 +2322,12 @@ fn parse_update_on_cluster_and_settings() {
             ParserError(err.to_string())
         );
     }
-    assert!(all_dialects_where(|d| !d.supports_settings())
-        .parse_sql_statements("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a = 1")
-        .is_err());
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_settings())
+            .parse_sql_statements("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a = 1")
+            .unwrap_err(),
+        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+    );
 }
 
 fn clickhouse() -> TestedDialects {

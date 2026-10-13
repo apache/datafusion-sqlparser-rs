@@ -1416,12 +1416,14 @@ impl Spanned for OnConflict {
     fn span(&self) -> Span {
         let OnConflict {
             conflict_target,
+            conflict_target_predicate,
             action,
         } = self;
 
         action
             .span()
             .union_opt(&conflict_target.as_ref().map(|i| i.span()))
+            .union_opt(&conflict_target_predicate.as_ref().map(|i| i.span()))
     }
 }
 

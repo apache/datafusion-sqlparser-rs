@@ -3589,7 +3589,7 @@ impl<'a> Parser<'a> {
         match value {
             Expr::Value(v) => match &v.value {
                 Value::Number(n, _) => Some(n.to_string()),
-                Value::SingleQuotedString(s) => Some(s.clone()),
+                Value::SingleQuotedString(s) | Value::DoubleQuotedString(s) => Some(s.clone()),
                 _ => None,
             },
             Expr::UnaryOp {

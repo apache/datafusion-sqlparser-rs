@@ -6840,6 +6840,10 @@ fn parse_interval_multi_units() {
         "SELECT INTERVAL +1 DAY +2 HOURS",
         "SELECT INTERVAL '1 DAY 2 HOURS'",
     );
+    dialects.one_statement_parses_to(
+        "SELECT INTERVAL \"1\" DAY \"2\" HOUR",
+        "SELECT INTERVAL '1 DAY 2 HOUR'",
+    );
     // A single unit, or a unit followed by something else, is left as it is.
     dialects.verified_stmt("SELECT INTERVAL 3 DAY");
     dialects.verified_stmt("SELECT INTERVAL 3 DAY + 1");

@@ -1416,21 +1416,24 @@ impl Spanned for OnConflict {
     fn span(&self) -> Span {
         let OnConflict {
             conflict_target,
-            conflict_target_predicate,
             action,
         } = self;
 
         action
             .span()
             .union_opt(&conflict_target.as_ref().map(|i| i.span()))
-            .union_opt(&conflict_target_predicate.as_ref().map(|i| i.span()))
     }
 }
 
 impl Spanned for ConflictTarget {
     fn span(&self) -> Span {
         match self {
-            ConflictTarget::Columns(vec) => union_spans(vec.iter().map(|i| i.span)),
+            ConflictTarget::Columns { columns, predicate } => union_spans(
+                columns
+                    .iter()
+                    .map(|i| i.span)
+                    .chain(predicate.iter().map(|p| p.span())),
+            ),
             ConflictTarget::OnConstraint(object_name) => object_name.span(),
         }
     }

@@ -18958,20 +18958,15 @@ impl<'a> Parser<'a> {
                         if self.parse_keywords(&[Keyword::ON, Keyword::CONSTRAINT]) {
                             Some(ConflictTarget::OnConstraint(self.parse_object_name(false)?))
                         } else if self.peek_token_ref().token == Token::LParen {
-                            Some(ConflictTarget::Columns(
-                                self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?,
-                            ))
-                        } else {
-                            None
-                        };
-
-                    // PostgreSQL: `( column [, ...] ) [ WHERE index_predicate ]`. The predicate
-                    // only follows a column list, never `ON CONSTRAINT` or an omitted target.
-                    let conflict_target_predicate =
-                        if matches!(conflict_target, Some(ConflictTarget::Columns(_)))
-                            && self.parse_keyword(Keyword::WHERE)
-                        {
-                            Some(self.parse_expr()?)
+                            let columns =
+                                self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?;
+                            // PostgreSQL: `( column [, ...] ) [ WHERE index_predicate ]`.
+                            let predicate = if self.parse_keyword(Keyword::WHERE) {
+                                Some(self.parse_expr()?)
+                            } else {
+                                None
+                            };
+                            Some(ConflictTarget::Columns { columns, predicate })
                         } else {
                             None
                         };
@@ -18996,7 +18991,6 @@ impl<'a> Parser<'a> {
 
                     Some(OnInsert::OnConflict(OnConflict {
                         conflict_target,
-                        conflict_target_predicate,
                         action,
                     }))
                 } else {

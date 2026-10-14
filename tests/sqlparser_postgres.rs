@@ -10091,11 +10091,13 @@ fn parse_insert_overriding() {
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 
-    // `OVERRIDING` takes `SYSTEM` or `USER`, then `VALUE`.
+    // `OVERRIDING` takes `SYSTEM` or `USER`, then `VALUE`, and is followed by a query: PostgreSQL's
+    // grammar does not allow it before `DEFAULT VALUES`.
     for sql in [
         "INSERT INTO t (id) OVERRIDING VALUE VALUES (1)",
         "INSERT INTO t (id) OVERRIDING SYSTEM VALUES (1)",
         "INSERT INTO t (id) OVERRIDING DEFAULT VALUE VALUES (1)",
+        "INSERT INTO t OVERRIDING SYSTEM VALUE DEFAULT VALUES",
     ] {
         assert!(
             pg_and_generic().parse_sql_statements(sql).is_err(),

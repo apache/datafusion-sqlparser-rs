@@ -18702,52 +18702,52 @@ impl<'a> Parser<'a> {
             let is_mysql = dialect_of!(self is MySqlDialect);
 
             let mut by_name = false;
-            let (columns, partitioned, after_columns, overriding, output, source, assignments) =
-                if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
-                    (vec![], None, vec![], None, None, None, vec![])
+            let mut overriding = None;
+            let (columns, partitioned, after_columns, output, source, assignments) = if self
+                .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
+            {
+                (vec![], None, vec![], None, None, vec![])
+            } else {
+                let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
+                    let columns =
+                        self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
+
+                    let partitioned = self.parse_insert_partition()?;
+                    by_name = self.parse_keywords(&[Keyword::BY, Keyword::NAME]);
+                    // Hive allows you to specify columns after partitions as well if you want.
+                    let after_columns = if dialect_of!(self is HiveDialect) {
+                        self.parse_parenthesized_column_list(Optional, false)?
+                    } else {
+                        vec![]
+                    };
+                    (columns, partitioned, after_columns)
                 } else {
-                    let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
-                        let columns =
-                            self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
-
-                        let partitioned = self.parse_insert_partition()?;
-                        by_name = self.parse_keywords(&[Keyword::BY, Keyword::NAME]);
-                        // Hive allows you to specify columns after partitions as well if you want.
-                        let after_columns = if dialect_of!(self is HiveDialect) {
-                            self.parse_parenthesized_column_list(Optional, false)?
-                        } else {
-                            vec![]
-                        };
-                        (columns, partitioned, after_columns)
-                    } else {
-                        Default::default()
-                    };
-
-                    let overriding = self.parse_insert_overriding()?;
-
-                    let output = self.maybe_parse_output_clause()?;
-
-                    let (source, assignments) = if self.peek_keyword(Keyword::FORMAT)
-                        || self.peek_keyword(Keyword::SETTINGS)
-                    {
-                        (None, vec![])
-                    } else if self.dialect.supports_insert_set() && self.parse_keyword(Keyword::SET)
-                    {
-                        (None, self.parse_comma_separated(Parser::parse_assignment)?)
-                    } else {
-                        (Some(self.parse_query()?), vec![])
-                    };
-
-                    (
-                        columns,
-                        partitioned,
-                        after_columns,
-                        overriding,
-                        output,
-                        source,
-                        assignments,
-                    )
+                    Default::default()
                 };
+
+                overriding = self.parse_insert_overriding()?;
+
+                let output = self.maybe_parse_output_clause()?;
+
+                let (source, assignments) = if self.peek_keyword(Keyword::FORMAT)
+                    || self.peek_keyword(Keyword::SETTINGS)
+                {
+                    (None, vec![])
+                } else if self.dialect.supports_insert_set() && self.parse_keyword(Keyword::SET) {
+                    (None, self.parse_comma_separated(Parser::parse_assignment)?)
+                } else {
+                    (Some(self.parse_query()?), vec![])
+                };
+
+                (
+                    columns,
+                    partitioned,
+                    after_columns,
+                    output,
+                    source,
+                    assignments,
+                )
+            };
 
             let (format_clause, settings) = if self.dialect.supports_insert_format() {
                 // Settings always comes before `FORMAT` for ClickHouse:
@@ -18938,13 +18938,12 @@ impl<'a> Parser<'a> {
         if !self.parse_keyword(Keyword::OVERRIDING) {
             return Ok(None);
         }
-        let overriding = match self.expect_one_of_keywords(&[Keyword::SYSTEM, Keyword::USER])? {
-            Keyword::SYSTEM => InsertOverriding::System,
-            Keyword::USER => InsertOverriding::User,
-            _ => {
-                self.prev_token();
-                return self.expected_ref("SYSTEM or USER", self.peek_token_ref());
-            }
+        let overriding = if self.parse_keyword(Keyword::SYSTEM) {
+            InsertOverriding::System
+        } else if self.parse_keyword(Keyword::USER) {
+            InsertOverriding::User
+        } else {
+            return self.expected_ref("SYSTEM or USER", self.peek_token_ref());
         };
         self.expect_keyword_is(Keyword::VALUE)?;
         Ok(Some(overriding))

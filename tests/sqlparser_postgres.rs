@@ -2286,8 +2286,11 @@ fn parse_pg_on_conflict_target_predicate() {
             Statement::Insert(Insert {
                 on:
                     Some(OnInsert::OnConflict(OnConflict {
-                        conflict_target: Some(ConflictTarget::Columns(_)),
-                        conflict_target_predicate: Some(predicate),
+                        conflict_target:
+                            Some(ConflictTarget::Columns {
+                                predicate: Some(predicate),
+                                ..
+                            }),
                         action,
                     })),
                 ..
@@ -2344,8 +2347,11 @@ fn parse_pg_on_conflict() {
         Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target: Some(ConflictTarget::Columns(cols)),
-                    conflict_target_predicate: None,
+                    conflict_target:
+                        Some(ConflictTarget::Columns {
+                            columns: cols,
+                            predicate: None,
+                        }),
                     action,
                 })),
             ..
@@ -2377,8 +2383,11 @@ fn parse_pg_on_conflict() {
         Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target: Some(ConflictTarget::Columns(cols)),
-                    conflict_target_predicate: None,
+                    conflict_target:
+                        Some(ConflictTarget::Columns {
+                            columns: cols,
+                            predicate: None,
+                        }),
                     action,
                 })),
             ..
@@ -2421,7 +2430,6 @@ fn parse_pg_on_conflict() {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: None,
-                    conflict_target_predicate: None,
                     action,
                 })),
             ..
@@ -2441,8 +2449,11 @@ fn parse_pg_on_conflict() {
         Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target: Some(ConflictTarget::Columns(cols)),
-                    conflict_target_predicate: None,
+                    conflict_target:
+                        Some(ConflictTarget::Columns {
+                            columns: cols,
+                            predicate: None,
+                        }),
                     action,
                 })),
             ..
@@ -2487,7 +2498,6 @@ fn parse_pg_on_conflict() {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::OnConstraint(cname)),
-                    conflict_target_predicate: None,
                     action,
                 })),
             ..

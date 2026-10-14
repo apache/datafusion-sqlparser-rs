@@ -1106,9 +1106,7 @@ impl Spanned for CreateTableOptions {
         match self {
             CreateTableOptions::None => Span::empty(),
             CreateTableOptions::With(vec) => union_spans(vec.iter().map(|i| i.span())),
-            CreateTableOptions::Options(vec) => {
-                union_spans(vec.as_slice().iter().map(|i| i.span()))
-            }
+            CreateTableOptions::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
         }

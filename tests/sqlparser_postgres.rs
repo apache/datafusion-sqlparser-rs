@@ -2517,6 +2517,23 @@ fn parse_pg_on_conflict_target_predicate() {
             "{sql} should not parse"
         );
     }
+
+    // The predicate is an expression, and the action must still follow it.
+    for (sql, err) in [
+        (
+            "INSERT INTO t (a) VALUES (1) ON CONFLICT (a) WHERE",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "INSERT INTO t (a) VALUES (1) ON CONFLICT (a) WHERE a > 0",
+            "Expected: DO, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+        );
+    }
 }
 
 #[test]

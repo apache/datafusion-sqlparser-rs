@@ -1532,7 +1532,8 @@ impl<'a> Parser<'a> {
         match &self.peek_token_ref().token {
             Token::SingleQuotedString(_)
             | Token::DollarQuotedString(_)
-            | Token::EscapedStringLiteral(_) => {}
+            | Token::EscapedStringLiteral(_)
+            | Token::UnicodeStringLiteral(_) => {}
             _ => return self.expected_ref("string literal", self.peek_token_ref()),
         }
         let code = self.parse_value()?;

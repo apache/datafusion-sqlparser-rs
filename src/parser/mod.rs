@@ -6687,7 +6687,14 @@ impl<'a> Parser<'a> {
                     format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in trigger exec body"),
                 )),
             },
-            func_desc: self.parse_function_desc()?,
+            name: self.parse_object_name(false)?,
+            args: if self.consume_token(&Token::LParen) {
+                let args = self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?;
+                self.expect_token(&Token::RParen)?;
+                Some(args)
+            } else {
+                None
+            },
         })
     }
 

@@ -1022,10 +1022,7 @@ fn parse_create_table_options_list() {
             "Expected: end of statement, found: WITHOUT",
         ),
         (" STRICT,", "Expected: WITHOUT ROWID or STRICT, found: EOF"),
-        (
-            " STRICT, WITHOUT",
-            "Expected: WITHOUT ROWID or STRICT, found: WITHOUT",
-        ),
+        (" STRICT, WITHOUT", "Expected: ROWID, found: EOF"),
         (",", "Expected: end of statement, found: ,"),
         (", , STRICT", "Expected: end of statement, found: ,"),
     ] {

@@ -8951,7 +8951,7 @@ impl<'a> Parser<'a> {
     /// See <https://www.sqlite.org/lang_createtable.html>.
     fn parse_sqlite_table_options(&mut self) -> Result<SqliteTableOptions, ParserError> {
         let leading_comma = self.consume_token(&Token::Comma);
-        let Some(first) = self.maybe_parse_sqlite_table_option() else {
+        let Some(first) = self.maybe_parse_sqlite_table_option()? else {
             if leading_comma {
                 self.prev_token();
             }
@@ -8960,7 +8960,7 @@ impl<'a> Parser<'a> {
         let mut options = Vec::with_capacity(2);
         options.push(first);
         while self.consume_token(&Token::Comma) {
-            match self.maybe_parse_sqlite_table_option() {
+            match self.maybe_parse_sqlite_table_option()? {
                 Some(option) => options.push(option),
                 None => return self.expected_ref("WITHOUT ROWID or STRICT", self.peek_token_ref()),
             }
@@ -8971,13 +8971,16 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn maybe_parse_sqlite_table_option(&mut self) -> Option<SqliteTableOption> {
-        if self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]) {
-            Some(SqliteTableOption::WithoutRowid)
+    fn maybe_parse_sqlite_table_option(
+        &mut self,
+    ) -> Result<Option<SqliteTableOption>, ParserError> {
+        if self.parse_keyword(Keyword::WITHOUT) {
+            self.expect_keyword_is(Keyword::ROWID)?;
+            Ok(Some(SqliteTableOption::WithoutRowid))
         } else if self.parse_keyword(Keyword::STRICT) {
-            Some(SqliteTableOption::Strict)
+            Ok(Some(SqliteTableOption::Strict))
         } else {
-            None
+            Ok(None)
         }
     }
 

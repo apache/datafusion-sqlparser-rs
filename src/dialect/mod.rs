@@ -1617,8 +1617,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports `IF NOT EXISTS` in
-    /// `ALTER TABLE ... ADD [COLUMN]`.
+    /// Returns true if the dialect supports `ALTER TABLE ... ADD [COLUMN] IF NOT EXISTS <col>`.
     /// Example:
     ///  ```sql
     ///  ALTER TABLE tbl ADD COLUMN IF NOT EXISTS c INT

@@ -1190,6 +1190,7 @@ define_keywords!(
     YEAR,
     YEARS,
     YES,
+    ZEROFILL,
     ZONE,
     ZORDER,
     ZSTD

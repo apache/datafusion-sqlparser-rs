@@ -237,6 +237,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
+        true
+    }
+
     fn supports_interval_options(&self) -> bool {
         true
     }

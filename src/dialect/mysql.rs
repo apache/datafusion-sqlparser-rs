@@ -193,6 +193,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
+        true
+    }
+
     fn supports_cross_join_constraint(&self) -> bool {
         true
     }

@@ -1653,6 +1653,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect allows an optional `ZEROFILL` suffix after numeric data types.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT(10) UNSIGNED ZEROFILL);
+    /// ```
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html>
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `INTERVAL` data type with [Postgres]-style options.
     ///
     /// Examples:

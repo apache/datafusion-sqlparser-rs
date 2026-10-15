@@ -1515,27 +1515,28 @@ impl<'a> Parser<'a> {
 
     /// Parse `DO` statement.
     pub fn parse_do(&mut self) -> Result<Statement, ParserError> {
-        let mut language = self.parse_do_language()?;
-        match &self.peek_token_ref().token {
-            Token::SingleQuotedString(_)
-            | Token::DollarQuotedString(_)
-            | Token::EscapedStringLiteral(_)
-            | Token::UnicodeStringLiteral(_) => {}
-            _ => return self.expected_ref("string literal", self.peek_token_ref()),
+        let mut options = Vec::new();
+        loop {
+            let language = self.parse_keyword(Keyword::LANGUAGE);
+            let string_literal = matches!(
+                self.peek_token_ref().token,
+                Token::SingleQuotedString(_)
+                    | Token::DollarQuotedString(_)
+                    | Token::EscapedStringLiteral(_)
+                    | Token::UnicodeStringLiteral(_)
+            );
+            let option = match (language, string_literal) {
+                (true, true) => DoOption::LanguageLiteral(self.parse_value()?),
+                (true, false) => DoOption::Language(self.parse_identifier()?),
+                (false, true) => DoOption::Code(self.parse_value()?),
+                (false, false) if options.is_empty() => {
+                    return self.expected_ref("string literal", self.peek_token_ref());
+                }
+                (false, false) => break,
+            };
+            options.push(option);
         }
-        let code = self.parse_value()?;
-        if language.is_none() {
-            language = self.parse_do_language()?;
-        }
-        Ok(Statement::Do(DoStatement { language, code }))
-    }
-
-    fn parse_do_language(&mut self) -> Result<Option<Ident>, ParserError> {
-        if self.parse_keyword(Keyword::LANGUAGE) {
-            Ok(Some(self.parse_identifier()?))
-        } else {
-            Ok(None)
-        }
+        Ok(Statement::Do(DoStatement { options }))
     }
 
     /// Parse `NOTIFY` statement.

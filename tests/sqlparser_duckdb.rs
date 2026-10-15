@@ -933,12 +933,10 @@ fn test_duckdb_nested_block_comments() {
         "SELECT a FROM t",
     );
 
-    let err = duckdb()
-        .parse_sql_statements("SELECT a /* outer /* inner */ FROM t")
-        .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("Unexpected EOF while in a multi-line comment"),
-        "{err}"
+    assert_eq!(
+        duckdb().parse_sql_statements("SELECT a /* outer /* inner */ FROM t"),
+        Err(ParserError::TokenizerError(
+            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 37".to_string()
+        ))
     );
 }

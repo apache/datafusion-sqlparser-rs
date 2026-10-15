@@ -669,15 +669,13 @@ fn parse_exclude_constraint() {
 
     // Dialects that do not opt in via `supports_exclude_constraint` must
     // refuse to parse `EXCLUDE` constraints.
-    let unsupported = all_dialects_where(|d| !d.supports_exclude_constraint());
-    let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))";
-    for dialect in unsupported.dialects {
-        let parser = TestedDialects::new(vec![dialect]);
-        assert!(
-            parser.parse_sql_statements(sql).is_err(),
-            "dialect unexpectedly accepted EXCLUDE: {sql}"
-        );
-    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_exclude_constraint())
+            .parse_sql_statements("CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: gist".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -4539,9 +4537,12 @@ fn parse_create_role() {
 
     for negatable_kw in negatables.iter() {
         let sql = format!("CREATE ROLE abc {negatable_kw} NO{negatable_kw}");
-        if pg().parse_sql_statements(&sql).is_ok() {
-            panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {negatable_kw}")
-        }
+        assert_eq!(
+            pg().parse_sql_statements(&sql),
+            Err(ParserError::ParserError(format!(
+                "Found multiple {negatable_kw} or NO{negatable_kw}"
+            )))
+        );
     }
 }
 
@@ -9453,68 +9454,42 @@ CONSTRAINT check_date CHECK (order_date >= '2023-01-01')\
 
 #[test]
 fn parse_create_table_partition_of_errors() {
-    let sql = "CREATE TABLE p PARTITION OF parent";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("FOR VALUES or DEFAULT"),
-        "Expected error about FOR VALUES, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent WITH (fillfactor = 70)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("FOR VALUES or DEFAULT"),
-        "Expected error about FOR VALUES, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES RANGE (1, 10)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("IN, FROM, or WITH"),
-        "Expected error about invalid keyword after FOR VALUES, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("TO"),
-        "Expected error about missing TO clause, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES IN ()";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("at least one value"),
-        "Expected error about empty value list in IN clause, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM () TO (10)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("at least one value"),
-        "Expected error about empty FROM list, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1) TO ()";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("at least one value"),
-        "Expected error about empty TO list, got: {err}"
-    );
+    for (sql, err) in [
+        (
+            "CREATE TABLE p PARTITION OF parent",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: EOF",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent WITH (fillfactor = 70)",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: WITH",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES RANGE (1, 10)",
+            "Expected: IN, FROM, or WITH after FOR VALUES, found: RANGE",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1)",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES IN ()",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES FROM () TO (10)",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1) TO ()",
+            "Expected: at least one value, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
 }
 
 #[test]
@@ -10052,15 +10027,28 @@ fn parse_insert_overriding() {
 
     // `OVERRIDING` takes `SYSTEM` or `USER`, then `VALUE`, and is followed by a query: PostgreSQL's
     // grammar does not allow it before `DEFAULT VALUES`.
-    for sql in [
-        "INSERT INTO t (id) OVERRIDING VALUE VALUES (1)",
-        "INSERT INTO t (id) OVERRIDING SYSTEM VALUES (1)",
-        "INSERT INTO t (id) OVERRIDING DEFAULT VALUE VALUES (1)",
-        "INSERT INTO t OVERRIDING SYSTEM VALUE DEFAULT VALUES",
+    for (sql, err) in [
+        (
+            "INSERT INTO t (id) OVERRIDING VALUE VALUES (1)",
+            "Expected: SYSTEM or USER, found: VALUE",
+        ),
+        (
+            "INSERT INTO t (id) OVERRIDING SYSTEM VALUES (1)",
+            "Expected: VALUE, found: VALUES",
+        ),
+        (
+            "INSERT INTO t (id) OVERRIDING DEFAULT VALUE VALUES (1)",
+            "Expected: SYSTEM or USER, found: DEFAULT",
+        ),
+        (
+            "INSERT INTO t OVERRIDING SYSTEM VALUE DEFAULT VALUES",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: DEFAULT",
+        ),
     ] {
-        assert!(
-            pg_and_generic().parse_sql_statements(sql).is_err(),
-            "{sql} should not parse"
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
         );
     }
 }

@@ -147,7 +147,7 @@ impl Dialect for DuckDbDialect {
         true
     }
 
-    /// See <https://duckdb.org/docs/sql/statements/alter_table.html>
+    /// See <https://duckdb.org/docs/stable/sql/statements/alter_table>
     fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }

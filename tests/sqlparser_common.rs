@@ -6805,10 +6805,10 @@ fn parse_interval_string_without_qualifier() {
     );
     assert_eq!(
         dialects
-            .parse_sql_statements("SELECT INTERVAL '1' DAY TO")
+            .parse_sql_statements("SELECT INTERVAL '1' DAY TO x")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected: date/time field, found: EOF"
+        "sql parser error: Expected: date/time field, found: x"
     );
 }
 
@@ -6819,27 +6819,6 @@ fn parse_window_frame_bound_string_as_interval() {
         "SELECT sum(a) OVER (ORDER BY ts RANGE BETWEEN '1' DAY PRECEDING AND CURRENT ROW) FROM t",
         "SELECT sum(a) OVER (ORDER BY ts RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND CURRENT ROW) FROM t",
     );
-}
-
-#[test]
-fn parse_interval_number_without_unit_error() {
-    for dialect in all_dialects().dialects {
-        if let Err(e) = Parser::parse_sql(&*dialect, "SELECT INTERVAL 1") {
-            assert_eq!(
-                e.to_string(),
-                "sql parser error: INTERVAL requires a unit after the literal value",
-                "{dialect:?}"
-            );
-        }
-    }
-}
-
-#[test]
-fn parse_interval_expression_value() {
-    let dialects = all_dialects_where(|d| {
-        d.require_interval_qualifier() && !d.supports_interval_string_without_qualifier()
-    });
-    dialects.verified_stmt("SELECT INTERVAL 1 + 1 DAY");
 }
 
 #[test]

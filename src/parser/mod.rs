@@ -1902,7 +1902,7 @@ impl<'a> Parser<'a> {
                     Err(e) => {
                         self.failed_reserved_word_prefix_positions
                             .insert(next_token_index, (&e).into());
-                        // `INTERVAL 1` is a malformed interval, not a name.
+                        // A number or string after `INTERVAL` starts an interval, not a name.
                         let interval_number = w.keyword == Keyword::INTERVAL
                             && matches!(
                                 self.peek_token_ref().token,

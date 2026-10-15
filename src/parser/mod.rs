@@ -14640,6 +14640,7 @@ impl<'a> Parser<'a> {
         };
 
         let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+        let on_cluster = self.parse_optional_on_cluster()?;
 
         let output = self.maybe_parse_output_clause()?;
 
@@ -14668,6 +14669,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let settings = self.parse_settings()?;
 
         Ok(Statement::Delete(Delete {
             delete_token: delete_token.into(),
@@ -14678,12 +14680,14 @@ impl<'a> Parser<'a> {
             } else {
                 FromTable::WithoutKeyword(from)
             },
+            on_cluster,
             using,
             selection,
             returning,
             output,
             order_by,
             limit,
+            settings,
         }))
     }
 
@@ -19026,6 +19030,7 @@ impl<'a> Parser<'a> {
         let optimizer_hints = self.maybe_parse_optimizer_hints()?;
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
+        let on_cluster = self.parse_optional_on_cluster()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
             Some(UpdateTableFromKind::BeforeSet(
                 self.parse_table_with_joins()?,
@@ -19067,10 +19072,12 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let settings = self.parse_settings()?;
         Ok(Update {
             update_token: update_token.into(),
             optimizer_hints,
             table,
+            on_cluster,
             assignments,
             from,
             selection,
@@ -19079,6 +19086,7 @@ impl<'a> Parser<'a> {
             or,
             order_by,
             limit,
+            settings,
         }
         .into())
     }

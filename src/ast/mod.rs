@@ -6913,11 +6913,12 @@ pub struct OnConflict {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Target specification for an `ON CONFLICT` clause.
 pub enum ConflictTarget {
-    /// Target specified as a list of columns, optionally followed by PostgreSQL's
+    /// Target specified as a list of columns, optionally followed by
     /// `WHERE index_predicate`, which lets a partial unique index be inferred as the arbiter:
-    /// `ON CONFLICT (a) WHERE b > 0 DO ...`.
+    /// `ON CONFLICT (a) WHERE b > 0 DO ...`. PostgreSQL and SQLite both accept the predicate.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-insert.html>
+    /// and <https://www.sqlite.org/lang_upsert.html>
     Columns {
         /// The columns of the conflict target.
         columns: Vec<Ident>,

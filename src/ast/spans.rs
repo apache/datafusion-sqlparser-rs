@@ -35,23 +35,22 @@ use super::{
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
     CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
-    Cte, Delete, DoStatement, DoUpdate, DropRule, ExceptSelectItem, ExcludeConstraintElement,
-    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
-    FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
-    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
-    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RefreshMaterializedView,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    Cte, Delete, DoOption, DoStatement, DoUpdate, DropRule, ExceptSelectItem,
+    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
+    IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
+    JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge,
+    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
+    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr,
+    OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
+    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
+    Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -2872,13 +2871,16 @@ impl Spanned for CreateUserMapping {
 
 impl Spanned for DoStatement {
     fn span(&self) -> Span {
-        let DoStatement { language, code } = self;
-        union_spans(
-            language
-                .iter()
-                .map(|l| l.span)
-                .chain(core::iter::once(code.span)),
-        )
+        union_spans(self.options.iter().map(|option| option.span()))
+    }
+}
+
+impl Spanned for DoOption {
+    fn span(&self) -> Span {
+        match self {
+            DoOption::Language(language) => language.span,
+            DoOption::LanguageLiteral(value) | DoOption::Code(value) => value.span,
+        }
     }
 }
 

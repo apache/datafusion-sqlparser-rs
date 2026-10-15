@@ -610,8 +610,14 @@ fn test_regexp_operator() {
     sqlite().verified_only_select(r#"SELECT count(*) FROM messages WHERE msg_text REGEXP '\d+'"#);
 
     // Should return an error, not panic
-    assert!(sqlite().parse_sql_statements("SELECT 1 REGEXP").is_err());
-    assert!(sqlite().parse_sql_statements("SELECT 1 MATCH").is_err());
+    for sql in ["SELECT 1 REGEXP", "SELECT 1 MATCH"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: an expression, found: EOF".to_string()
+            ))
+        );
+    }
 }
 
 #[test]
@@ -629,7 +635,12 @@ fn test_glob_operator() {
     sqlite().verified_only_select(r#"SELECT count(*) FROM files WHERE name GLOB '*.txt'"#);
 
     // Should return an error, not panic
-    assert!(sqlite().parse_sql_statements("SELECT 1 GLOB").is_err());
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT 1 GLOB"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: EOF".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -984,9 +995,19 @@ fn test_non_bmp_identifiers() {
     sqlite().verified_stmt("SELECT 𒀀");
     sqlite().verified_stmt("SELECT 𒀀𒀁");
     // U+DFFFE is not alphabetic, so GenericDialect rejects it as an identifier.
-    assert!(sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "SELECT 󟿾").is_err());
+    assert_eq!(
+        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "SELECT \u{DFFFE}"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: \u{DFFFE} at Line: 1, Column: 8".to_string()
+        ))
+    );
     // SQLite rejects U+007F as an unrecognized token.
-    assert!(sqlite().parse_sql_statements("SELECT \u{007f}").is_err());
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT \u{007f}"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: \u{7f}".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -997,8 +1018,12 @@ fn parse_create_table_string_column_names() {
         r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL, 'name' TEXT NOT NULL, 'zip' INT UNSIGNED NULL)"#,
     );
     // Generic dialect does not support this
-    assert!(
-        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')").is_err()
+    assert_eq!(
+        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')"),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'a' at Line: 1, Column: 17"
+                .to_string()
+        ))
     );
 }
 
@@ -1009,9 +1034,12 @@ fn test_cast_empty_type() {
     sqlite().verified_stmt("SELECT CAST(a AS)");
 
     // Rejected by dialects without the flag
-    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
-        .parse_sql_statements("SELECT CAST(a AS)")
-        .is_err());
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("SELECT CAST(a AS)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a data type name, found: )".to_string())
+    );
 }
 
 #[test]

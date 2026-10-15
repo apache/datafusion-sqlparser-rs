@@ -34,8 +34,8 @@ use super::{
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
     CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, Cte, Delete,
-    DoStatement, DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
+    DoOption, DoStatement, DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem,
+    Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
     Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
@@ -2766,13 +2766,16 @@ impl Spanned for comments::CommentWithSpan {
 
 impl Spanned for DoStatement {
     fn span(&self) -> Span {
-        let DoStatement { language, code } = self;
-        union_spans(
-            language
-                .iter()
-                .map(|l| l.span)
-                .chain(core::iter::once(code.span)),
-        )
+        union_spans(self.options.iter().map(|option| option.span()))
+    }
+}
+
+impl Spanned for DoOption {
+    fn span(&self) -> Span {
+        match self {
+            DoOption::Language(language) => language.span,
+            DoOption::LanguageLiteral(value) | DoOption::Code(value) => value.span,
+        }
     }
 }
 

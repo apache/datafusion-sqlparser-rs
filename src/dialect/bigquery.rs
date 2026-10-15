@@ -183,4 +183,9 @@ impl Dialect for BigQueryDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_add_column_statement>
+    fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
 }

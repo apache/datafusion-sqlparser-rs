@@ -1648,6 +1648,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `IF NOT EXISTS` in
+    /// `ALTER TABLE ... ADD [COLUMN]`.
+    /// Example:
+    ///  ```sql
+    ///  ALTER TABLE tbl ADD COLUMN IF NOT EXISTS c INT
+    /// ```
+    fn supports_add_column_if_not_exists(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect considers the specified ident as a function
     /// that returns an identifier. Typically used to generate identifiers
     /// programmatically.

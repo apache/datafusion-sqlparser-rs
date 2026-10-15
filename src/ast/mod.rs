@@ -4937,7 +4937,7 @@ pub enum Statement {
         channel: Ident,
     },
     /// ```sql
-    /// DO [ LANGUAGE lang_name ] code
+    /// DO { code | LANGUAGE lang_name } [ ... ]
     /// ```
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-do.html>
@@ -11596,7 +11596,7 @@ impl fmt::Display for WaitForStatement {
 /// PostgreSQL `DO` statement, executing an anonymous code block.
 ///
 /// ```sql
-/// DO [ LANGUAGE lang_name ] code
+/// DO { code | LANGUAGE lang_name } [ ... ]
 /// ```
 ///
 /// See <https://www.postgresql.org/docs/current/sql-do.html>
@@ -11604,19 +11604,36 @@ impl fmt::Display for WaitForStatement {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DoStatement {
-    /// Optional procedural language name.
-    pub language: Option<Ident>,
-    /// The anonymous code block, a string literal.
-    pub code: ValueWithSpan,
+    /// The code blocks and `LANGUAGE` options, in source order.
+    pub options: Vec<DoOption>,
 }
 
 impl fmt::Display for DoStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "DO ")?;
-        if let Some(language) = &self.language {
-            write!(f, "LANGUAGE {language} ")?;
+        write!(f, "DO {}", display_separated(&self.options, " "))
+    }
+}
+
+/// An item of a [`DoStatement`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DoOption {
+    /// `LANGUAGE lang_name`
+    Language(Ident),
+    /// `LANGUAGE` followed by the name as a string literal.
+    LanguageLiteral(ValueWithSpan),
+    /// The anonymous code block, a string literal.
+    Code(ValueWithSpan),
+}
+
+impl fmt::Display for DoOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DoOption::Language(language) => write!(f, "LANGUAGE {language}"),
+            DoOption::LanguageLiteral(language) => write!(f, "LANGUAGE {language}"),
+            DoOption::Code(code) => write!(f, "{code}"),
         }
-        write!(f, "{}", self.code)
     }
 }
 

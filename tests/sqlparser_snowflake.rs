@@ -5045,12 +5045,21 @@ fn test_stage_name_delimiters() {
 
 #[test]
 fn test_show_external_volumes() {
-    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES") {
+    let stmt = snowflake().verified_stmt("SHOW EXTERNAL VOLUMES");
+    assert_eq!(Span::empty(), stmt.span());
+    match stmt {
         Statement::ShowExternalVolumes(ShowExternalVolumes { filter }) => {
             assert!(filter.is_none());
         }
         _ => unreachable!(),
     }
+
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SHOW EXTERNAL VOLUMES LIKE")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: literal string, found: EOF".to_string())
+    );
 }
 
 #[test]

@@ -18739,9 +18739,12 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_object = self.parse_table_object()?;
 
-            // `BY NAME` is an INSERT clause, not a table alias.
+            // `BY NAME` and `OVERRIDING { SYSTEM | USER } VALUE` are INSERT clauses, not table
+            // aliases.
             let table_alias = if self.dialect.supports_insert_table_alias()
                 && !self.peek_keywords(&[Keyword::BY, Keyword::NAME])
+                && !self.peek_keywords(&[Keyword::OVERRIDING, Keyword::SYSTEM])
+                && !self.peek_keywords(&[Keyword::OVERRIDING, Keyword::USER])
                 && !self.peek_sub_query()
                 && self
                     .peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
@@ -18766,6 +18769,7 @@ impl<'a> Parser<'a> {
             let is_mysql = dialect_of!(self is MySqlDialect);
 
             let mut by_name = false;
+            let mut overriding = None;
             let (columns, partitioned, after_columns, output, source, assignments) = if self
                 .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
             {
@@ -18787,6 +18791,8 @@ impl<'a> Parser<'a> {
                 } else {
                     Default::default()
                 };
+
+                overriding = self.parse_insert_overriding()?;
 
                 let output = self.maybe_parse_output_clause()?;
 
@@ -18905,6 +18911,7 @@ impl<'a> Parser<'a> {
                 partitioned,
                 columns,
                 after_columns,
+                overriding,
                 source,
                 assignments,
                 has_table_keyword: table,
@@ -18991,6 +18998,22 @@ impl<'a> Parser<'a> {
         } else {
             None
         }
+    }
+
+    /// Parse PostgreSQL's `OVERRIDING { SYSTEM | USER } VALUE` in an `INSERT`, if present.
+    fn parse_insert_overriding(&mut self) -> Result<Option<InsertOverriding>, ParserError> {
+        if !self.parse_keyword(Keyword::OVERRIDING) {
+            return Ok(None);
+        }
+        let overriding = if self.parse_keyword(Keyword::SYSTEM) {
+            InsertOverriding::System
+        } else if self.parse_keyword(Keyword::USER) {
+            InsertOverriding::User
+        } else {
+            return self.expected_ref("SYSTEM or USER", self.peek_token_ref());
+        };
+        self.expect_keyword_is(Keyword::VALUE)?;
+        Ok(Some(overriding))
     }
 
     /// Parse an optional `PARTITION (...)` clause for INSERT statements.

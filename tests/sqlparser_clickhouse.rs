@@ -1912,9 +1912,10 @@ fn parse_alter_table_column_position() {
         _ => unreachable!(),
     }
 
-    assert!(clickhouse()
-        .parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER")
-        .is_err());
+    assert_eq!(
+        clickhouse().parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER"),
+        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+    );
 }
 
 #[test]
@@ -2072,15 +2073,29 @@ fn parse_tuple_element_access() {
     clickhouse().verified_stmt("SELECT 1.5, 1 + 0.5");
     clickhouse().one_statement_parses_to("SELECT .5, 1e3", "SELECT 0.5, 1000");
 
-    assert!(clickhouse().parse_sql_statements("SELECT t.").is_err());
-    assert!(clickhouse().parse_sql_statements("SELECT t.1.").is_err());
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT t."),
+        Err(ParserError(
+            "Expected: an identifier or a '*' after '.', found: EOF".to_string()
+        ))
+    );
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT t.1."),
+        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+    );
 
-    let unsupported = all_dialects_where(|d| !d.supports_tuple_element_access());
-    unsupported.verified_stmt("SELECT (1, 'a') . 1");
-    for dialect in unsupported.dialects {
-        assert!(TestedDialects::new(vec![dialect])
-            .parse_sql_statements("SELECT t.1 FROM t")
-            .is_err());
+    all_dialects_where(|d| !d.supports_tuple_element_access()).verified_stmt("SELECT (1, 'a') . 1");
+    for (numeric_prefix, err) in [
+        (true, "Expected: an identifier or a '*' after '.', found: 1"),
+        (false, "Expected: end of statement, found: .1"),
+    ] {
+        assert_eq!(
+            all_dialects_where(|d| {
+                !d.supports_tuple_element_access() && d.supports_numeric_prefix() == numeric_prefix
+            })
+            .parse_sql_statements("SELECT t.1 FROM t"),
+            Err(ParserError(err.to_string()))
+        );
     }
 }
 
@@ -2127,15 +2142,20 @@ fn parse_global_in() {
         }
     ));
 
-    assert!(clickhouse()
-        .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL y")
-        .is_err());
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT * FROM t WHERE x GLOBAL y"),
+        Err(ParserError(
+            "Expected: end of statement, found: GLOBAL".to_string()
+        ))
+    );
 
-    for dialect in all_dialects_where(|d| !d.supports_global_in()).dialects {
-        assert!(TestedDialects::new(vec![dialect])
-            .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL IN (1)")
-            .is_err());
-    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_global_in())
+            .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL IN (1)"),
+        Err(ParserError(
+            "Expected: end of statement, found: GLOBAL".to_string()
+        ))
+    );
 }
 
 #[test]

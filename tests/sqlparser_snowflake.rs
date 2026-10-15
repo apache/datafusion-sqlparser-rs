@@ -5120,7 +5120,9 @@ fn ext_vol_option<'a>(options: &'a [KeyValueOption], name: &str) -> Option<&'a s
 fn test_create_external_volume_basic() {
     let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
                ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/path/'))";
-    match snowflake().verified_stmt(sql) {
+    let stmt = snowflake().verified_stmt(sql);
+    assert_eq!(Span::empty(), stmt.span());
+    match stmt {
         Statement::CreateExternalVolume(CreateExternalVolume {
             or_replace,
             if_not_exists,
@@ -5356,19 +5358,56 @@ fn test_create_external_volume_escaped_single_quotes() {
 }
 
 #[test]
-fn test_create_external_volume_empty_storage_locations() {
-    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = ()";
-    snowflake()
-        .parse_sql_statements(sql)
-        .expect_err("parser must reject empty STORAGE_LOCATIONS");
-}
-
-#[test]
-fn test_create_external_volume_empty_storage_location() {
-    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = (())";
-    snowflake()
-        .parse_sql_statements(sql)
-        .expect_err("parser must reject an empty storage location");
+fn test_create_external_volume_parse_errors() {
+    for (sql, expected) in [
+        ("CREATE EXTERNAL VOLUME", "Expected: identifier, found: EOF"),
+        (
+            "CREATE EXTERNAL VOLUME my_vol",
+            "Expected: STORAGE_LOCATIONS, found: EOF",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS ((NAME='loc1'))",
+            "Expected: =, found: (",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = 'x'",
+            "Expected: (, found: 'x'",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = ()",
+            "Expected: (, found: )",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = (())",
+            "Expected: storage location options, found: )",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = ((NAME='loc1')",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = ((NAME='loc1')) ALLOW_WRITES TRUE",
+            "Expected: =, found: TRUE",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = ((NAME='loc1')) ALLOW_WRITES = 1",
+            "Expected: TRUE or FALSE, found: 1",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = ((NAME='loc1')) COMMENT 'c'",
+            "Expected: =, found: 'c'",
+        ),
+        (
+            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = ((NAME='loc1')) COMMENT = 1",
+            "Expected: string literal, found: 1",
+        ),
+    ] {
+        assert_eq!(
+            snowflake().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
 }
 
 #[test]
@@ -5394,20 +5433,6 @@ fn test_create_external_volume_comment_before_allow_writes() {
 }
 
 #[test]
-fn test_create_external_volume_allow_writes_non_boolean() {
-    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
-               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')) \
-               ALLOW_WRITES = 1";
-    let err = snowflake()
-        .parse_sql_statements(sql)
-        .expect_err("parser must reject non-boolean ALLOW_WRITES");
-    assert!(
-        err.to_string().contains("TRUE or FALSE"),
-        "unexpected error: {err}"
-    );
-}
-
-#[test]
 fn test_drop_external_volume() {
     match snowflake().verified_stmt("DROP EXTERNAL VOLUME my_vol") {
         Statement::Drop {
@@ -5422,6 +5447,11 @@ fn test_drop_external_volume() {
         }
         _ => unreachable!(),
     }
+    let err = snowflake()
+        .parse_sql_statements("DROP EXTERNAL my_vol")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("EXTERNAL VOLUME"), "{err}");
 }
 
 #[test]

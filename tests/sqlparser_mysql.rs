@@ -1946,13 +1946,18 @@ fn parse_zerofill() {
         mysql_and_generic().verified_stmt(&format!("CREATE TABLE t (a {data_type} ZEROFILL)"));
     }
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT(10) UNSIGNED ZEROFILL)");
-    assert!(mysql_and_generic()
-        .parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)")
-        .is_err());
-    assert!(
+    assert_eq!(
+        mysql_and_generic().parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
+    );
+    assert_eq!(
         all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
-            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)")
-            .is_err()
+            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
     );
 }
 

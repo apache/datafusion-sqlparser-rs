@@ -723,13 +723,21 @@ fn parse_invalid_table_name() {
     let ast = all_dialects().run_parser_method("db.public..customer", |parser| {
         parser.parse_object_name(false)
     });
-    assert!(ast.is_err());
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: identifier, found: . at Line: 1, Column: 11".to_string()
+        ),
+        ast.unwrap_err()
+    );
 }
 
 #[test]
 fn parse_no_table_name() {
     let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name(false));
-    assert!(ast.is_err());
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        ast.unwrap_err()
+    );
 }
 
 #[test]
@@ -12410,9 +12418,12 @@ fn parse_non_latin_identifiers() {
         Box::new(DuckDbDialect {}),
         Box::new(MsSqlDialect {}),
     ]);
-    assert!(supported_dialects
-        .parse_sql_statements("SELECT 💝 FROM table1")
-        .is_err());
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: 💝".to_string()),
+        supported_dialects
+            .parse_sql_statements("SELECT 💝 FROM table1")
+            .unwrap_err()
+    );
 }
 
 #[test]
@@ -17638,128 +17649,134 @@ fn parse_pipeline_operator_negative_tests() {
     );
 
     // Test that CALL without function name fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL")
-        .is_err());
-
-    // Test that CALL without parentheses fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL my_function")
-        .is_err());
-
-    // Test that CALL with invalid function syntax fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL 123 invalid")
-        .is_err());
-
-    // Test that CALL with malformed arguments fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL my_function(,)")
-        .is_err());
-
-    // Test that CALL with invalid alias syntax fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL my_function() AS")
-        .is_err());
-
-    // Test that PIVOT without parentheses fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> PIVOT SUM(amount) FOR month IN ('Jan')")
-        .is_err());
-
-    // Test that PIVOT without FOR keyword fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) month IN ('Jan'))")
-        .is_err());
-
-    // Test that PIVOT without IN keyword fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month ('Jan'))")
-        .is_err());
-
-    // Test that PIVOT with empty IN list fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ())")
-        .is_err());
-
-    // Test that PIVOT with invalid alias syntax fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ('Jan')) AS")
-        .is_err());
-
-    // Test UNPIVOT negative cases
-
-    // Test that UNPIVOT without parentheses fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT value FOR name IN col1, col2")
-        .is_err());
-
-    // Test that UNPIVOT without FOR keyword fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value name IN (col1, col2))")
-        .is_err());
-
-    // Test that UNPIVOT without IN keyword fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name (col1, col2))")
-        .is_err());
-
-    // Test that UNPIVOT with missing value column fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(FOR name IN (col1, col2))")
-        .is_err());
-
-    // Test that UNPIVOT with missing name column fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR IN (col1, col2))")
-        .is_err());
-
-    // Test that UNPIVOT with empty IN list fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN ())")
-        .is_err());
-
-    // Test that UNPIVOT with invalid alias syntax fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)) AS")
-        .is_err());
-
-    // Test that UNPIVOT with missing closing parenthesis fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)")
-        .is_err());
-
-    // Test that JOIN without table name fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> JOIN ON users.id = orders.user_id")
-        .is_err());
-
-    // Test that CROSS JOIN with ON condition fails
-    assert!(dialects
-        .parse_sql_statements(
-            "SELECT * FROM users |> CROSS JOIN orders ON users.id = orders.user_id"
-        )
-        .is_err());
-
-    // Test that CROSS JOIN with USING condition fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CROSS JOIN orders USING (user_id)")
-        .is_err());
-
-    // Test that JOIN with empty USING list fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> JOIN orders USING ()")
-        .is_err());
-
-    // Test that JOIN with malformed ON condition fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> JOIN orders ON")
-        .is_err());
-
-    // Test that JOIN with invalid USING syntax fails
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> JOIN orders USING user_id")
-        .is_err());
+    for (sql, err_msg) in [
+        (
+            "SELECT * FROM users |> CALL",
+            "Expected: identifier, found: EOF",
+        ),
+        // Test that CALL without parentheses fails
+        (
+            "SELECT * FROM users |> CALL my_function",
+            "Expected: (, found: EOF",
+        ),
+        // Test that CALL with invalid function syntax fails
+        (
+            "SELECT * FROM users |> CALL 123 invalid",
+            "Expected: identifier, found: 123",
+        ),
+        // Test that CALL with malformed arguments fails
+        (
+            "SELECT * FROM users |> CALL my_function(,)",
+            "Expected: an expression, found: ,",
+        ),
+        // Test that CALL with invalid alias syntax fails
+        (
+            "SELECT * FROM users |> CALL my_function() AS",
+            "Expected: identifier, found: EOF",
+        ),
+        // Test that PIVOT without parentheses fails
+        (
+            "SELECT * FROM users |> PIVOT SUM(amount) FOR month IN ('Jan')",
+            "Expected: (, found: SUM",
+        ),
+        // Test that PIVOT without FOR keyword fails
+        (
+            "SELECT * FROM users |> PIVOT(SUM(amount) month IN ('Jan'))",
+            "Expected: FOR, found: IN",
+        ),
+        // Test that PIVOT without IN keyword fails
+        (
+            "SELECT * FROM users |> PIVOT(SUM(amount) FOR month ('Jan'))",
+            "Expected: IN, found: (",
+        ),
+        // Test that PIVOT with empty IN list fails
+        (
+            "SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ())",
+            "Expected: an expression, found: )",
+        ),
+        // Test that PIVOT with invalid alias syntax fails
+        (
+            "SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ('Jan')) AS",
+            "Expected: identifier, found: EOF",
+        ),
+        // Test UNPIVOT negative cases
+        // Test that UNPIVOT without parentheses fails
+        (
+            "SELECT * FROM users |> UNPIVOT value FOR name IN col1, col2",
+            "Expected: (, found: value",
+        ),
+        // Test that UNPIVOT without FOR keyword fails
+        (
+            "SELECT * FROM users |> UNPIVOT(value name IN (col1, col2))",
+            "Expected: FOR, found: name",
+        ),
+        // Test that UNPIVOT without IN keyword fails
+        (
+            "SELECT * FROM users |> UNPIVOT(value FOR name (col1, col2))",
+            "Expected: IN, found: (",
+        ),
+        // Test that UNPIVOT with missing value column fails
+        (
+            "SELECT * FROM users |> UNPIVOT(FOR name IN (col1, col2))",
+            "Expected: FOR, found: name",
+        ),
+        // Test that UNPIVOT with missing name column fails
+        (
+            "SELECT * FROM users |> UNPIVOT(value FOR IN (col1, col2))",
+            "Expected: IN, found: (",
+        ),
+        // Test that UNPIVOT with empty IN list fails
+        (
+            "SELECT * FROM users |> UNPIVOT(value FOR name IN ())",
+            "Expected: identifier, found: )",
+        ),
+        // Test that UNPIVOT with invalid alias syntax fails
+        (
+            "SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)) AS",
+            "Expected: identifier, found: EOF",
+        ),
+        // Test that UNPIVOT with missing closing parenthesis fails
+        (
+            "SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)",
+            "Expected: ), found: EOF",
+        ),
+        // Test that JOIN without table name fails
+        (
+            "SELECT * FROM users |> JOIN ON users.id = orders.user_id",
+            "Expected: end of statement, found: .",
+        ),
+        // Test that CROSS JOIN with ON condition fails
+        (
+            "SELECT * FROM users |> CROSS JOIN orders ON users.id = orders.user_id",
+            "Expected: end of statement, found: ON",
+        ),
+        // Test that CROSS JOIN with USING condition fails
+        (
+            "SELECT * FROM users |> CROSS JOIN orders USING (user_id)",
+            "Expected: end of statement, found: USING",
+        ),
+        // Test that JOIN with empty USING list fails
+        (
+            "SELECT * FROM users |> JOIN orders USING ()",
+            "Expected: identifier, found: )",
+        ),
+        // Test that JOIN with malformed ON condition fails
+        (
+            "SELECT * FROM users |> JOIN orders ON",
+            "Expected: an expression, found: EOF",
+        ),
+        // Test that JOIN with invalid USING syntax fails
+        (
+            "SELECT * FROM users |> JOIN orders USING user_id",
+            "Expected: a list of columns in parentheses, found: user_id",
+        ),
+    ] {
+        let res = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(err_msg.to_string()),
+            res.unwrap_err()
+        );
+    }
 }
 
 #[test]
@@ -19828,10 +19845,11 @@ fn parse_select_item_multi_column_alias() {
     all_dialects_where(|d| d.supports_select_item_multi_column_alias())
         .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2) FROM t");
 
-    assert!(
+    assert_eq!(
+        ParserError::ParserError("Expected: an identifier after AS, found: (".to_string()),
         all_dialects_where(|d| !d.supports_select_item_multi_column_alias())
             .parse_sql_statements("SELECT stack(2, 'a', 'b') AS (col1, col2)")
-            .is_err()
+            .unwrap_err()
     );
 }
 
@@ -19852,9 +19870,12 @@ fn parse_aliased_function_args() {
     dialects.verified_only_select("SELECT foo(lower(a) AS x, b AS y)");
     dialects.verified_only_select(r#"SELECT foo(a AS "x y")"#);
     dialects.verified_only_select("SELECT foo(bar(a AS x) AS y)");
-    assert!(all_dialects_except(|d| d.supports_aliased_function_args())
-        .parse_sql_statements("SELECT foo(a AS x)")
-        .is_err());
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: AS".to_string()),
+        all_dialects_except(|d| d.supports_aliased_function_args())
+            .parse_sql_statements("SELECT foo(a AS x)")
+            .unwrap_err()
+    );
 }
 
 #[test]
@@ -19889,9 +19910,12 @@ fn parse_xmlparse() {
     }
 
     // XMLPARSE needs both a mode word and a value.
-    assert!(dialects
-        .parse_sql_statements("SELECT xmlparse('<a/>')")
-        .is_err());
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: )".to_string()),
+        dialects
+            .parse_sql_statements("SELECT xmlparse('<a/>')")
+            .unwrap_err()
+    );
 
     // Going through the ordinary function-call path, XMLPARSE accepts the same
     // trailing clauses as any other function.
@@ -19902,9 +19926,12 @@ fn parse_xmlparse() {
     // and the special `CONTENT <expr>` syntax is rejected.
     let others = all_dialects_except(|d| d.supports_xml_expressions());
     others.verified_only_select("SELECT xmlparse(1)");
-    assert!(others
-        .parse_sql_statements("SELECT xmlparse(content '<a/>')")
-        .is_err());
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: '<a/>'".to_string()),
+        others
+            .parse_sql_statements("SELECT xmlparse(content '<a/>')")
+            .unwrap_err()
+    );
 }
 
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
@@ -20235,9 +20262,12 @@ fn parse_alter_table_column_position() {
         ),
         _ => unreachable!(),
     }
-    assert!(dialects
-        .parse_sql_statements("ALTER TABLE tab ADD COLUMN c INT AFTER")
-        .is_err());
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        dialects
+            .parse_sql_statements("ALTER TABLE tab ADD COLUMN c INT AFTER")
+            .unwrap_err()
+    );
 
     let dialects = all_dialects_where(|d| !d.supports_alter_column_position());
     for sql in [

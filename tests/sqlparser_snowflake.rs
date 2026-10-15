@@ -5104,7 +5104,9 @@ fn test_stage_name_delimiters() {
 
 #[test]
 fn test_describe_external_volume() {
-    match snowflake().verified_stmt("DESCRIBE EXTERNAL VOLUME my_vol") {
+    let stmt = snowflake().verified_stmt("DESCRIBE EXTERNAL VOLUME my_vol");
+    assert_eq!(Span::empty(), stmt.span());
+    match stmt {
         Statement::DescribeExternalVolume(DescribeExternalVolume {
             describe_alias,
             name,
@@ -5114,6 +5116,13 @@ fn test_describe_external_volume() {
         }
         _ => unreachable!(),
     }
+
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("DESCRIBE EXTERNAL VOLUME")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }
 
 #[test]

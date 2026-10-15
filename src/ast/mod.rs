@@ -88,8 +88,8 @@ pub use self::ddl::{
     UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
-    Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, MultiTableInsertIntoClause,
+    Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
+    MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, MultiTableInsertIntoClause,
     MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
     MultiTableInsertWhenClause, OutputClause, Update,
 };

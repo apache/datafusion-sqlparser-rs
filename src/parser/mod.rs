@@ -13411,6 +13411,10 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
+        if self.is_zerofill_allowed(next_token_index) && self.parse_keyword(Keyword::ZEROFILL) {
+            data = DataType::Zerofill(Box::new(data));
+        }
+
         if self.dialect.supports_array_typedef_with_brackets() {
             while self.consume_token(&Token::LBracket) {
                 // Parse optional array data type size
@@ -13447,6 +13451,35 @@ impl<'a> Parser<'a> {
             data_type = DataType::Collate(Box::new(data_type), self.parse_object_name(false)?);
         }
         Ok((data_type, trailing_bracket))
+    }
+
+    fn is_zerofill_allowed(&self, token_index: usize) -> bool {
+        if !self.dialect.supports_data_type_zerofill_suffix() {
+            return false;
+        }
+        match &self.token_at(token_index).token {
+            Token::Word(w) => matches!(
+                w.keyword,
+                Keyword::TINYINT
+                    | Keyword::SMALLINT
+                    | Keyword::MEDIUMINT
+                    | Keyword::INT
+                    | Keyword::INTEGER
+                    | Keyword::BIGINT
+                    | Keyword::INT2
+                    | Keyword::INT4
+                    | Keyword::INT8
+                    | Keyword::DECIMAL
+                    | Keyword::DEC
+                    | Keyword::NUMERIC
+                    | Keyword::FLOAT
+                    | Keyword::FLOAT4
+                    | Keyword::FLOAT8
+                    | Keyword::DOUBLE
+                    | Keyword::REAL
+            ),
+            _ => false,
+        }
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
@@ -14607,6 +14640,7 @@ impl<'a> Parser<'a> {
         };
 
         let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+        let on_cluster = self.parse_optional_on_cluster()?;
 
         let output = self.maybe_parse_output_clause()?;
 
@@ -14635,6 +14669,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let settings = self.parse_settings()?;
 
         Ok(Statement::Delete(Delete {
             delete_token: delete_token.into(),
@@ -14645,12 +14680,14 @@ impl<'a> Parser<'a> {
             } else {
                 FromTable::WithoutKeyword(from)
             },
+            on_cluster,
             using,
             selection,
             returning,
             output,
             order_by,
             limit,
+            settings,
         }))
     }
 
@@ -18672,9 +18709,12 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_object = self.parse_table_object()?;
 
-            // `BY NAME` is an INSERT clause, not a table alias.
+            // `BY NAME` and `OVERRIDING { SYSTEM | USER } VALUE` are INSERT clauses, not table
+            // aliases.
             let table_alias = if self.dialect.supports_insert_table_alias()
                 && !self.peek_keywords(&[Keyword::BY, Keyword::NAME])
+                && !self.peek_keywords(&[Keyword::OVERRIDING, Keyword::SYSTEM])
+                && !self.peek_keywords(&[Keyword::OVERRIDING, Keyword::USER])
                 && !self.peek_sub_query()
                 && self
                     .peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
@@ -18699,6 +18739,7 @@ impl<'a> Parser<'a> {
             let is_mysql = dialect_of!(self is MySqlDialect);
 
             let mut by_name = false;
+            let mut overriding = None;
             let (columns, partitioned, after_columns, output, source, assignments) = if self
                 .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
             {
@@ -18720,6 +18761,8 @@ impl<'a> Parser<'a> {
                 } else {
                     Default::default()
                 };
+
+                overriding = self.parse_insert_overriding()?;
 
                 let output = self.maybe_parse_output_clause()?;
 
@@ -18838,6 +18881,7 @@ impl<'a> Parser<'a> {
                 partitioned,
                 columns,
                 after_columns,
+                overriding,
                 source,
                 assignments,
                 has_table_keyword: table,
@@ -18926,6 +18970,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse PostgreSQL's `OVERRIDING { SYSTEM | USER } VALUE` in an `INSERT`, if present.
+    fn parse_insert_overriding(&mut self) -> Result<Option<InsertOverriding>, ParserError> {
+        if !self.parse_keyword(Keyword::OVERRIDING) {
+            return Ok(None);
+        }
+        let overriding = if self.parse_keyword(Keyword::SYSTEM) {
+            InsertOverriding::System
+        } else if self.parse_keyword(Keyword::USER) {
+            InsertOverriding::User
+        } else {
+            return self.expected_ref("SYSTEM or USER", self.peek_token_ref());
+        };
+        self.expect_keyword_is(Keyword::VALUE)?;
+        Ok(Some(overriding))
+    }
+
     /// Parse an optional `PARTITION (...)` clause for INSERT statements.
     pub fn parse_insert_partition(&mut self) -> Result<Option<Vec<Expr>>, ParserError> {
         if self.parse_keyword(Keyword::PARTITION) {
@@ -18970,6 +19030,7 @@ impl<'a> Parser<'a> {
         let optimizer_hints = self.maybe_parse_optimizer_hints()?;
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
+        let on_cluster = self.parse_optional_on_cluster()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
             Some(UpdateTableFromKind::BeforeSet(
                 self.parse_table_with_joins()?,
@@ -19011,10 +19072,12 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let settings = self.parse_settings()?;
         Ok(Update {
             update_token: update_token.into(),
             optimizer_hints,
             table,
+            on_cluster,
             assignments,
             from,
             selection,
@@ -19023,6 +19086,7 @@ impl<'a> Parser<'a> {
             or,
             order_by,
             limit,
+            settings,
         }
         .into())
     }
@@ -22280,28 +22344,54 @@ mod tests {
     fn test_replace_into_placeholders() {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert_eq!(
+            ParserError::ParserError(
+                "Expected: an expression, found: & at Line: 1, Column: 28".to_string()
+            ),
+            Parser::parse_sql(&GenericDialect {}, sql).unwrap_err()
+        );
     }
 
     #[test]
     fn test_replace_into_set_placeholder() {
         let sql = "REPLACE INTO t SET ?";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert_eq!(
+            ParserError::ParserError(
+                "Expected: SELECT, VALUES, or a subquery in the query body, found: SET at Line: 1, Column: 16"
+                    .to_string()
+            ),
+            Parser::parse_sql(&GenericDialect {}, sql).unwrap_err()
+        );
     }
 
     #[test]
     fn test_replace_incomplete() {
         let sql = r#"REPLACE"#;
 
-        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+        assert_eq!(
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            Parser::parse_sql(&MySqlDialect {}, sql).unwrap_err()
+        );
     }
 
     #[test]
     fn test_placeholder_invalid_whitespace() {
-        for w in ["  ", "/*invalid*/"] {
+        for (w, expected) in [
+            (
+                "  ",
+                "Expected: placeholder, found:   at Line: 3, Column: 4",
+            ),
+            (
+                "/*invalid*/",
+                "Expected: placeholder, found: /*invalid*/ at Line: 3, Column: 4",
+            ),
+        ] {
             let sql = format!("\nSELECT\n  :{w}fooBar");
-            assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
+            assert_eq!(
+                ParserError::ParserError(expected.to_string()),
+                Parser::parse_sql(&GenericDialect, &sql).unwrap_err()
+            );
         }
     }
 }

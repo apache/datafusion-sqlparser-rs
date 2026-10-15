@@ -41,12 +41,16 @@ fn test_method_overrides() {
     assert!(!dialect.supports_factorial_operator());
 
     // Parsing works with the overrides
-    let result = Parser::new(&dialect)
+    let statements = Parser::new(&dialect)
         .try_with_sql("SELECT '''value''' FROM t ORDER BY ALL")
         .unwrap()
-        .parse_statements();
-
-    assert!(result.is_ok());
+        .parse_statements()
+        .unwrap();
+    assert_eq!(statements.len(), 1);
+    assert_eq!(
+        statements[0].to_string(),
+        "SELECT '''value''' FROM t ORDER BY ALL"
+    );
 }
 
 #[test]

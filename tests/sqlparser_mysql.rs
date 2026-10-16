@@ -1946,13 +1946,18 @@ fn parse_zerofill() {
         mysql_and_generic().verified_stmt(&format!("CREATE TABLE t (a {data_type} ZEROFILL)"));
     }
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT(10) UNSIGNED ZEROFILL)");
-    assert!(mysql_and_generic()
-        .parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)")
-        .is_err());
-    assert!(
+    assert_eq!(
+        mysql_and_generic().parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
+    );
+    assert_eq!(
         all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
-            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)")
-            .is_err()
+            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
     );
 }
 
@@ -5160,15 +5165,31 @@ fn parse_alter_table_column_position() {
     mysql_and_generic().verified_stmt("ALTER TABLE tab ADD COLUMN a INT FIRST, CHANGE COLUMN b c INT AFTER a, MODIFY COLUMN d INT AFTER c");
 
     // FIRST and AFTER are mutually exclusive, and AFTER needs a target.
-    for sql in [
-        "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
-        "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
-        "ALTER TABLE tab ADD COLUMN c INT AFTER",
-        "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
-        "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+    for (sql, err) in [
+        (
+            "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
+            "Expected: end of statement, found: AFTER",
+        ),
+        (
+            "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
+            "Expected: end of statement, found: FIRST",
+        ),
+        (
+            "ALTER TABLE tab ADD COLUMN c INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
     ] {
-        assert!(
-            mysql_and_generic().parse_sql_statements(sql).is_err(),
+        assert_eq!(
+            mysql_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
             "{sql}"
         );
     }

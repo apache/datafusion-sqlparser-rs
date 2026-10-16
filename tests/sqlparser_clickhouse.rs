@@ -1943,15 +1943,31 @@ fn parse_alter_table_modify_order_by() {
         _ => unreachable!(),
     }
 
-    for sql in [
-        "ALTER TABLE events MODIFY ORDER BY",
-        "ALTER TABLE events MODIFY ORDER BY (a",
-        "ALTER TABLE events MODIFY ORDER BY (,)",
-        "ALTER TABLE events MODIFY ORDER BY (a) b",
-        "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
+    for (sql, err) in [
+        (
+            "ALTER TABLE events MODIFY ORDER BY",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (a",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (,)",
+            "Expected: an expression, found: ,",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (a) b",
+            "Expected: end of statement, found: b",
+        ),
+        (
+            "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
+            "Expected: ), found: EOF",
+        ),
     ] {
-        assert!(
-            clickhouse_and_generic().parse_sql_statements(sql).is_err(),
+        assert_eq!(
+            clickhouse_and_generic().parse_sql_statements(sql),
+            Err(ParserError(err.to_string())),
             "{sql}"
         );
     }

@@ -2313,7 +2313,6 @@ mod tests {
         let statement = r#"SELECT 'Wayne\'s World'"#;
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
-        assert!(res1.is_ok());
-        assert_eq!(res1, res2);
+        assert_eq!(res1.unwrap(), res2.unwrap());
     }
 }

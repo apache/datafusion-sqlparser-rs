@@ -9749,6 +9749,25 @@ fn parse_create_aggregate_additional_options() {
         "CREATE AGGREGATE my_shareable (INT) (SFUNC = my_sfunc, STYPE = internal, FINALFUNC_MODIFY = SHAREABLE, MFINALFUNC = my_mfinal, MSSPACE = 64, MINITCOND = '0')",
     );
 }
+#[test]
+fn parse_create_aggregate_ordered_set_args() {
+    let sql = "CREATE AGGREGATE percentile (FLOAT8 ORDER BY FLOAT8) (SFUNC = ordered_set_transition, STYPE = internal)";
+    let stmt = pg_and_generic().verified_stmt(sql);
+    let Statement::CreateAggregate(aggregate) = stmt else {
+        unreachable!()
+    };
+    let CreateAggregateArgs::OrderedSet { direct, aggregated } = aggregate.args else {
+        unreachable!()
+    };
+    assert_eq!(
+        direct.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        ["FLOAT8"]
+    );
+    assert_eq!(
+        aggregated.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        ["FLOAT8"]
+    );
+}
 
 #[test]
 fn parse_create_aggregate_parenthesized_arg_type() {

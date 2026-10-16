@@ -9,6 +9,13 @@
 1. Refrain from adding conditions on specific dialects, such as `dialect_is!(...)` or `dialect_of!(... | ...)`. Instead, define a new function in the `Dialect` trait that describes the condition, so that dialects can turn this condition on more easily.
 2. Make targeted code changes and refrain from refactoring, unless it's absolutely required.
 
+## Code Organization Guidelines
+1. `src/parser/mod.rs` holds the `Parser` core (tokens, expressions, queries) and is split by statement family into sibling files, each containing an `impl Parser<'_>` block (e.g., `src/parser/create.rs`, `alter.rs`, `merge.rs`).
+2. Add new `parse_*` methods to the file matching their statement family. Do not add statement-specific methods to `mod.rs` when a matching sibling file exists.
+3. When a new statement family needs its own file, follow the layout of `src/parser/create.rs`: license header, `use super::{Parser, ParserError};`, one `impl Parser<'_>` block, and a `mod <name>;` line in `mod.rs`.
+4. Helpers shared across families stay in `mod.rs`. Methods in a sibling file that `mod.rs` or other files call are `pub(super)` unless they are part of the public API.
+5. When moving existing code between files, keep the PR a pure move with no logic changes, and verify it with `git diff --color-moved`.
+
 ## Code Documentation Guidelines
 1. Keep comments and doc comments brief and non-repetitive.
 2. Document only what the code does not plainly state, never the trivial or self-evident.

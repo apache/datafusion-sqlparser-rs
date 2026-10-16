@@ -37,7 +37,9 @@ rendered statement no longer parses.
 
 `fuzz_duckdb_accepts` parses the input with DuckDB's own parser and fails when DuckDB accepts a `SELECT` that `DuckDbDialect` rejects.
 
-The three oracle targets compile their engine from source, so each builds only with its feature, `sqlite`, `postgres` or `duckdb`, as in `cargo +nightly fuzz run --features sqlite fuzz_sqlite_accepts fuzz_seeds`. `cargo +nightly fuzz build --all-features` builds every target.
+`fuzz_clickhouse_lexes` tokenizes the input with ClickHouse's own lexer, vendored under `fuzz/vendor/clickhouse-lexer/`, and fails when it reaches the end without an error token but `ClickHouseDialect` fails to tokenize. ClickHouse has no standalone parser, so the check stops at the tokenizer.
+
+The four oracle targets compile their engine from source, so each builds only with its feature, `sqlite`, `postgres`, `duckdb` or `clickhouse`, as in `cargo +nightly fuzz run --features sqlite fuzz_sqlite_accepts fuzz_seeds`. `cargo +nightly fuzz build --all-features` builds every target.
 
 `fuzz_stage_cost` times tokenizing, parsing and printing the input with every dialect and fails when parsing takes more than 50 times as long as tokenizing, or printing more than 50 times as long as parsing, once the slower stage passes 10 ms. It reports superlinear paths whose cost stays far below the fuzzer's timeout.
 

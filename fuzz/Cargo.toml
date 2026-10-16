@@ -32,11 +32,15 @@ libduckdb-sys = { version = "1.10505.0", features = ["bundled", "json"], optiona
 serde_json = { version = "1", optional = true }
 sqlparser = { path = ".." }
 
+[build-dependencies]
+cc = { version = "1", optional = true }
+
 # The oracle targets build their engines from source, so each compiles only when its feature is on.
 [features]
 sqlite = ["dep:libsqlite3-sys"]
 postgres = ["dep:pg_query"]
 duckdb = ["dep:libduckdb-sys", "dep:serde_json"]
+clickhouse = ["dep:cc"]
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -76,6 +80,14 @@ bench = false
 name = "fuzz_duckdb_accepts"
 path = "fuzz_targets/fuzz_duckdb_accepts.rs"
 required-features = ["duckdb"]
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_clickhouse_lexes"
+path = "fuzz_targets/fuzz_clickhouse_lexes.rs"
+required-features = ["clickhouse"]
 test = false
 doc = false
 bench = false

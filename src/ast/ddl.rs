@@ -2980,6 +2980,7 @@ impl fmt::Display for CreateIndex {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SqliteTableOption {
     /// `WITHOUT ROWID`
     WithoutRowid,
@@ -3000,6 +3001,7 @@ impl fmt::Display for SqliteTableOption {
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SqliteTableOptions {
     /// Whether a comma separates the list from the column definitions,
     /// as in `(a INT), STRICT`.

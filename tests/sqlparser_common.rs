@@ -183,7 +183,7 @@ fn parse_insert_values() {
                         ..
                     }) => {
                         assert_eq!(rows.as_slice(), expected_rows);
-                        assert!(value_keyword == expected_value_keyword);
+                        assert_eq!(value_keyword, expected_value_keyword);
                     }
                     _ => unreachable!(),
                 }

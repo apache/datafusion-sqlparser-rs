@@ -1151,8 +1151,10 @@ fn sqlite_is_operators() {
             expr,
             list,
             negated,
+            global,
         } => {
             assert!(!negated);
+            assert!(!global);
             assert_eq!(
                 *expr,
                 Expr::BinaryOp {

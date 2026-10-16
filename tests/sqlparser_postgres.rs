@@ -672,8 +672,10 @@ fn parse_exclude_constraint() {
     // Dialects that do not opt in via `supports_exclude_constraint` must
     // refuse to parse `EXCLUDE` constraints.
     assert_eq!(
-        all_dialects_where(|d| !d.supports_exclude_constraint())
-            .parse_sql_statements("CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))"),
+        all_dialects_where(|d| {
+            !d.supports_exclude_constraint() && !d.supports_multiword_type_names()
+        })
+        .parse_sql_statements("CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))"),
         Err(ParserError::ParserError(
             "Expected: ',' or ')' after column definition, found: gist".to_string()
         ))

@@ -1814,27 +1814,61 @@ fn parse_sqlite_variable_tokens() {
     sqlite().one_statement_parses_to("SELECT @2t i", "SELECT @2t AS i");
 
     let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
-    for sql in ["SELECT :::6", "SELECT ($$::)"] {
-        assert!(generic.parse_sql_statements(sql).is_err(), "{sql}");
+    for (sql, err) in [
+        (
+            "SELECT :::6",
+            ParserError::ParserError("Expected: an expression, found: ::".to_string()),
+        ),
+        (
+            "SELECT ($$::)",
+            ParserError::TokenizerError(
+                "Unterminated dollar-quoted string at Line: 1, Column: 14".to_string(),
+            ),
+        ),
+    ] {
+        assert_eq!(generic.parse_sql_statements(sql), Err(err), "{sql}");
     }
     // SQLite ends a subscript at whitespace and rejects the token
-    assert!(sqlite().parse_sql_statements("SELECT $a(x y)").is_err());
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT $a(x y)"),
+        Err(ParserError::TokenizerError(
+            "Unterminated SQLite variable subscript at Line: 1, Column: 8".to_string()
+        ))
+    );
     // A vertical tab also ends a subscript in SQLite's tokenizer
-    assert!(sqlite()
-        .parse_sql_statements("SELECT :a(x\u{000b}y)")
-        .is_err());
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT :a(x\u{000b}y)"),
+        Err(ParserError::TokenizerError(
+            "Unterminated SQLite variable subscript at Line: 1, Column: 8".to_string()
+        ))
+    );
 }
 
 #[test]
 fn parse_colon_is_not_an_operator() {
-    for sql in [
-        "SELECT b : c",
-        "SELECT a / b : c",
-        "SELECT b : c.d",
-        "SELECT b : \"c\"",
-        "SELECT b :c",
+    for (sql, err) in [
+        (
+            "SELECT b : c",
+            ParserError::ParserError("Expected: end of statement, found: :".to_string()),
+        ),
+        (
+            "SELECT a / b : c",
+            ParserError::ParserError("Expected: end of statement, found: :".to_string()),
+        ),
+        (
+            "SELECT b : c.d",
+            ParserError::ParserError("Expected: end of statement, found: :".to_string()),
+        ),
+        (
+            "SELECT b : \"c\"",
+            ParserError::ParserError("Expected: end of statement, found: :".to_string()),
+        ),
+        (
+            "SELECT b :c",
+            ParserError::ParserError("Expected: end of statement, found: :c".to_string()),
+        ),
     ] {
-        assert!(sqlite().parse_sql_statements(sql).is_err(), "{sql}");
+        assert_eq!(sqlite().parse_sql_statements(sql), Err(err), "{sql}");
     }
     sqlite().verified_stmt("SELECT a FROM t WHERE b = :c");
 }

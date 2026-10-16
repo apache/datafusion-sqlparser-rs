@@ -16349,13 +16349,10 @@ fn overflow() {
 
 #[test]
 fn long_set_operation_chain_display_does_not_stack_overflow() {
-    // `SetExpr`'s `Display` recurses once per branch of a set-operation chain.
-    // Print on a small stack: with the default test-thread stack the check
-    // would depend on the platform's stack size, while without the
-    // recursive-protection attribute a chain this long overflows this stack.
+    // Small stack so the check does not depend on the platform's default
+    // test-thread stack: without recursive-protection this chain overflows it.
     fn drop_chain_iteratively(mut expr: Box<SetExpr>) {
-        // The chain's recursive drop glue would overflow the small stack as
-        // well; tear it down iteratively so this test isolates `Display`.
+        // Iterative teardown: recursive drop glue would also overflow.
         loop {
             match *expr {
                 SetExpr::SetOperation { left, .. } => expr = left,

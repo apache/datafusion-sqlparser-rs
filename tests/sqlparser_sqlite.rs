@@ -1114,29 +1114,45 @@ fn test_multiword_type_names() {
     sqlite().verified_stmt("CREATE TABLE t (a foo bar PATH)");
     sqlite().verified_stmt("CREATE TABLE t (a foo PATH bar)");
     // fully-reserved keywords end the type name
-    assert!(sqlite()
-        .parse_sql_statements("CREATE TABLE t (a foo AND bar)")
-        .is_err());
-    assert!(sqlite()
-        .parse_sql_statements("CREATE TABLE t (a foo bar ON)")
-        .is_err());
-    assert!(sqlite()
-        .parse_sql_statements("CREATE TABLE t (a foo bar SELECT)")
-        .is_err());
-    assert!(sqlite()
-        .parse_sql_statements("CREATE TABLE t (a foo ISNULL, b INT)")
-        .is_err());
-    assert!(sqlite()
-        .parse_sql_statements("CREATE TABLE t (a foo INDEXED, b INT)")
-        .is_err());
+    for (sql, err) in [
+        (
+            "CREATE TABLE t (a foo AND bar)",
+            "Expected: ',' or ')' after column definition, found: AND",
+        ),
+        (
+            "CREATE TABLE t (a foo bar ON)",
+            "Expected: ',' or ')' after column definition, found: ON",
+        ),
+        (
+            "CREATE TABLE t (a foo bar SELECT)",
+            "Expected: ',' or ')' after column definition, found: SELECT",
+        ),
+        (
+            "CREATE TABLE t (a foo ISNULL, b INT)",
+            "Expected: ',' or ')' after column definition, found: ISNULL",
+        ),
+        (
+            "CREATE TABLE t (a foo INDEXED, b INT)",
+            "Expected: ',' or ')' after column definition, found: INDEXED",
+        ),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string()))
+        );
+    }
 }
 
 #[test]
 fn test_multiword_type_names_rejected_by_other_dialects() {
     // GenericDialect does not support multi-word type names
-    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
-        .parse_sql_statements("CREATE TABLE t (a foo bar)")
-        .is_err());
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("CREATE TABLE t (a foo bar)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: bar".to_string()
+        ))
+    );
 }
 
 #[test]

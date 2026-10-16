@@ -1120,8 +1120,14 @@ fn parse_create_table_options_list() {
 #[test]
 fn parse_colon_does_not_start_json_access() {
     // SQLite rejects `SELECT c:se` (`near ":se": syntax error`); no `:` traversal.
-    assert!(sqlite().parse_sql_statements("SELECT c:se").is_err());
-    assert!(sqlite().parse_sql_statements("SELECT a:b FROM t").is_err());
+    for sql in ["SELECT c:se", "SELECT a:b FROM t"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: end of statement, found: :".to_string()
+            ))
+        );
+    }
 
     let ast = sqlite().verified_only_select("SELECT :xxx");
     assert_eq!(
@@ -1131,9 +1137,9 @@ fn parse_colon_does_not_start_json_access() {
         )),
     );
 
-    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
+    TestedDialects::new(vec![Box::new(GenericDialect {})])
         .parse_sql_statements("SELECT a:b FROM t")
-        .is_ok());
+        .unwrap();
 }
 
 fn sqlite() -> TestedDialects {

@@ -42,6 +42,7 @@ unsafe_code = "forbid"
 [lints.clippy]
 assertions_on_result_states = "deny"
 manual_assert_eq = "deny"
+should_panic_without_expect = "deny"
 
 [workspace]
 members = ["sqlparser_bench"]

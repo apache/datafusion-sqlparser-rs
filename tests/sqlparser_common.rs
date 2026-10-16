@@ -604,6 +604,7 @@ fn parse_update_with_table_alias() {
                         json_path: None,
                         sample: None,
                         index_hints: vec![],
+                        has_trailing_asterisk: false,
                     },
                     joins: vec![],
                 },
@@ -706,6 +707,7 @@ fn parse_select_with_table_alias() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             },
             joins: vec![],
         }]
@@ -912,6 +914,7 @@ fn parse_where_delete_with_alias_statement() {
                     json_path: None,
                     sample: None,
                     index_hints: vec![],
+                    has_trailing_asterisk: false,
                 },
                 from[0].relation,
             );
@@ -928,6 +931,7 @@ fn parse_where_delete_with_alias_statement() {
                         json_path: None,
                         sample: None,
                         index_hints: vec![],
+                        has_trailing_asterisk: false,
                     },
                     joins: vec![],
                 }]),
@@ -7775,6 +7779,7 @@ fn parse_joins_on() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -7917,6 +7922,7 @@ fn parse_joins_using() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
@@ -8012,6 +8018,7 @@ fn parse_natural_join() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -10461,6 +10468,7 @@ fn parse_merge() {
                     json_path: None,
                     sample: None,
                     index_hints: vec![],
+                    has_trailing_asterisk: false,
                 }
             );
             assert_eq!(table, table_no_into);
@@ -11938,6 +11946,7 @@ fn parse_pivot_table() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -12018,6 +12027,7 @@ fn parse_pivot_table() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             }),
             aggregate_functions: vec![
                 ExprWithAlias {
@@ -12097,6 +12107,7 @@ fn parse_unpivot_table() {
             json_path: None,
             sample: None,
             index_hints: vec![],
+            has_trailing_asterisk: false,
         }),
         null_inclusion: None,
         value: Expr::Identifier(Ident::new("quantity")),
@@ -12353,6 +12364,7 @@ fn parse_select_table_with_index_hints() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             },
             joins: vec![],
         }]
@@ -12382,6 +12394,7 @@ fn parse_pivot_unpivot_table() {
                     json_path: None,
                     sample: None,
                     index_hints: vec![],
+                    has_trailing_asterisk: false,
                 }),
                 null_inclusion: None,
                 value: Expr::Identifier(Ident::new("population")),
@@ -17972,12 +17985,12 @@ fn parse_truncate_only() {
         TruncateTableTarget {
             name: ObjectName::from(vec![Ident::new("employee")]),
             only: false,
-            has_asterisk: false,
+            has_trailing_asterisk: false,
         },
         TruncateTableTarget {
             name: ObjectName::from(vec![Ident::new("dept")]),
             only: true,
-            has_asterisk: false,
+            has_trailing_asterisk: false,
         },
     ];
 
@@ -18061,6 +18074,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_hints: vec![],
+                        has_trailing_asterisk: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18074,6 +18088,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_hints: vec![],
+                            has_trailing_asterisk: false,
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -18128,6 +18143,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_hints: vec![],
+                        has_trailing_asterisk: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18141,6 +18157,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_hints: vec![],
+                            has_trailing_asterisk: false,
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
@@ -18195,6 +18212,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_hints: vec![],
+                        has_trailing_asterisk: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18208,6 +18226,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_hints: vec![],
+                            has_trailing_asterisk: false,
                         },
                         global: false,
                         join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
@@ -18262,6 +18281,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_hints: vec![],
+                        has_trailing_asterisk: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18275,6 +18295,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_hints: vec![],
+                            has_trailing_asterisk: false,
                         },
                         global: false,
                         join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
@@ -18329,6 +18350,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_hints: vec![],
+                        has_trailing_asterisk: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18342,6 +18364,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_hints: vec![],
+                            has_trailing_asterisk: false,
                         },
                         global: false,
                         join_operator: JoinOperator::FullOuter(JoinConstraint::On(

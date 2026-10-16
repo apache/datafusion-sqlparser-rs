@@ -1768,6 +1768,7 @@ fn parse_table_time_travel() {
                 json_path: None,
                 sample: None,
                 index_hints: vec![],
+                has_trailing_asterisk: false,
             },
             joins: vec![]
         },]
@@ -1883,6 +1884,7 @@ fn parse_merge() {
                     json_path: None,
                     sample: None,
                     index_hints: vec![],
+                    has_trailing_asterisk: false,
                 },
                 table
             );
@@ -1898,6 +1900,7 @@ fn parse_merge() {
                     json_path: None,
                     sample: None,
                     index_hints: vec![],
+                    has_trailing_asterisk: false,
                 },
                 source
             );

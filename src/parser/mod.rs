@@ -13411,6 +13411,11 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
+        // The `>>` that closed this type also closed the enclosing one, so any suffix belongs to that.
+        if trailing_bracket.0 {
+            return Ok((data, trailing_bracket));
+        }
+
         if self.is_zerofill_allowed(next_token_index) && self.parse_keyword(Keyword::ZEROFILL) {
             data = DataType::Zerofill(Box::new(data));
         }

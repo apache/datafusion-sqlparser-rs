@@ -11196,9 +11196,12 @@ fn parse_create_group() {
     }
 
     // `IF NOT EXISTS` belongs to `CREATE ROLE`, and PostgreSQL rejects it in `CREATE GROUP`.
-    assert!(pg()
-        .parse_sql_statements("CREATE GROUP IF NOT EXISTS g")
-        .is_err());
+    assert_eq!(
+        pg().parse_sql_statements("CREATE GROUP IF NOT EXISTS g"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: NOT".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -11239,10 +11242,20 @@ fn parse_user_group_statements_is_dialect_gated() {
         Box::new(MySqlDialect {}),
         Box::new(MsSqlDialect {}),
     ]);
-    for sql in ["CREATE GROUP staff", "DROP GROUP staff"] {
-        assert!(
-            others.parse_sql_statements(sql).is_err(),
-            "{sql} should not parse in a dialect without GROUP statements"
+    for (sql, err) in [
+        (
+            "CREATE GROUP staff",
+            "Expected: an object type after CREATE, found: GROUP",
+        ),
+        (
+            "DROP GROUP staff",
+            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP",
+        ),
+    ] {
+        assert_eq!(
+            others.parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
         );
     }
 }

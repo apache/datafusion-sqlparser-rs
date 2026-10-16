@@ -7655,9 +7655,6 @@ impl<'a> Parser<'a> {
                     }
                     self.expect_token(&Token::RParen)?;
                     Some(types)
-                } else if self.consume_token(&Token::LParen) {
-                    self.expect_token(&Token::RParen)?;
-                    Some(vec![])
                 } else {
                     None
                 };
@@ -11925,9 +11922,6 @@ impl<'a> Parser<'a> {
                 let types = self.parse_comma_separated(Parser::parse_data_type)?;
                 self.expect_token(&Token::RParen)?;
                 Some(types)
-            } else if self.consume_token(&Token::LParen) {
-                self.expect_token(&Token::RParen)?;
-                Some(vec![])
             } else {
                 None
             };

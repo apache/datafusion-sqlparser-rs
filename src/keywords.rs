@@ -778,6 +778,7 @@ define_keywords!(
     OVERLAPS,
     OVERLAY,
     OVERRIDE,
+    OVERRIDING,
     OVERWRITE,
     OWNED,
     OWNER,
@@ -836,6 +837,7 @@ define_keywords!(
     PRINT,
     PRIOR,
     PRIVILEGES,
+    PROC,
     PROCEDURE,
     PROCESSLIST,
     PROFILE,
@@ -1212,6 +1214,7 @@ define_keywords!(
     YEAR,
     YEARS,
     YES,
+    ZEROFILL,
     ZONE,
     ZORDER,
     ZSTD

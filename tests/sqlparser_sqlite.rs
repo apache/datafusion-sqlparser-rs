@@ -496,8 +496,10 @@ fn parse_update_tuple_row_values() {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("x")])),
                 joins: vec![],
             },
+            on_cluster: None,
             from: None,
             returning: None,
+            settings: None,
             output: None,
             order_by: vec![],
             limit: None,
@@ -608,8 +610,14 @@ fn test_regexp_operator() {
     sqlite().verified_only_select(r#"SELECT count(*) FROM messages WHERE msg_text REGEXP '\d+'"#);
 
     // Should return an error, not panic
-    assert!(sqlite().parse_sql_statements("SELECT 1 REGEXP").is_err());
-    assert!(sqlite().parse_sql_statements("SELECT 1 MATCH").is_err());
+    for sql in ["SELECT 1 REGEXP", "SELECT 1 MATCH"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: an expression, found: EOF".to_string()
+            ))
+        );
+    }
 }
 
 #[test]
@@ -627,7 +635,12 @@ fn test_glob_operator() {
     sqlite().verified_only_select(r#"SELECT count(*) FROM files WHERE name GLOB '*.txt'"#);
 
     // Should return an error, not panic
-    assert!(sqlite().parse_sql_statements("SELECT 1 GLOB").is_err());
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT 1 GLOB"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: EOF".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -955,6 +968,78 @@ fn parse_pattern_operators_bind_at_like_precedence() {
         let sql = format!("SELECT 1 FROM t WHERE a {operator} 'p' || 'q'");
         assert_eq!(where_operator(&sql), expected, "{operator}");
     }
+}
+
+#[test]
+fn parse_update_set_double_eq() {
+    // SQLite treats `==` as `=` in all positions, including SET assignments.
+    sqlite().one_statement_parses_to("UPDATE t SET a == 1", "UPDATE t SET a = 1");
+    sqlite().one_statement_parses_to("UPDATE t SET a == 1, b == 2", "UPDATE t SET a = 1, b = 2");
+    // `=` still works
+    sqlite().verified_stmt("UPDATE t SET a = 1");
+    // Other dialects reject `==` in SET
+    let res = ParserError::ParserError("Expected: =, found: ==".to_string());
+    assert_eq!(
+        all_dialects_except(|d| d.supports_double_eq_assignment())
+            .parse_sql_statements("UPDATE t SET a == 1")
+            .unwrap_err(),
+        res,
+    );
+}
+
+#[test]
+fn test_non_bmp_identifiers() {
+    // SQLite tokenizer treats every byte >= 0x80 as an identifier character,
+    // so any Unicode code point above U+007F is a valid identifier start/part.
+    sqlite().verified_stmt("SELECT 󟿾");
+    sqlite().verified_stmt("SELECT 𒀀");
+    sqlite().verified_stmt("SELECT 𒀀𒀁");
+    // U+DFFFE is not alphabetic, so GenericDialect rejects it as an identifier.
+    assert_eq!(
+        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "SELECT \u{DFFFE}"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: \u{DFFFE} at Line: 1, Column: 8".to_string()
+        ))
+    );
+    // SQLite rejects U+007F as an unrecognized token.
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT \u{007f}"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: \u{7f}".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_table_string_column_names() {
+    sqlite().verified_stmt("CREATE TABLE t ('a')");
+    sqlite().verified_stmt(r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL)"#);
+    sqlite().verified_stmt(
+        r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL, 'name' TEXT NOT NULL, 'zip' INT UNSIGNED NULL)"#,
+    );
+    // Generic dialect does not support this
+    assert_eq!(
+        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')"),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'a' at Line: 1, Column: 17"
+                .to_string()
+        ))
+    );
+}
+
+#[test]
+fn test_cast_empty_type() {
+    // SQLite allows CAST(expr AS) with an empty type name (typetoken can be empty)
+    // See https://www.sqlite.org/lang_expr.html
+    sqlite().verified_stmt("SELECT CAST(a AS)");
+
+    // Rejected by dialects without the flag
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("SELECT CAST(a AS)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a data type name, found: )".to_string())
+    );
 }
 
 #[test]

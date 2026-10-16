@@ -48,10 +48,7 @@ impl Dialect for SQLiteDialect {
 
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://www.sqlite.org/draft/tokenreq.html
-        ch.is_ascii_lowercase()
-            || ch.is_ascii_uppercase()
-            || ch == '_'
-            || ('\u{007f}'..='\u{ffff}').contains(&ch)
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_' || ch >= '\u{0080}'
     }
 
     fn supports_filter_during_aggregation(&self) -> bool {
@@ -127,6 +124,18 @@ impl Dialect for SQLiteDialect {
     }
 
     fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
+
+    fn supports_double_eq_assignment(&self) -> bool {
+        true
+    }
+
+    fn supports_string_literal_column_names(&self) -> bool {
+        true
+    }
+
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
         true
     }
 

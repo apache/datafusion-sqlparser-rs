@@ -100,6 +100,11 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    // See <https://clickhouse.com/docs/sql-reference/operators/in#distributed-subqueries>
+    fn supports_global_in(&self) -> bool {
+        true
+    }
+
     /// See <https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function>
     fn supports_lambda_functions(&self) -> bool {
         true
@@ -176,6 +181,11 @@ impl Dialect for ClickHouseDialect {
 
     /// See <https://clickhouse.com/docs/sql-reference/statements/alter/column>
     fn supports_alter_column_position(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/sql-reference/data-types/tuple#addressing-tuple-elements>
+    fn supports_tuple_element_access(&self) -> bool {
         true
     }
 }

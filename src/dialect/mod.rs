@@ -461,6 +461,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `GLOBAL IN` and `GLOBAL NOT IN`.
+    fn supports_global_in(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE | TRY | CATCH} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
         false
@@ -502,6 +507,12 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports identifiers starting with a numeric
     /// prefix such as tables named `59901_user_login`
     fn supports_numeric_prefix(&self) -> bool {
+        false
+    }
+
+    /// Returns true if a period directly after an identifier starts a tuple
+    /// element access such as `t.1`, instead of the number `.1`.
+    fn supports_tuple_element_access(&self) -> bool {
         false
     }
 
@@ -908,6 +919,20 @@ pub trait Dialect: Debug + Any {
                 Ok(p!(Is))
             }
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
+            Token::Word(w) if w.keyword == Keyword::GLOBAL && self.supports_global_in() => {
+                match (
+                    &parser.peek_nth_token_ref(1).token,
+                    &parser.peek_nth_token_ref(2).token,
+                ) {
+                    (Token::Word(w), _) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                    (Token::Word(w), Token::Word(w2))
+                        if w.keyword == Keyword::NOT && w2.keyword == Keyword::IN =>
+                    {
+                        Ok(p!(Between))
+                    }
+                    _ => Ok(self.prec_unknown()),
+                }
+            }
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
@@ -1234,6 +1259,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows string literals as column names in `CREATE TABLE`.
+    /// SQLite's grammar rule `nm ::= id | STRING | JOIN_KW` permits this.
+    fn supports_string_literal_column_names(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `a!` expressions
     fn supports_factorial_operator(&self) -> bool {
         false
@@ -1324,6 +1355,12 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
     fn supports_create_table_select(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `PROC` as an abbreviation for
+    /// `PROCEDURE` in a `CREATE` statement.
+    fn supports_create_proc_syntax(&self) -> bool {
         false
     }
 
@@ -1608,6 +1645,18 @@ pub trait Dialect: Debug + Any {
     ///
     /// Note that this is canonicalized to `INT(20)`.
     fn supports_data_type_signed_suffix(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows an optional `ZEROFILL` suffix after numeric data types.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT(10) UNSIGNED ZEROFILL);
+    /// ```
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html>
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
         false
     }
 
@@ -1949,6 +1998,25 @@ pub trait Dialect: Debug + Any {
     ///
     /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-datatypes.html)
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect accepts `==` as an alternative to `=` in `UPDATE SET` assignments.
+    ///
+    /// See <https://www.sqlite.org/lang_update.html>
+    fn supports_double_eq_assignment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `CAST(expr AS)` with an empty type name.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT CAST(a AS)
+    /// ```
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html)
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
         false
     }
 }

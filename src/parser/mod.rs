@@ -18821,9 +18821,15 @@ impl<'a> Parser<'a> {
                         if self.parse_keywords(&[Keyword::ON, Keyword::CONSTRAINT]) {
                             Some(ConflictTarget::OnConstraint(self.parse_object_name(false)?))
                         } else if self.peek_token_ref().token == Token::LParen {
-                            Some(ConflictTarget::Columns(
-                                self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?,
-                            ))
+                            let columns =
+                                self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?;
+                            // PostgreSQL: `( column [, ...] ) [ WHERE index_predicate ]`.
+                            let predicate = if self.parse_keyword(Keyword::WHERE) {
+                                Some(self.parse_expr()?)
+                            } else {
+                                None
+                            };
+                            Some(ConflictTarget::Columns { columns, predicate })
                         } else {
                             None
                         };

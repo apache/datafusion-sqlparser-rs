@@ -18415,7 +18415,7 @@ fn parse_pipeline_operator_negative_tests() {
         // Test that JOIN without table name fails
         (
             "SELECT * FROM users |> JOIN ON users.id = orders.user_id",
-            "Expected: end of statement, found: .",
+            "Expected: table name, found: ON",
         ),
         // Test that CROSS JOIN with ON condition fails
         (

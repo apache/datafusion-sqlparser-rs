@@ -17784,11 +17784,11 @@ fn overflow() {
 fn long_set_operation_chain_display_does_not_stack_overflow() {
     // Small stack so the check does not depend on the platform's default
     // test-thread stack: without recursive-protection this chain overflows it.
-    fn drop_chain_iteratively(mut expr: Box<SetExpr>) {
+    fn drop_chain_iteratively(mut expr: SetExpr) {
         // Iterative teardown: recursive drop glue would also overflow.
         loop {
-            match *expr {
-                SetExpr::SetOperation { left, .. } => expr = left,
+            match expr {
+                SetExpr::SetOperation { left, .. } => expr = *left,
                 _ => return,
             }
         }
@@ -17810,7 +17810,7 @@ fn long_set_operation_chain_display_does_not_stack_overflow() {
                 panic!("expected a query");
             };
             let Query { body, .. } = *query;
-            drop_chain_iteratively(body);
+            drop_chain_iteratively(*body);
         })
         .unwrap()
         .join()

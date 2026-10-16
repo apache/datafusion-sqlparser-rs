@@ -159,10 +159,7 @@ fn parse_create_table_without_rowid() {
                 name,
                 sqlite_table_options,
                 ..
-            } = *create_table
-            else {
-                unreachable!()
-            };
+            } = *create_table;
             assert_eq!(
                 sqlite_table_options.options,
                 vec![SqliteTableOption::WithoutRowid]
@@ -1492,17 +1489,20 @@ fn parse_create_table_options_list() {
     ] {
         let sql = format!("CREATE TABLE t (a INT){suffix}");
         match sqlite_and_generic().verified_stmt(&sql) {
-            Statement::CreateTable(CreateTable {
-                sqlite_table_options,
-                ..
-            }) => assert_eq!(
-                sqlite_table_options,
-                SqliteTableOptions {
-                    leading_comma,
-                    options
-                },
-                "{sql}"
-            ),
+            Statement::CreateTable(create_table) => {
+                let CreateTable {
+                    sqlite_table_options,
+                    ..
+                } = *create_table;
+                assert_eq!(
+                    sqlite_table_options,
+                    SqliteTableOptions {
+                        leading_comma,
+                        options
+                    },
+                    "{sql}"
+                );
+            }
             _ => unreachable!(),
         }
     }

@@ -20607,3 +20607,39 @@ fn parse_position_in_connect_by_list_after_state_change() {
         assert_eq!(positions, 1, "{dialect:?}");
     }
 }
+
+#[test]
+fn parse_array_suffix_after_nested_type() {
+    // When `>>` closes two types at once, a following array suffix belongs to the outer one.
+    let dialects = all_dialects_where(|d| {
+        d.supports_struct_literal() && d.supports_array_typedef_with_brackets()
+    });
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[])");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>[]>)");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b STRUCT<c INT>>>[])");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[][2])");
+    dialects.verified_stmt("SELECT CAST(NULL AS ARRAY<ARRAY<INT>>[])");
+    dialects.verified_stmt("SELECT CAST(NULL AS ARRAY<STRUCT<a INT>>[])");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[)"),
+        Err(ParserError::ParserError(
+            "Expected: ], found: )".to_string()
+        ))
+    );
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[x])"),
+        Err(ParserError::ParserError(
+            "Expected: ], found: x".to_string()
+        ))
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_struct_literal());
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>> ARRAY)");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>> ARRAY[2])");
+    dialects.verified_stmt("SELECT CAST(NULL AS ARRAY<STRUCT<a INT>> ARRAY)");
+
+    all_dialects_where(|d| {
+        d.supports_struct_literal() && d.supports_map_literal_with_angle_brackets()
+    })
+    .verified_stmt("SELECT CAST(NULL AS MAP<INT, STRUCT<a INT>> ARRAY)");
+}

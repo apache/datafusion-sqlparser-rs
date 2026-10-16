@@ -2226,11 +2226,12 @@ fn parse_delete_on_cluster_and_settings() {
     match clickhouse_and_generic()
         .verified_stmt("DELETE FROM hits ON CLUSTER c1 WHERE x = 1 SETTINGS a = 1, b = 'x'")
     {
-        Statement::Delete(Delete {
-            on_cluster,
-            settings,
-            ..
-        }) => {
+        Statement::Delete(delete) => {
+            let Delete {
+                on_cluster,
+                settings,
+                ..
+            } = *delete;
             assert_eq!(on_cluster, Some(Ident::new("c1")));
             assert_eq!(
                 settings,
@@ -2293,11 +2294,12 @@ fn parse_update_on_cluster_and_settings() {
     match clickhouse_and_generic()
         .verified_stmt("UPDATE hits ON CLUSTER c1 SET x = 1 WHERE y = 2 SETTINGS a = 1")
     {
-        Statement::Update(Update {
-            on_cluster,
-            settings,
-            ..
-        }) => {
+        Statement::Update(update) => {
+            let Update {
+                on_cluster,
+                settings,
+                ..
+            } = *update;
             assert_eq!(on_cluster, Some(Ident::new("c1")));
             assert_eq!(
                 settings,

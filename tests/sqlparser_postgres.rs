@@ -10832,7 +10832,7 @@ fn parse_insert_overriding() {
         ),
     ] {
         match pg_and_generic().verified_stmt(sql) {
-            Statement::Insert(Insert { overriding, .. }) => assert_eq!(overriding, Some(expected)),
+            Statement::Insert(insert) => assert_eq!(insert.overriding, Some(expected)),
             statement => panic!("Expected INSERT statement, got: {statement:?}"),
         }
     }
@@ -10843,13 +10843,9 @@ fn parse_insert_overriding() {
         "INSERT INTO t OVERRIDING USER VALUE SELECT * FROM u",
     ] {
         match pg().verified_stmt(sql) {
-            Statement::Insert(Insert {
-                table_alias,
-                overriding,
-                ..
-            }) => {
-                assert_eq!(table_alias, None);
-                assert!(overriding.is_some());
+            Statement::Insert(insert) => {
+                assert_eq!(insert.table_alias, None);
+                assert!(insert.overriding.is_some());
             }
             statement => panic!("Expected INSERT statement, got: {statement:?}"),
         }
@@ -10858,7 +10854,7 @@ fn parse_insert_overriding() {
 
     // An INSERT without the clause has none.
     match pg_and_generic().verified_stmt("INSERT INTO t (id) VALUES (1)") {
-        Statement::Insert(Insert { overriding, .. }) => assert_eq!(overriding, None),
+        Statement::Insert(insert) => assert_eq!(insert.overriding, None),
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 

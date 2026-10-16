@@ -982,7 +982,7 @@ fn test_dollar_sign_in_identifier() {
     // AS$ is parsed as the alias name
     sqlite().one_statement_parses_to("SELECT a AS$", "SELECT a AS AS$");
     // Dialects without $ as an identifier character still reject these identifiers
-    assert!(TestedDialects::new(vec![Box::new(AnsiDialect {})])
+    TestedDialects::new(vec![Box::new(AnsiDialect {})])
         .parse_sql_statements("SELECT a$ FROM t")
-        .is_err());
+        .unwrap_err();
 }

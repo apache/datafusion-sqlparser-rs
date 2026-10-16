@@ -191,6 +191,7 @@ impl SetExpr {
 }
 
 impl fmt::Display for SetExpr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SetExpr::Select(s) => s.fmt(f),

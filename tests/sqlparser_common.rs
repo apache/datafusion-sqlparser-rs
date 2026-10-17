@@ -4729,7 +4729,6 @@ fn parse_assert() {
 }
 
 #[test]
-#[allow(clippy::collapsible_match)]
 fn parse_assert_message() {
     let sql = "ASSERT (SELECT COUNT(*) FROM my_table) > 0 AS 'No rows in my_table'";
     let ast = one_statement_parses_to(
@@ -4739,16 +4738,12 @@ fn parse_assert_message() {
     match ast {
         Statement::Assert {
             condition: _condition,
-            message: Some(message),
-        } => {
-            match message {
-                Expr::Value(ValueWithSpan {
+            message:
+                Some(Expr::Value(ValueWithSpan {
                     value: Value::SingleQuotedString(s),
                     span: _,
-                }) => assert_eq!(s, "No rows in my_table"),
-                _ => unreachable!(),
-            };
-        }
+                })),
+        } => assert_eq!(s, "No rows in my_table"),
         _ => unreachable!(),
     }
 }

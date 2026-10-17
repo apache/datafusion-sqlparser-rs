@@ -2421,7 +2421,10 @@ impl<'a> Tokenizer<'a> {
         (s, last_char)
     }
 
-    #[allow(clippy::unnecessary_wraps)]
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the match arms in `next_token` return this value directly"
+    )]
     fn consume_and_return(
         &self,
         chars: &mut State,

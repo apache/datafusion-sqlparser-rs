@@ -1062,13 +1062,16 @@ fn test_snowflake_create_table_trailing_options() {
 
 #[test]
 fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
-    assert!(snowflake_and_generic()
-        .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")
-        .is_ok());
+    snowflake_and_generic()
+        .verified_stmt("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1");
 
-    assert!(snowflake_and_generic()
-        .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT 'hello, world' AS SELECT 1")
-        .is_err());
+    assert_eq!(
+        snowflake_and_generic()
+            .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT 'hello, world' AS SELECT 1"),
+        Err(ParserError::ParserError(
+            "Expected: =, found: 'hello, world'".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -4085,22 +4088,28 @@ fn test_sql_keywords_as_select_item_ident() {
     }
 
     // Some keywords that should not be parsed as an alias
-    let reserved_kws = vec![
-        "FROM",
-        "GROUP",
-        "HAVING",
-        "INTERSECT",
-        "INTO",
-        "ORDER",
-        "SELECT",
-        "UNION",
-        "WHERE",
-        "WITH",
-    ];
-    for kw in reserved_kws {
-        assert!(snowflake()
-            .parse_sql_statements(&format!("SELECT 1, {kw}"))
-            .is_err());
+    for (kw, err) in [
+        ("FROM", "Expected: identifier, found: EOF"),
+        ("GROUP", "Expected: end of statement, found: GROUP"),
+        ("HAVING", "Expected: an expression, found: EOF"),
+        (
+            "INTERSECT",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+        ("INTO", "Expected: an expression, found: EOF"),
+        ("ORDER", "Expected: end of statement, found: ORDER"),
+        ("SELECT", "Expected: end of statement, found: SELECT"),
+        (
+            "UNION",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+        ("WHERE", "Expected: an expression, found: EOF"),
+        ("WITH", "Expected: end of statement, found: WITH"),
+    ] {
+        assert_eq!(
+            snowflake().parse_sql_statements(&format!("SELECT 1, {kw}")),
+            Err(ParserError::ParserError(err.to_string()))
+        );
     }
 }
 
@@ -4114,22 +4123,28 @@ fn test_sql_keywords_as_select_item_aliases() {
     }
 
     // Some keywords that should not be parsed as an alias
-    let reserved_kws = vec![
-        "FROM",
-        "GROUP",
-        "HAVING",
-        "INTERSECT",
-        "INTO",
-        "ORDER",
-        "SELECT",
-        "UNION",
-        "WHERE",
-        "WITH",
-    ];
-    for kw in reserved_kws {
-        assert!(snowflake()
-            .parse_sql_statements(&format!("SELECT 1 {kw}"))
-            .is_err());
+    for (kw, err) in [
+        ("FROM", "Expected: identifier, found: EOF"),
+        ("GROUP", "Expected: end of statement, found: GROUP"),
+        ("HAVING", "Expected: an expression, found: EOF"),
+        (
+            "INTERSECT",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+        ("INTO", "Expected: an expression, found: EOF"),
+        ("ORDER", "Expected: end of statement, found: ORDER"),
+        ("SELECT", "Expected: end of statement, found: SELECT"),
+        (
+            "UNION",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+        ("WHERE", "Expected: an expression, found: EOF"),
+        ("WITH", "Expected: end of statement, found: WITH"),
+    ] {
+        assert_eq!(
+            snowflake().parse_sql_statements(&format!("SELECT 1 {kw}")),
+            Err(ParserError::ParserError(err.to_string()))
+        );
     }
 
     // LIMIT is alias
@@ -4210,13 +4225,23 @@ fn test_sql_keywords_as_table_aliases() {
     }
 
     // Some keywords that should not be parsed as an alias implicitly
-    let reserved_kws = vec![
-        "FROM", "GROUP", "HAVING", "ORDER", "SELECT", "UNION", "WHERE", "WITH",
-    ];
-    for kw in reserved_kws {
-        assert!(snowflake()
-            .parse_sql_statements(&format!("SELECT * FROM tbl {kw}"))
-            .is_err());
+    for (kw, err) in [
+        ("FROM", "Expected: end of statement, found: FROM"),
+        ("GROUP", "Expected: end of statement, found: GROUP"),
+        ("HAVING", "Expected: an expression, found: EOF"),
+        ("ORDER", "Expected: end of statement, found: ORDER"),
+        ("SELECT", "Expected: end of statement, found: SELECT"),
+        (
+            "UNION",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+        ("WHERE", "Expected: an expression, found: EOF"),
+        ("WITH", "Expected: end of statement, found: WITH"),
+    ] {
+        assert_eq!(
+            snowflake().parse_sql_statements(&format!("SELECT * FROM tbl {kw}")),
+            Err(ParserError::ParserError(err.to_string()))
+        );
     }
 
     // LIMIT is alias
@@ -4244,9 +4269,12 @@ fn test_sql_keywords_as_table_factor() {
     snowflake().verified_stmt("SELECT 1 FROM TABLE(GENERATOR(ROWCOUNT => 10)) AS a, TABLE(GENERATOR(ROWCOUNT => 10)) AS b");
 
     // ORDER is reserved
-    assert!(snowflake()
-        .parse_sql_statements("SELECT * FROM tbl, order")
-        .is_err());
+    assert_eq!(
+        snowflake().parse_sql_statements("SELECT * FROM tbl, order"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: order".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -4803,18 +4831,19 @@ fn test_snowflake_identifier_function() {
 
     // Cannot have more than one IDENTIFIER part in an object name
     assert_eq!(
-        snowflake()
-            .parse_sql_statements(
-                "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
-            )
-            .is_err(),
-        true
+        snowflake().parse_sql_statements(
+            "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
+        ),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'sc1'".to_string()
+        ))
     );
     assert_eq!(
         snowflake()
-            .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)")
-            .is_err(),
-        true
+            .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)"),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'tbl'".to_string()
+        ))
     );
 }
 
@@ -4856,17 +4885,15 @@ fn test_create_database() {
         WITH CONTACT (owner = admin, dpo = compliance)",
     );
 
-    let err = snowflake()
-        .parse_sql_statements("CREATE DATABASE")
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("Expected"), "Unexpected error: {err}");
-
-    let err = snowflake()
-        .parse_sql_statements("CREATE DATABASE my_db CLONE")
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("Expected"), "Unexpected error: {err}");
+    for sql in ["CREATE DATABASE", "CREATE DATABASE my_db CLONE"] {
+        assert_eq!(
+            snowflake().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: identifier, found: EOF".to_string()
+            )),
+            "{sql}"
+        );
+    }
 }
 
 #[test]
@@ -5009,9 +5036,12 @@ fn test_structured_object_type() {
     assert_eq!(fields[1].options.len(), 1);
     assert_eq!(fields[1].options[0].option, ColumnOption::NotNull);
 
-    assert!(snowflake()
-        .parse_sql_statements("CREATE TABLE t (o OBJECT(city VARCHAR)")
-        .is_err());
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TABLE t (o OBJECT(city VARCHAR)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: EOF".to_string()
+        ))
+    );
 
     let Statement::CreateTable(CreateTable { columns, .. }) =
         snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)")

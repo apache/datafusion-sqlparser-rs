@@ -669,15 +669,13 @@ fn parse_exclude_constraint() {
 
     // Dialects that do not opt in via `supports_exclude_constraint` must
     // refuse to parse `EXCLUDE` constraints.
-    let unsupported = all_dialects_where(|d| !d.supports_exclude_constraint());
-    let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))";
-    for dialect in unsupported.dialects {
-        let parser = TestedDialects::new(vec![dialect]);
-        assert!(
-            parser.parse_sql_statements(sql).is_err(),
-            "dialect unexpectedly accepted EXCLUDE: {sql}"
-        );
-    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_exclude_constraint())
+            .parse_sql_statements("CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: gist".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -4539,9 +4537,12 @@ fn parse_create_role() {
 
     for negatable_kw in negatables.iter() {
         let sql = format!("CREATE ROLE abc {negatable_kw} NO{negatable_kw}");
-        if pg().parse_sql_statements(&sql).is_ok() {
-            panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {negatable_kw}")
-        }
+        assert_eq!(
+            pg().parse_sql_statements(&sql),
+            Err(ParserError::ParserError(format!(
+                "Found multiple {negatable_kw} or NO{negatable_kw}"
+            )))
+        );
     }
 }
 
@@ -5131,7 +5132,10 @@ $$"#;
     );
 
     let incorrect_sql = "CREATE FUNCTION add(function(struct<a,b> int64), b INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
-    assert!(pg().parse_sql_statements(incorrect_sql).is_err(),);
+    assert_eq!(
+        pg().parse_sql_statements(incorrect_sql).unwrap_err(),
+        ParserError::ParserError("Expected: type modifiers, found: <".to_string())
+    );
 }
 
 #[test]
@@ -5267,7 +5271,12 @@ fn parse_create_function_with_set_params() {
 #[test]
 fn parse_incorrect_create_function_parallel() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        pg().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of UNSAFE | RESTRICTED | SAFE, found: BLAH".to_string()
+        )
+    );
 }
 
 #[test]
@@ -5668,14 +5677,25 @@ fn parse_dollar_quoted_string() {
 
 #[test]
 fn parse_incorrect_dollar_quoted_string() {
-    let sql = "SELECT $x$hello$$";
-    assert!(pg().parse_sql_statements(sql).is_err());
-
-    let sql = "SELECT $hello$$";
-    assert!(pg().parse_sql_statements(sql).is_err());
-
-    let sql = "SELECT $$$";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    for (sql, expected) in [
+        (
+            "SELECT $x$hello$$",
+            "Unterminated dollar-quoted, expected $ at Line: 1, Column: 18",
+        ),
+        (
+            "SELECT $hello$$",
+            "Unterminated dollar-quoted, expected $ at Line: 1, Column: 16",
+        ),
+        (
+            "SELECT $$$",
+            "Unterminated dollar-quoted string at Line: 1, Column: 11",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::TokenizerError(expected.to_string())
+        );
+    }
 }
 
 #[test]
@@ -6146,6 +6166,7 @@ fn test_simple_postgres_insert_with_alias() {
             assignments: vec![],
             partitioned: None,
             after_columns: vec![],
+            overriding: None,
             has_table_keyword: false,
             on: None,
             returning: None,
@@ -6230,6 +6251,7 @@ fn test_simple_postgres_insert_with_alias() {
             assignments: vec![],
             partitioned: None,
             after_columns: vec![],
+            overriding: None,
             has_table_keyword: false,
             on: None,
             returning: None,
@@ -6312,6 +6334,7 @@ fn test_simple_insert_with_quoted_alias() {
             assignments: vec![],
             partitioned: None,
             after_columns: vec![],
+            overriding: None,
             has_table_keyword: false,
             on: None,
             returning: None,
@@ -7037,7 +7060,7 @@ fn parse_trigger_related_functions() {
             file_format: None,
             location: None,
             query: None,
-            without_rowid: false,
+            sqlite_table_options: Default::default(),
             like: None,
             clone: None,
             comment: None,
@@ -7051,7 +7074,6 @@ fn parse_trigger_related_functions() {
             inherits: None,
             partition_of: None,
             for_values: None,
-            strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
             change_tracking: None,
@@ -7777,34 +7799,55 @@ fn parse_create_operator() {
     );
 
     // Test all duplicate clause errors
-    for field in &[
-        "FUNCTION = f2",
-        "PROCEDURE = p",
-        "LEFTARG = INT4, LEFTARG = INT4",
-        "RIGHTARG = INT4, RIGHTARG = INT4",
-        "COMMUTATOR = -, COMMUTATOR = *",
-        "NEGATOR = -, NEGATOR = *",
-        "RESTRICT = f1, RESTRICT = f2",
-        "JOIN = f1, JOIN = f2",
-        "HASHES, HASHES",
-        "MERGES, MERGES",
+    for (field, keyword) in [
+        ("FUNCTION = f2", "FUNCTION"),
+        ("PROCEDURE = p", "PROCEDURE"),
+        ("LEFTARG = INT4, LEFTARG = INT4", "LEFTARG"),
+        ("RIGHTARG = INT4, RIGHTARG = INT4", "RIGHTARG"),
+        ("COMMUTATOR = -, COMMUTATOR = *", "COMMUTATOR"),
+        ("NEGATOR = -, NEGATOR = *", "NEGATOR"),
+        ("RESTRICT = f1, RESTRICT = f2", "RESTRICT"),
+        ("JOIN = f1, JOIN = f2", "JOIN"),
+        ("HASHES, HASHES", "HASHES"),
+        ("MERGES, MERGES", "MERGES"),
     ] {
-        assert!(pg()
-            .parse_sql_statements(&format!("CREATE OPERATOR + (FUNCTION = f, {field})"))
-            .is_err());
+        assert_eq!(
+            pg().parse_sql_statements(&format!("CREATE OPERATOR + (FUNCTION = f, {field})"))
+                .unwrap_err(),
+            ParserError::ParserError(format!(
+                "Duplicate or unexpected keyword {keyword} in CREATE OPERATOR"
+            ))
+        );
     }
 
     // Test missing FUNCTION/PROCEDURE error
-    assert!(pg()
-        .parse_sql_statements("CREATE OPERATOR + (LEFTARG = INT4)")
-        .is_err());
+    assert_eq!(
+        pg().parse_sql_statements("CREATE OPERATOR + (LEFTARG = INT4)")
+            .unwrap_err(),
+        ParserError::ParserError("CREATE OPERATOR requires FUNCTION parameter".to_string())
+    );
 
     // Test empty parameter list error
-    assert!(pg().parse_sql_statements("CREATE OPERATOR + ()").is_err());
+    assert_eq!(
+        pg().parse_sql_statements("CREATE OPERATOR + ()").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: )".to_string()
+        )
+    );
 
     // Test nested empty parentheses error
-    assert!(pg().parse_sql_statements("CREATE OPERATOR > (()").is_err());
-    assert!(pg().parse_sql_statements("CREATE OPERATOR > ())").is_err());
+    assert_eq!(
+        pg().parse_sql_statements("CREATE OPERATOR > (()").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: (".to_string()
+        )
+    );
+    assert_eq!(
+        pg().parse_sql_statements("CREATE OPERATOR > ())").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of FUNCTION or PROCEDURE or LEFTARG or RIGHTARG or COMMUTATOR or NEGATOR or RESTRICT or JOIN or HASHES or MERGES, found: )".to_string()
+        )
+    );
 }
 
 #[test]
@@ -7894,11 +7937,17 @@ fn parse_drop_operator() {
 
     // Test error: DROP OPERATOR with no operators
     let sql = "DROP OPERATOR (INTEGER, INTEGER)";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        pg().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: (, found: INTEGER".to_string())
+    );
 
     // Test error: DROP OPERATOR IF EXISTS with no operators
     let sql = "DROP OPERATOR IF EXISTS (INTEGER, INTEGER)";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        pg().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: (, found: INTEGER".to_string())
+    );
 }
 
 #[test]
@@ -8224,267 +8273,166 @@ fn parse_alter_operator_family() {
     );
 
     // Test error cases
-    // Missing USING clause
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops ADD OPERATOR 1 < (INT4, INT2)")
-        .is_err());
+    for (sql, expected) in [
+        // Missing USING clause
+        ("ALTER OPERATOR FAMILY my_ops ADD OPERATOR 1 < (INT4, INT2)", "Expected: USING, found: ADD"),
+        // Invalid operation
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree INVALID_OPERATION",
+            "Expected: ADD, DROP, RENAME TO, OWNER TO, or SET SCHEMA after ALTER OPERATOR FAMILY, found: INVALID_OPERATION"
+        ),
+        // Missing operator name in ADD OPERATOR
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 (INT4, INT2)", "Expected: (, found: INT4"),
+        // Missing function name in ADD FUNCTION
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)", "Expected: identifier, found: EOF"),
+        // Missing parentheses in DROP OPERATOR
+        ("ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 INT4, INT2", "Expected: (, found: INT4"),
+        // Invalid operator name (empty)
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1  (INT4, INT2)", "Expected: (, found: INT4"),
+        // Invalid operator name (special characters)
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 @#$ (INT4, INT2)", "Expected: (, found: #"),
+        // Negative strategy number
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR -1 < (INT4, INT2)", "Expected: literal int, found: -"),
+        // Non-integer strategy number
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1.5 < (INT4, INT2)",
+            "Could not parse '1.5' as u64: invalid digit found in string"
+        ),
+        // Missing closing parenthesis in operator types
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2", "Expected: ), found: EOF"),
+        // Missing opening parenthesis in operator types
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < INT4, INT2)", "Expected: (, found: INT4"),
+        // Empty operator types
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < ()", "Expected: a data type name, found: )"),
+        // Invalid data type (using punctuation)
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (@#$%, INT2)", "Expected: a data type name, found: @"),
+        // Incomplete FOR clause
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR", "Expected: SEARCH or ORDER BY after FOR, found: EOF"),
+        // Invalid FOR clause keyword
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR INVALID", "Expected: SEARCH or ORDER BY after FOR, found: INVALID"),
+        // FOR ORDER BY without sort family
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY",
+            "Expected: identifier, found: EOF"
+        ),
+        // Missing function name in ADD FUNCTION
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)", "Expected: identifier, found: EOF"),
+        // Invalid function name
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 123invalid(INT4, INT2)", "Expected: identifier, found: 123"),
+        // Negative support number
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION -1 func(INT4, INT2)", "Expected: literal int, found: -"),
+        // Non-integer support number
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1.5 func(INT4, INT2)",
+            "Could not parse '1.5' as u64: invalid digit found in string"
+        ),
+        // Missing closing parenthesis in function operator types
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2 func()", "Expected: ), found: func"),
+        // Missing closing parenthesis in function arguments
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(INT4, INT2", "Expected: ), found: EOF"),
+        // Invalid data type in function arguments
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(@#$%, INT2)", "Expected: a data type name, found: @"),
+        // DROP OPERATOR with FOR clause (not allowed)
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2) FOR SEARCH",
+            "Expected: end of statement, found: FOR"
+        ),
+        // DROP FUNCTION with function arguments (not allowed)
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 (INT4, INT2) func(INT4)",
+            "Expected: end of statement, found: func"
+        ),
+        // Multiple ADD items with error in middle
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2), INVALID_ITEM",
+            "Expected: OPERATOR or FUNCTION, found: INVALID_ITEM"
+        ),
+        // Multiple DROP items with error in middle
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2), INVALID_ITEM",
+            "Expected: OPERATOR or FUNCTION, found: INVALID_ITEM"
+        ),
+        // RENAME TO with invalid new name
+        ("ALTER OPERATOR FAMILY my_ops USING btree RENAME TO 123invalid", "Expected: identifier, found: 123"),
+        // OWNER TO with invalid owner
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree OWNER TO 123invalid",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: 123"
+        ),
+        // SET SCHEMA with invalid schema name
+        ("ALTER OPERATOR FAMILY my_ops USING btree SET SCHEMA 123invalid", "Expected: identifier, found: 123"),
+        // Schema-qualified operator family name with invalid schema
+        (
+            "ALTER OPERATOR FAMILY 123invalid.my_ops USING btree ADD OPERATOR 1 < (INT4, INT2)",
+            "Expected: identifier, found: 123"
+        ),
+        // Missing operator family name
+        ("ALTER OPERATOR FAMILY USING btree ADD OPERATOR 1 < (INT4, INT2)", "Expected: USING, found: btree"),
+        // Extra tokens at end
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) EXTRA",
+            "Expected: end of statement, found: EXTRA"
+        ),
+        // Incomplete statement
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD", "Expected: OPERATOR or FUNCTION, found: EOF"),
+        // Very long numbers
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 999999999999999999999 < (INT4, INT2)",
+            "Could not parse '999999999999999999999' as u64: number too large to fit in target type"
+        ),
+        // Multiple FOR clauses
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH FOR ORDER BY sort_family",
+            "Expected: end of statement, found: FOR"
+        ),
+        // FOR SEARCH with extra tokens
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH EXTRA",
+            "Expected: end of statement, found: EXTRA"
+        ),
+        // FOR ORDER BY with invalid sort family
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY 123invalid",
+            "Expected: identifier, found: 123"
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string())
+        );
+    }
 
-    // Invalid operation
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree INVALID_OPERATION")
-        .is_err());
-
-    // Missing operator name in ADD OPERATOR
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 (INT4, INT2)"
+    // Function with empty operator types
+    assert_eq!(
+        pg().parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 () func"
         )
-        .is_err());
+        .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
 
-    // Missing function name in ADD FUNCTION
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)"
-        )
-        .is_err());
-
-    // Missing parentheses in DROP OPERATOR
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 INT4, INT2")
-        .is_err());
-
-    // Invalid operator name (empty)
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1  (INT4, INT2)"
-        )
-        .is_err());
-
-    // Invalid operator name (special characters)
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 @#$ (INT4, INT2)"
-        )
-        .is_err());
-
-    // Negative strategy number
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR -1 < (INT4, INT2)"
-        )
-        .is_err());
-
-    // Non-integer strategy number
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1.5 < (INT4, INT2)"
-        )
-        .is_err());
-
-    // Missing closing parenthesis in operator types
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2"
-        )
-        .is_err());
-
-    // Missing opening parenthesis in operator types
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < INT4, INT2)"
-        )
-        .is_err());
-
-    // Empty operator types
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < ()")
-        .is_err());
-
-    // Invalid data type (using punctuation)
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (@#$%, INT2)"
-        )
-        .is_err());
-
-    // Incomplete FOR clause
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR"
-        )
-        .is_err());
-
-    // Invalid FOR clause keyword
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR INVALID"
-        )
-        .is_err());
-
-    // FOR ORDER BY without sort family
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY"
-        )
-        .is_err());
-
-    // Missing function name in ADD FUNCTION
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)"
-        )
-        .is_err());
-
-    // Invalid function name
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 123invalid(INT4, INT2)"
-        )
-        .is_err());
-
-    // Negative support number
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION -1 func(INT4, INT2)"
-        )
-        .is_err());
-
-    // Non-integer support number
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1.5 func(INT4, INT2)"
-        )
-        .is_err());
-
-    // Missing closing parenthesis in function operator types
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2 func()"
-        )
-        .is_err());
-
-    // Missing closing parenthesis in function arguments
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(INT4, INT2"
-        )
-        .is_err());
-
-    // Invalid data type in function arguments
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(@#$%, INT2)"
-        )
-        .is_err());
-
-    // DROP OPERATOR with FOR clause (not allowed)
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2) FOR SEARCH"
-        )
-        .is_err());
-
-    // DROP FUNCTION with function arguments (not allowed)
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 (INT4, INT2) func(INT4)"
-        )
-        .is_err());
-
-    // Multiple ADD items with error in middle
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2), INVALID_ITEM"
-        )
-        .is_err());
-
-    // Multiple DROP items with error in middle
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2), INVALID_ITEM"
-        )
-        .is_err());
-
-    // RENAME TO with invalid new name
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree RENAME TO 123invalid")
-        .is_err());
-
-    // OWNER TO with invalid owner
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree OWNER TO 123invalid")
-        .is_err());
-
-    // SET SCHEMA with invalid schema name
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree SET SCHEMA 123invalid")
-        .is_err());
-
-    // Schema-qualified operator family name with invalid schema
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY 123invalid.my_ops USING btree ADD OPERATOR 1 < (INT4, INT2)"
-        )
-        .is_err());
-
-    // Missing operator family name
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY USING btree ADD OPERATOR 1 < (INT4, INT2)")
-        .is_err());
-
-    // Extra tokens at end
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) EXTRA"
-        )
-        .is_err());
-
-    // Incomplete statement
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD")
-        .is_err());
-
-    // Very long numbers
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 999999999999999999999 < (INT4, INT2)")
-        .is_err());
-
-    // Multiple FOR clauses
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH FOR ORDER BY sort_family")
-        .is_err());
-
-    // FOR SEARCH with extra tokens
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH EXTRA")
-        .is_err());
-
-    // FOR ORDER BY with invalid sort family
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY 123invalid")
-        .is_err());
-
-    // Function with empty operator types but missing function args parens
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 () func")
-        .is_err());
-
-    // Function with mismatched parentheses
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4 func(INT2"
-        )
-        .is_err());
-
-    // DROP with empty types
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 ()")
-        .is_err());
-
-    // DROP FUNCTION with empty types
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 ()")
-        .is_err());
+    for (sql, expected) in [
+        // Function with mismatched parentheses
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4 func(INT2",
+            "Expected: ), found: func",
+        ),
+        // DROP with empty types
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 ()",
+            "Expected: a data type name, found: )",
+        ),
+        // DROP FUNCTION with empty types
+        (
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 ()",
+            "Expected: a data type name, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string())
+        );
+    }
 }
 
 #[test]
@@ -8560,81 +8508,62 @@ fn parse_alter_operator_class() {
     }
 
     // Test error cases
-    // Missing USING clause
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops")
-        .is_err());
-
-    // Invalid operation
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree INVALID_OPERATION")
-        .is_err());
-
-    // Missing new name for RENAME TO
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree RENAME TO")
-        .is_err());
-
-    // Missing owner for OWNER TO
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree OWNER TO")
-        .is_err());
-
-    // Missing schema for SET SCHEMA
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA")
-        .is_err());
-
-    // Invalid new name
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree RENAME TO 123invalid")
-        .is_err());
-
-    // Invalid owner
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree OWNER TO 123invalid")
-        .is_err());
-
-    // Invalid schema name
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA 123invalid")
-        .is_err());
-
-    // Missing operator class name
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS USING btree RENAME TO integer_ops")
-        .is_err());
-
-    // Extra tokens at end
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR CLASS int_ops USING btree RENAME TO integer_ops EXTRA"
-        )
-        .is_err());
-
-    // Missing index method
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops")
-        .is_err());
-
-    // Invalid index method
-    assert!(pg()
-        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING 123invalid RENAME TO integer_ops")
-        .is_err());
-
-    // Trying to use ADD operation (only valid for OPERATOR FAMILY)
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR CLASS int_ops USING btree ADD OPERATOR 1 < (INT4, INT2)"
-        )
-        .is_err());
-
-    // Trying to use DROP operation (only valid for OPERATOR FAMILY)
-    assert!(pg()
-        .parse_sql_statements(
-            "ALTER OPERATOR CLASS int_ops USING btree DROP OPERATOR 1 (INT4, INT2)"
-        )
-        .is_err());
+    for (sql, expected) in [
+        // Missing USING clause
+        ("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops", "Expected: USING, found: RENAME"),
+        // Invalid operation
+        (
+            "ALTER OPERATOR CLASS int_ops USING btree INVALID_OPERATION",
+            "Expected: RENAME TO, OWNER TO, or SET SCHEMA after ALTER OPERATOR CLASS, found: INVALID_OPERATION"
+        ),
+        // Missing new name for RENAME TO
+        ("ALTER OPERATOR CLASS int_ops USING btree RENAME TO", "Expected: identifier, found: EOF"),
+        // Missing owner for OWNER TO
+        (
+            "ALTER OPERATOR CLASS int_ops USING btree OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF"
+        ),
+        // Missing schema for SET SCHEMA
+        ("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA", "Expected: identifier, found: EOF"),
+        // Invalid new name
+        ("ALTER OPERATOR CLASS int_ops USING btree RENAME TO 123invalid", "Expected: identifier, found: 123"),
+        // Invalid owner
+        (
+            "ALTER OPERATOR CLASS int_ops USING btree OWNER TO 123invalid",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: 123"
+        ),
+        // Invalid schema name
+        ("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA 123invalid", "Expected: identifier, found: 123"),
+        // Missing operator class name
+        ("ALTER OPERATOR CLASS USING btree RENAME TO integer_ops", "Expected: USING, found: btree"),
+        // Extra tokens at end
+        (
+            "ALTER OPERATOR CLASS int_ops USING btree RENAME TO integer_ops EXTRA",
+            "Expected: end of statement, found: EXTRA"
+        ),
+        // Missing index method
+        ("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops", "Expected: USING, found: RENAME"),
+        // Invalid index method
+        (
+            "ALTER OPERATOR CLASS int_ops USING 123invalid RENAME TO integer_ops",
+            "Expected: identifier, found: 123"
+        ),
+        // Trying to use ADD operation (only valid for OPERATOR FAMILY)
+        (
+            "ALTER OPERATOR CLASS int_ops USING btree ADD OPERATOR 1 < (INT4, INT2)",
+            "Expected: RENAME TO, OWNER TO, or SET SCHEMA after ALTER OPERATOR CLASS, found: ADD"
+        ),
+        // Trying to use DROP operation (only valid for OPERATOR FAMILY)
+        (
+            "ALTER OPERATOR CLASS int_ops USING btree DROP OPERATOR 1 (INT4, INT2)",
+            "Expected: RENAME TO, OWNER TO, or SET SCHEMA after ALTER OPERATOR CLASS, found: DROP"
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string())
+        );
+    }
 }
 
 #[test]
@@ -8835,25 +8764,37 @@ fn parse_alter_function_and_aggregate() {
         ));
     }
 
-    assert!(pg()
-        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) DEPENDS ON EXTENSION ext1")
-        .is_err());
-    assert!(pg()
-        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) NO DEPENDS ON EXTENSION ext1")
-        .is_err());
-    assert!(pg()
-        .parse_sql_statements("ALTER AGGREGATE alt_func1(OUT INT) OWNER TO joe")
-        .is_err());
-    assert!(pg()
-        .parse_sql_statements("ALTER AGGREGATE alt_func1(INOUT INT) OWNER TO joe")
-        .is_err());
-    assert!(pg()
-        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT = 1) OWNER TO joe")
-        .is_err());
-
-    assert!(pg()
-        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) IMMUTABLE")
-        .is_err());
+    for (sql, expected) in [
+        (
+            "ALTER AGGREGATE alt_func1(INT) DEPENDS ON EXTENSION ext1",
+            "Expected: RENAME TO, OWNER TO, or SET SCHEMA after ALTER AGGREGATE, found: DEPENDS",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(INT) NO DEPENDS ON EXTENSION ext1",
+            "Expected: RENAME TO, OWNER TO, or SET SCHEMA after ALTER AGGREGATE, found: NO",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(OUT INT) OWNER TO joe",
+            "Expected: IN or argument type in aggregate signature, found: OUT",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(INOUT INT) OWNER TO joe",
+            "Expected: IN or argument type in aggregate signature, found: INOUT",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(INT = 1) OWNER TO joe",
+            "Expected: ',' or ')' or ORDER BY after aggregate argument type, found: =",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(INT) IMMUTABLE",
+            "Expected: RENAME TO, OWNER TO, or SET SCHEMA after ALTER AGGREGATE, found: IMMUTABLE",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string())
+        );
+    }
 }
 
 #[test]
@@ -8872,14 +8813,21 @@ fn parse_create_text_search() {
     pg_and_generic().verified_stmt(r#"CREATE TEXT SEARCH TEMPLATE t ("Init" = init_function)"#);
 
     // Object type must be an unquoted keyword-like token in this position.
-    assert!(pg()
-        .parse_sql_statements(r#"CREATE TEXT SEARCH "DICTIONARY" d (template = simple)"#)
-        .is_err());
+    assert_eq!(
+        pg()
+            .parse_sql_statements(r#"CREATE TEXT SEARCH "DICTIONARY" d (template = simple)"#)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of DICTIONARY or CONFIGURATION or TEMPLATE or PARSER, found: \"DICTIONARY\"".to_string()
+        )
+    );
 
     // CREATE options are key-value pairs in PostgreSQL syntax.
-    assert!(pg()
-        .parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
-        .is_err());
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: )".to_string())
+    );
 }
 
 #[test]
@@ -8965,11 +8913,17 @@ fn parse_drop_operator_family() {
 
     // Test error: DROP OPERATOR FAMILY with no names
     let sql = "DROP OPERATOR FAMILY USING btree";
-    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: USING, found: btree".to_string())
+    );
 
     // Test error: DROP OPERATOR FAMILY IF EXISTS with no names
     let sql = "DROP OPERATOR FAMILY IF EXISTS USING btree";
-    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: USING, found: btree".to_string())
+    );
 }
 
 #[test]
@@ -9028,11 +8982,17 @@ fn parse_drop_operator_class() {
 
     // Test error: DROP OPERATOR CLASS with no names
     let sql = "DROP OPERATOR CLASS USING btree";
-    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: USING, found: btree".to_string())
+    );
 
     // Test error: DROP OPERATOR CLASS IF EXISTS with no names
     let sql = "DROP OPERATOR CLASS IF EXISTS USING btree";
-    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: USING, found: btree".to_string())
+    );
 }
 
 #[test]
@@ -9286,11 +9246,13 @@ fn parse_create_operator_class() {
     }
 
     // Test nested empty parentheses error in function arguments
-    assert!(pg()
-        .parse_sql_statements(
+    assert_eq!(
+        pg().parse_sql_statements(
             "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 cas_cmp(()"
         )
-        .is_err());
+        .unwrap_err(),
+        ParserError::ParserError("Expected: a data type name, found: (".to_string())
+    );
 }
 
 #[test]
@@ -9491,68 +9453,42 @@ CONSTRAINT check_date CHECK (order_date >= '2023-01-01')\
 
 #[test]
 fn parse_create_table_partition_of_errors() {
-    let sql = "CREATE TABLE p PARTITION OF parent";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("FOR VALUES or DEFAULT"),
-        "Expected error about FOR VALUES, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent WITH (fillfactor = 70)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("FOR VALUES or DEFAULT"),
-        "Expected error about FOR VALUES, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES RANGE (1, 10)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("IN, FROM, or WITH"),
-        "Expected error about invalid keyword after FOR VALUES, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("TO"),
-        "Expected error about missing TO clause, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES IN ()";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("at least one value"),
-        "Expected error about empty value list in IN clause, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM () TO (10)";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("at least one value"),
-        "Expected error about empty FROM list, got: {err}"
-    );
-
-    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1) TO ()";
-    let result = pg_and_generic().parse_sql_statements(sql);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("at least one value"),
-        "Expected error about empty TO list, got: {err}"
-    );
+    for (sql, err) in [
+        (
+            "CREATE TABLE p PARTITION OF parent",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: EOF",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent WITH (fillfactor = 70)",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: WITH",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES RANGE (1, 10)",
+            "Expected: IN, FROM, or WITH after FOR VALUES, found: RANGE",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1)",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES IN ()",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES FROM () TO (10)",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1) TO ()",
+            "Expected: at least one value, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
 }
 
 #[test]
@@ -10038,6 +9974,85 @@ fn parse_trim_from_without_characters() {
 }
 
 #[test]
+fn parse_insert_overriding() {
+    for (sql, expected) in [
+        (
+            "INSERT INTO t (id, a) OVERRIDING SYSTEM VALUE VALUES (1, 'x')",
+            InsertOverriding::System,
+        ),
+        (
+            "INSERT INTO t (id, a) OVERRIDING USER VALUE VALUES (1, 'x')",
+            InsertOverriding::User,
+        ),
+        (
+            "INSERT INTO t (id, a) OVERRIDING SYSTEM VALUE SELECT id, a FROM u",
+            InsertOverriding::System,
+        ),
+        (
+            "INSERT INTO t (id) OVERRIDING USER VALUE VALUES (1) ON CONFLICT DO NOTHING RETURNING id",
+            InsertOverriding::User,
+        ),
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::Insert(Insert { overriding, .. }) => assert_eq!(overriding, Some(expected)),
+            statement => panic!("Expected INSERT statement, got: {statement:?}"),
+        }
+    }
+
+    // Without a column list, PostgreSQL's implicit table alias must not swallow `OVERRIDING`.
+    for sql in [
+        "INSERT INTO t OVERRIDING SYSTEM VALUE VALUES (1, 'x')",
+        "INSERT INTO t OVERRIDING USER VALUE SELECT * FROM u",
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::Insert(Insert {
+                table_alias,
+                overriding,
+                ..
+            }) => {
+                assert_eq!(table_alias, None);
+                assert!(overriding.is_some());
+            }
+            statement => panic!("Expected INSERT statement, got: {statement:?}"),
+        }
+    }
+    pg().verified_stmt("INSERT INTO t AS x (id) OVERRIDING SYSTEM VALUE VALUES (1)");
+
+    // An INSERT without the clause has none.
+    match pg_and_generic().verified_stmt("INSERT INTO t (id) VALUES (1)") {
+        Statement::Insert(Insert { overriding, .. }) => assert_eq!(overriding, None),
+        statement => panic!("Expected INSERT statement, got: {statement:?}"),
+    }
+
+    // `OVERRIDING` takes `SYSTEM` or `USER`, then `VALUE`, and is followed by a query: PostgreSQL's
+    // grammar does not allow it before `DEFAULT VALUES`.
+    for (sql, err) in [
+        (
+            "INSERT INTO t (id) OVERRIDING VALUE VALUES (1)",
+            "Expected: SYSTEM or USER, found: VALUE",
+        ),
+        (
+            "INSERT INTO t (id) OVERRIDING SYSTEM VALUES (1)",
+            "Expected: VALUE, found: VALUES",
+        ),
+        (
+            "INSERT INTO t (id) OVERRIDING DEFAULT VALUE VALUES (1)",
+            "Expected: SYSTEM or USER, found: DEFAULT",
+        ),
+        (
+            "INSERT INTO t OVERRIDING SYSTEM VALUE DEFAULT VALUES",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: DEFAULT",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn parse_insert_by_name_keywords_as_table_and_alias() {
     // Without a table name, `BY NAME` is not an INSERT BY NAME clause. PostgreSQL
     // treats `BY` as the table name and `NAME` as its implicit table alias.
@@ -10125,4 +10140,35 @@ fn parse_stage_table_factor_rejected() {
 fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
+}
+
+#[test]
+fn parse_join_using_alias() {
+    let sql = "SELECT * FROM t1 JOIN t2 USING (id) AS joined_cols";
+    let dialect = PostgreSqlDialect {};
+    let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    let statement = parser.parse_statement().unwrap();
+    let Statement::Query(query) = statement else {
+        panic!("Expected a query statement");
+    };
+    let SetExpr::Select(select) = *query.body else {
+        panic!("Expected a SELECT query");
+    };
+    let join = &select.from[0].joins[0];
+
+    assert_eq!(
+        JoinOperator::Join(JoinConstraint::UsingAlias(
+            vec![ObjectName::from(vec![Ident::new("id")])],
+            Ident::new("joined_cols"),
+        )),
+        join.join_operator
+    );
+    assert_eq!(
+        Span::new(Location::new(1, 33), Location::new(1, 51)),
+        join.join_operator.span()
+    );
+    assert_eq!(
+        "SELECT * FROM t1 JOIN t2 USING(id) AS joined_cols",
+        select.to_string()
+    );
 }

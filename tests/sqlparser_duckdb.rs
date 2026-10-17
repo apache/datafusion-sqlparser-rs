@@ -753,7 +753,7 @@ fn test_duckdb_union_datatype() {
             file_format: Default::default(),
             location: Default::default(),
             query: Default::default(),
-            without_rowid: Default::default(),
+            sqlite_table_options: Default::default(),
             like: Default::default(),
             clone: Default::default(),
             comment: Default::default(),
@@ -767,7 +767,6 @@ fn test_duckdb_union_datatype() {
             inherits: Default::default(),
             partition_of: Default::default(),
             for_values: Default::default(),
-            strict: Default::default(),
             copy_grants: Default::default(),
             enable_schema_evolution: Default::default(),
             change_tracking: Default::default(),
@@ -933,12 +932,10 @@ fn test_duckdb_nested_block_comments() {
         "SELECT a FROM t",
     );
 
-    let err = duckdb()
-        .parse_sql_statements("SELECT a /* outer /* inner */ FROM t")
-        .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("Unexpected EOF while in a multi-line comment"),
-        "{err}"
+    assert_eq!(
+        duckdb().parse_sql_statements("SELECT a /* outer /* inner */ FROM t"),
+        Err(ParserError::TokenizerError(
+            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 37".to_string()
+        ))
     );
 }

@@ -24,6 +24,7 @@ use test_utils::*;
 use sqlparser::ast::*;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::dialect::RedshiftSqlDialect;
+use sqlparser::parser::ParserError;
 
 #[test]
 fn test_square_brackets_over_db_schema_table_name() {
@@ -387,9 +388,12 @@ fn test_parse_nested_quoted_identifier() {
     // trim spaces
     redshift().one_statement_parses_to(r#"SELECT 1 AS [ " 1 " ]"#, r#"SELECT 1 AS [" 1 "]"#);
     // invalid query
-    assert!(redshift()
-        .parse_sql_statements(r#"SELECT 1 AS ["1]"#)
-        .is_err());
+    assert_eq!(
+        redshift().parse_sql_statements(r#"SELECT 1 AS ["1]"#),
+        Err(ParserError::TokenizerError(
+            "Expected close delimiter '\"' before EOF. at Line: 1, Column: 14".to_string()
+        ))
+    );
 }
 
 #[test]

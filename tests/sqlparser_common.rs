@@ -6766,7 +6766,9 @@ fn parse_interval_dont_require_unit() {
 
 #[test]
 fn parse_interval_require_unit() {
-    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_where(|d| {
+        d.require_interval_qualifier() && !d.supports_interval_string_without_qualifier()
+    });
     let sql = "SELECT INTERVAL '1 DAY'";
     let err = dialects.parse_sql_statements(sql).unwrap_err();
     assert_eq!(
@@ -6776,8 +6778,65 @@ fn parse_interval_require_unit() {
 }
 
 #[test]
+fn parse_interval_string_without_qualifier() {
+    let dialects = all_dialects_where(|d| d.supports_interval_string_without_qualifier());
+    for sql in [
+        "SELECT INTERVAL '2 months'",
+        "SELECT INTERVAL '1' DAY",
+        "SELECT INTERVAL '1-2' YEAR TO MONTH",
+        "SELECT INTERVAL -'1' DAY",
+        "SELECT INTERVAL 3 DAY",
+        "SELECT INTERVAL -1 DAY, INTERVAL +2 HOURS",
+        "SELECT INTERVAL '2 seconds' * 2",
+        "SELECT INTERVAL \"2 months\"",
+        "SELECT INTERVAL \"1\" DAY",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    for sql in [
+        "SELECT INTERVAL 1",
+        "SELECT INTERVAL 1 + 1 DAY",
+        "SELECT INTERVAL x DAY",
+    ] {
+        assert!(
+            dialects.parse_sql_statements(sql).is_err(),
+            "{sql} should not parse"
+        );
+    }
+    dialects.verified_stmt("SELECT interval, x FROM t");
+    dialects.verified_stmt("SELECT max(interval) FROM t WHERE interval > 1");
+    dialects.verified_stmt("SELECT interval - 1, interval + 1 FROM t");
+    dialects.one_statement_parses_to("SELECT INTERVAL -1", "SELECT INTERVAL - 1");
+    dialects.one_statement_parses_to(
+        "SELECT INTERVAL -'2 months'",
+        "SELECT INTERVAL - '2 months'",
+    );
+    dialects.verified_stmt(
+        "SELECT sum(a) OVER (ORDER BY ts RANGE BETWEEN '1 day' PRECEDING AND CURRENT ROW) FROM t",
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT INTERVAL '1' DAY TO x")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: date/time field, found: x"
+    );
+}
+
+#[test]
+fn parse_window_frame_bound_string_as_interval() {
+    let dialects = all_dialects_where(|d| !d.supports_interval_string_without_qualifier());
+    dialects.one_statement_parses_to(
+        "SELECT sum(a) OVER (ORDER BY ts RANGE BETWEEN '1' DAY PRECEDING AND CURRENT ROW) FROM t",
+        "SELECT sum(a) OVER (ORDER BY ts RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND CURRENT ROW) FROM t",
+    );
+}
+
+#[test]
 fn parse_interval_require_qualifier() {
-    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_where(|d| {
+        d.require_interval_qualifier() && !d.supports_interval_string_without_qualifier()
+    });
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = dialects.verified_only_select(sql);

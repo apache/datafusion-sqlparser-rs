@@ -16,6 +16,7 @@
 // under the License.
 
 use crate::dialect::Dialect;
+use crate::keywords::{self, Keyword};
 
 /// A [`Dialect`] for [Databricks SQL](https://www.databricks.com/)
 ///
@@ -73,6 +74,16 @@ impl Dialect for DatabricksDialect {
 
     fn require_interval_qualifier(&self) -> bool {
         true
+    }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/data-types/interval-type>
+    fn supports_interval_string_without_qualifier(&self) -> bool {
+        true
+    }
+
+    /// `SELECT interval FROM t` names a column.
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        kw != Keyword::INTERVAL && keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
     // See https://docs.databricks.com/en/sql/language-manual/functions/struct.html

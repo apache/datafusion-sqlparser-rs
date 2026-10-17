@@ -35,6 +35,7 @@ pub fn derive_visit_mut(input: proc_macro::TokenStream) -> proc_macro::TokenStre
         input,
         &visit::VisitType {
             visit_trait: quote!(VisitMut),
+            visit_method: quote!(visit_mut),
             visitor_trait: quote!(VisitorMut),
             modifier: Some(quote!(mut)),
         },
@@ -49,6 +50,7 @@ pub fn derive_visit_immutable(input: proc_macro::TokenStream) -> proc_macro::Tok
         input,
         &visit::VisitType {
             visit_trait: quote!(Visit),
+            visit_method: quote!(visit),
             visitor_trait: quote!(Visitor),
             modifier: None,
         },

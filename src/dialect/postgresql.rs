@@ -116,7 +116,13 @@ impl Dialect for PostgreSqlDialect {
 
     /// Aliases are identifiers, see `output_name` and `alias` in
     /// <https://www.postgresql.org/docs/current/sql-select.html>
-    fn supports_string_literal_alias(&self) -> bool {
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// Aliases are identifiers, see `alias` in
+    /// <https://www.postgresql.org/docs/current/sql-select.html>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
         false
     }
 

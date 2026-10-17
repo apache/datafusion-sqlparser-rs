@@ -1537,11 +1537,20 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_table_alias(kw, parser)
     }
 
-    /// Returns true if a single-quoted string can be an alias, as in `SELECT 1 AS 'x'`.
+    /// Returns true if a single-quoted string can name a select item, as in `SELECT 1 AS 'x'`.
+    /// `explicit` is true when the alias follows `AS`.
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/problems-with-alias.html),
     /// [SQLite](https://www.sqlite.org/lang_keywords.html)
-    fn supports_string_literal_alias(&self) -> bool {
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        true
+    }
+
+    /// Returns true if a single-quoted string can name a table, as in `FROM t AS 'x'`.
+    /// `explicit` is true when the alias follows `AS`.
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_keywords.html)
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
         true
     }
 

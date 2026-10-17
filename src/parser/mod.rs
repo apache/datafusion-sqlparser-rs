@@ -366,6 +366,13 @@ pub struct Parser<'a> {
     failed_in_subquery_positions: BTreeMap<usize, Option<usize>>,
 }
 
+/// Whether an alias names a select item or a table.
+#[derive(Debug, Clone, Copy)]
+enum AliasKind {
+    Column,
+    Table,
+}
+
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
 /// memoization, so the caches hold no strings.
 #[derive(Debug, Clone, Copy)]
@@ -1414,7 +1421,7 @@ impl<'a> Parser<'a> {
         fn validator(explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
             explicit || !&[Keyword::ASC, Keyword::DESC, Keyword::GROUP].contains(kw)
         }
-        let alias = self.parse_optional_alias_inner(None, validator)?;
+        let alias = self.parse_optional_alias_inner(None, AliasKind::Column, validator)?;
         let order_by = OrderByOptions {
             sort: self.parse_optional_order_by_sort(),
             nulls_first: None,
@@ -13605,7 +13612,7 @@ impl<'a> Parser<'a> {
         fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
             parser.dialect.is_select_item_alias(explicit, kw, parser)
         }
-        self.parse_optional_alias_inner(None, validator)
+        self.parse_optional_alias_inner(None, AliasKind::Column, validator)
     }
 
     /// Optionally parses an alias for a table like in `... FROM generate_series(1, 10) AS t (col)`.
@@ -13616,7 +13623,7 @@ impl<'a> Parser<'a> {
             parser.dialect.is_table_factor_alias(explicit, kw, parser)
         }
         let explicit = self.peek_keyword(Keyword::AS);
-        match self.parse_optional_alias_inner(None, validator)? {
+        match self.parse_optional_alias_inner(None, AliasKind::Table, validator)? {
             Some(name) => {
                 let columns = self.parse_table_alias_column_defs()?;
                 let at = if self.dialect.supports_partiql() && self.parse_keyword(Keyword::AT) {
@@ -13704,7 +13711,7 @@ impl<'a> Parser<'a> {
         fn validator(_explicit: bool, _kw: &Keyword, _parser: &mut Parser) -> bool {
             false
         }
-        self.parse_optional_alias_inner(Some(reserved_kwds), validator)
+        self.parse_optional_alias_inner(Some(reserved_kwds), AliasKind::Column, validator)
     }
 
     /// Parses an optional alias after a SQL element such as a select list item
@@ -13716,6 +13723,7 @@ impl<'a> Parser<'a> {
     fn parse_optional_alias_inner<F>(
         &mut self,
         reserved_kwds: Option<&[Keyword]>,
+        kind: AliasKind,
         validator: F,
     ) -> Result<Option<Ident>, ParserError>
     where
@@ -13739,7 +13747,14 @@ impl<'a> Parser<'a> {
             Token::Word(w) if validator(after_as, &w.keyword, self) => {
                 Ok(Some(w.into_ident(next_token.span)))
             }
-            Token::SingleQuotedString(s) if self.dialect.supports_string_literal_alias() => {
+            Token::SingleQuotedString(s)
+                if match kind {
+                    AliasKind::Column => {
+                        self.dialect.supports_string_literal_column_alias(after_as)
+                    }
+                    AliasKind::Table => self.dialect.supports_string_literal_table_alias(after_as),
+                } =>
+            {
                 Ok(Some(Ident::with_quote('\'', s)))
             }
             Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
@@ -17883,7 +17898,7 @@ impl<'a> Parser<'a> {
                 // ~ for a PIVOT aggregate function the alias must not be a "FOR"; in any dialect
                 kw != &Keyword::FOR && parser.dialect.is_select_item_alias(explicit, kw, parser)
             }
-            self.parse_optional_alias_inner(None, validator)?
+            self.parse_optional_alias_inner(None, AliasKind::Column, validator)?
         };
         Ok(ExprWithAlias { expr, alias })
     }

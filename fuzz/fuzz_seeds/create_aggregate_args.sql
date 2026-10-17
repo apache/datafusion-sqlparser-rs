@@ -1,0 +1,1 @@
+CREATE AGGREGATE s.my_agg(VARIADIC "any" ORDER BY VARIADIC "any") (SFUNC = s.f, STYPE = integer[], INITCOND = '{}', SORTOP = <, HYPOTHETICAL)

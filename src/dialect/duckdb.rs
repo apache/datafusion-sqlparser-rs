@@ -146,4 +146,9 @@ impl Dialect for DuckDbDialect {
     fn supports_nested_comments(&self) -> bool {
         true
     }
+
+    /// See <https://duckdb.org/docs/stable/sql/statements/alter_table>
+    fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
 }

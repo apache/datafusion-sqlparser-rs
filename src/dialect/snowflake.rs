@@ -721,6 +721,11 @@ impl Dialect for SnowflakeDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after

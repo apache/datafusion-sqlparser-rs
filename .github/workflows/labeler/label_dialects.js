@@ -19,6 +19,7 @@ const DIALECTS = [
   { label: "BigQuery", stems: ["bigquery"], pattern: /\bbig\s?query\b/i },
   { label: "ClickHouse", stems: ["clickhouse"], pattern: /\bclick\s?house\b/i },
   { label: "Databricks", stems: ["databricks"], pattern: /\bdatabricks\b/i },
+  { label: "Doris", stems: ["doris"], pattern: /\bdoris\b/i },
   { label: "DuckDB", stems: ["duckdb"], pattern: /\bduck\s?db\b/i },
   { label: "Hive", stems: ["hive"], pattern: /\bhive\b/i },
   { label: "MySQL", stems: ["mysql"], pattern: /\b(mysql|maria\s?db)\b/i },

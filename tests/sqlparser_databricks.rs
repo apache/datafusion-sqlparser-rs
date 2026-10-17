@@ -453,13 +453,20 @@ fn parse_table_time_travel() {
     all_dialects_where(|d| d.supports_table_versioning())
         .verified_only_select("SELECT 1 FROM t1 VERSION AS OF 1");
 
-    assert!(databricks()
-        .parse_sql_statements("SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'")
-        .is_err());
+    assert_eq!(
+        databricks().parse_sql_statements("SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'"),
+        Err(ParserError::ParserError(
+            "Expected: one of UPDATE or SHARE, found: TIMESTAMP".to_string()
+        ))
+    );
 
-    assert!(all_dialects_where(|d| d.supports_table_versioning())
-        .parse_sql_statements("SELECT 1 FROM t1 VERSION AS OF 1 - 2",)
-        .is_err())
+    assert_eq!(
+        all_dialects_where(|d| d.supports_table_versioning())
+            .parse_sql_statements("SELECT 1 FROM t1 VERSION AS OF 1 - 2"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: -".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -733,9 +740,13 @@ fn parse_cte_without_as() {
     databricks_and_generic()
         .verified_query("WITH cte (col1, col2) AS (SELECT 1, 2) SELECT * FROM cte");
 
-    assert!(all_dialects_where(|d| !d.supports_cte_without_as())
-        .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte")
-        .is_err());
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_cte_without_as())
+            .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: 1".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -756,4 +767,20 @@ fn parse_databricks_query_entry_points() {
     );
     databricks()
         .verified_stmt("CREATE VIEW filtered AS FROM main.raw.source |> WHERE id > 0 |> SELECT id");
+}
+
+#[test]
+fn parse_databricks_collated_data_types() {
+    databricks().verified_stmt(
+        "CREATE TABLE t (name STRING COLLATE UTF8_BINARY, values ARRAY<STRING COLLATE UTF8_LCASE>, attrs MAP<STRING COLLATE UTF8_BINARY, STRING COLLATE UTF8_LCASE>)",
+    );
+    databricks().verified_stmt("CREATE TABLE t (s STRUCT<a STRING COLLATE UTF8_LCASE>)");
+    databricks().verified_stmt("CREATE TABLE t (c ARRAY<ARRAY<STRING>> COLLATE UTF8_LCASE)");
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("CREATE TABLE t (c ARRAY<STRING COLLATE UTF8_LCASE>)"),
+        Err(ParserError::ParserError(
+            "Expected: >, found: COLLATE".to_string()
+        ))
+    );
 }

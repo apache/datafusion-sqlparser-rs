@@ -753,7 +753,7 @@ fn test_duckdb_union_datatype() {
             file_format: Default::default(),
             location: Default::default(),
             query: Default::default(),
-            without_rowid: Default::default(),
+            sqlite_table_options: Default::default(),
             like: Default::default(),
             clone: Default::default(),
             comment: Default::default(),
@@ -767,7 +767,6 @@ fn test_duckdb_union_datatype() {
             inherits: Default::default(),
             partition_of: Default::default(),
             for_values: Default::default(),
-            strict: Default::default(),
             copy_grants: Default::default(),
             enable_schema_evolution: Default::default(),
             change_tracking: Default::default(),
@@ -924,4 +923,19 @@ fn test_duckdb_lambda_function() {
     // Test lambda in list_transform
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
+}
+
+#[test]
+fn test_duckdb_nested_block_comments() {
+    duckdb().one_statement_parses_to(
+        "SELECT a /* outer /* inner */ still comment */ FROM t",
+        "SELECT a FROM t",
+    );
+
+    assert_eq!(
+        duckdb().parse_sql_statements("SELECT a /* outer /* inner */ FROM t"),
+        Err(ParserError::TokenizerError(
+            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 37".to_string()
+        ))
+    );
 }

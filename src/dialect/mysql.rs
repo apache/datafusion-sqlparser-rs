@@ -20,9 +20,10 @@ use alloc::boxed::Box;
 
 use crate::{
     ast::{BinaryOperator, Expr, LockTable, LockTableType, Statement},
-    dialect::Dialect,
+    dialect::{Dialect, Precedence},
     keywords::Keyword,
     parser::{Parser, ParserError},
+    tokenizer::Token,
 };
 
 use super::keywords;
@@ -193,6 +194,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
+        true
+    }
+
     fn supports_cross_join_constraint(&self) -> bool {
         true
     }
@@ -202,9 +207,23 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// `&&` binds like `AND`.
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/operator-precedence.html>
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        match parser.peek_token_ref().token {
+            Token::Overlap => Some(Ok(self.prec_value(Precedence::And))),
+            _ => None,
+        }
+    }
+
     /// Deprecated functionality by MySQL but still supported
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html#operator_binary>
     fn supports_binary_kw_as_cast(&self) -> bool {
+        true
+    }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/partitioning-selection.html>
+    fn supports_table_partitions(&self) -> bool {
         true
     }
 

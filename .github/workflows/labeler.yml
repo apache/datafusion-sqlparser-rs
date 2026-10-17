@@ -20,7 +20,7 @@ name: labeler
 # pull_request_target runs on the base branch, so the script below is never taken from the PR head.
 on:
   pull_request_target:
-    types: [opened, edited]
+    types: [opened, edited, reopened, synchronize]
   issues:
     types: [opened, edited]
   issue_comment:

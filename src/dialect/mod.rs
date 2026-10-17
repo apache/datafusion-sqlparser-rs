@@ -283,6 +283,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect tokenize `N'...'` as a national string literal?
+    ///
+    /// Dialects such as SQLite treat `N` as a plain identifier, so `N'foo'` is
+    /// the identifier `N` followed by a string literal, not a national string.
+    fn supports_national_string_literal(&self) -> bool {
+        true
+    }
+
     /// Determine whether the dialect strips the backslash when escaping LIKE wildcards (%, _).
     ///
     /// [MySQL] has a special case when escaping single quoted strings which leaves these unescaped
@@ -453,6 +461,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `GLOBAL IN` and `GLOBAL NOT IN`.
+    fn supports_global_in(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE | TRY | CATCH} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
         false
@@ -494,6 +507,12 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports identifiers starting with a numeric
     /// prefix such as tables named `59901_user_login`
     fn supports_numeric_prefix(&self) -> bool {
+        false
+    }
+
+    /// Returns true if a period directly after an identifier starts a tuple
+    /// element access such as `t.1`, instead of the number `.1`.
+    fn supports_tuple_element_access(&self) -> bool {
         false
     }
 
@@ -900,6 +919,20 @@ pub trait Dialect: Debug + Any {
                 Ok(p!(Is))
             }
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
+            Token::Word(w) if w.keyword == Keyword::GLOBAL && self.supports_global_in() => {
+                match (
+                    &parser.peek_nth_token_ref(1).token,
+                    &parser.peek_nth_token_ref(2).token,
+                ) {
+                    (Token::Word(w), _) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                    (Token::Word(w), Token::Word(w2))
+                        if w.keyword == Keyword::NOT && w2.keyword == Keyword::IN =>
+                    {
+                        Ok(p!(Between))
+                    }
+                    _ => Ok(self.prec_unknown()),
+                }
+            }
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
@@ -1100,6 +1133,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a data type can carry a collation, including inside a
+    /// nested type such as `MAP<STRING COLLATE UTF8_BINARY, STRING>`.
+    fn supports_data_type_collation(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `ARRAY` type without
     /// specifying an element type.
     ///
@@ -1110,6 +1149,33 @@ pub trait Dialect: Debug + Any {
     ///
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/data-types-semistructured#array)
     fn supports_array_typedef_without_element_type(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `ARRAY(element_type)` syntax.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a ARRAY(VARCHAR));
+    /// ```
+    fn supports_array_typedef_with_parentheses(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `NOT NULL` on an element type in
+    /// an `ARRAY(element_type)` definition.
+    fn supports_array_element_not_null(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `MAP(key_type, value_type)` syntax.
+    fn supports_map_typedef_with_parentheses(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `NOT NULL` on the value type in
+    /// a `MAP(key_type, value_type)` definition.
+    fn supports_map_value_not_null(&self) -> bool {
         false
     }
 
@@ -1190,6 +1256,12 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports `ASC` and `DESC` in column definitions
     /// e.g. `CREATE TABLE t (a INT ASC, b INT DESC);`
     fn supports_asc_desc_in_column_definition(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect allows string literals as column names in `CREATE TABLE`.
+    /// SQLite's grammar rule `nm ::= id | STRING | JOIN_KW` permits this.
+    fn supports_string_literal_column_names(&self) -> bool {
         false
     }
 
@@ -1283,6 +1355,12 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
     fn supports_create_table_select(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `PROC` as an abbreviation for
+    /// `PROCEDURE` in a `CREATE` statement.
+    fn supports_create_proc_syntax(&self) -> bool {
         false
     }
 
@@ -1570,6 +1648,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect allows an optional `ZEROFILL` suffix after numeric data types.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT(10) UNSIGNED ZEROFILL);
+    /// ```
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html>
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `INTERVAL` data type with [Postgres]-style options.
     ///
     /// Examples:
@@ -1805,6 +1895,19 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `PARTITION` clause on a table factor,
+    /// restricting a query to an explicit list of partitions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM employees PARTITION (p0, p1)
+    /// ```
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/partitioning-selection.html)
+    fn supports_table_partitions(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `FORMAT` clause in `SELECT` statements.
     ///
     /// Example:
@@ -1895,6 +1998,25 @@ pub trait Dialect: Debug + Any {
     ///
     /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-datatypes.html)
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect accepts `==` as an alternative to `=` in `UPDATE SET` assignments.
+    ///
+    /// See <https://www.sqlite.org/lang_update.html>
+    fn supports_double_eq_assignment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `CAST(expr AS)` with an empty type name.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT CAST(a AS)
+    /// ```
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html)
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
         false
     }
 }
@@ -2187,11 +2309,9 @@ mod tests {
             }
         }
 
-        #[allow(clippy::needless_raw_string_hashes)]
-        let statement = r#"SELECT 'Wayne\'s World'"#;
+        let statement = r"SELECT 'Wayne\'s World'";
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
-        assert!(res1.is_ok());
-        assert_eq!(res1, res2);
+        assert_eq!(res1.unwrap(), res2.unwrap());
     }
 }

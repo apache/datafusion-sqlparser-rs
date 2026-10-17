@@ -152,8 +152,58 @@ fn test_map_syntax_not_support_default() -> Result<(), ParserError> {
 
     let dialect = MyDialect {};
     let sql = "SELECT MAP {1: 2}";
-    let ast = Parser::parse_sql(&dialect, sql);
-    assert!(ast.is_err());
+    assert_eq!(
+        Parser::parse_sql(&dialect, sql),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: { at Line: 1, Column: 12".to_string()
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn custom_dialect_supports_table_partitions() -> Result<(), ParserError> {
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn supports_table_partitions(&self) -> bool {
+            true
+        }
+    }
+
+    let sql = "SELECT * FROM employees PARTITION (p0, p1)";
+    let ast = Parser::parse_sql(&MyDialect {}, sql)?;
+    assert_eq!(sql, &format!("{}", ast[0]));
+
+    // A dialect that does not opt in still rejects the clause.
+    #[derive(Debug)]
+    struct WithoutPartitions {}
+
+    impl Dialect for WithoutPartitions {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+    }
+
+    assert_eq!(
+        Parser::parse_sql(&WithoutPartitions {}, sql),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: PARTITION at Line: 1, Column: 25".to_string()
+        ))
+    );
     Ok(())
 }
 
@@ -282,5 +332,10 @@ fn custom_dialect_lambda_arrow_syntax_without_keyword() {
         sql,
         &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
     );
-    assert!(Parser::parse_sql(&dialect, "SELECT transform(xs, lambda x : x + 1)").is_err());
+    assert_eq!(
+        Parser::parse_sql(&dialect, "SELECT transform(xs, lambda x : x + 1)"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: x at Line: 1, Column: 29".to_string()
+        ))
+    );
 }

@@ -28,6 +28,17 @@ impl Dialect for ClickHouseDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    /// Aliases are identifiers, quoted with `"` or a backtick, see
+    /// <https://clickhouse.com/docs/reference/syntax#identifiers>
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// See <https://clickhouse.com/docs/reference/syntax#identifiers>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }

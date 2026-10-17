@@ -37,7 +37,7 @@ rendered statement no longer parses.
 
 `fuzz_duckdb_accepts` parses the input with DuckDB's own parser and fails when DuckDB accepts a `SELECT` that `DuckDbDialect` rejects.
 
-`fuzz_clickhouse_lexes` tokenizes the input with ClickHouse's own lexer, vendored under `fuzz/vendor/clickhouse-lexer/`, and fails when it reaches the end without an error token but `ClickHouseDialect` fails to tokenize. ClickHouse has no standalone parser, so the check stops at the tokenizer.
+`fuzz_clickhouse_lexes` tokenizes the input with ClickHouse's own lexer, from the [`clickhouse-lexer-sys`](https://crates.io/crates/clickhouse-lexer-sys) crate, and fails when it reaches the end without an error token but `ClickHouseDialect` fails to tokenize. ClickHouse has no standalone parser, so the check stops at the tokenizer; a lone `$`, which lexes but never parses, counts as rejected.
 
 The four oracle targets compile their engine from source, so each builds only with its feature, `sqlite`, `postgres`, `duckdb` or `clickhouse`, as in `cargo +nightly fuzz run --features sqlite fuzz_sqlite_accepts fuzz_seeds`. `cargo +nightly fuzz build --all-features` builds every target.
 

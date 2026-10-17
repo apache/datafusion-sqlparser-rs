@@ -1006,12 +1006,16 @@ pub enum Expr {
         /// `true` when the `NOT` modifier is present.
         negated: bool,
     },
-    /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
+    /// `<expr> [ NOT ] BETWEEN [ ASYMMETRIC | SYMMETRIC ] <low> AND <high>`
+    ///
+    /// See [SYMMETRIC](https://www.postgresql.org/docs/current/functions-comparison.html)
     Between {
         /// Expression being compared.
         expr: Box<Expr>,
         /// `true` when the `NOT` modifier is present.
         negated: bool,
+        /// `true` when the `SYMMETRIC` modifier is present.
+        symmetric: bool,
         /// Lower bound.
         low: Box<Expr>,
         /// Upper bound.
@@ -1841,13 +1845,15 @@ impl fmt::Display for Expr {
             Expr::Between {
                 expr,
                 negated,
+                symmetric,
                 low,
                 high,
             } => write!(
                 f,
-                "{} {}BETWEEN {} AND {}",
+                "{} {}BETWEEN {}{} AND {}",
                 expr,
                 if *negated { "NOT " } else { "" },
+                if *symmetric { "SYMMETRIC " } else { "" },
                 low,
                 high
             ),

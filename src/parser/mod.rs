@@ -20847,7 +20847,16 @@ impl<'a> Parser<'a> {
     /// Parse a window specification.
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
         let window_name = match &self.peek_token_ref().token {
-            Token::Word(word) if word.keyword == Keyword::NoKeyword => {
+            Token::Word(w)
+                if !matches!(
+                    w.keyword,
+                    Keyword::PARTITION
+                        | Keyword::ORDER
+                        | Keyword::ROWS
+                        | Keyword::RANGE
+                        | Keyword::GROUPS
+                ) =>
+            {
                 self.parse_optional_ident()?
             }
             _ => None,

@@ -1117,6 +1117,26 @@ fn parse_create_table_options_list() {
     }
 }
 
+#[test]
+fn parse_bitwise_shift_operators() {
+    sqlite().verified_stmt("SELECT a << 1 FROM t");
+    sqlite().verified_stmt("SELECT a >> 1 FROM t");
+
+    let unsupported = all_dialects_where(|d| !d.supports_bitwise_shift_operators());
+    for (sql, token) in [
+        ("SELECT a << 1 FROM t", "ShiftLeft"),
+        ("SELECT a >> 1 FROM t", "ShiftRight"),
+    ] {
+        assert_eq!(
+            unsupported.parse_sql_statements(sql),
+            Err(ParserError::ParserError(format!(
+                "No infix parser for token {token}"
+            ))),
+            "{sql}"
+        );
+    }
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

@@ -4831,18 +4831,19 @@ fn test_snowflake_identifier_function() {
 
     // Cannot have more than one IDENTIFIER part in an object name
     assert_eq!(
-        snowflake()
-            .parse_sql_statements(
-                "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
-            )
-            .is_err(),
-        true
+        snowflake().parse_sql_statements(
+            "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
+        ),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'sc1'".to_string()
+        ))
     );
     assert_eq!(
         snowflake()
-            .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)")
-            .is_err(),
-        true
+            .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)"),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'tbl'".to_string()
+        ))
     );
 }
 
@@ -4884,17 +4885,15 @@ fn test_create_database() {
         WITH CONTACT (owner = admin, dpo = compliance)",
     );
 
-    let err = snowflake()
-        .parse_sql_statements("CREATE DATABASE")
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("Expected"), "Unexpected error: {err}");
-
-    let err = snowflake()
-        .parse_sql_statements("CREATE DATABASE my_db CLONE")
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("Expected"), "Unexpected error: {err}");
+    for sql in ["CREATE DATABASE", "CREATE DATABASE my_db CLONE"] {
+        assert_eq!(
+            snowflake().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: identifier, found: EOF".to_string()
+            )),
+            "{sql}"
+        );
+    }
 }
 
 #[test]

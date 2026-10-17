@@ -20694,6 +20694,7 @@ fn parse_cte_materialization() {
         ),
     ] {
         let sql = format!("WITH c AS {directive}(SELECT 1) SELECT * FROM c");
+        TestedDialects::new(vec![Box::new(DuckDbDialect {})]).verified_query(&sql);
         let query = all_dialects_where(|d| d.supports_cte_materialization()).verified_query(&sql);
         assert_eq!(query.with.unwrap().cte_tables[0].materialized, expected);
         if expected.is_some() {

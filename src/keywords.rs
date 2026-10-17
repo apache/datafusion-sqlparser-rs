@@ -424,6 +424,7 @@ define_keywords!(
     FALLBACK,
     FALSE,
     FAMILY,
+    FAST_FORWARD,
     FETCH,
     FIELDS,
     FILE,

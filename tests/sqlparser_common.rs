@@ -11299,7 +11299,8 @@ fn parse_is_boolean() {
         ("SELECT s, s IS TRIM(' NFKC ') FROM foo", "TRIM"),
     ] {
         assert_eq!(
-            parse_sql_statements(sql),
+            all_dialects_except(|dialect| dialect.supports_is_operator())
+                .parse_sql_statements(sql),
             Err(ParserError::ParserError(format!(
                 "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: {found}"
             ))),

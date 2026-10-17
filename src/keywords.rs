@@ -1094,6 +1094,7 @@ define_keywords!(
     TRY,
     TRY_CAST,
     TRY_CONVERT,
+    TRY_PARSE,
     TSQUERY,
     TSVECTOR,
     TUPLE,

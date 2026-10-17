@@ -1637,6 +1637,13 @@ impl Spanned for Expr {
                 data_type: _,
                 format: _,
             } => expr.span(),
+            Expr::TryParse {
+                expr,
+                data_type: _,
+                culture,
+            } => union_spans(
+                core::iter::once(expr.span()).chain(culture.as_ref().map(|expr| expr.span())),
+            ),
             Expr::AtTimeZone {
                 timestamp,
                 time_zone,

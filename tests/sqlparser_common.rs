@@ -161,7 +161,9 @@ fn parse_insert_values() {
         expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
-        match verified_stmt(sql) {
+        let dialects =
+            all_dialects_where(|d| !expected_value_keyword || d.supports_singular_value_keyword());
+        match dialects.verified_stmt(sql) {
             Statement::Insert(Insert {
                 table: table_name,
                 columns,
@@ -20698,4 +20700,16 @@ fn parse_cte_materialization() {
                 .unwrap_err();
         }
     }
+}
+
+#[test]
+fn parse_singular_value_keyword() {
+    let sql = "INSERT INTO t (a) VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_singular_value_keyword()).parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
 }

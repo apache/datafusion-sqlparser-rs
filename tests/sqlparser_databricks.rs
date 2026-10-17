@@ -784,3 +784,8 @@ fn parse_databricks_collated_data_types() {
         ))
     );
 }
+
+#[test]
+fn parse_databricks_multipart_table_query() {
+    databricks().verified_stmt("CREATE VIEW copy AS TABLE main.raw.source");
+}

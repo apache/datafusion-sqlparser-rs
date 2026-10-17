@@ -4464,6 +4464,16 @@ fn parse_xml_typed_string() {
     }
 }
 
+#[test]
+fn parse_do_statement() {
+    let dialects = pg();
+    dialects.verified_stmt("DO LANGUAGE plpgsql LANGUAGE sql $$BEGIN NULL; END$$");
+    dialects.one_statement_parses_to(
+        "DO LANGUAGE N'BEGIN NULL; END'",
+        "DO LANGUAGE nchar 'BEGIN NULL; END'",
+    );
+}
+
 fn pg() -> TestedDialects {
     TestedDialects::new(vec![Box::new(PostgreSqlDialect {})])
 }

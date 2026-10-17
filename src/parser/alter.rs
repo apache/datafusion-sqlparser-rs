@@ -13,16 +13,17 @@
 //! SQL Parser for ALTER
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::ToString, vec};
+use alloc::{boxed::Box, string::ToString, vec};
 
 use super::{Parser, ParserError};
 use crate::{
     ast::{
         helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
-        AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterUser,
-        AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
-        AlterUserPassword, AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind,
-        Password, ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
+        AlterConnector, AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRole,
+        AlterRoleOperation, AlterUser, AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation,
+        AlterUserModifyMfaMethod, AlterUserPassword, AlterUserRemoveRoleDelegation,
+        AlterUserSetPolicy, Expr, MfaMethodKind, Password, ResetConfig, RoleOption, SetConfigValue,
+        Statement, UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -136,12 +137,12 @@ impl Parser<'_> {
             None
         };
 
-        Ok(Statement::AlterConnector {
+        Ok(Statement::AlterConnector(Box::new(AlterConnector {
             name,
             properties,
             url,
             owner,
-        })
+        })))
     }
 
     /// Parse an `ALTER USER` statement
@@ -364,10 +365,10 @@ impl Parser<'_> {
             return self.expected_ref("'ADD' or 'DROP' or 'WITH NAME'", self.peek_token_ref());
         };
 
-        Ok(Statement::AlterRole {
+        Ok(Statement::AlterRole(Box::new(AlterRole {
             name: role_name,
             operation,
-        })
+        })))
     }
 
     fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
@@ -448,10 +449,10 @@ impl Parser<'_> {
             AlterRoleOperation::WithOptions { options }
         };
 
-        Ok(Statement::AlterRole {
+        Ok(Statement::AlterRole(Box::new(AlterRole {
             name: role_name,
             operation,
-        })
+        })))
     }
 
     fn parse_pg_role_option(&mut self) -> Result<RoleOption, ParserError> {

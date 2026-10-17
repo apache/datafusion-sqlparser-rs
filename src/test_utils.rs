@@ -460,10 +460,12 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
 /// [`Statement::CreateIndex`], [`Statement::CreateTable`], or [`Statement::AlterTable`].
 pub fn index_column(stmt: Statement) -> Expr {
     match stmt {
-        Statement::CreateIndex(CreateIndex { columns, .. }) => {
+        Statement::CreateIndex(create_index) => {
+            let CreateIndex { columns, .. } = *create_index;
             columns.first().unwrap().column.expr.clone()
         }
-        Statement::CreateTable(CreateTable { constraints, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { constraints, .. } = *create_table;
             match constraints.first().unwrap() {
                 TableConstraint::Index(constraint) => {
                     constraint.columns.first().unwrap().column.expr.clone()

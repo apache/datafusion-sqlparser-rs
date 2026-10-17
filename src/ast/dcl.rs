@@ -19,7 +19,7 @@
 //! (commonly referred to as Data Control Language, or DCL)
 
 #[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 
 #[cfg(feature = "serde")]
@@ -482,7 +482,7 @@ impl fmt::Display for Grant {
 
 impl From<Grant> for crate::ast::Statement {
     fn from(v: Grant) -> Self {
-        crate::ast::Statement::Grant(v)
+        crate::ast::Statement::Grant(Box::new(v))
     }
 }
 
@@ -532,6 +532,6 @@ impl fmt::Display for Revoke {
 
 impl From<Revoke> for crate::ast::Statement {
     fn from(v: Revoke) -> Self {
-        crate::ast::Statement::Revoke(v)
+        crate::ast::Statement::Revoke(Box::new(v))
     }
 }

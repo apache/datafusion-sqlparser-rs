@@ -168,17 +168,18 @@ impl fmt::Display for TriggerExecBodyType {
 pub struct TriggerExecBody {
     /// Whether the body is a `FUNCTION` or `PROCEDURE` invocation.
     pub exec_type: TriggerExecBodyType,
-    /// Description of the function/procedure to execute.
-    pub func_desc: FunctionDesc,
+    /// Name of the function/procedure to execute.
+    pub name: ObjectName,
+    /// Arguments passed to the function/procedure, if parenthesized.
+    pub args: Option<Vec<Expr>>,
 }
 
 impl fmt::Display for TriggerExecBody {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{exec_type} {func_desc}",
-            exec_type = self.exec_type,
-            func_desc = self.func_desc
-        )
+        write!(f, "{} {}", self.exec_type, self.name)?;
+        if let Some(args) = &self.args {
+            write!(f, "({})", display_comma_separated(args))?;
+        }
+        Ok(())
     }
 }

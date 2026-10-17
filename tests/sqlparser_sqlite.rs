@@ -1117,6 +1117,21 @@ fn parse_create_table_options_list() {
     }
 }
 
+#[test]
+fn parse_unterminated_block_comment() {
+    sqlite().one_statement_parses_to("SELECT 1 /* x", "SELECT 1");
+    sqlite().one_statement_parses_to("SELECT 1 /* x;", "SELECT 1");
+    assert_eq!(sqlite().parse_sql_statements("/* ;"), Ok(vec![]));
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_unterminated_block_comments())
+            .parse_sql_statements("SELECT 1 /* x"),
+        Err(ParserError::TokenizerError(
+            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 14".to_string()
+        ))
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

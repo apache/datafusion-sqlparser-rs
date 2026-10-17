@@ -142,4 +142,8 @@ impl Dialect for SQLiteDialect {
     fn supports_national_string_literal(&self) -> bool {
         false
     }
+
+    fn supports_aggregate_order_by_with_empty_args(&self) -> bool {
+        true
+    }
 }

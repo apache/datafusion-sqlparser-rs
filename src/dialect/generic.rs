@@ -24,6 +24,10 @@ use crate::dialect::Dialect;
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
+    fn supports_create_table_skewed_by(&self) -> bool {
+        true
+    }
+
     fn supports_map_typedef_with_parentheses(&self) -> bool {
         true
     }

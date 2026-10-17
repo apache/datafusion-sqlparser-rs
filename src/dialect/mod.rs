@@ -1524,6 +1524,14 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_table_alias(kw, parser)
     }
 
+    /// Returns true if a single-quoted string can be an alias, as in `SELECT 1 AS 'x'`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/problems-with-alias.html),
+    /// [SQLite](https://www.sqlite.org/lang_keywords.html)
+    fn supports_string_literal_alias(&self) -> bool {
+        true
+    }
+
     /// Returns true if this dialect supports querying historical table data
     /// by specifying which version of the data to query.
     fn supports_table_versioning(&self) -> bool {

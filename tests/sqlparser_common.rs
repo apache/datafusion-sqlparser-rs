@@ -1219,10 +1219,10 @@ fn parse_select_wildcard() {
 
 #[test]
 fn parse_count_wildcard() {
-    verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
+    verified_only_select("SELECT COUNT(*) FROM orders WHERE id = 10");
 
     verified_only_select(
-        "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
+        "SELECT COUNT(Employee.*) FROM orders JOIN Employee ON orders.employee = Employee.id",
     );
 }
 
@@ -17822,7 +17822,7 @@ fn parse_pipeline_operator_negative_tests() {
         // Test that JOIN without table name fails
         (
             "SELECT * FROM users |> JOIN ON users.id = orders.user_id",
-            "Expected: end of statement, found: .",
+            "Expected: table name, found: ON",
         ),
         // Test that CROSS JOIN with ON condition fails
         (
@@ -20676,4 +20676,27 @@ fn parse_array_suffix_after_nested_type() {
         d.supports_struct_literal() && d.supports_map_literal_with_angle_brackets()
     })
     .verified_stmt("SELECT CAST(NULL AS MAP<INT, STRUCT<a INT>> ARRAY)");
+}
+
+#[test]
+fn on_keyword_rejected_as_table_name() {
+    let dialects = all_dialects_where(|d| !d.is_table_factor(&Keyword::ON, &mut Parser::new(d)));
+    for sql in [
+        "SELECT * FROM ON",
+        "SELECT * FROM t JOIN ON",
+        "SELECT * FROM t JOIN ON u ON TRUE",
+    ] {
+        assert_eq!(
+            ParserError::ParserError("Expected: table name, found: ON".to_string()),
+            dialects.parse_sql_statements(sql).unwrap_err()
+        );
+    }
+}
+
+#[test]
+fn quoted_on_allowed_as_table_name() {
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('"'));
+    dialects.verified_stmt(r#"SELECT * FROM "ON""#);
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('`'));
+    dialects.verified_stmt("SELECT * FROM `ON`");
 }

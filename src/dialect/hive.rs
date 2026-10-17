@@ -16,6 +16,8 @@
 // under the License.
 
 use crate::dialect::Dialect;
+use crate::keywords::{Keyword, RESERVED_FOR_TABLE_FACTOR};
+use crate::parser::Parser;
 
 /// A [`Dialect`] for [Hive](https://hive.apache.org/).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -44,6 +46,12 @@ impl Dialect for HiveDialect {
             || ch == '$'
             || ch == '{'
             || ch == '}'
+    }
+
+    /// LIMIT is not reserved in Hive; identifiers may be nonReserved keywords.
+    /// See <https://github.com/apache/hive/blob/4e9caba7c02a947a39c60de427acb7189c8c1fe8/parser/src/java/org/apache/hadoop/hive/ql/parse/IdentifiersParser.g#L945>
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        kw == &Keyword::LIMIT || !RESERVED_FOR_TABLE_FACTOR.contains(kw)
     }
 
     fn supports_filter_during_aggregation(&self) -> bool {

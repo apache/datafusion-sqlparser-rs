@@ -3004,3 +3004,9 @@ fn parse_create_proc() {
         .expect_err("PROC should remain MSSQL-specific");
     ms_and_generic().verified_stmt("SELECT proc FROM jobs");
 }
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    ms().verified_stmt("SELECT * FROM limit");
+    ms().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}

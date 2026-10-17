@@ -2376,3 +2376,11 @@ fn clickhouse_and_generic() -> TestedDialects {
         Box::new(GenericDialect {}),
     ])
 }
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    for table_name in ["into", "limit", "having", "where", "on"] {
+        clickhouse().verified_stmt(&format!("SELECT * FROM {table_name}"));
+        clickhouse().verified_stmt(&format!("SELECT * FROM t JOIN {table_name} ON true"));
+    }
+}

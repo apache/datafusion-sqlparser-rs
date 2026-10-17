@@ -3242,29 +3242,48 @@ impl fmt::Display for CreateTable {
         }
 
         match &self.hive_distribution {
-            HiveDistributionStyle::PARTITIONED { columns } => {
-                write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
-            }
-            HiveDistributionStyle::SKEWED {
-                columns,
-                on,
-                stored_as_directories,
+            HiveDistributionStyle::PARTITIONED { columns }
+            | HiveDistributionStyle::PartitionedAndSkewed {
+                partitioned_columns: columns,
+                ..
             } => {
-                write!(
-                    f,
-                    " SKEWED BY ({})) ON ({})",
-                    display_comma_separated(columns),
-                    display_comma_separated(on)
-                )?;
-                if *stored_as_directories {
-                    write!(f, " STORED AS DIRECTORIES")?;
-                }
+                write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
             }
             _ => (),
         }
 
         if let Some(clustered_by) = &self.clustered_by {
             write!(f, " {clustered_by}")?;
+        }
+
+        if let HiveDistributionStyle::SKEWED {
+            columns,
+            on,
+            stored_as_directories,
+        }
+        | HiveDistributionStyle::PartitionedAndSkewed {
+            columns,
+            on,
+            stored_as_directories,
+            ..
+        } = &self.hive_distribution
+        {
+            write!(f, " SKEWED BY ({}) ON (", display_comma_separated(columns))?;
+            let tuples = columns.len() != 1 || on.iter().any(|values| values.len() != 1);
+            for (index, values) in on.iter().enumerate() {
+                if index > 0 {
+                    write!(f, ", ")?;
+                }
+                if tuples {
+                    write!(f, "({})", display_comma_separated(values))?;
+                } else {
+                    write!(f, "{}", display_comma_separated(values))?;
+                }
+            }
+            write!(f, ")")?;
+            if *stored_as_directories {
+                write!(f, " STORED AS DIRECTORIES")?;
+            }
         }
 
         if let Some(HiveFormat {

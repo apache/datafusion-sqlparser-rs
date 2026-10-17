@@ -576,3 +576,233 @@ fn hive() -> TestedDialects {
 fn hive_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})])
 }
+
+#[test]
+fn create_table_with_skewed_by_single_column() {
+    for sql in [
+        "CREATE TABLE test (id STRING) SKEWED BY (id) ON ('a', 'b')",
+        concat!(
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON ('a', 'b')",
+            " STORED AS DIRECTORIES"
+        ),
+    ] {
+        hive_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn create_table_with_skewed_by_single_column_tuples() {
+    hive_and_generic().one_statement_parses_to(
+        "CREATE TABLE test (id STRING) SKEWED BY (id) ON (('a'), ('b'))",
+        "CREATE TABLE test (id STRING) SKEWED BY (id) ON ('a', 'b')",
+    );
+}
+
+#[test]
+fn create_table_with_skewed_by_constant_values() {
+    hive_and_generic().verified_stmt(concat!(
+        "CREATE TABLE test (id STRING)",
+        " SKEWED BY (id) ON (NULL, true, false, 1, 2.5, 'a')"
+    ));
+}
+
+#[test]
+fn create_table_with_skewed_by_multiple_columns() {
+    for sql in [
+        "CREATE TABLE test (id INT, name STRING) SKEWED BY (id, name) ON ((1, 'a'), (2, 'b'))",
+        concat!(
+            "CREATE TABLE test (id INT, name STRING)",
+            " SKEWED BY (id, name) ON ((1, 'a'), (2, 'b')) STORED AS DIRECTORIES"
+        ),
+    ] {
+        hive_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn create_table_with_clustered_and_skewed_by() {
+    hive_and_generic().verified_stmt(concat!(
+        "CREATE TABLE test (id STRING) CLUSTERED BY (id) INTO 4 BUCKETS",
+        " SKEWED BY (id) ON ('a', 'b') STORED AS DIRECTORIES"
+    ));
+}
+
+#[test]
+fn create_table_with_partitioned_clustered_and_skewed_by() {
+    hive_and_generic().verified_stmt(concat!(
+        "CREATE TABLE test (id INT, name STRING) PARTITIONED BY (region STRING)",
+        " CLUSTERED BY (id) INTO 4 BUCKETS",
+        " SKEWED BY (id, name) ON ((1, 'a'), (2, 'b')) STORED AS DIRECTORIES"
+    ));
+}
+
+#[test]
+fn create_external_table_with_skewed_by() {
+    hive_and_generic().verified_stmt(concat!(
+        "CREATE EXTERNAL TABLE test (id STRING)",
+        " SKEWED BY (id) ON ('a', 'b') STORED AS DIRECTORIES"
+    ));
+}
+
+#[test]
+fn create_external_table_with_clustered_and_skewed_by() {
+    hive_and_generic().verified_stmt(concat!(
+        "CREATE EXTERNAL TABLE test (id INT, name STRING)",
+        " CLUSTERED BY (id) INTO 4 BUCKETS",
+        " SKEWED BY (id, name) ON ((1, 'a'), (2, 'b'))"
+    ));
+}
+
+#[test]
+fn create_table_with_skewed_by_rejects_column_definitions() {
+    assert_eq!(
+        hive_and_generic()
+            .parse_sql_statements("CREATE TABLE test (id STRING) SKEWED BY (id STRING) ON ('a')")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: STRING".to_string())
+    );
+}
+
+#[test]
+fn create_table_with_skewed_by_rejects_identifier_values() {
+    for (sql, expected) in [
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON (id)",
+            "Expected: a constant value, found: id",
+        ),
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON (`id`)",
+            "Expected: a constant value, found: `id`",
+        ),
+    ] {
+        assert_eq!(
+            hive_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn create_table_with_skewed_by_rejects_empty_lists() {
+    for (sql, expected) in [
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY () ON ('a')",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON ()",
+            "Expected: a constant value, found: )",
+        ),
+        (
+            "CREATE TABLE test (id INT, name STRING) SKEWED BY (id, name) ON (())",
+            "Expected: a constant value, found: )",
+        ),
+    ] {
+        assert_eq!(
+            hive_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn create_table_with_skewed_by_rejects_extra_parentheses() {
+    assert_eq!(
+        hive_and_generic()
+            .parse_sql_statements(concat!(
+                "CREATE TABLE test (id INT, name STRING)",
+                " SKEWED BY (id, name) ON (((1, 'a')))"
+            ))
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a constant value, found: (".to_string())
+    );
+}
+
+#[test]
+fn create_table_with_skewed_by_rejects_expression_values() {
+    for (sql, expected) in [
+        (
+            "CREATE TABLE test (id INT) SKEWED BY (id) ON (1 + 1)",
+            "Expected: ), found: +",
+        ),
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON (concat('a', 'b'))",
+            "Expected: a constant value, found: concat",
+        ),
+        (
+            concat!(
+                "CREATE TABLE test (id INT, name STRING)",
+                " SKEWED BY (id, name) ON ((1 + 1, 'a'))"
+            ),
+            "Expected: ), found: +",
+        ),
+        (
+            "CREATE TABLE test (id INT) SKEWED BY (id) ON (-1)",
+            "Expected: a constant value, found: -",
+        ),
+        (
+            "CREATE TABLE test (id INT) SKEWED BY (id) ON (+1)",
+            "Expected: a constant value, found: +",
+        ),
+    ] {
+        assert_eq!(
+            hive_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn create_table_with_skewed_by_placeholder_and_typed_constants() {
+    hive_and_generic().verified_stmt(concat!(
+        "CREATE TABLE test (id STRING) SKEWED BY (id)",
+        " ON (?, \"a\", DATE '2026-10-17', TIMESTAMP '2026-10-17 12:34:56')"
+    ));
+}
+
+#[test]
+fn create_table_with_skewed_by_rejects_invalid_typed_constants() {
+    for (sql, expected) in [
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON (DATE 1)",
+            "Expected: a string literal, found: 1",
+        ),
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON (DATE(foo))",
+            "Expected: a string literal, found: (",
+        ),
+        (
+            "CREATE TABLE test (id STRING) SKEWED BY (id) ON (TIMESTAMP ?)",
+            "Expected: a string literal, found: ?",
+        ),
+    ] {
+        assert_eq!(
+            hive_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn create_table_with_skewed_by_rejects_mixed_value_lists() {
+    for (sql, expected) in [
+        (
+            "CREATE TABLE test (id INT) SKEWED BY (id) ON (1, (2))",
+            "Expected: a constant value, found: (",
+        ),
+        (
+            "CREATE TABLE test (id INT) SKEWED BY (id) ON ((1), 2)",
+            "Expected: (, found: 2",
+        ),
+    ] {
+        assert_eq!(
+            hive_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

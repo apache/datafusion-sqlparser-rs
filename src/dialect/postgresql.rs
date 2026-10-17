@@ -285,6 +285,8 @@ impl Dialect for PostgreSqlDialect {
     /// ```sql
     /// SELECT from table_name
     /// ```
+    ///
+    /// The target list is optional in <https://www.postgresql.org/docs/current/sql-select.html>
     fn supports_empty_projections(&self) -> bool {
         true
     }

@@ -28,6 +28,14 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_string_literal_column_alias(&self, explicit: bool) -> bool {
+        explicit
+    }
+
+    fn supports_string_literal_table_alias(&self, explicit: bool) -> bool {
+        explicit
+    }
+
     fn supports_trailing_commas(&self) -> bool {
         true
     }

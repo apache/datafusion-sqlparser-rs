@@ -27,6 +27,18 @@ impl Dialect for HiveDialect {
         (ch == '"') || (ch == '`')
     }
 
+    /// The alias is an `identifier`, see `selectItem` in
+    /// <https://github.com/apache/hive/blob/master/parser/src/java/org/apache/hadoop/hive/ql/parse/SelectClauseParser.g>
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// The alias is an `identifier`, see `tableSource` in
+    /// <https://github.com/apache/hive/blob/master/parser/src/java/org/apache/hadoop/hive/ql/parse/FromClauseParser.g>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
     /// See <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-RulesforColumnNames>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')

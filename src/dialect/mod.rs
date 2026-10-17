@@ -445,6 +445,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `ON`/`USING` after a comma-joined table,
+    /// e.g. `SELECT * FROM t, u ON t.a = u.a`.
+    ///
+    /// [SQLite](https://www.sqlite.org/syntax/join-clause.html)
+    fn supports_comma_join_constraint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
         false

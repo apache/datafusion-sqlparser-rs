@@ -939,3 +939,40 @@ fn test_duckdb_nested_block_comments() {
         ))
     );
 }
+
+#[test]
+fn parse_create_macro_without_arguments() {
+    duckdb_and_generic().verified_stmt("CREATE MACRO four() AS 4");
+    duckdb_and_generic()
+        .verified_stmt("CREATE OR REPLACE TEMPORARY MACRO nothing() AS TABLE SELECT 1");
+    duckdb().one_statement_parses_to("CREATE FUNCTION add() AS 1", "CREATE MACRO add() AS 1");
+}
+
+#[test]
+fn display_create_macro_propagates_argument_list_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for sql in [
+        "CREATE MACRO four() AS 4",
+        "CREATE MACRO add(a, b) AS a + b",
+        "CREATE MACRO nothing() AS TABLE SELECT 1",
+    ] {
+        let statement = duckdb_and_generic().verified_stmt(sql);
+        for rejected in ['(', ')'] {
+            let mut writer = RejectingWriter(rejected);
+            assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+        }
+    }
+}

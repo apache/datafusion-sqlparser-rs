@@ -135,6 +135,11 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    /// See <https://clickhouse.com/docs/sql-reference/syntax#comments>
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
     /// See <https://clickhouse.com/docs/en/sql-reference/statements/optimize>
     fn supports_optimize_table(&self) -> bool {
         true

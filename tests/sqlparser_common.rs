@@ -13253,22 +13253,27 @@ fn test_release_savepoint() {
 
 #[test]
 fn test_comment_hash_syntax() {
-    let dialects = TestedDialects::new(vec![
-        Box::new(BigQueryDialect {}),
-        Box::new(SnowflakeDialect {}),
-        Box::new(MySqlDialect {}),
-        Box::new(HiveDialect {}),
-    ]);
     let sql = r#"
     # comment
     SELECT a, b, c # , d, e
     FROM T
     ####### comment #################
-    WHERE true
+    WHERE true # it's a comment
     # comment
     "#;
     let canonical = "SELECT a, b, c FROM T WHERE true";
-    dialects.verified_only_select_with_canonical(sql, canonical);
+    all_dialects_where(|d| d.supports_hash_comment())
+        .verified_only_select_with_canonical(sql, canonical);
+
+    // Elsewhere `#` is an operator, so the apostrophe starts an unterminated string.
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_hash_comment())
+            .parse_sql_statements("SELECT 1 # it's a comment")
+            .unwrap_err(),
+        ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 14".to_string()
+        )
+    );
 }
 
 #[test]

@@ -249,6 +249,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-comment.html>
     fn supports_comment_on(&self) -> bool {
         true

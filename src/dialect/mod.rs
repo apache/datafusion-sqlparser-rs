@@ -2272,10 +2272,6 @@ mod tests {
                 self.0.supports_group_by_expr()
             }
 
-            fn supports_cte_materialization(&self) -> bool {
-                self.0.supports_cte_materialization()
-            }
-
             fn supports_in_empty_list(&self) -> bool {
                 self.0.supports_in_empty_list()
             }

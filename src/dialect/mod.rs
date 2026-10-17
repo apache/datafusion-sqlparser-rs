@@ -1325,6 +1325,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the MySQL `LOAD DATA ... INFILE` statement
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/load-data.html>
+    fn supports_load_data_infile(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LOAD extension` statement
     fn supports_load_extension(&self) -> bool {
         false

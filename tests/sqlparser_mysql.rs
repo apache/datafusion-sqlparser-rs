@@ -5196,3 +5196,82 @@ fn parse_alter_table_column_position() {
         );
     }
 }
+
+#[test]
+fn parse_load_data_infile() {
+    mysql().verified_stmt(
+        "LOAD DATA LOCAL INFILE '/tmp/x.csv' REPLACE INTO TABLE t FIELDS TERMINATED BY '|' (a, b, c)",
+    );
+    mysql().verified_stmt(
+        "LOAD DATA LOCAL INFILE '/tmp/x.csv' IGNORE INTO TABLE t FIELDS TERMINATED BY '|' (a, b)",
+    );
+    mysql().verified_stmt(
+        "LOAD DATA LOCAL INFILE '/tmp/x.csv' INTO TABLE t FIELDS TERMINATED BY ',' (a)",
+    );
+
+    match mysql().verified_stmt(
+        "LOAD DATA LOCAL INFILE '/tmp/x.csv' REPLACE INTO TABLE db.t FIELDS TERMINATED BY '|' (a, b)",
+    ) {
+        Statement::LoadDataInfile(load) => {
+            assert!(load.local);
+            assert_eq!(load.infile, "/tmp/x.csv");
+            assert_eq!(load.duplicates, Some(LoadDataDuplicates::Replace));
+            assert_eq!(
+                load.table_name,
+                ObjectName::from(vec![Ident::new("db"), Ident::new("t")])
+            );
+            assert_eq!(load.fields.unwrap().terminated_by.as_deref(), Some("|"));
+            assert_eq!(load.columns, vec![Ident::new("a"), Ident::new("b")]);
+        }
+        _ => unreachable!(),
+    }
+
+    // Minimal and fully-specified forms
+    mysql().verified_stmt("LOAD DATA INFILE 'f' INTO TABLE t");
+    mysql().verified_stmt(
+        "LOAD DATA LOW_PRIORITY LOCAL INFILE 'f' IGNORE INTO TABLE t PARTITION (p0, p1) CHARACTER SET utf8mb4 FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' ESCAPED BY '#' LINES STARTING BY 'x' TERMINATED BY ';' IGNORE 1 LINES (a, b) SET c = a + 1, d = NULL",
+    );
+    mysql().verified_stmt("LOAD DATA CONCURRENT INFILE 'f' INTO TABLE t");
+    mysql().verified_stmt("LOAD DATA INFILE 'f' INTO TABLE t (a, @v) SET b = @v, c = DEFAULT");
+
+    // Backslash escapes round-trip when unescaping is disabled
+    TestedDialects::new_with_options(
+        vec![Box::new(MySqlDialect {})],
+        ParserOptions::new().with_unescape(false),
+    )
+    .verified_stmt(
+        r"LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY ',' ESCAPED BY '\\' LINES TERMINATED BY '\n'",
+    );
+
+    // `COLUMNS` and `ROWS` are accepted and normalized
+    mysql().one_statement_parses_to(
+        "LOAD DATA INFILE 'f' INTO TABLE t COLUMNS ENCLOSED BY '\"' IGNORE 2 ROWS",
+        "LOAD DATA INFILE 'f' INTO TABLE t FIELDS ENCLOSED BY '\"' IGNORE 2 LINES",
+    );
+
+    // Not supported by dialects without `INFILE` support
+    assert!(all_dialects_where(|d| {
+        !d.supports_load_data_infile() && !d.supports_load_data() && !d.supports_load_extension()
+    })
+    .parse_sql_statements("LOAD DATA INFILE 'f' INTO TABLE t")
+    .is_err());
+
+    for sql in [
+        "LOAD DATA INFILE INTO TABLE t",
+        "LOAD DATA INFILE 'f' TABLE t",
+        "LOAD DATA INFILE 'f' INTO t",
+        "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED '|'",
+        "LOAD DATA INFILE 'f' INTO TABLE t FIELDS OPTIONALLY TERMINATED BY '|'",
+        "LOAD DATA INFILE 'f' INTO TABLE t FIELDS",
+        "LOAD DATA INFILE 'f' INTO TABLE t FIELDS ENCLOSED BY '\"' TERMINATED BY ','",
+        "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY ',' TERMINATED BY ';'",
+        "LOAD DATA INFILE 'f' INTO TABLE t LINES",
+        "LOAD DATA INFILE 'f' INTO TABLE t LINES TERMINATED BY ';' STARTING BY 'x'",
+        "LOAD DATA INFILE 'f' INTO TABLE t LINES TERMINATED BY ';' FIELDS TERMINATED BY ','",
+        "LOAD DATA INPATH 'f' INTO TABLE t",
+        "LOAD DATA INFILE 'f' INTO TABLE t IGNORE 1",
+        "LOAD DATA INFILE 'f' INTO TABLE t SET",
+    ] {
+        assert!(mysql().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}

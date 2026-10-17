@@ -20539,11 +20539,119 @@ impl<'a> Parser<'a> {
         Ok(Statement::Install { extension_name })
     }
 
+    /// Parse MySQL `LOAD DATA ... INFILE` after `LOAD DATA`.
+    fn parse_load_data_infile(&mut self) -> Result<Statement, ParserError> {
+        // Optional `<keyword> BY '<string>'`
+        let by = |parser: &mut Self, keyword: Keyword| -> Result<Option<String>, ParserError> {
+            if parser.parse_keywords(&[keyword, Keyword::BY]) {
+                Ok(Some(parser.parse_literal_string()?))
+            } else {
+                Ok(None)
+            }
+        };
+        let priority =
+            match self.parse_one_of_keywords(&[Keyword::LOW_PRIORITY, Keyword::CONCURRENT]) {
+                Some(Keyword::LOW_PRIORITY) => Some(LoadDataPriority::LowPriority),
+                Some(_) => Some(LoadDataPriority::Concurrent),
+                None => None,
+            };
+        let local = self.parse_keyword(Keyword::LOCAL);
+        self.expect_keyword_is(Keyword::INFILE)?;
+        let infile = self.parse_literal_string()?;
+        let duplicates = match self.parse_one_of_keywords(&[Keyword::REPLACE, Keyword::IGNORE]) {
+            Some(Keyword::REPLACE) => Some(LoadDataDuplicates::Replace),
+            Some(_) => Some(LoadDataDuplicates::Ignore),
+            None => None,
+        };
+        self.expect_keywords(&[Keyword::INTO, Keyword::TABLE])?;
+        let table_name = self.parse_object_name(false)?;
+        let partitions = if self.parse_keyword(Keyword::PARTITION) {
+            Some(self.parse_parenthesized_column_list(Mandatory, false)?)
+        } else {
+            None
+        };
+        let character_set = if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        let fields = if self
+            .parse_one_of_keywords(&[Keyword::FIELDS, Keyword::COLUMNS])
+            .is_some()
+        {
+            let terminated_by = by(self, Keyword::TERMINATED)?;
+            let optionally_enclosed = self.parse_keyword(Keyword::OPTIONALLY);
+            let enclosed_by = if optionally_enclosed {
+                self.expect_keywords(&[Keyword::ENCLOSED, Keyword::BY])?;
+                Some(self.parse_literal_string()?)
+            } else {
+                by(self, Keyword::ENCLOSED)?
+            };
+            let escaped_by = by(self, Keyword::ESCAPED)?;
+            if terminated_by.is_none() && enclosed_by.is_none() && escaped_by.is_none() {
+                return self.expected_ref(
+                    "TERMINATED BY, ENCLOSED BY or ESCAPED BY",
+                    self.peek_token_ref(),
+                );
+            }
+            Some(LoadDataFields {
+                terminated_by,
+                optionally_enclosed,
+                enclosed_by,
+                escaped_by,
+            })
+        } else {
+            None
+        };
+        let lines = if self.parse_keyword(Keyword::LINES) {
+            let starting_by = by(self, Keyword::STARTING)?;
+            let terminated_by = by(self, Keyword::TERMINATED)?;
+            if starting_by.is_none() && terminated_by.is_none() {
+                return self.expected_ref("STARTING BY or TERMINATED BY", self.peek_token_ref());
+            }
+            Some(LoadDataLines {
+                starting_by,
+                terminated_by,
+            })
+        } else {
+            None
+        };
+        let ignore_lines = if self.parse_keyword(Keyword::IGNORE) {
+            let n = self.parse_literal_uint()?;
+            self.expect_one_of_keywords(&[Keyword::LINES, Keyword::ROWS])?;
+            Some(n)
+        } else {
+            None
+        };
+        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+        let set = if self.parse_keyword(Keyword::SET) {
+            self.parse_comma_separated(Parser::parse_assignment)?
+        } else {
+            vec![]
+        };
+        Ok(Statement::LoadDataInfile(LoadDataInfile {
+            priority,
+            local,
+            infile,
+            duplicates,
+            table_name,
+            partitions,
+            character_set,
+            fields,
+            lines,
+            ignore_lines,
+            columns,
+            set,
+        }))
+    }
+
     /// Parse a SQL LOAD statement
     pub fn parse_load(&mut self) -> Result<Statement, ParserError> {
         if self.dialect.supports_load_extension() {
             let extension_name = self.parse_identifier()?;
             Ok(Statement::Load { extension_name })
+        } else if self.dialect.supports_load_data_infile() && self.parse_keyword(Keyword::DATA) {
+            self.parse_load_data_infile()
         } else if self.parse_keyword(Keyword::DATA) && self.dialect.supports_load_data() {
             let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
             self.expect_keyword_is(Keyword::INPATH)?;

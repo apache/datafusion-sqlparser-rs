@@ -15349,7 +15349,7 @@ impl<'a> Parser<'a> {
         };
 
         let mut is_materialized = None;
-        if dialect_of!(self is PostgreSqlDialect) {
+        if self.dialect.supports_cte_materialization() {
             if self.parse_keyword(Keyword::MATERIALIZED) {
                 is_materialized = Some(CteAsMaterialized::Materialized);
             } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {

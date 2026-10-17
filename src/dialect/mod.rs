@@ -386,6 +386,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `AS MATERIALIZED` and `AS NOT MATERIALIZED`
+    /// in a common table expression.
+    ///
+    /// ```sql
+    /// WITH cte AS MATERIALIZED (SELECT 1) SELECT * FROM cte
+    /// ```
+    fn supports_cte_materialization(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false
@@ -2260,6 +2270,10 @@ mod tests {
 
             fn supports_group_by_expr(&self) -> bool {
                 self.0.supports_group_by_expr()
+            }
+
+            fn supports_cte_materialization(&self) -> bool {
+                self.0.supports_cte_materialization()
             }
 
             fn supports_in_empty_list(&self) -> bool {

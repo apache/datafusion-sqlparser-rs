@@ -20677,3 +20677,34 @@ fn parse_array_suffix_after_nested_type() {
     })
     .verified_stmt("SELECT CAST(NULL AS MAP<INT, STRUCT<a INT>> ARRAY)");
 }
+
+#[test]
+fn parse_tilde_like_match_operators() {
+    let like_match = all_dialects_where(|d| d.supports_tilde_like_match_operator());
+    for (op, expected) in [
+        ("~~", BinaryOperator::PGLikeMatch),
+        ("~~*", BinaryOperator::PGILikeMatch),
+        ("!~~", BinaryOperator::PGNotLikeMatch),
+        ("!~~*", BinaryOperator::PGNotILikeMatch),
+    ] {
+        let select = like_match.verified_only_select(&format!("SELECT a {op} b"));
+        assert_eq!(
+            select.projection[0],
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: expected,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            })
+        );
+    }
+    assert_eq!(
+        like_match.parse_sql_statements("SELECT ~~a"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: ~~".to_string()
+        ))
+    );
+
+    let bitwise_not = all_dialects_where(|d| !d.supports_tilde_like_match_operator());
+    bitwise_not.one_statement_parses_to("SELECT ~~a", "SELECT ~ ~ a");
+    bitwise_not.one_statement_parses_to("SELECT ~~~a", "SELECT ~ ~ ~ a");
+}

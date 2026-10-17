@@ -65,6 +65,10 @@ impl Dialect for MsSqlDialect {
         true
     }
 
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
+
     /// SQL Server supports `$` as a prefix for money literals
     /// <https://learn.microsoft.com/en-us/sql/t-sql/data-types/constants-transact-sql?view=sql-server-ver17#money-constants>
     fn supports_dollar_as_money_prefix(&self) -> bool {

@@ -31,6 +31,10 @@ impl Dialect for DatabricksDialect {
         matches!(ch, '`')
     }
 
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-identifiers.html>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')

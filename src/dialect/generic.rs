@@ -197,6 +197,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     fn supports_comment_on(&self) -> bool {
         true
     }

@@ -20677,3 +20677,25 @@ fn parse_array_suffix_after_nested_type() {
     })
     .verified_stmt("SELECT CAST(NULL AS MAP<INT, STRUCT<a INT>> ARRAY)");
 }
+
+#[test]
+fn parse_cte_materialization() {
+    for (directive, expected) in [
+        ("", None),
+        ("MATERIALIZED ", Some(CteAsMaterialized::Materialized)),
+        (
+            "NOT MATERIALIZED ",
+            Some(CteAsMaterialized::NotMaterialized),
+        ),
+    ] {
+        let sql = format!("WITH c AS {directive}(SELECT 1) SELECT * FROM c");
+        TestedDialects::new(vec![Box::new(DuckDbDialect {})]).verified_query(&sql);
+        let query = all_dialects_where(|d| d.supports_cte_materialization()).verified_query(&sql);
+        assert_eq!(query.with.unwrap().cte_tables[0].materialized, expected);
+        if expected.is_some() {
+            all_dialects_where(|d| !d.supports_cte_materialization())
+                .parse_sql_statements(&sql)
+                .unwrap_err();
+        }
+    }
+}

@@ -8855,7 +8855,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE` statement.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each flag is a `CREATE` modifier the caller parsed before `TABLE`"
+    )]
     pub fn parse_create_table(
         &mut self,
         or_replace: bool,
@@ -16855,7 +16858,6 @@ impl<'a> Parser<'a> {
             // followed by some joins or (B) another level of nesting.
             let mut table_and_joins = self.parse_table_and_joins()?;
 
-            #[allow(clippy::if_same_then_else)]
             if !table_and_joins.joins.is_empty() {
                 self.expect_token(&Token::RParen)?;
                 let alias = self.maybe_parse_table_alias()?;

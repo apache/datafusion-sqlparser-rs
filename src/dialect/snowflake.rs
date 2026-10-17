@@ -866,7 +866,10 @@ fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, Pars
 /// Parse snowflake create table statement.
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each flag is a `CREATE` modifier the caller parsed before `TABLE`"
+)]
 pub fn parse_create_table(
     or_replace: bool,
     global: Option<bool>,

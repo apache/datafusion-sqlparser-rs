@@ -143,7 +143,6 @@ impl fmt::Display for ProjectionSelect {
 
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

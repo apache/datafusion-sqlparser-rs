@@ -1,0 +1,1 @@
+SELECT INTERVAL + 1 AS value, TRIM, SUBSTRING FROM dbo.example WHERE TRIM = 'value'

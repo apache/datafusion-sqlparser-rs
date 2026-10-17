@@ -1281,6 +1281,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `#` as the start of a single line comment,
+    /// e.g. `SELECT 1 # comment`
+    fn supports_hash_comment(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports optimizer hints in multiline comments
     /// e.g. `/*!50110 KEY_BLOCK_SIZE = 1024*/`
     fn supports_multiline_comment_hints(&self) -> bool {

@@ -163,6 +163,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
     fn supports_match_against(&self) -> bool {
         true
     }

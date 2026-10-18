@@ -183,7 +183,7 @@ fn parse_insert_values() {
                         ..
                     }) => {
                         assert_eq!(rows.as_slice(), expected_rows);
-                        assert!(value_keyword == expected_value_keyword);
+                        assert_eq!(value_keyword, expected_value_keyword);
                     }
                     _ => unreachable!(),
                 }
@@ -4729,7 +4729,6 @@ fn parse_assert() {
 }
 
 #[test]
-#[allow(clippy::collapsible_match)]
 fn parse_assert_message() {
     let sql = "ASSERT (SELECT COUNT(*) FROM my_table) > 0 AS 'No rows in my_table'";
     let ast = one_statement_parses_to(
@@ -4739,16 +4738,12 @@ fn parse_assert_message() {
     match ast {
         Statement::Assert {
             condition: _condition,
-            message: Some(message),
-        } => {
-            match message {
-                Expr::Value(ValueWithSpan {
+            message:
+                Some(Expr::Value(ValueWithSpan {
                     value: Value::SingleQuotedString(s),
                     span: _,
-                }) => assert_eq!(s, "No rows in my_table"),
-                _ => unreachable!(),
-            };
-        }
+                })),
+        } => assert_eq!(s, "No rows in my_table"),
         _ => unreachable!(),
     }
 }
@@ -16410,6 +16405,43 @@ fn overflow() {
 }
 
 #[test]
+fn long_set_operation_chain_display_does_not_stack_overflow() {
+    // Small stack so the check does not depend on the platform's default
+    // test-thread stack: without recursive-protection this chain overflows it.
+    fn drop_chain_iteratively(mut expr: Box<SetExpr>) {
+        // Iterative teardown: recursive drop glue would also overflow.
+        loop {
+            match *expr {
+                SetExpr::SetOperation { left, .. } => expr = left,
+                _ => return,
+            }
+        }
+    }
+
+    std::thread::Builder::new()
+        .stack_size(256 * 1024)
+        .spawn(|| {
+            let mut sql = String::from("SELECT 1");
+            for i in 2..=25_000 {
+                sql.push_str(&format!(" UNION ALL SELECT {i}"));
+            }
+
+            let mut statements = Parser::parse_sql(&GenericDialect {}, &sql).unwrap();
+            let statement = statements.pop().unwrap();
+            assert_eq!(statement.to_string(), sql);
+
+            let Statement::Query(query) = statement else {
+                panic!("expected a query");
+            };
+            let Query { body, .. } = *query;
+            drop_chain_iteratively(body);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn parse_deeply_nested_boolean_expr_does_not_stackoverflow() {
     fn build_nested_expr(depth: usize) -> String {
         if depth == 0 {
@@ -19716,6 +19748,8 @@ fn parse_select_parenthesized_wildcard() {
 fn parse_overlap_as_bool_and() {
     let dialects = all_dialects_where(|d| d.supports_double_ampersand_operator());
     dialects.one_statement_parses_to("SELECT x && y", "SELECT x AND y");
+    dialects.one_statement_parses_to("SELECT x = a && c", "SELECT x = a AND c");
+    dialects.one_statement_parses_to("SELECT x < 1 && y > 2", "SELECT x < 1 AND y > 2");
 }
 
 #[test]
@@ -20605,5 +20639,63 @@ fn parse_position_in_connect_by_list_after_state_change() {
             core::ops::ControlFlow::<()>::Continue(())
         });
         assert_eq!(positions, 1, "{dialect:?}");
+    }
+}
+
+#[test]
+fn parse_array_suffix_after_nested_type() {
+    // When `>>` closes two types at once, a following array suffix belongs to the outer one.
+    let dialects = all_dialects_where(|d| {
+        d.supports_struct_literal() && d.supports_array_typedef_with_brackets()
+    });
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[])");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>[]>)");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b STRUCT<c INT>>>[])");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[][2])");
+    dialects.verified_stmt("SELECT CAST(NULL AS ARRAY<ARRAY<INT>>[])");
+    dialects.verified_stmt("SELECT CAST(NULL AS ARRAY<STRUCT<a INT>>[])");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[)"),
+        Err(ParserError::ParserError(
+            "Expected: ], found: )".to_string()
+        ))
+    );
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>>[x])"),
+        Err(ParserError::ParserError(
+            "Expected: ], found: x".to_string()
+        ))
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_struct_literal());
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>> ARRAY)");
+    dialects.verified_stmt("SELECT CAST(NULL AS STRUCT<a STRUCT<b INT>> ARRAY[2])");
+    dialects.verified_stmt("SELECT CAST(NULL AS ARRAY<STRUCT<a INT>> ARRAY)");
+
+    all_dialects_where(|d| {
+        d.supports_struct_literal() && d.supports_map_literal_with_angle_brackets()
+    })
+    .verified_stmt("SELECT CAST(NULL AS MAP<INT, STRUCT<a INT>> ARRAY)");
+}
+
+#[test]
+fn parse_cte_materialization() {
+    for (directive, expected) in [
+        ("", None),
+        ("MATERIALIZED ", Some(CteAsMaterialized::Materialized)),
+        (
+            "NOT MATERIALIZED ",
+            Some(CteAsMaterialized::NotMaterialized),
+        ),
+    ] {
+        let sql = format!("WITH c AS {directive}(SELECT 1) SELECT * FROM c");
+        TestedDialects::new(vec![Box::new(DuckDbDialect {})]).verified_query(&sql);
+        let query = all_dialects_where(|d| d.supports_cte_materialization()).verified_query(&sql);
+        assert_eq!(query.with.unwrap().cte_tables[0].materialized, expected);
+        if expected.is_some() {
+            all_dialects_where(|d| !d.supports_cte_materialization())
+                .parse_sql_statements(&sql)
+                .unwrap_err();
+        }
     }
 }

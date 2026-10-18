@@ -21196,3 +21196,55 @@ fn parse_period_underscore_after_whitespace() {
         assert_eq!(dialects.parse_sql_statements(sql), Err(error), "{sql}");
     }
 }
+
+#[test]
+fn tokenize_long_whitespace_run_completes() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let request_id = "tokenize-long-whitespace-run";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT{}t._a FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = Tokenizer::new(&GenericDialect {}, &sql)
+            .tokenize_with_location()
+            .map(drop);
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name should tokenize");
+}
+
+#[test]
+fn tokenize_long_whitespace_run_in_comment_hint_completes() {
+    use core::time::Duration;
+    use std::sync::mpsc;
+    use std::thread;
+
+    let request_id = "tokenize-long-whitespace-run-in-comment-hint";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT /*!{}t ._a */ FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = [&GenericDialect {} as &dyn Dialect, &MySqlDialect {}]
+            .into_iter()
+            .try_for_each(|dialect| {
+                Tokenizer::new(dialect, &sql)
+                    .tokenize_with_location()
+                    .map(drop)
+            });
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("hint tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name in hint should tokenize");
+}

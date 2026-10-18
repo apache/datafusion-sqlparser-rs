@@ -1545,7 +1545,7 @@ impl<'a> Parser<'a> {
                     let next_token = self.next_token();
                     let span = next_token.span;
                     let Token::NationalStringLiteral(code) = next_token.token else {
-                        unreachable!()
+                        return self.expected("national string literal", next_token);
                     };
                     options.push(DoOption::Language(Ident::with_span(span, "nchar")));
                     DoOption::Code(Value::SingleQuotedString(code).with_span(span))

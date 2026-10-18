@@ -2899,8 +2899,6 @@ WHERE id = 1
         let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
         assert_eq!(1, r.len());
 
-        dbg!(&r[0]);
-
         let stmt_span = r[0].span();
 
         assert_eq!(stmt_span.start, (2, 11).into());

@@ -40,8 +40,12 @@ path = "src/lib.rs"
 unsafe_code = "forbid"
 
 [lints.clippy]
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
 assertions_on_result_states = "deny"
+ignore_without_reason = "deny"
 manual_assert_eq = "deny"
+should_panic_without_expect = "deny"
 
 [workspace]
 members = ["sqlparser_bench"]

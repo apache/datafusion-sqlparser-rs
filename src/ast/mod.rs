@@ -887,7 +887,8 @@ pub enum InTarget {
     /// A table name or table-valued function, read as `(SELECT * FROM name)`, see
     /// [SQLite](https://www.sqlite.org/lang_expr.html#in_op)
     Table {
-        /// Table or table-valued function name.
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        /// Table or table-valued function name, visited as a relation.
         name: ObjectName,
         /// Table-valued function arguments, `None` for a plain table name.
         args: Option<Vec<FunctionArg>>,

@@ -21563,3 +21563,39 @@ fn parse_in_table_expression() {
     dialects.verified_stmt("SELECT a IN (1, 2) FROM t");
     dialects.verified_stmt("SELECT a IN (SELECT b FROM u) FROM t");
 }
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let stmts = Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let mut relations = vec![];
+        let _ = sqlparser::ast::visit_relations(&stmts, |relation| {
+            relations.push(relation.to_string());
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(relations, ["lookup", "source"], "{dialect:?}");
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_mut_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let mut stmts =
+            Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let _ = sqlparser::ast::visit_relations_mut(&mut stmts, |relation| {
+            if relation.to_string() == "lookup" {
+                *relation = ObjectName::from(Ident::new("renamed"));
+            }
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(
+            stmts[0].to_string(),
+            "SELECT a IN renamed FROM source",
+            "{dialect:?}"
+        );
+    }
+}

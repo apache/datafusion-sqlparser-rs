@@ -140,6 +140,10 @@ impl Dialect for SnowflakeDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
     /// See <https://docs.snowflake.com/en/sql-reference/identifiers-syntax>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')

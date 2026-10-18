@@ -3242,4 +3242,20 @@ SETTINGS update_parallel_mode = 'auto'"#;
             stmt => panic!("expected ALTER TABLE; got {stmt:?}"),
         }
     }
+
+    #[test]
+    fn test_in_expression_spans() {
+        for (sql, expected) in [
+            ("  needle IN (first, last)", "needle IN (first, last"),
+            (
+                "  needle IN (SELECT last FROM items)",
+                "needle IN (SELECT last FROM items",
+            ),
+            ("  needle IN UNNEST(items)", "needle IN UNNEST(items"),
+        ] {
+            let mut test = SpanTest::new(&GenericDialect, sql);
+            let expr = test.0.parse_expr().unwrap();
+            assert_eq!(test.get_source(expr.span()), expected, "{sql}");
+        }
+    }
 }

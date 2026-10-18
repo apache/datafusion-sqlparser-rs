@@ -20,9 +20,10 @@ use alloc::boxed::Box;
 
 use crate::ast::BinaryOperator;
 use crate::ast::{Expr, Statement};
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 ///
@@ -95,6 +96,15 @@ impl Dialect for SQLiteDialect {
             }
         }
         None
+    }
+
+    /// `&` and `|` share one left-associative precedence level.
+    /// See <https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes>
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        match parser.peek_token_ref().token {
+            Token::Ampersand | Token::Pipe => Some(Ok(self.prec_value(Precedence::Ampersand))),
+            _ => None,
+        }
     }
 
     fn supports_in_empty_list(&self) -> bool {

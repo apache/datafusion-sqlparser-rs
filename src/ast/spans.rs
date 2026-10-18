@@ -3356,4 +3356,20 @@ SETTINGS update_parallel_mode = 'auto'"#;
             assert_eq!(test.get_source(expr.span()), expected, "{sql}");
         }
     }
+
+    #[test]
+    fn test_in_table_expression_spans() {
+        let dialect = &crate::dialect::SQLiteDialect {};
+        for (sql, expected) in [
+            ("  needle IN main.items", "needle IN main.items"),
+            (
+                "  needle IN main.f(first, last)",
+                "needle IN main.f(first, last",
+            ),
+        ] {
+            let mut test = SpanTest::new(dialect, sql);
+            let expr = test.0.parse_expr().unwrap();
+            assert_eq!(test.get_source(expr.span()), expected, "{sql}");
+        }
+    }
 }

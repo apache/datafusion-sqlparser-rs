@@ -44,10 +44,10 @@ use super::{
     OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
     PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
     RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithExpression, WithFill,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement,
+    Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor,
+    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values,
+    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithExpression, WithFill,
     XmlNamespaceDefinition,
 };
 

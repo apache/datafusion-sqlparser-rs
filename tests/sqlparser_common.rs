@@ -20697,11 +20697,16 @@ fn parse_cte_materialization() {
         let sql = format!("WITH c AS {directive}(SELECT 1) SELECT * FROM c");
         TestedDialects::new(vec![Box::new(DuckDbDialect {})]).verified_query(&sql);
         let query = all_dialects_where(|d| d.supports_cte_materialization()).verified_query(&sql);
-        assert_eq!(query.with.unwrap().cte_tables[0].materialized, expected);
+        let with = query.with.unwrap();
+        let cte = match &with.exprs[0] {
+            WithExpression::Cte(cte) => cte,
+            other => panic!("expected a CTE, got {other:?}"),
+        };
+        assert_eq!(cte.materialized, expected);
         if expected.is_some() {
-            all_dialects_where(|d| !d.supports_cte_materialization())
-                .parse_sql_statements(&sql)
-                .unwrap_err();
+            for dialect in all_dialects_where(|d| !d.supports_cte_materialization()).dialects {
+                Parser::parse_sql(dialect.as_ref(), &sql).unwrap_err();
+            }
         }
     }
 }

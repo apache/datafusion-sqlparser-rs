@@ -4476,26 +4476,30 @@ impl<'a> Parser<'a> {
     ) -> Result<Expr, ParserError> {
         // BigQuery allows `IN UNNEST(array_expression)`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
-        if !global && self.parse_keyword(Keyword::UNNEST) {
+        let target = if !global && self.parse_keyword(Keyword::UNNEST) {
             self.expect_token(&Token::LParen)?;
             let array_expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            return Ok(Expr::InUnnest {
-                expr: Box::new(expr),
-                array_expr: Box::new(array_expr),
-                negated,
-            });
-        }
-        if self.dialect.supports_in_unparenthesized_expr()
+            InTarget::Unnest(Box::new(array_expr))
+        } else if self.dialect.supports_in_unparenthesized_expr()
             && self.peek_token_ref().token != Token::LParen
         {
-            return Ok(Expr::InList {
-                expr: Box::new(expr),
-                list: vec![self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?],
-                negated,
-                global,
-            });
-        }
+            InTarget::List(vec![
+                self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?
+            ])
+        } else {
+            self.parse_in_parenthesized_target()?
+        };
+        Ok(Expr::In {
+            expr: Box::new(expr),
+            target,
+            negated,
+            global,
+        })
+    }
+
+    /// Parses the parenthesized subquery or value list of an `IN` predicate.
+    fn parse_in_parenthesized_target(&mut self) -> Result<InTarget, ParserError> {
         self.expect_token(&Token::LParen)?;
         // A leading query is the whole subquery only when `)` follows it,
         // otherwise it is the first item of a list, as in `IN ((SELECT 1), 2)`.
@@ -4508,12 +4512,7 @@ impl<'a> Parser<'a> {
                 let mut missing_rparen = None;
                 if let Some(subquery) = self.maybe_parse(|p| p.parse_query())? {
                     if self.consume_token(&Token::RParen) {
-                        return Ok(Expr::InSubquery {
-                            expr: Box::new(expr),
-                            subquery,
-                            negated,
-                            global,
-                        });
+                        return Ok(InTarget::Subquery(subquery));
                     }
                     missing_rparen = Some(self.index);
                     self.index = start;
@@ -4529,12 +4528,7 @@ impl<'a> Parser<'a> {
             self.parse_comma_separated(Parser::parse_expr)
         };
         match list.and_then(|list| self.expect_token(&Token::RParen).map(|_| list)) {
-            Ok(list) => Ok(Expr::InList {
-                expr: Box::new(expr),
-                list,
-                negated,
-                global,
-            }),
+            Ok(list) => Ok(InTarget::List(list)),
             Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
             Err(e) => match missing_rparen {
                 Some(index) if self.index <= index => {

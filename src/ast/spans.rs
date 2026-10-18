@@ -36,9 +36,9 @@ use super::{
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement,
     ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
     FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
-    HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr,
-    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
+    HavingBound, IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate,
+    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
+    LimitClause, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
     OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
@@ -1525,25 +1525,18 @@ impl Spanned for Expr {
             } => expr.span(),
             Expr::IsDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::IsNotDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
-            Expr::InList {
+            Expr::In {
                 expr,
-                list,
+                target,
                 negated: _,
                 global: _,
-            } => union_spans(
-                core::iter::once(expr.span()).chain(list.iter().map(|item| item.span())),
-            ),
-            Expr::InSubquery {
-                expr,
-                subquery,
-                negated: _,
-                global: _,
-            } => expr.span().union(&subquery.span()),
-            Expr::InUnnest {
-                expr,
-                array_expr,
-                negated: _,
-            } => expr.span().union(&array_expr.span()),
+            } => match target {
+                InTarget::List(list) => union_spans(
+                    core::iter::once(expr.span()).chain(list.iter().map(|item| item.span())),
+                ),
+                InTarget::Subquery(subquery) => expr.span().union(&subquery.span()),
+                InTarget::Unnest(array_expr) => expr.span().union(&array_expr.span()),
+            },
             Expr::Between {
                 expr,
                 negated: _,

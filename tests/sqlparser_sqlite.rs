@@ -524,7 +524,11 @@ fn parse_update_tuple_row_values() {
 fn parse_where_in_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN ()";
     let select = sqlite().verified_only_select(sql);
-    if let Expr::InList { list, .. } = select.selection.as_ref().unwrap() {
+    if let Expr::In {
+        target: InTarget::List(list),
+        ..
+    } = select.selection.as_ref().unwrap()
+    {
         assert_eq!(list.len(), 0);
     } else {
         unreachable!()

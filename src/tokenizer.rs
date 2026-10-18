@@ -1733,7 +1733,14 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if self.dialect.supports_hash_comment() => {
+                '#' if self.dialect.supports_hash_comment()
+                    && (!self.dialect.requires_hash_comment_space()
+                        || chars
+                            .peekable
+                            .clone()
+                            .nth(1)
+                            .is_some_and(|c| c == ' ' || c == '!')) =>
+                {
                     chars.next(); // consume the '#', starting a single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {

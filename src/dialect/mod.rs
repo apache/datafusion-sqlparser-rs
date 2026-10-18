@@ -1297,6 +1297,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `#` starts a single line comment only when followed by an ASCII
+    /// space or `!`, so `# comment` and `#! comment` are comments but `#comment` is not.
+    fn requires_hash_comment_space(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports optimizer hints in multiline comments
     /// e.g. `/*!50110 KEY_BLOCK_SIZE = 1024*/`
     fn supports_multiline_comment_hints(&self) -> bool {

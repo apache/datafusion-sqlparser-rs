@@ -140,6 +140,11 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    /// See <https://github.com/ClickHouse/ClickHouse/blob/master/src/Parsers/Lexer.cpp>
+    fn requires_hash_comment_space(&self) -> bool {
+        true
+    }
+
     /// See <https://clickhouse.com/docs/en/sql-reference/statements/optimize>
     fn supports_optimize_table(&self) -> bool {
         true

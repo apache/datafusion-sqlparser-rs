@@ -1561,21 +1561,22 @@ impl<'a> Parser<'a> {
             );
             let option = match (language, string_literal) {
                 (true, true) => DoOption::LanguageLiteral(self.parse_value()?),
-                (true, false)
-                    if matches!(self.peek_token_ref().token, Token::NationalStringLiteral(_)) =>
-                {
+                (true, false) => match self.next_token() {
                     // PostgreSQL lexes `N'...'` as the `NCHAR` keyword followed
                     // by a string literal, so `LANGUAGE N'...'` is the language
                     // name `nchar` followed by the code block.
-                    let next_token = self.next_token();
-                    let span = next_token.span;
-                    let Token::NationalStringLiteral(code) = next_token.token else {
-                        unreachable!()
-                    };
-                    options.push(DoOption::Language(Ident::with_span(span, "nchar")));
-                    DoOption::Code(Value::SingleQuotedString(code).with_span(span))
-                }
-                (true, false) => DoOption::Language(self.parse_identifier()?),
+                    TokenWithSpan {
+                        token: Token::NationalStringLiteral(code),
+                        span,
+                    } => {
+                        options.push(DoOption::Language(Ident::with_span(span, "nchar")));
+                        DoOption::Code(Value::SingleQuotedString(code).with_span(span))
+                    }
+                    _ => {
+                        self.prev_token();
+                        DoOption::Language(self.parse_identifier()?)
+                    }
+                },
                 (false, true) => DoOption::Code(self.parse_value()?),
                 (false, false) if options.is_empty() => {
                     return self.expected_ref("string literal", self.peek_token_ref());

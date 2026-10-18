@@ -142,4 +142,8 @@ impl Dialect for SQLiteDialect {
     fn supports_national_string_literal(&self) -> bool {
         false
     }
+
+    fn supports_parens_around_table_factor(&self) -> bool {
+        true
+    }
 }

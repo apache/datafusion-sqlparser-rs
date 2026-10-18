@@ -9346,7 +9346,7 @@ impl<'a> Parser<'a> {
                     Ok(Some(SqlOption::NamedParenthesizedList(
                         NamedParenthesizedList {
                             key: Ident::new("ENGINE"),
-                            name: Some(Ident::new(w.value)),
+                            name: Some(w.into_ident(value.span)),
                             values: parameters,
                         },
                     )))

@@ -5196,3 +5196,9 @@ fn parse_alter_table_column_position() {
         );
     }
 }
+
+#[test]
+fn parse_create_table_engine_name_quoting() {
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `InnoDB`");
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = InnoDB");
+}

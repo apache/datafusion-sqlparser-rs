@@ -2479,10 +2479,6 @@ mod tests {
                 self.0.supports_in_unparenthesized_expr()
             }
 
-            fn supports_in_table_expression(&self) -> bool {
-                self.0.supports_in_table_expression()
-            }
-
             fn convert_type_before_value(&self) -> bool {
                 self.0.convert_type_before_value()
             }

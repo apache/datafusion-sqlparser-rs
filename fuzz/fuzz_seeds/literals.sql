@@ -1,0 +1,1 @@
+SELECT 0, 1, -1, 1.5, -2.75, 1e10, 1.5e-3, TRUE, FALSE, NULL, 'plain', 'it''s quoted', DATE '2020-02-29', TIMESTAMP '1999-12-31 23:59:59', INTERVAL '7' DAY FROM t

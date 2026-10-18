@@ -1,0 +1,1 @@
+SELECT a, x FROM t LATERAL VIEW explode(arr) v AS x

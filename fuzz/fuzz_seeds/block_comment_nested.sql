@@ -1,0 +1,1 @@
+SELECT a /* outer /* inner */ still comment */ FROM t

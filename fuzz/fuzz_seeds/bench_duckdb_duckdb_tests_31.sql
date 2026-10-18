@@ -1,0 +1,1 @@
+INSERT INTO el_ids VALUES ('el', 10)

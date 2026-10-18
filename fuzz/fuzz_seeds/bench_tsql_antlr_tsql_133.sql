@@ -1,0 +1,1 @@
+SELECT LEAD(PurchaseOrderNumber) OVER(PARTITION BY CustomerID ORDER BY OrderDate) AS NextPONumber FROM sales.SalesOrderHeader

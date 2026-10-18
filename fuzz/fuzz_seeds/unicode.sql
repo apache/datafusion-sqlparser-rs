@@ -1,0 +1,1 @@
+SELECT 'ünïcödé', 'ключ', '日本語', 'emoji 🎉' AS label FROM t

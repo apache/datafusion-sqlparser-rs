@@ -1,0 +1,1 @@
+SELECT approx_top_k(concat('this is a long prefix', skewed_groups::VARCHAR), 5) FROM integers

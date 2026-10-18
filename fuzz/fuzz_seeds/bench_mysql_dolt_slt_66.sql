@@ -1,0 +1,1 @@
+CREATE TABLE `empty` (x INT)

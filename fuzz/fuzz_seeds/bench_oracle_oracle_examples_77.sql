@@ -1,0 +1,1 @@
+select name, type, square_km, sum(square_km) over ( order by square_km desc rows between unbounded preceding and current row ) as tot from water order by 3 desc

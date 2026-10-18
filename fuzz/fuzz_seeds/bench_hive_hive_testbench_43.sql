@@ -1,0 +1,1 @@
+drop table q18_large_volume_customer_cached

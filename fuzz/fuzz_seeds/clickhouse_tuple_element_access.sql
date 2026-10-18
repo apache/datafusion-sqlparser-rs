@@ -1,0 +1,1 @@
+SELECT t.1, t.2.1, (1, 'a').2, tuple(1, (2, 3)).2.1, [(1, 2)][1].1 FROM (SELECT (1, (2, 3)) AS t) WHERE t.2.2 = 3

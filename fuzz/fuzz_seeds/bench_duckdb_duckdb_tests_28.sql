@@ -1,0 +1,1 @@
+CREATE TABLE t2 AS SELECT i%5 as even_groups, i FROM range(10000) t(i)

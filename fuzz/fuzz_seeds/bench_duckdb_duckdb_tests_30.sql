@@ -1,0 +1,1 @@
+SET disabled_optimizers = 'top_n_window_elimination'

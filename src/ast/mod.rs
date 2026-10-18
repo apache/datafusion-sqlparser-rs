@@ -72,7 +72,7 @@ pub use self::ddl::{
     AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
     ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
     ConstraintCharacteristics, CreateCollation, CreateCollationDefinition, CreateConnector,
-    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    CreateDomain, CreateExtension, CreateForeignTable, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
     CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
@@ -82,14 +82,14 @@ pub use self::ddl::{
     IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
     OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
     Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef, WithData,
+    ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
-    Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, MultiTableInsertIntoClause,
+    Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
+    MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, MultiTableInsertIntoClause,
     MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
     MultiTableInsertWhenClause, OutputClause, Update,
 };
@@ -378,17 +378,24 @@ impl From<&str> for Ident {
     }
 }
 
+pub(crate) fn fmt_ident(
+    f: &mut fmt::Formatter,
+    value: &str,
+    quote_style: Option<char>,
+) -> fmt::Result {
+    match quote_style {
+        Some('[') => write!(f, "[{value}]"),
+        Some(q) => {
+            let escaped = value::escape_quoted_string(value, q);
+            write!(f, "{q}{escaped}{q}")
+        }
+        None => f.write_str(value),
+    }
+}
+
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.quote_style {
-            Some(q) if q == '"' || q == '\'' || q == '`' => {
-                let escaped = value::escape_quoted_string(&self.value, q);
-                write!(f, "{q}{escaped}{q}")
-            }
-            Some('[') => write!(f, "[{}]", self.value),
-            None => f.write_str(&self.value),
-            _ => panic!("unexpected quote style"),
-        }
+        fmt_ident(f, &self.value, self.quote_style)
     }
 }
 
@@ -968,7 +975,7 @@ pub enum Expr {
         /// `true` when `NOT` is present.
         negated: bool,
     },
-    /// `[ NOT ] IN (val1, val2, ...)`
+    /// `[ GLOBAL ] [ NOT ] IN (val1, val2, ...)`
     InList {
         /// Left-hand expression to test for membership.
         expr: Box<Expr>,
@@ -976,8 +983,10 @@ pub enum Expr {
         list: Vec<Expr>,
         /// `true` when the `NOT` modifier is present.
         negated: bool,
+        /// `true` when the ClickHouse `GLOBAL` modifier is present.
+        global: bool,
     },
-    /// `[ NOT ] IN (SELECT ...)`
+    /// `[ GLOBAL ] [ NOT ] IN (SELECT ...)`
     InSubquery {
         /// Left-hand expression to test for membership.
         expr: Box<Expr>,
@@ -985,6 +994,8 @@ pub enum Expr {
         subquery: Box<Query>,
         /// `true` when the `NOT` modifier is present.
         negated: bool,
+        /// `true` when the ClickHouse `GLOBAL` modifier is present.
+        global: bool,
     },
     /// `[ NOT ] IN UNNEST(array_expression)`
     InUnnest {
@@ -1484,12 +1495,14 @@ pub enum AccessExpr {
     Subscript(Subscript),
 }
 
+const fn is_number_expr(expr: &Expr) -> bool {
+    matches!(expr, Expr::Value(v) if matches!(v.value, Value::Number(_, _)))
+}
+
 impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccessExpr::Dot(Expr::Value(value)) if matches!(value.value, Value::Number(_, _)) => {
-                write!(f, " . {value}")
-            }
+            AccessExpr::Dot(expr) if is_number_expr(expr) => write!(f, " . {expr}"),
             AccessExpr::Dot(expr) => write!(f, ".{expr}"),
             AccessExpr::Subscript(subscript) => write!(f, "[{subscript}]"),
         }
@@ -1751,8 +1764,13 @@ impl fmt::Display for Expr {
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::CompoundFieldAccess { root, access_chain } => {
                 write!(f, "{root}")?;
+                let mut prev_is_number = is_number_expr(root);
                 for field in access_chain {
-                    write!(f, "{field}")?;
+                    match field {
+                        AccessExpr::Dot(expr) if prev_is_number => write!(f, " . {expr}")?,
+                        _ => write!(f, "{field}")?,
+                    }
+                    prev_is_number = matches!(field, AccessExpr::Dot(expr) if is_number_expr(expr));
                 }
                 Ok(())
             }
@@ -1787,10 +1805,12 @@ impl fmt::Display for Expr {
                 expr,
                 list,
                 negated,
+                global,
             } => write!(
                 f,
-                "{} {}IN ({})",
+                "{} {}{}IN ({})",
                 expr,
+                if *global { "GLOBAL " } else { "" },
                 if *negated { "NOT " } else { "" },
                 display_comma_separated(list)
             ),
@@ -1798,10 +1818,12 @@ impl fmt::Display for Expr {
                 expr,
                 subquery,
                 negated,
+                global,
             } => write!(
                 f,
-                "{} {}IN ({})",
+                "{} {}{}IN ({})",
                 expr,
+                if *global { "GLOBAL " } else { "" },
                 if *negated { "NOT " } else { "" },
                 subquery
             ),
@@ -1955,23 +1977,39 @@ impl fmt::Display for Expr {
                     if add_parens { ")" } else { "" },
                 )
             }
-            Expr::UnaryOp { op, expr } => {
-                if op == &UnaryOperator::PGPostfixFactorial {
-                    write!(f, "{expr}{op}")
-                } else if matches!(
-                    op,
-                    UnaryOperator::Not
-                        | UnaryOperator::Hash
-                        | UnaryOperator::AtDashAt
-                        | UnaryOperator::DoubleAt
-                        | UnaryOperator::QuestionDash
-                        | UnaryOperator::QuestionPipe
-                ) {
-                    write!(f, "{op} {expr}")
-                } else {
-                    write!(f, "{op}{expr}")
+            Expr::UnaryOp { op, expr } => match op {
+                UnaryOperator::PGPostfixFactorial => {
+                    if matches!(
+                        expr.as_ref(),
+                        Expr::UnaryOp {
+                            op: UnaryOperator::PGPostfixFactorial,
+                            ..
+                        }
+                    ) {
+                        write!(f, "{expr} {op}")
+                    } else {
+                        write!(f, "{expr}{op}")
+                    }
                 }
-            }
+                UnaryOperator::Not
+                | UnaryOperator::BitwiseNot
+                | UnaryOperator::Hash
+                | UnaryOperator::AtDashAt
+                | UnaryOperator::DoubleAt
+                | UnaryOperator::PGAbs
+                | UnaryOperator::QuestionDash
+                | UnaryOperator::QuestionPipe
+                | UnaryOperator::PGSquareRoot
+                | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
+                UnaryOperator::Minus | UnaryOperator::BangNot => {
+                    if starts_with_operator_char(expr) {
+                        write!(f, "{op} {expr}")
+                    } else {
+                        write!(f, "{op}{expr}")
+                    }
+                }
+                UnaryOperator::Plus | UnaryOperator::PGPrefixFactorial => write!(f, "{op}{expr}"),
+            },
             Expr::Convert {
                 is_try,
                 expr,
@@ -2006,7 +2044,11 @@ impl fmt::Display for Expr {
                 format,
             } => match kind {
                 CastKind::Cast => {
-                    write!(f, "CAST({expr} AS {data_type}")?;
+                    if matches!(data_type, DataType::Unspecified) {
+                        write!(f, "CAST({expr} AS")?;
+                    } else {
+                        write!(f, "CAST({expr} AS {data_type}")?;
+                    }
                     if let Some(format) = format {
                         write!(f, " FORMAT {format}")?;
                     }
@@ -3565,7 +3607,6 @@ impl fmt::Display for Analyze {
 }
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -3772,6 +3813,11 @@ pub enum Statement {
     },
     /// A `CREATE SERVER` statement.
     CreateServer(CreateServerStatement),
+    /// ```sql
+    /// CREATE FOREIGN TABLE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+    CreateForeignTable(CreateForeignTable),
     /// ```sql
     /// CREATE POLICY
     /// ```
@@ -5118,9 +5164,10 @@ impl fmt::Display for Statement {
     /// FROM
     ///   table_1"#);
     /// ```
-    // Clippy thinks this function is too complicated, but it is painful to
-    // split up without extracting structs for each `Statement` variant.
-    #[allow(clippy::cognitive_complexity)]
+    #[expect(
+        clippy::cognitive_complexity,
+        reason = "splitting this match would need a struct for each `Statement` variant"
+    )]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Flush {
@@ -5632,6 +5679,7 @@ impl fmt::Display for Statement {
             Statement::CreateServer(stmt) => {
                 write!(f, "{stmt}")
             }
+            Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
@@ -8083,6 +8131,19 @@ impl fmt::Display for FunctionArg {
     }
 }
 
+/// Whether `expr` renders with an operator character first. A prefix `-` or `!`
+/// must not abut one, since `--` starts a line comment and compound tokens
+/// like `!!` or `!~` alter the parsed AST or fail to parse.
+fn starts_with_operator_char(mut expr: &Expr) -> bool {
+    loop {
+        match expr {
+            Expr::UnaryOp { op, .. } => return !matches!(op, UnaryOperator::Not),
+            Expr::BinaryOp { left, .. } => expr = left,
+            _ => return false,
+        }
+    }
+}
+
 /// `FunctionArgOperator::Space` has no token of its own, so the name and the
 /// value are separated by a single space instead.
 fn fmt_named_function_arg(
@@ -8877,7 +8938,6 @@ impl fmt::Display for DescribeAlias {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-#[allow(clippy::large_enum_variant)]
 /// Hive input/output format specification used in `CREATE TABLE`.
 pub enum HiveIOFormat {
     /// Generic IO format with separate input and output expressions.
@@ -9189,7 +9249,7 @@ impl fmt::Display for CreateServerStatement {
     }
 }
 
-/// A key/value option for `CREATE SERVER`.
+/// A key/value entry in a Postgres `OPTIONS ( ... )` clause.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -10637,7 +10697,6 @@ impl fmt::Display for HiveSetLocation {
 }
 
 /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -10653,10 +10712,7 @@ impl Display for MySQLColumnPosition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MySQLColumnPosition::First => write!(f, "FIRST"),
-            MySQLColumnPosition::After(ident) => {
-                let column_name = &ident.value;
-                write!(f, "AFTER {column_name}")
-            }
+            MySQLColumnPosition::After(ident) => write!(f, "AFTER {ident}"),
         }
     }
 }

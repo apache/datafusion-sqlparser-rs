@@ -1,0 +1,1 @@
+select utl_i18n.validate_character_encoding(col1) invalid_offset_column1, utl_i18n.validate_character_encoding(col2) invalid_offset_column2 from charset_test

@@ -1,0 +1,1 @@
+SELECT a FROM t WHERE a > 1 AND b < 10 OR NOT c = 'x' AND d IS NOT NULL AND e BETWEEN 1 AND 5 AND f IN (1, 2, 3) AND g LIKE 'ab%' AND h NOT LIKE '%z'

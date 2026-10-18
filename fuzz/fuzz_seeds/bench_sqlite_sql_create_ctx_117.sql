@@ -1,0 +1,1 @@
+SELECT name, born_state, age FROM head ORDER BY age

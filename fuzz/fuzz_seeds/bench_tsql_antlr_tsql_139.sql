@@ -1,0 +1,1 @@
+DECLARE Employee_Cursor CURSOR FOR SELECT BusinessEntityID, JobTitle FROM AdventureWorks2012.HumanResources.Employee

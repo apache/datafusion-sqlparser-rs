@@ -1,0 +1,1 @@
+DROP SCHEMA IF EXISTS tpcds_reports CASCADE

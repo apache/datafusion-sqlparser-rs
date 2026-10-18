@@ -19,39 +19,33 @@
 
 # Fuzzing
 
-## Installing `honggfuzz`
-
-```
-cargo install honggfuzz
-```
-
-Install [dependencies](https://github.com/rust-fuzz/honggfuzz-rs#dependencies) for your system.
-
-## Running the fuzzer
-
-Running the fuzzer is as easy as running in the `fuzz` directory.
-
-Choose a target:
-
-These are `[[bin]]` entries in `Cargo.toml`.
-List them with `cargo read-manifest | jq '.targets[].name'` from the `fuzz` directory.
-
-Run the fuzzer:
+`cargo-fuzz` needs the nightly toolchain. Install it with `rustup toolchain install nightly`, then:
 
 ```shell
+cargo install cargo-fuzz
 cd fuzz
-cargo hfuzz run <target>
+cargo +nightly fuzz run fuzz_parse_sql fuzz_seeds -- -max_total_time=600
 ```
 
-After a panic is found, get a stack trace with:
+`fuzz_parse_sql` parses the input with every dialect.
+`fuzz_parse_roundtrip` additionally re-parses the SQL rendered by `Display` and fails when a
+rendered statement no longer parses.
 
-```shell
-cargo hfuzz run-debug <target> hfuzz_workspace/<target>/*.fuzz
-```
+`fuzz_sqlite_accepts` compiles the input with a bundled SQLite, without running it, and fails when SQLite accepts SQL that `SQLiteDialect` rejects. Name resolution errors such as a missing table still count as accepted once SQLite has read the statement to its end.
 
-For example, with the `fuzz_parse_sql` target:
+`fuzz_postgres_accepts` parses the input with PostgreSQL's own grammar through `pg_query` and fails when PostgreSQL accepts SQL that `PostgreSqlDialect` rejects.
 
-```shell
-cargo hfuzz run fuzz_parse_sql
-cargo hfuzz run-debug fuzz_parse_sql hfuzz_workspace/fuzz_parse_sql/*.fuzz
-```
+`fuzz_duckdb_accepts` parses the input with DuckDB's own parser and fails when DuckDB accepts a `SELECT` that `DuckDbDialect` rejects.
+
+The three oracle targets compile their engine from source, so each builds only with its feature, `sqlite`, `postgres` or `duckdb`, as in `cargo +nightly fuzz run --features sqlite fuzz_sqlite_accepts fuzz_seeds`. `cargo +nightly fuzz build --all-features` builds every target.
+
+`fuzz_stage_cost` times tokenizing, parsing and printing the input with every dialect and fails when parsing takes more than 50 times as long as tokenizing, or printing more than 50 times as long as parsing, once the slower stage passes 10 ms. It reports superlinear paths whose cost stays far below the fuzzer's timeout.
+
+ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
+`code-change` mode, a daily batch job grows the shared corpus stored on the
+`clusterfuzzlite` branch, and a daily prune compacts it.
+
+`fuzz_seeds/` is a committed corpus of valid SQL that random mutation would never produce.
+The run command above uses it and `build.sh` packages it for ClusterFuzzLite.
+
+Crashes land in `artifacts/<target>/` and replay with `cargo fuzz run <target> <crash-file>`.

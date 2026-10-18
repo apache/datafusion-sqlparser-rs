@@ -54,7 +54,10 @@ macro_rules! define_keywords {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-        #[allow(non_camel_case_types)]
+        #[expect(
+            non_camel_case_types,
+            reason = "variants are spelled like the SQL keywords they name, such as `CURRENT_DATE`"
+        )]
         /// An enumeration of SQL keywords recognized by the parser.
         pub enum Keyword {
             /// Represents no keyword.
@@ -762,6 +765,7 @@ define_keywords!(
     OVERLAPS,
     OVERLAY,
     OVERRIDE,
+    OVERRIDING,
     OVERWRITE,
     OWNED,
     OWNER,
@@ -820,6 +824,7 @@ define_keywords!(
     PRINT,
     PRIOR,
     PRIVILEGES,
+    PROC,
     PROCEDURE,
     PROCESSLIST,
     PROFILE,
@@ -1189,6 +1194,7 @@ define_keywords!(
     YEAR,
     YEARS,
     YES,
+    ZEROFILL,
     ZONE,
     ZORDER,
     ZSTD

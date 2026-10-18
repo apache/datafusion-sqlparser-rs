@@ -1,0 +1,1 @@
+SELECT CASE WHEN a > 1 THEN 'big' WHEN a = 1 THEN 'one' ELSE 'small' END, CASE b WHEN 1 THEN 'x' ELSE 'y' END FROM t

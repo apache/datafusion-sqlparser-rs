@@ -143,7 +143,6 @@ impl fmt::Display for ProjectionSelect {
 
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -191,6 +190,7 @@ impl SetExpr {
 }
 
 impl fmt::Display for SetExpr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SetExpr::Select(s) => s.fmt(f),
@@ -295,14 +295,13 @@ impl fmt::Display for SetQuantifier {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
+/// A [`TABLE` command](https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// A (possibly schema-qualified) table reference used in `FROM` clauses.
 pub struct Table {
     /// Optional table name (absent for e.g. `TABLE` command without argument).
-    pub table_name: Option<String>,
+    pub table_name: Option<Ident>,
     /// Optional schema/catalog name qualifying the table.
-    pub schema_name: Option<String>,
+    pub schema_name: Option<Ident>,
 }
 
 impl fmt::Display for Table {
@@ -2223,6 +2222,8 @@ pub enum RepetitionQuantifier {
     AtMost(u32),
     /// `{n,m}
     Range(u32, u32),
+    /// A reluctant (non-greedy) quantifier, for example `*?` or `{n,m}?`.
+    Reluctant(Box<RepetitionQuantifier>),
 }
 
 impl fmt::Display for RepetitionQuantifier {
@@ -2236,6 +2237,7 @@ impl fmt::Display for RepetitionQuantifier {
             AtLeast(n) => write!(f, "{{{n},}}"),
             AtMost(n) => write!(f, "{{,{n}}}"),
             Range(n, m) => write!(f, "{{{n},{m}}}"),
+            Reluctant(quantifier) => write!(f, "{quantifier}?"),
         }
     }
 }
@@ -2730,6 +2732,9 @@ impl fmt::Display for Join {
                         JoinConstraint::Using(attrs) => {
                             write!(f, " USING({})", display_comma_separated(attrs))
                         }
+                        JoinConstraint::UsingAlias(columns, alias) => {
+                            write!(f, " USING({}) AS {alias}", display_comma_separated(columns))
+                        }
                         _ => Ok(()),
                     }
                 }
@@ -2919,6 +2924,8 @@ pub enum JoinConstraint {
     On(Expr),
     /// `USING(...)` list of column names.
     Using(Vec<ObjectName>),
+    /// `USING(...) AS alias` list of column names with an alias for the joined columns.
+    UsingAlias(Vec<ObjectName>, Ident),
     /// `NATURAL` join (columns matched automatically).
     Natural,
     /// No constraint specified (e.g. `CROSS JOIN`).

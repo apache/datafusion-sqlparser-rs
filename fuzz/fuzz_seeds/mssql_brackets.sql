@@ -1,0 +1,1 @@
+SELECT [id], [odd name] FROM [dbo].[tbl] WHERE [x] = 1

@@ -1,0 +1,1 @@
+SELECT COUNT(*) FROM test.hits WHERE AdvEngineID <> 0

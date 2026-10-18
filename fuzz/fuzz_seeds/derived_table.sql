@@ -1,0 +1,1 @@
+SELECT s.a FROM (SELECT a, b FROM t WHERE a > 0) AS s JOIN (VALUES (1), (2)) AS v(x) ON s.a = v.x

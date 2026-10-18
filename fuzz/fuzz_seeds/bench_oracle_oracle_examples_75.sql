@@ -1,0 +1,1 @@
+create table water ( name varchar2(30) primary key, type varchar2(10), square_km int )

@@ -44,7 +44,7 @@ use super::{
     OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
     PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
     RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript,
     SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
     TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
     WhileStatement, WildcardAdditionalOptions, With, WithExpression, WithFill,
@@ -413,6 +413,7 @@ impl Spanned for Statement {
             Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
+            Statement::CreateForeignTable(stmt) => stmt.span(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {
@@ -588,7 +589,7 @@ impl Spanned for CreateTable {
             file_format: _,       // enum
             location: _,          // string, no span
             query,
-            without_rowid: _, // bool
+            sqlite_table_options: _, // keywords, no span
             like: _,
             clone,
             comment: _, // todo, no span
@@ -602,7 +603,6 @@ impl Spanned for CreateTable {
             inherits: _,     // todo, PostgreSQL specific
             partition_of,
             for_values,
-            strict: _,                          // bool
             copy_grants: _,                     // bool
             enable_schema_evolution: _,         // bool
             change_tracking: _,                 // bool
@@ -962,12 +962,14 @@ impl Spanned for Delete {
             optimizer_hints: _,
             tables,
             from,
+            on_cluster,
             using,
             selection,
             returning,
             output,
             order_by,
             limit,
+            settings,
         } = self;
 
         union_spans(
@@ -976,6 +978,7 @@ impl Spanned for Delete {
                     .iter()
                     .map(|i| i.span())
                     .chain(core::iter::once(from.span()))
+                    .chain(on_cluster.iter().map(|i| i.span))
                     .chain(
                         using
                             .iter()
@@ -985,7 +988,8 @@ impl Spanned for Delete {
                     .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                     .chain(output.iter().map(|i| i.span()))
                     .chain(order_by.iter().map(|i| i.span()))
-                    .chain(limit.iter().map(|i| i.span())),
+                    .chain(limit.iter().map(|i| i.span()))
+                    .chain(settings.iter().flatten().map(|i| i.span())),
             ),
         )
     }
@@ -997,6 +1001,7 @@ impl Spanned for Update {
             update_token,
             optimizer_hints: _,
             table,
+            on_cluster,
             assignments,
             from,
             selection,
@@ -1005,18 +1010,21 @@ impl Spanned for Update {
             or: _,
             order_by,
             limit,
+            settings,
         } = self;
 
         union_spans(
             core::iter::once(table.span())
                 .chain(core::iter::once(update_token.0.span))
+                .chain(on_cluster.iter().map(|i| i.span))
                 .chain(assignments.iter().map(|i| i.span()))
                 .chain(from.iter().map(|i| i.span()))
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(output.iter().map(|i| i.span()))
                 .chain(order_by.iter().map(|i| i.span()))
-                .chain(limit.iter().map(|i| i.span())),
+                .chain(limit.iter().map(|i| i.span()))
+                .chain(settings.iter().flatten().map(|i| i.span())),
         )
     }
 }
@@ -1239,6 +1247,9 @@ impl Spanned for AlterTableOperation {
             } => {
                 union_spans(core::iter::once(col_name.span).chain(options.iter().map(|i| i.span())))
             }
+            AlterTableOperation::ModifyOrderBy { order_by } => {
+                union_spans(order_by.iter().map(|e| e.span()))
+            }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 old_name.span.union(&new_name.span)
             }
@@ -1378,6 +1389,7 @@ impl Spanned for Insert {
             source,
             partitioned,
             after_columns,
+            overriding: _,        // enum, postgres specific
             has_table_keyword: _, // bool
             on,
             returning,
@@ -1478,6 +1490,14 @@ impl Spanned for Assignment {
     }
 }
 
+impl Spanned for Setting {
+    fn span(&self) -> Span {
+        let Setting { key, value } = self;
+
+        key.span.union(&value.span())
+    }
+}
+
 impl Spanned for AssignmentTarget {
     fn span(&self) -> Span {
         match self {
@@ -1528,6 +1548,7 @@ impl Spanned for Expr {
                 expr,
                 list,
                 negated: _,
+                global: _,
             } => union_spans(
                 core::iter::once(expr.span()).chain(list.iter().map(|item| item.span())),
             ),
@@ -1535,6 +1556,7 @@ impl Spanned for Expr {
                 expr,
                 subquery,
                 negated: _,
+                global: _,
             } => expr.span().union(&subquery.span()),
             Expr::InUnnest {
                 expr,
@@ -2324,6 +2346,12 @@ impl Spanned for JoinConstraint {
         match self {
             JoinConstraint::On(expr) => expr.span(),
             JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span())),
+            JoinConstraint::UsingAlias(columns, alias) => union_spans(
+                columns
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(iter::once(alias.span)),
+            ),
             JoinConstraint::Natural => Span::empty(),
             JoinConstraint::None => Span::empty(),
         }
@@ -2920,6 +2948,37 @@ WHERE id = 1
     }
 
     #[test]
+    fn test_delete_on_cluster_settings_span() {
+        let sql = r#"DELETE FROM foo ON CLUSTER c1
+WHERE x = 42
+SETTINGS lightweight_deletes_sync = 0"#;
+
+        let r = Parser::parse_sql(&crate::dialect::ClickHouseDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (1, 1).into());
+        assert_eq!(stmt_span.end, (3, 38).into());
+    }
+
+    #[test]
+    fn test_update_on_cluster_settings_span() {
+        let sql = r#"UPDATE foo ON CLUSTER c1
+SET bar = 3
+WHERE x = 42
+SETTINGS update_parallel_mode = 'auto'"#;
+
+        let r = Parser::parse_sql(&crate::dialect::ClickHouseDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (1, 1).into());
+        assert_eq!(stmt_span.end, (4, 39).into());
+    }
+
+    #[test]
     fn test_merge_statement_spans() {
         let sql = r#"
         -- plain merge statement; no RETURNING, no OUTPUT
@@ -3185,5 +3244,34 @@ WHERE id = 1
             stmt_span,
             Span::new(Location::new(2, 8), Location::new(4, 52))
         );
+    }
+
+    #[test]
+    fn test_create_foreign_table_option_spans() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = r#"CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ("schema_name" 'public')"#;
+        let mut test = SpanTest::new(dialect, sql);
+
+        let options = match test.0.parse_statement().unwrap() {
+            Statement::CreateForeignTable(stmt) => stmt.options.unwrap(),
+            stmt => panic!("expected CREATE FOREIGN TABLE, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(options[0].key.span), r#""schema_name""#);
+        assert_eq!(test.get_source(options[0].value.span), "'public'");
+    }
+
+    #[test]
+    fn test_alter_table_modify_order_by_span() {
+        let dialect = &crate::dialect::ClickHouseDialect {};
+        let sql = "ALTER TABLE t MODIFY ORDER BY (a, b.c)";
+        let test = SpanTest::new(dialect, sql);
+        let r = Parser::parse_sql(dialect, sql).unwrap();
+        match &r[0] {
+            Statement::AlterTable(alter) => {
+                let op_span = alter.operations[0].span();
+                assert_eq!(test.get_source(op_span), "a, b.c");
+            }
+            stmt => panic!("expected ALTER TABLE; got {stmt:?}"),
+        }
     }
 }

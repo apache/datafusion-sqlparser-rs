@@ -19,8 +19,10 @@ name: Security audit
 
 on:
   push:
-    branches-ignore:
-      - 'gh-readonly-queue/**'
+    # Feature branches get CI from pull_request, so push runs only the long-lived branches.
+    branches:
+      - main
+      - 'branch-*'
     paths:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
@@ -36,6 +38,11 @@ on:
 
 permissions:
   contents: read
+
+# Only PR runs are disposable. Main, schedule and merge-queue runs keep their verdicts.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   audit:

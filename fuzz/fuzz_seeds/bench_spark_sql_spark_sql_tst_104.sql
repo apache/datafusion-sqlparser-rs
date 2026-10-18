@@ -1,0 +1,1 @@
+CREATE TABLE t1(col1 INT, col2 STRING)

@@ -1,0 +1,1 @@
+CREATE MACRO compute_top_k(table_name, group_col, val_col, k) AS TABLE SELECT rs.grp, array_agg(rs.val ORDER BY rid) FROM ( SELECT group_col AS grp, val_col AS val, row_number() OVER (PARTITION BY group_col ORDER BY val_col DESC) as rid FROM query_table(table_name::VARCHAR) ORDER BY group_col DESC ) as rs WHERE rid <= k GROUP BY ALL ORDER BY ALL

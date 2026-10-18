@@ -1,0 +1,1 @@
+SELECT FIRST_VALUE(SalesOrderNumber) OVER(PARTITION BY CustomerID ORDER BY OrderDate) AS FirstSONumberPerCustomer FROM Sales.SalesOrderHeader

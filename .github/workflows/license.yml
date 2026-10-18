@@ -25,6 +25,11 @@ on:
   pull_request:
   merge_group:
 
+# Only PR runs are disposable. Main, schedule and merge-queue runs keep their verdicts.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
 
   rat:
@@ -38,3 +43,9 @@ jobs:
           python-version: 3.8
       - name: Audit licenses
         run: ./dev/release/run-rat.sh .
+      - name: Verify release tarball excludes fuzz seeds
+        run: |
+          if git archive HEAD | tar -tf - | grep -q 'fuzz/fuzz_seeds'; then
+            echo "Error: fuzz/fuzz_seeds found in git archive release tarball"
+            exit 1
+          fi

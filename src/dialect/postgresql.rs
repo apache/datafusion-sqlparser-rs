@@ -73,6 +73,10 @@ const AND_PREC: u8 = 20;
 const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
+    fn supports_cte_materialization(&self) -> bool {
+        true
+    }
+
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
     }

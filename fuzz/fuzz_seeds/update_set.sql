@@ -1,0 +1,1 @@
+UPDATE t SET a = a + 1, b = 'z' WHERE c IS NOT NULL

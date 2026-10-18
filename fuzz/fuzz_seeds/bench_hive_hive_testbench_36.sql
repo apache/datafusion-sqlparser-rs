@@ -1,0 +1,1 @@
+drop view q11_part_tmp_cached

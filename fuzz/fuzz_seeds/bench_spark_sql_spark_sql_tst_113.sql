@@ -1,0 +1,1 @@
+CREATE OR REPLACE TEMPORARY VIEW bitwise_test AS SELECT * FROM VALUES (1, 1, 1, 1L), (2, 3, 4, null), (7, 7, 7, 3L) AS bitwise_test(b1, b2, b3, b4)

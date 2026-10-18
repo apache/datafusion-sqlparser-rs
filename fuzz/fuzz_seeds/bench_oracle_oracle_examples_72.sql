@@ -1,0 +1,1 @@
+insert into charset_test values( unistr('foo\D800bar'), unistr('foo\D800bar') )

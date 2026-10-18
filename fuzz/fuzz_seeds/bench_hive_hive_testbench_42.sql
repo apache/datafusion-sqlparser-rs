@@ -1,0 +1,1 @@
+create view max_revenue_cached as select max(total_revenue) as max_revenue from revenue_cached

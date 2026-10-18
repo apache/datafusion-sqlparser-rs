@@ -1,0 +1,1 @@
+CREATE VIEW v AS SELECT a, b FROM t WHERE a > 0

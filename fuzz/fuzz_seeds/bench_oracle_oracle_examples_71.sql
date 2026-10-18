@@ -1,0 +1,1 @@
+create table charset_test(col1 varchar2(20), col2 nvarchar2(20))

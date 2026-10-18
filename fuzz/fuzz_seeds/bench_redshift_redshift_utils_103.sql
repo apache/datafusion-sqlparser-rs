@@ -1,0 +1,1 @@
+copy nation from 's3://redshift-downloads/TPC-H/2.18/30TB/nation/' iam_role 'arn:aws:iam::<account_no>:role/RedshiftCopyRole' delimiter '|' EMPTYASNULL region 'us-east-1'

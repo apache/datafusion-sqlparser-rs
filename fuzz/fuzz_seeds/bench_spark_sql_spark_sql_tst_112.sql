@@ -1,0 +1,1 @@
+set spark.sql.legacy.negativeIndexInArrayInsert=false

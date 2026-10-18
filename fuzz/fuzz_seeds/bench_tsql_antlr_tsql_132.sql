@@ -1,0 +1,1 @@
+SELECT LAG(PurchaseOrderNumber,2) OVER(PARTITION BY CustomerID ORDER BY OrderDate) AS PrevPONumberOffset2 FROM sales.SalesOrderHeader

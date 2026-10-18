@@ -1,0 +1,1 @@
+SELECT approx_top_k(skewed_groups, 5) FROM integers

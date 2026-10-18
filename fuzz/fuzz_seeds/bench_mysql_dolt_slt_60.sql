@@ -1,0 +1,1 @@
+SELECT * FROM onecolumn AS a NATURAL JOIN onecolumn as b

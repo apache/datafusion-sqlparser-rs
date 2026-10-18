@@ -1,0 +1,1 @@
+SELECT STRUCT(1 AS a, 'x' AS b) AS s, ARRAY<INT64>[1, 2, 3] AS arr, ARRAY_LENGTH(arr) FROM `project.dataset.tbl`

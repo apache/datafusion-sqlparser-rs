@@ -1,0 +1,1 @@
+CREATE SCHEMA tpcds_reports

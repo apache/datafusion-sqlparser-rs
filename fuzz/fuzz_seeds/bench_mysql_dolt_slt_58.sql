@@ -1,0 +1,1 @@
+SELECT a.x AS x, b.x AS y FROM onecolumn AS a CROSS JOIN onecolumn AS b ORDER BY x, y

@@ -1,0 +1,1 @@
+SELECT amount_of_honey :: text FROM bear_inventory

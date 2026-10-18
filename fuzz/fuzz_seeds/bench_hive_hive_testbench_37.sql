@@ -1,0 +1,1 @@
+drop view q11_sum_tmp_cached

@@ -6056,22 +6056,28 @@ impl fmt::Display for CreateForeignTable {
     }
 }
 
-/// The handler/validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
+/// A handler or validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ForeignDataWrapperRoutineClause {
-    /// A named function, e.g. `HANDLER myhandler` or `VALIDATOR myvalidator`.
-    Function(ObjectName),
-    /// The `NO HANDLER` / `NO VALIDATOR` form.
-    Absent,
+    /// `HANDLER handler_function`
+    Handler(ObjectName),
+    /// `NO HANDLER`
+    NoHandler,
+    /// `VALIDATOR validator_function`
+    Validator(ObjectName),
+    /// `NO VALIDATOR`
+    NoValidator,
 }
 
-impl ForeignDataWrapperRoutineClause {
-    fn fmt_with_label(&self, f: &mut fmt::Formatter<'_>, label: &str) -> fmt::Result {
+impl fmt::Display for ForeignDataWrapperRoutineClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ForeignDataWrapperRoutineClause::Function(name) => write!(f, " {label} {name}"),
-            ForeignDataWrapperRoutineClause::Absent => write!(f, " NO {label}"),
+            ForeignDataWrapperRoutineClause::Handler(name) => write!(f, "HANDLER {name}"),
+            ForeignDataWrapperRoutineClause::NoHandler => f.write_str("NO HANDLER"),
+            ForeignDataWrapperRoutineClause::Validator(name) => write!(f, "VALIDATOR {name}"),
+            ForeignDataWrapperRoutineClause::NoValidator => f.write_str("NO VALIDATOR"),
         }
     }
 }

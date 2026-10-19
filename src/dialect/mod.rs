@@ -1306,6 +1306,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports inline data for
+    /// `COPY ... FROM STDIN`, captured verbatim by the tokenizer.
+    fn supports_copy_from_stdin_data(&self) -> bool {
+        false
+    }
+
     /// Returns true if `#` starts a single line comment only when followed by an ASCII
     /// space or `!`, so `# comment` and `#! comment` are comments but `#comment` is not.
     fn requires_hash_comment_space(&self) -> bool {

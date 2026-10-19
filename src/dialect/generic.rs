@@ -205,6 +205,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_copy_from_stdin_data(&self) -> bool {
+        true
+    }
+
     fn supports_user_host_grantee(&self) -> bool {
         true
     }

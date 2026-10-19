@@ -458,6 +458,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_copy_from_stdin_data(&self) -> bool {
+        true
+    }
+
     fn supports_string_escape_constant(&self) -> bool {
         true
     }

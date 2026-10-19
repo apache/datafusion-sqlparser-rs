@@ -21022,3 +21022,65 @@ fn parse_window_spec_keyword_base_window_name() {
         "SELECT count(*) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
     );
 }
+
+#[test]
+fn parse_qualified_column_named_like_a_literal_prefix() {
+    let dialects = all_dialects_where(|d| d.supports_literal_prefix_in_qualified_name());
+    for (prefix, value) in [
+        ("x", "ff"),
+        ("X", "ff"),
+        ("b", "01"),
+        ("B", "01"),
+        ("n", "nat"),
+        ("N", "nat"),
+        ("r", "raw"),
+        ("R", "raw"),
+        ("e", "es"),
+        ("E", "es"),
+    ] {
+        dialects.one_statement_parses_to(
+            &format!("SELECT t.{prefix}'{value}' FROM t"),
+            &format!("SELECT t.{prefix} AS '{value}' FROM t"),
+        );
+    }
+    dialects.one_statement_parses_to("SELECT t.u&'uni' FROM t", "SELECT t.u & 'uni' FROM t");
+}
+
+#[test]
+fn tokenize_qualified_literal_prefix_without_capability() {
+    all_dialects_where(|d| !d.supports_literal_prefix_in_qualified_name()).tokenizes_to(
+        "t.x'ff'",
+        vec![
+            Token::make_word("t", None),
+            Token::Period,
+            Token::HexStringLiteral("ff".to_string()),
+        ],
+    );
+}
+
+#[test]
+fn parse_qualified_literal_prefix_requires_adjacent_period() {
+    let dialects = all_dialects_where(|d| d.supports_literal_prefix_in_qualified_name());
+    for sql in [
+        "SELECT t. x'ff' FROM t",
+        "SELECT t./* comment */x'ff' FROM t",
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: an identifier or a '*' after '.', found: X'ff'".to_string()
+            )),
+            "{sql}"
+        );
+    }
+    for (sql, token) in [
+        ("x'ff'", Token::HexStringLiteral("ff".to_string())),
+        (
+            "b'01'",
+            Token::SingleQuotedByteStringLiteral("01".to_string()),
+        ),
+        ("n'nat'", Token::NationalStringLiteral("nat".to_string())),
+    ] {
+        dialects.tokenizes_to(sql, vec![token]);
+    }
+}

@@ -49,6 +49,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_literal_prefix_in_qualified_name(&self) -> bool {
+        true
+    }
+
     fn supports_partition_by_after_order_by(&self) -> bool {
         true
     }

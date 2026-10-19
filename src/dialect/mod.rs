@@ -291,6 +291,14 @@ pub trait Dialect: Debug + Any {
         true
     }
 
+    /// Treats literal prefixes immediately after `.` as unquoted identifiers.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/identifiers.html),
+    /// [MariaDB](https://mariadb.com/docs/server/reference/sql-structure/sql-language-structure/identifier-names)
+    fn supports_literal_prefix_in_qualified_name(&self) -> bool {
+        false
+    }
+
     /// Determine whether the dialect strips the backslash when escaping LIKE wildcards (%, _).
     ///
     /// [MySQL] has a special case when escaping single quoted strings which leaves these unescaped

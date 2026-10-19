@@ -17095,13 +17095,17 @@ impl<'a> Parser<'a> {
             // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {
-            // Unquoted reserved keywords, e.g. `ON`, are not table names.
-            let peek_keyword = if let Token::Word(w) = &self.peek_token_ref().token {
-                w.keyword
-            } else {
-                Keyword::NoKeyword
+            // Unquoted reserved keywords, e.g. `ON`, are not table names. The
+            // keyword is consumed first so that `is_table_factor` peeks past it,
+            // as it does at the trailing comma check.
+            self.advance_token();
+            let keyword = match &self.get_current_token().token {
+                Token::Word(w) => w.keyword,
+                _ => Keyword::NoKeyword,
             };
-            if !self.dialect.is_table_factor(&peek_keyword, self) {
+            let is_table_name = self.dialect.is_table_factor(&keyword, self);
+            self.prev_token();
+            if !is_table_name {
                 return self.expected_ref("table name", self.peek_token_ref());
             }
 

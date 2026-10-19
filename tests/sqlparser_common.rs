@@ -21520,6 +21520,7 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
+}
 
 #[test]
 fn quoted_on_allowed_as_table_name() {

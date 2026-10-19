@@ -10201,6 +10201,9 @@ fn parse_string_literal_alias_rejected() {
         );
     }
     pg().verified_stmt(r#"SELECT a AS "x" FROM t AS "y""#);
+}
+
+#[test]
 fn parse_create_foreign_data_wrapper() {
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw";
     let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {

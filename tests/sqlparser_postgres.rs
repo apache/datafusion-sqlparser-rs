@@ -10162,8 +10162,7 @@ fn parse_create_foreign_data_wrapper() {
         unreachable!()
     };
     assert_eq!(stmt.name.to_string(), "myfdw");
-    assert!(stmt.handler.is_none());
-    assert!(stmt.validator.is_none());
+    assert!(stmt.routines.is_empty());
     assert!(stmt.options.is_none());
 
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler";
@@ -10171,25 +10170,28 @@ fn parse_create_foreign_data_wrapper() {
         unreachable!()
     };
     assert_eq!(
-        stmt.handler,
-        Some(ForeignDataWrapperRoutineClause::Function(ObjectName::from(
+        stmt.routines,
+        vec![ForeignDataWrapperRoutineClause::Handler(ObjectName::from(
             vec!["myhandler".into()]
-        )))
+        ))]
     );
 
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER";
     let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.handler, Some(ForeignDataWrapperRoutineClause::Absent));
+    assert_eq!(
+        stmt.routines,
+        vec![ForeignDataWrapperRoutineClause::NoHandler]
+    );
 
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR";
     let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
     assert_eq!(
-        stmt.validator,
-        Some(ForeignDataWrapperRoutineClause::Absent)
+        stmt.routines,
+        vec![ForeignDataWrapperRoutineClause::NoValidator]
     );
 
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator OPTIONS (debug 'true')";
@@ -10212,10 +10214,12 @@ fn parse_create_foreign_data_wrapper() {
     let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.handler, Some(ForeignDataWrapperRoutineClause::Absent));
     assert_eq!(
-        stmt.validator,
-        Some(ForeignDataWrapperRoutineClause::Absent)
+        stmt.routines,
+        vec![
+            ForeignDataWrapperRoutineClause::NoHandler,
+            ForeignDataWrapperRoutineClause::NoValidator
+        ]
     );
 
     // A schema-qualified name is not valid: FDW names are bare identifiers.

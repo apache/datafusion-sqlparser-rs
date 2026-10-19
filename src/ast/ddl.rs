@@ -6570,14 +6570,13 @@ impl From<CreateForeignDataWrapper> for crate::ast::Statement {
 
 impl Spanned for CreateForeignDataWrapper {
     fn span(&self) -> Span {
-        let routine_span = |clause: &Option<ForeignDataWrapperRoutineClause>| match clause {
-            Some(ForeignDataWrapperRoutineClause::Function(name)) => Some(name.span()),
-            _ => None,
-        };
         Span::union_iter(
             core::iter::once(self.name.span)
-                .chain(routine_span(&self.handler))
-                .chain(routine_span(&self.validator))
+                .chain(self.routines.iter().filter_map(|routine| match routine {
+                    ForeignDataWrapperRoutineClause::Handler(name)
+                    | ForeignDataWrapperRoutineClause::Validator(name) => Some(name.span()),
+                    _ => None,
+                }))
                 .chain(
                     self.options
                         .iter()

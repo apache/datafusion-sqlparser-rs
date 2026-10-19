@@ -688,6 +688,30 @@ impl fmt::Display for RoleGrantOptionValue {
     }
 }
 
+/// The options of [`AlterDefaultPrivileges`], kept in the order written.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DefaultPrivilegesOption {
+    /// `FOR ROLE <role> [, ...]`.
+    ForRole(Vec<Ident>),
+    /// `IN SCHEMA <schema> [, ...]`.
+    InSchema(Vec<ObjectName>),
+}
+
+impl fmt::Display for DefaultPrivilegesOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DefaultPrivilegesOption::ForRole(roles) => {
+                write!(f, "FOR ROLE {}", display_comma_separated(roles))
+            }
+            DefaultPrivilegesOption::InSchema(schemas) => {
+                write!(f, "IN SCHEMA {}", display_comma_separated(schemas))
+            }
+        }
+    }
+}
+
 /// `ALTER DEFAULT PRIVILEGES`, which applies to objects created later rather
 /// than to existing ones.
 ///
@@ -696,10 +720,8 @@ impl fmt::Display for RoleGrantOptionValue {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterDefaultPrivileges {
-    /// `FOR ROLE <role> [, ...]`, empty when the clause is absent.
-    pub for_roles: Vec<Ident>,
-    /// `IN SCHEMA <schema> [, ...]`, empty when the clause is absent.
-    pub in_schemas: Vec<ObjectName>,
+    /// The `FOR ROLE` and `IN SCHEMA` options, in written order.
+    pub options: Vec<DefaultPrivilegesOption>,
     /// The abbreviated `GRANT` or `REVOKE` that follows.
     pub operation: AlterDefaultPrivilegesOperation,
 }
@@ -707,15 +729,8 @@ pub struct AlterDefaultPrivileges {
 impl fmt::Display for AlterDefaultPrivileges {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("ALTER DEFAULT PRIVILEGES")?;
-        if !self.for_roles.is_empty() {
-            write!(f, " FOR ROLE {}", display_comma_separated(&self.for_roles))?;
-        }
-        if !self.in_schemas.is_empty() {
-            write!(
-                f,
-                " IN SCHEMA {}",
-                display_comma_separated(&self.in_schemas)
-            )?;
+        for option in &self.options {
+            write!(f, " {option}")?;
         }
         write!(f, " {}", self.operation)
     }
@@ -819,6 +834,8 @@ pub enum DefaultPrivilegesObjectType {
     Types,
     /// `SCHEMAS`
     Schemas,
+    /// `LARGE OBJECTS`
+    LargeObjects,
 }
 
 impl fmt::Display for DefaultPrivilegesObjectType {
@@ -830,6 +847,7 @@ impl fmt::Display for DefaultPrivilegesObjectType {
             DefaultPrivilegesObjectType::Routines => "ROUTINES",
             DefaultPrivilegesObjectType::Types => "TYPES",
             DefaultPrivilegesObjectType::Schemas => "SCHEMAS",
+            DefaultPrivilegesObjectType::LargeObjects => "LARGE OBJECTS",
         })
     }
 }

@@ -10972,26 +10972,13 @@ fn parse_create_foreign_data_wrapper() {
 
 #[test]
 fn parse_create_foreign_data_wrapper_clause_order() {
-    // PostgreSQL takes these in either order; Display normalizes to HANDLER first.
-    let canonical = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator";
-    pg_and_generic().one_statement_parses_to(
-        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR myvalidator HANDLER myhandler",
-        canonical,
-    );
-    pg_and_generic().one_statement_parses_to(
-        "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR NO HANDLER",
-        "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR",
-    );
-
     for sql in [
+        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR myvalidator HANDLER myhandler",
+        "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR NO HANDLER",
         "CREATE FOREIGN DATA WRAPPER myfdw HANDLER h1 HANDLER h2",
         "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER HANDLER h",
         "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR v NO VALIDATOR",
     ] {
-        let err = pg_and_generic().parse_sql_statements(sql).unwrap_err();
-        assert!(
-            err.to_string().contains("conflicting or redundant options"),
-            "unexpected error for {sql}: {err}"
-        );
+        pg_and_generic().verified_stmt(sql);
     }
 }

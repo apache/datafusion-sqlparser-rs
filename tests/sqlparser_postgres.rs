@@ -10868,6 +10868,52 @@ fn parse_alter_default_privileges() {
         "ALTER DEFAULT PRIVILEGES FOR ROLE bob GRANT SELECT ON TABLES TO app",
     );
 
+    // Options keep the order written.
+    for (sql, options) in [
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA s FOR ROLE r GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+            ],
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+            ],
+        ),
+    ] {
+        let mut stmts = pg().parse_sql_statements(sql).unwrap();
+        match stmts.pop().unwrap() {
+            Statement::AlterDefaultPrivileges(stmt) => assert_eq!(stmt.options, options, "{sql}"),
+            _ => unreachable!(),
+        }
+    }
+    // Reversed option order round-trips unchanged.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES IN SCHEMA public FOR ROLE postgres GRANT SELECT ON TABLES TO app_user");
+    // `LARGE OBJECTS` is a valid object type for both `GRANT` and `REVOKE`.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT, UPDATE ON LARGE OBJECTS TO app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON LARGE OBJECTS FROM app CASCADE",
+    );
+    // Repeated options are rejected.
+    assert_eq!(
+        pg().parse_sql_statements(
+            "ALTER DEFAULT PRIVILEGES FOR ROLE a FOR ROLE b GRANT SELECT ON TABLES TO app"
+        )
+        .unwrap_err(),
+        ParserError::ParserError("FOR ROLE specified more than once".to_string()),
+    );
+    assert_eq!(
+        pg().parse_sql_statements(
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA s IN SCHEMA t GRANT SELECT ON TABLES TO app"
+        )
+        .unwrap_err(),
+        ParserError::ParserError("IN SCHEMA specified more than once".to_string()),
+    );
+
     // `TABLES` is a keyword only here, so a table named `tables` still parses.
     pg().verified_stmt("GRANT SELECT ON TABLES TO app");
     assert_eq!(

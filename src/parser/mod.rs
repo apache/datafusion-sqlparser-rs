@@ -19008,18 +19008,35 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<AlterDefaultPrivileges, ParserError> {
         // `FOR USER` is a synonym of `FOR ROLE` and is normalised to it.
-        let for_roles = if self.parse_keyword(Keyword::FOR) {
-            self.expect_one_of_keywords(&[Keyword::ROLE, Keyword::USER])?;
-            self.parse_comma_separated(|p| p.parse_identifier())?
-        } else {
-            vec![]
-        };
-
-        let in_schemas = if self.parse_keywords(&[Keyword::IN, Keyword::SCHEMA]) {
-            self.parse_comma_separated(|p| p.parse_object_name(false))?
-        } else {
-            vec![]
-        };
+        let mut options = Vec::new();
+        let mut for_roles = false;
+        let mut in_schemas = false;
+        loop {
+            if self.parse_keyword(Keyword::FOR) {
+                if for_roles {
+                    return Err(ParserError::ParserError(
+                        "FOR ROLE specified more than once".to_string(),
+                    ));
+                }
+                self.expect_one_of_keywords(&[Keyword::ROLE, Keyword::USER])?;
+                for_roles = true;
+                options.push(DefaultPrivilegesOption::ForRole(
+                    self.parse_comma_separated(|p| p.parse_identifier())?,
+                ));
+            } else if self.parse_keywords(&[Keyword::IN, Keyword::SCHEMA]) {
+                if in_schemas {
+                    return Err(ParserError::ParserError(
+                        "IN SCHEMA specified more than once".to_string(),
+                    ));
+                }
+                in_schemas = true;
+                options.push(DefaultPrivilegesOption::InSchema(
+                    self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                ));
+            } else {
+                break;
+            }
+        }
 
         let is_grant = if self.parse_keyword(Keyword::GRANT) {
             true
@@ -19058,11 +19075,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(AlterDefaultPrivileges {
-            for_roles,
-            in_schemas,
-            operation,
-        })
+        Ok(AlterDefaultPrivileges { options, operation })
     }
 
     /// Parse `ALL [PRIVILEGES]` or a comma separated privilege list.
@@ -19079,6 +19092,9 @@ impl<'a> Parser<'a> {
     fn parse_default_privileges_object_type(
         &mut self,
     ) -> Result<DefaultPrivilegesObjectType, ParserError> {
+        if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECTS]) {
+            return Ok(DefaultPrivilegesObjectType::LargeObjects);
+        }
         for (keyword, object_type) in [
             (Keyword::TABLES, DefaultPrivilegesObjectType::Tables),
             (Keyword::SEQUENCES, DefaultPrivilegesObjectType::Sequences),
@@ -19092,7 +19108,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.expected_ref(
-            "TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES or SCHEMAS",
+            "TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES, SCHEMAS or LARGE OBJECTS",
             self.peek_token_ref(),
         )
     }

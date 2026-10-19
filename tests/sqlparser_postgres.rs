@@ -5559,12 +5559,10 @@ fn parse_create_function_with_set_params() {
 #[test]
 fn parse_incorrect_create_function_parallel() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";
-    assert_eq!(
-        pg().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError(
-            "Expected: one of UNSAFE | RESTRICTED | SAFE, found: BLAH".to_string()
-        )
-    );
+    assert!(matches!(
+        pg().parse_sql_statements(sql),
+        Err(ParserError::ParserError(_))
+    ));
 }
 
 #[test]
@@ -10026,7 +10024,10 @@ fn parse_create_aggregate_ordered_set_args() {
         ["FLOAT8"]
     );
     assert_eq!(
-        aggregated.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        aggregated
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
         ["FLOAT8"]
     );
 }

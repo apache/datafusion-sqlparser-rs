@@ -248,6 +248,73 @@ impl Dialect for SQLiteDialect {
     fn supports_in_table_expression(&self) -> bool {
         true
     }
+
+    /// The keywords SQLite does not accept as a name, as opposed to the
+    /// keywords its grammar lets fall back to an identifier.
+    /// See <https://www.sqlite.org/lang_keywords.html> and the `%fallback ID`
+    /// list in [parse.y](https://sqlite.org/src/file?name=src/parse.y)
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !matches!(
+            kw,
+            Keyword::ADD
+                | Keyword::ALL
+                | Keyword::ALTER
+                | Keyword::AND
+                | Keyword::AS
+                | Keyword::AUTOINCREMENT
+                | Keyword::BETWEEN
+                | Keyword::CASE
+                | Keyword::CHECK
+                | Keyword::COLLATE
+                | Keyword::COMMIT
+                | Keyword::CONSTRAINT
+                | Keyword::CREATE
+                | Keyword::DEFAULT
+                | Keyword::DEFERRABLE
+                | Keyword::DELETE
+                | Keyword::DISTINCT
+                | Keyword::DROP
+                | Keyword::ELSE
+                | Keyword::ESCAPE
+                | Keyword::EXCEPT
+                | Keyword::EXISTS
+                | Keyword::FOREIGN
+                | Keyword::FROM
+                | Keyword::GROUP
+                | Keyword::HAVING
+                | Keyword::IN
+                | Keyword::INDEX
+                | Keyword::INSERT
+                | Keyword::INTERSECT
+                | Keyword::INTO
+                | Keyword::IS
+                | Keyword::JOIN
+                | Keyword::LIMIT
+                | Keyword::NOT
+                | Keyword::NOTHING
+                | Keyword::NOTNULL
+                | Keyword::NULL
+                | Keyword::ON
+                | Keyword::OR
+                | Keyword::ORDER
+                | Keyword::PRIMARY
+                | Keyword::REFERENCES
+                | Keyword::RETURNING
+                | Keyword::SELECT
+                | Keyword::SET
+                | Keyword::TABLE
+                | Keyword::THEN
+                | Keyword::TO
+                | Keyword::TRANSACTION
+                | Keyword::UNION
+                | Keyword::UNIQUE
+                | Keyword::UPDATE
+                | Keyword::USING
+                | Keyword::VALUES
+                | Keyword::WHEN
+                | Keyword::WHERE
+        )
+    }
 }
 
 /// SQLite permits signed and decimal numeric type modifiers.

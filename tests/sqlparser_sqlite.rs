@@ -1786,3 +1786,31 @@ fn parse_bitwise_shift_precedence_boundaries() {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
     }
 }
+
+fn parse_in_table_keyword_names() {
+    // Keywords SQLite lets fall back to an identifier name a table after `IN`.
+    for sql in [
+        "SELECT 1 IN view",
+        "SELECT 1 IN offset",
+        "SELECT 1 IN key",
+        "SELECT 1 IN abort",
+    ] {
+        sqlite().verified_stmt(sql);
+    }
+    // Its reserved keywords do not, so the target falls back to a parenthesized list.
+    for (sql, found) in [
+        ("SELECT 1 IN FROM t", "FROM"),
+        ("SELECT 1 IN select", "select"),
+        ("SELECT 1 IN where", "where"),
+        ("SELECT 1 IN NULL", "NULL"),
+        ("SELECT 1 IN table", "table"),
+        ("SELECT a FROM t WHERE a IN AND b", "AND"),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("Expected: (, found: {found}")),
+        );
+    }
+    // A quoted keyword is a plain name.
+    sqlite().verified_stmt(r#"SELECT 1 IN "from""#);
+}

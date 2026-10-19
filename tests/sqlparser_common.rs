@@ -39,8 +39,7 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
-use sqlparser::tokenizer::Tokenizer;
-use sqlparser::tokenizer::{Location, Span};
+use sqlparser::tokenizer::{Location, Span, Token, Tokenizer, Whitespace};
 use test_utils::{
     all_dialects, all_dialects_where, all_dialects_with_options, alter_table_op, assert_eq_vec,
     call, expr_from_projection, join, number, only, table, table_alias, table_from_name,
@@ -13259,22 +13258,71 @@ fn test_release_savepoint() {
 
 #[test]
 fn test_comment_hash_syntax() {
-    let dialects = TestedDialects::new(vec![
-        Box::new(BigQueryDialect {}),
-        Box::new(SnowflakeDialect {}),
-        Box::new(MySqlDialect {}),
-        Box::new(HiveDialect {}),
-    ]);
     let sql = r#"
     # comment
     SELECT a, b, c # , d, e
     FROM T
     ####### comment #################
-    WHERE true
+    WHERE true # it's a comment
     # comment
     "#;
     let canonical = "SELECT a, b, c FROM T WHERE true";
+    all_dialects_where(|d| d.supports_hash_comment() && !d.requires_hash_comment_space())
+        .verified_only_select_with_canonical(sql, canonical);
+
+    // Elsewhere `#` is an operator, so the apostrophe starts an unterminated string.
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_hash_comment())
+            .parse_sql_statements("SELECT 1 # it's a comment")
+            .unwrap_err(),
+        ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 14".to_string()
+        )
+    );
+}
+
+#[test]
+fn test_comment_hash_requires_space() {
+    let dialects = all_dialects_where(|d| d.requires_hash_comment_space());
+
+    let sql = r#"
+    # comment
+    #! shebang comment
+    SELECT a, b, c # , d, e
+    FROM T
+    WHERE true #! it's a comment
+    "#;
+    let canonical = "SELECT a, b, c FROM T WHERE true";
     dialects.verified_only_select_with_canonical(sql, canonical);
+
+    // Without a space or `!` after it, `#` is an operator token, which the parser rejects.
+    for sql in [
+        "SELECT 1 #comment",
+        "SELECT 1 ####### comment",
+        "SELECT 1 #",
+        "SELECT 1 #\tcomment",
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token Sharp".to_string()),
+            "{sql}"
+        );
+    }
+    dialects.tokenizes_to(
+        "SELECT 1 ### comment",
+        vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
+            Token::Sharp,
+            Token::Sharp,
+            Token::Whitespace(Whitespace::SingleLineComment {
+                prefix: "#".to_string(),
+                comment: " comment".to_string(),
+            }),
+        ],
+    );
 }
 
 #[test]
@@ -20709,4 +20757,12 @@ fn parse_cte_materialization() {
             }
         }
     }
+}
+
+#[test]
+fn parse_string_literal_alias() {
+    let dialects = all_dialects_where(|d| d.supports_string_literal_alias());
+    dialects.one_statement_parses_to("SELECT 1 'x'", "SELECT 1 AS 'x'");
+    dialects.verified_stmt("SELECT 1 AS 'x'");
+    dialects.verified_stmt("SELECT a FROM t AS 'y'");
 }

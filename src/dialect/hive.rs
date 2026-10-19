@@ -27,6 +27,10 @@ impl Dialect for HiveDialect {
         (ch == '"') || (ch == '`')
     }
 
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
     /// See <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-RulesforColumnNames>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')

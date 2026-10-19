@@ -10219,10 +10219,12 @@ fn parse_create_foreign_data_wrapper() {
     );
 
     // A schema-qualified name is not valid: FDW names are bare identifiers.
-    assert!(matches!(
+    assert_eq!(
         pg_and_generic().parse_sql_statements("CREATE FOREIGN DATA WRAPPER myschema.myfdw"),
-        Err(ParserError::ParserError(_))
-    ));
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: .".to_string()
+        ))
+    );
 
     for sql in [
         "CREATE TEMPORARY FOREIGN DATA WRAPPER myfdw",

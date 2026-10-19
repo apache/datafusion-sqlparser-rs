@@ -1990,6 +1990,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Whether a custom type name may introduce a typed string.
+    fn is_custom_type_typed_string(&self, _first_keyword: Keyword, _qualified: bool) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports aliased function arguments,
     /// e.g. `XMLFOREST(a AS x)` in PostgreSQL.
     fn supports_aliased_function_args(&self) -> bool {

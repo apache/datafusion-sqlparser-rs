@@ -143,7 +143,6 @@ impl fmt::Display for ProjectionSelect {
 
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -191,6 +190,7 @@ impl SetExpr {
 }
 
 impl fmt::Display for SetExpr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SetExpr::Select(s) => s.fmt(f),
@@ -2703,6 +2703,9 @@ impl fmt::Display for Join {
                         JoinConstraint::Using(attrs) => {
                             write!(f, " USING({})", display_comma_separated(attrs))
                         }
+                        JoinConstraint::UsingAlias(columns, alias) => {
+                            write!(f, " USING({}) AS {alias}", display_comma_separated(columns))
+                        }
                         _ => Ok(()),
                     }
                 }
@@ -2892,6 +2895,8 @@ pub enum JoinConstraint {
     On(Expr),
     /// `USING(...)` list of column names.
     Using(Vec<ObjectName>),
+    /// `USING(...) AS alias` list of column names with an alias for the joined columns.
+    UsingAlias(Vec<ObjectName>, Ident),
     /// `NATURAL` join (columns matched automatically).
     Natural,
     /// No constraint specified (e.g. `CROSS JOIN`).

@@ -100,6 +100,11 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    // See <https://clickhouse.com/docs/sql-reference/operators/in#distributed-subqueries>
+    fn supports_global_in(&self) -> bool {
+        true
+    }
+
     /// See <https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function>
     fn supports_lambda_functions(&self) -> bool {
         true
@@ -127,6 +132,16 @@ impl Dialect for ClickHouseDialect {
     /// Supported since 2020.
     /// See <https://clickhouse.com/docs/whats-new/changelog/2020#backward-incompatible-change-2>
     fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/sql-reference/syntax#comments>
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
+    /// See <https://github.com/ClickHouse/ClickHouse/blob/master/src/Parsers/Lexer.cpp>
+    fn requires_hash_comment_space(&self) -> bool {
         true
     }
 

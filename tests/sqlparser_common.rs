@@ -20749,9 +20749,57 @@ fn parse_cte_materialization() {
 }
 
 #[test]
+fn unary_prefix_operator_renders_apart_from_cast_operand() {
+    for (op, expected) in [
+        (UnaryOperator::Minus, "- -x::INT"),
+        (UnaryOperator::BangNot, "! !x::INT"),
+    ] {
+        let cast = Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(UnaryOp {
+                op,
+                expr: Box::new(Identifier(Ident::new("x"))),
+            }),
+            data_type: DataType::Int(None),
+            format: None,
+        };
+        let expr = UnaryOp {
+            op,
+            expr: Box::new(cast),
+        };
+        assert_eq!(expr.to_string(), expected);
+    }
+}
+
+#[test]
 fn parse_string_literal_alias() {
     let dialects = all_dialects_where(|d| d.supports_string_literal_alias());
     dialects.one_statement_parses_to("SELECT 1 'x'", "SELECT 1 AS 'x'");
     dialects.verified_stmt("SELECT 1 AS 'x'");
     dialects.verified_stmt("SELECT a FROM t AS 'y'");
+}
+
+#[test]
+fn display_nested_unary_minus_in_linear_time() {
+    use core::time::Duration;
+    use std::sync::mpsc;
+    use std::thread;
+
+    let depth = 200;
+    let sql = format!("SELECT {}-x", "- ".repeat(depth - 1));
+    let statement = Parser::new(&GenericDialect {})
+        .with_recursion_limit(depth * 10)
+        .try_with_sql(&sql)
+        .and_then(|mut p| p.parse_statement())
+        .unwrap();
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(statement.to_string());
+    });
+
+    let printed = rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("display should not take exponential time");
+    assert_eq!(printed, sql);
 }

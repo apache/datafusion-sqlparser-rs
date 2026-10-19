@@ -48,6 +48,9 @@ use crate::dialect::{
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
+/// Chars that may join a preceding `-` or `!` into one token.
+pub(crate) const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
+
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

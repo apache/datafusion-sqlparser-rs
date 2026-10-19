@@ -6337,10 +6337,9 @@ pub struct CreateForeignDataWrapper {
     /// The name of the foreign-data wrapper. Per PostgreSQL this is a bare
     /// identifier and cannot be schema-qualified.
     pub name: Ident,
-    /// Optional `HANDLER handler_function` or `NO HANDLER` clause.
-    pub handler: Option<ForeignDataWrapperRoutineClause>,
-    /// Optional `VALIDATOR validator_function` or `NO VALIDATOR` clause.
-    pub validator: Option<ForeignDataWrapperRoutineClause>,
+    /// `HANDLER` and `VALIDATOR` clauses in source order. PostgreSQL's grammar
+    /// accepts repeated clauses and rejects them only when executing the statement.
+    pub routines: Vec<ForeignDataWrapperRoutineClause>,
     /// Optional `OPTIONS (key 'value', ...)` clause.
     pub options: Option<Vec<CreateServerOption>>,
 }

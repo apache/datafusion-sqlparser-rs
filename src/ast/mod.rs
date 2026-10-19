@@ -83,10 +83,10 @@ pub use self::ddl::{
     IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
     OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
     Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef, WithData,
+    ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -3608,7 +3608,6 @@ impl fmt::Display for Analyze {
 }
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -5171,9 +5170,10 @@ impl fmt::Display for Statement {
     /// FROM
     ///   table_1"#);
     /// ```
-    // Clippy thinks this function is too complicated, but it is painful to
-    // split up without extracting structs for each `Statement` variant.
-    #[allow(clippy::cognitive_complexity)]
+    #[expect(
+        clippy::cognitive_complexity,
+        reason = "splitting this match would need a struct for each `Statement` variant"
+    )]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Flush {
@@ -5576,9 +5576,11 @@ impl fmt::Display for Statement {
                     temp = if *temporary { "TEMPORARY " } else { "" },
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
-                if let Some(args) = args {
-                    write!(f, "({})", display_comma_separated(args))?;
-                }
+                write!(
+                    f,
+                    "({})",
+                    display_comma_separated(args.as_deref().unwrap_or(&[]))
+                )?;
                 match definition {
                     MacroDefinition::Expr(expr) => write!(f, " AS {expr}")?,
                     MacroDefinition::Table(query) => write!(f, " AS TABLE {query}")?,
@@ -8945,7 +8947,6 @@ impl fmt::Display for DescribeAlias {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-#[allow(clippy::large_enum_variant)]
 /// Hive input/output format specification used in `CREATE TABLE`.
 pub enum HiveIOFormat {
     /// Generic IO format with separate input and output expressions.
@@ -10705,7 +10706,6 @@ impl fmt::Display for HiveSetLocation {
 }
 
 /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

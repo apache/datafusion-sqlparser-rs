@@ -40,16 +40,13 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use crate::ast::{DollarQuotedString, QuoteDelimitedString};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use crate::{
-    ast::{DollarQuotedString, QuoteDelimitedString},
-    dialect::HiveDialect,
-};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1736,9 +1733,15 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
+                '#' if self.dialect.supports_hash_comment()
+                    && (!self.dialect.requires_hash_comment_space()
+                        || chars
+                            .peekable
+                            .clone()
+                            .nth(1)
+                            .is_some_and(|c| c == ' ' || c == '!')) =>
                 {
-                    chars.next(); // consume the '#', starting a snowflake single-line comment
+                    chars.next(); // consume the '#', starting a single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
                         prefix: "#".to_owned(),
@@ -2421,7 +2424,10 @@ impl<'a> Tokenizer<'a> {
         (s, last_char)
     }
 
-    #[allow(clippy::unnecessary_wraps)]
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the match arms in `next_token` return this value directly"
+    )]
     fn consume_and_return(
         &self,
         chars: &mut State,

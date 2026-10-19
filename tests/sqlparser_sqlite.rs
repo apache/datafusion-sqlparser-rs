@@ -29,7 +29,7 @@ use test_utils::*;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::dialect::{AnsiDialect, GenericDialect, SQLiteDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
 
@@ -132,9 +132,13 @@ fn parse_create_table_without_rowid() {
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
-            without_rowid: true,
+            sqlite_table_options,
             ..
         }) => {
+            assert_eq!(
+                sqlite_table_options.options,
+                vec![SqliteTableOption::WithoutRowid]
+            );
             assert_eq!("t", name.to_string());
         }
         _ => unreachable!(),
@@ -389,9 +393,17 @@ fn test_placeholder() {
 #[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
-    if let Statement::CreateTable(CreateTable { name, strict, .. }) = sqlite().verified_stmt(sql) {
+    if let Statement::CreateTable(CreateTable {
+        name,
+        sqlite_table_options,
+        ..
+    }) = sqlite().verified_stmt(sql)
+    {
         assert_eq!(name.to_string(), "Fruits");
-        assert!(strict);
+        assert_eq!(
+            sqlite_table_options.options,
+            vec![SqliteTableOption::Strict]
+        );
     }
 }
 
@@ -1054,6 +1066,82 @@ fn parse_n_prefix_not_national_string() {
     all_dialects_where(|d| d.supports_national_string_literal()).verified_stmt("SELECT N'hello'");
 }
 
+#[test]
+fn parse_create_table_options_list() {
+    use SqliteTableOption::{Strict, WithoutRowid};
+    for (suffix, leading_comma, options) in [
+        (" WITHOUT ROWID, STRICT", false, vec![WithoutRowid, Strict]),
+        (" STRICT, WITHOUT ROWID", false, vec![Strict, WithoutRowid]),
+        (" STRICT, STRICT", false, vec![Strict, Strict]),
+        (", STRICT", true, vec![Strict]),
+        (", WITHOUT ROWID, STRICT", true, vec![WithoutRowid, Strict]),
+    ] {
+        let sql = format!("CREATE TABLE t (a INT){suffix}");
+        match sqlite_and_generic().verified_stmt(&sql) {
+            Statement::CreateTable(CreateTable {
+                sqlite_table_options,
+                ..
+            }) => assert_eq!(
+                sqlite_table_options,
+                SqliteTableOptions {
+                    leading_comma,
+                    options
+                },
+                "{sql}"
+            ),
+            _ => unreachable!(),
+        }
+    }
+    sqlite_and_generic().one_statement_parses_to(
+        "CREATE TABLE t (a INT) , STRICT",
+        "CREATE TABLE t (a INT), STRICT",
+    );
+
+    for (suffix, error) in [
+        (
+            " WITHOUT ROWID STRICT",
+            "Expected: end of statement, found: STRICT",
+        ),
+        (
+            " STRICT WITHOUT ROWID",
+            "Expected: end of statement, found: WITHOUT",
+        ),
+        (" STRICT,", "Expected: WITHOUT ROWID or STRICT, found: EOF"),
+        (" STRICT, WITHOUT", "Expected: ROWID, found: EOF"),
+        (",", "Expected: end of statement, found: ,"),
+        (", , STRICT", "Expected: end of statement, found: ,"),
+    ] {
+        let sql = format!("CREATE TABLE t (a INT){suffix}");
+        let actual = sqlite_and_generic().parse_sql_statements(&sql).unwrap_err();
+        assert!(actual.to_string().contains(error), "{sql}: {actual}");
+    }
+}
+
+#[test]
+fn parse_parenthesized_table_factor() {
+    for (sql, canonical) in [
+        ("SELECT * FROM (t)", "SELECT * FROM t"),
+        ("SELECT * FROM ((t))", "SELECT * FROM t"),
+        ("SELECT * FROM (t) AS a", "SELECT * FROM t AS a"),
+        ("SELECT * FROM (t AS a)", "SELECT * FROM t AS a"),
+        (
+            "SELECT * FROM ((SELECT 1) AS s)",
+            "SELECT * FROM (SELECT 1) AS s",
+        ),
+        ("SELECT * FROM f(), (t)", "SELECT * FROM f(), t"),
+    ] {
+        sqlite_and_generic().one_statement_parses_to(sql, canonical);
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_parens_around_table_factor())
+            .parse_sql_statements("SELECT * FROM (t)"),
+        Err(ParserError::ParserError(
+            "Expected: joined table, found: )".to_string()
+        ))
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }
@@ -1067,4 +1155,19 @@ fn sqlite_and_generic() -> TestedDialects {
         Box::new(SQLiteDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+#[test]
+fn test_dollar_sign_in_identifier() {
+    // SQLite allows $ anywhere after the first character of an identifier
+    sqlite().verified_stmt("SELECT a$ FROM t");
+    sqlite().verified_stmt("SELECT 1 AS a$");
+    sqlite().one_statement_parses_to("CREATE TABLE t(a$ INT)", "CREATE TABLE t (a$ INT)");
+    sqlite().verified_stmt("INSERT INTO t$ VALUES (1)");
+    // AS$ is parsed as the alias name
+    sqlite().one_statement_parses_to("SELECT a AS$", "SELECT a AS AS$");
+    // Dialects without $ as an identifier character still reject these identifiers
+    TestedDialects::new(vec![Box::new(AnsiDialect {})])
+        .parse_sql_statements("SELECT a$ FROM t")
+        .unwrap_err();
 }

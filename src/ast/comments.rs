@@ -101,6 +101,39 @@ impl Comments {
         })
     }
 
+    /// Finds comments immediately before the token starting at `location`, in source order.
+    ///
+    /// # Example
+    /// ```rust
+    /// use sqlparser::{dialect::GenericDialect, parser::Parser, tokenizer::Location};
+    ///
+    /// let sql = r#"SELECT 1; -- one
+    /// -- two
+    /// SELECT 2"#;
+    /// let (_, comments) = Parser::parse_sql_with_comments(&GenericDialect, sql).unwrap();
+    ///
+    /// let second = Location::new(3, 1);
+    /// assert_eq!(
+    ///    &comments.find_before(second).map(|c| c.as_str()).collect::<Vec<_>>(),
+    ///    &[" one", " two"]);
+    /// ```
+    pub fn find_before(&self, location: Location) -> Iter<'_> {
+        let end = self.end_index(Bound::Excluded(&location));
+        let start = self.0[..end].partition_point(|c| c.next_token_start != Some(location));
+        Iter(self.0[start..end].iter())
+    }
+
+    pub(crate) fn set_next_token_start(&mut self, next_token_start: Location) {
+        for comment in self
+            .0
+            .iter_mut()
+            .rev()
+            .take_while(|c| c.next_token_start.is_none())
+        {
+            comment.next_token_start = Some(next_token_start);
+        }
+    }
+
     /// Find the index of the first comment starting "before" the given location.
     ///
     /// The returned index is _inclusive_ and within the range of `0..=self.0.len()`.
@@ -157,6 +190,10 @@ pub struct CommentWithSpan {
     pub comment: Comment,
     /// The span of the comment including its markers
     pub span: Span,
+    /// End of the previous non-whitespace source token, or `None` before the first token.
+    pub prev_token_end: Option<Location>,
+    /// Start of the next non-whitespace source token, or `None` after the last token.
+    pub next_token_start: Option<Location>,
 }
 
 impl Deref for CommentWithSpan {
@@ -208,7 +245,7 @@ impl Deref for Comment {
     }
 }
 
-/// An opaque iterator implementation over comments served by [Comments::find].
+/// An opaque iterator over comments returned by [`Comments::find`] and [`Comments::find_before`].
 pub struct Iter<'a>(slice::Iter<'a, CommentWithSpan>);
 
 impl<'a> Iterator for Iter<'a> {
@@ -241,10 +278,14 @@ mod tests {
                     prefix: "--".into(),
                 },
                 span: Span::new((1, 1).into(), (1, 7).into()),
+                prev_token_end: None,
+                next_token_start: None,
             });
             c.offer(CommentWithSpan {
                 comment: Comment::MultiLine(" hello ".into()),
                 span: Span::new((2, 3).into(), (2, 14).into()),
+                prev_token_end: None,
+                next_token_start: None,
             });
             c.offer(CommentWithSpan {
                 comment: Comment::SingleLine {
@@ -252,10 +293,14 @@ mod tests {
                     prefix: "--".into(),
                 },
                 span: Span::new((2, 14).into(), (2, 21).into()),
+                prev_token_end: None,
+                next_token_start: None,
             });
             c.offer(CommentWithSpan {
                 comment: Comment::MultiLine(" def\n ghi\n jkl\n".into()),
                 span: Span::new((3, 3).into(), (7, 1).into()),
+                prev_token_end: None,
+                next_token_start: None,
             });
             c
         };
@@ -333,6 +378,81 @@ mod tests {
         assert_eq!(
             find(&comments, ..),
             vec![" abc", " hello ", ", world", " def\n ghi\n jkl\n"]
+        );
+    }
+
+    #[test]
+    fn test_find_before() {
+        let first_token = Location::new(2, 1);
+        let second_token = Location::new(4, 1);
+        let mut comments = Comments::default();
+        for comment in [
+            CommentWithSpan {
+                comment: Comment::SingleLine {
+                    content: " first".into(),
+                    prefix: "--".into(),
+                },
+                span: Span::new((1, 1).into(), (1, 9).into()),
+                prev_token_end: None,
+                next_token_start: Some(first_token),
+            },
+            CommentWithSpan {
+                comment: Comment::SingleLine {
+                    content: " second".into(),
+                    prefix: "--".into(),
+                },
+                span: Span::new((2, 11).into(), (2, 20).into()),
+                prev_token_end: Some(Location::new(2, 10)),
+                next_token_start: Some(second_token),
+            },
+            CommentWithSpan {
+                comment: Comment::SingleLine {
+                    content: " third".into(),
+                    prefix: "--".into(),
+                },
+                span: Span::new((3, 1).into(), (3, 9).into()),
+                prev_token_end: Some(Location::new(2, 10)),
+                next_token_start: Some(second_token),
+            },
+            CommentWithSpan {
+                comment: Comment::SingleLine {
+                    content: " tail".into(),
+                    prefix: "--".into(),
+                },
+                span: Span::new((4, 11).into(), (4, 18).into()),
+                prev_token_end: Some(Location::new(4, 10)),
+                next_token_start: None,
+            },
+        ] {
+            comments.offer(comment);
+        }
+
+        fn find_before(comments: &Comments, location: Location) -> Vec<&str> {
+            comments.find_before(location).map(|c| c.as_str()).collect()
+        }
+
+        assert_eq!(find_before(&comments, first_token), vec![" first"]);
+        assert_eq!(
+            find_before(&comments, second_token),
+            vec![" second", " third"]
+        );
+        for location in [
+            Location::new(0, 0),
+            Location::new(1, 3),
+            Location::new(2, 8),
+            Location::new(3, 12),
+            Location::new(4, 3),
+            Location::new(5, 1),
+        ] {
+            assert_eq!(
+                find_before(&comments, location),
+                Vec::<&str>::new(),
+                "{location:?}"
+            );
+        }
+        assert_eq!(
+            find_before(&Comments::default(), first_token),
+            Vec::<&str>::new()
         );
     }
 }

@@ -596,25 +596,31 @@ impl<'a> Parser<'a> {
     /// Consumes this parser returning comments from the parsed token stream.
     pub fn into_comments(self) -> comments::Comments {
         let mut comments = comments::Comments::default();
+        let mut prev_token_end = None;
         for t in self.tokens.into_iter() {
-            match t.token {
+            let comment = match t.token {
                 Token::Whitespace(Whitespace::SingleLineComment { comment, prefix }) => {
-                    comments.offer(comments::CommentWithSpan {
-                        comment: comments::Comment::SingleLine {
-                            content: comment,
-                            prefix,
-                        },
-                        span: t.span,
-                    });
+                    comments::Comment::SingleLine {
+                        content: comment,
+                        prefix,
+                    }
                 }
                 Token::Whitespace(Whitespace::MultiLineComment(comment)) => {
-                    comments.offer(comments::CommentWithSpan {
-                        comment: comments::Comment::MultiLine(comment),
-                        span: t.span,
-                    });
+                    comments::Comment::MultiLine(comment)
                 }
-                _ => {}
-            }
+                Token::Whitespace(_) | Token::EOF => continue,
+                _ => {
+                    comments.set_next_token_start(t.span.start);
+                    prev_token_end = Some(t.span.end);
+                    continue;
+                }
+            };
+            comments.offer(comments::CommentWithSpan {
+                comment,
+                span: t.span,
+                prev_token_end,
+                next_token_start: None,
+            });
         }
         comments
     }

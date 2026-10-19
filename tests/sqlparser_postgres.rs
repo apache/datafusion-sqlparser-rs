@@ -10847,3 +10847,10 @@ fn parse_geometric_typed_literal_error_propagates() {
         ParserError::ParserError("Expected: a value, found: (".to_string())
     );
 }
+
+#[test]
+fn parse_create_function_with_order_type() {
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(x ORDER) RETURNS INT LANGUAGE SQL AS 'SELECT 1'",
+    );
+}

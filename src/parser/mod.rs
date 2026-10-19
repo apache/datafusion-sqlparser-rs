@@ -6436,12 +6436,12 @@ impl<'a> Parser<'a> {
         // first token is a name and not a type in itself.
         let data_type_idx = self.get_current_index();
 
-        // DEFAULT and ORDER parse as `DataType::Custom`, which is undesirable here.
+        // DEFAULT parses as `DataType::Custom`, which is undesirable here.
         fn parse_data_type_no_arg_boundary(parser: &mut Parser) -> Result<DataType, ParserError> {
-            if parser.peek_keyword(Keyword::DEFAULT) || parser.peek_keyword(Keyword::ORDER) {
+            if parser.peek_keyword(Keyword::DEFAULT) {
                 // This dummy error is ignored in `maybe_parse`
                 parser_err!(
-                    "The DEFAULT or ORDER keyword is not a type",
+                    "The DEFAULT keyword is not a type",
                     parser.peek_token_ref().span.start
                 )
             } else {

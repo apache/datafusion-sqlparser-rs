@@ -6347,11 +6347,8 @@ pub struct CreateForeignDataWrapper {
 impl fmt::Display for CreateForeignDataWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "CREATE FOREIGN DATA WRAPPER {}", self.name)?;
-        if let Some(handler) = &self.handler {
-            handler.fmt_with_label(f, "HANDLER")?;
-        }
-        if let Some(validator) = &self.validator {
-            validator.fmt_with_label(f, "VALIDATOR")?;
+        for routine in &self.routines {
+            write!(f, " {routine}")?;
         }
         if let Some(options) = &self.options {
             write!(f, " OPTIONS ({})", display_comma_separated(options))?;

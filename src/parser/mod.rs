@@ -20797,12 +20797,17 @@ impl<'a> Parser<'a> {
                 (SequenceOptions::DataType(self.parse_data_type()?), "AS")
             } else if allow_type_and_owner && self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
                 // [ OWNED BY { table_name.column_name | NONE } ]
-                let owner = if self.parse_keyword(Keyword::NONE) {
-                    None
-                } else {
-                    Some(self.parse_object_name(false)?)
-                };
-                (SequenceOptions::OwnedBy(owner), "OWNED BY")
+                // Only the single bare word `NONE` means no owner, `none.c` is a column.
+                let owner = self.parse_object_name(false)?;
+                let is_none = matches!(
+                    owner.0.as_slice(),
+                    [ObjectNamePart::Identifier(ident)]
+                        if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("NONE")
+                );
+                (
+                    SequenceOptions::OwnedBy((!is_none).then_some(owner)),
+                    "OWNED BY",
+                )
             } else {
                 break;
             };

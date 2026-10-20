@@ -1043,6 +1043,10 @@ fn test_signed_type_modifiers() {
     sqlite().verified_stmt("CREATE TABLE t (a CHAR(1, 1.5))");
     sqlite().verified_stmt("CREATE TABLE t (a INT(1, -2))");
     sqlite().verified_stmt("CREATE TABLE t (a DECIMAL(1, 2.5))");
+    // signed decimals and oversized values select the custom path in either slot
+    sqlite().verified_stmt("CREATE TABLE t (a REAL(-1.5, +2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a DECIMAL(10, 99999999999999999999999))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(1, .5))");
     // plain unsigned integer keeps the normal AST
     sqlite().verified_stmt("CREATE TABLE t (a CHAR(10))");
     sqlite().verified_stmt("CREATE TABLE t (a INT(10))");

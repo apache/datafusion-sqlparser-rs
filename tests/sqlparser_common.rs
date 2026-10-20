@@ -21564,6 +21564,62 @@ fn parse_in_table_expression() {
     dialects.verified_stmt("SELECT a IN (SELECT b FROM u) FROM t");
 }
 
+/// Malformed table and table-function targets of `IN` keep their precise
+/// parse errors.
+#[test]
+fn parse_in_table_expression_malformed_targets() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for (sql, expected) in [
+        // A dangling dot leaves the qualified name without its last part.
+        ("SELECT a IN t.", "Expected: identifier, found: EOF"),
+        // A trailing comma leaves the next argument without an expression.
+        ("SELECT a IN f(x,)", "Expected: an expression, found: )"),
+        // The argument list never closes its parenthesis.
+        ("SELECT a IN f(1, 2", "Expected: ), found: EOF"),
+    ] {
+        assert_eq!(
+            ParserError::ParserError(expected.to_string()),
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            "{sql}"
+        );
+    }
+}
+
+/// Display of an `IN` table target propagates formatter errors from the
+/// name and the argument list writes.
+#[test]
+fn display_in_table_target_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let plain = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: None,
+    };
+    let mut writer = RejectingWriter('t');
+    assert_eq!(write!(writer, "{plain}"), Err(fmt::Error));
+
+    let function = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: Some(vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+            Expr::value(number("1")),
+        ))]),
+    };
+    let mut writer = RejectingWriter('1');
+    assert_eq!(write!(writer, "{function}"), Err(fmt::Error));
+}
+
 #[test]
 #[cfg(feature = "visitor")]
 fn test_visit_relations_in_table_target() {

@@ -3012,6 +3012,9 @@ fn parse_hyphenated_identifier_after_numeric_segment() {
     bigquery().verified_stmt("UPDATE foo-1 SET a = 1");
     bigquery().verified_stmt("CREATE TABLE t-1 (a INT64)");
     bigquery().verified_stmt("CREATE TABLE ship_mo-29 (a INT64)");
+    bigquery().one_statement_parses_to("SELECT * FROM foo-1;", "SELECT * FROM foo-1");
+    bigquery().verified_stmt("SELECT * FROM (SELECT 1 FROM foo-1)");
+    bigquery().one_statement_parses_to("CREATE TABLE t-1(a INT64)", "CREATE TABLE t-1 (a INT64)");
 
     let err = bigquery()
         .parse_sql_statements("SELECT * FROM foo-123a")
@@ -3019,6 +3022,16 @@ fn parse_hyphenated_identifier_after_numeric_segment() {
     assert_eq!(
         ParserError::ParserError(
             "Expected: whitespace following hyphenated identifier, found: a".to_string(),
+        ),
+        err
+    );
+
+    let err = bigquery()
+        .parse_sql_statements("SELECT * FROM foo-1`x`")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: whitespace following hyphenated identifier, found: `x`".to_string(),
         ),
         err
     );

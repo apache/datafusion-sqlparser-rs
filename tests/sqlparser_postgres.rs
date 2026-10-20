@@ -10954,7 +10954,6 @@ fn parse_create_foreign_data_wrapper() {
         ]
     );
 
-    // A schema-qualified name is not valid: FDW names are bare identifiers.
     assert_eq!(
         pg_and_generic().parse_sql_statements("CREATE FOREIGN DATA WRAPPER myschema.myfdw"),
         Err(ParserError::ParserError(
@@ -10974,6 +10973,45 @@ fn parse_create_foreign_data_wrapper() {
             "unexpected error for {sql}: {err}"
         );
     }
+}
+
+#[test]
+fn foreign_data_wrapper_display_and_span() {
+    let ident = |value: &str, start: u64, end: u64| Ident {
+        value: value.to_string(),
+        quote_style: None,
+        span: Span::new(Location::new(1, start), Location::new(1, end)),
+    };
+    let stmt = Statement::CreateForeignDataWrapper(CreateForeignDataWrapper {
+        name: ident("myfdw", 29, 34),
+        routines: vec![
+            ForeignDataWrapperRoutineClause::Handler(ObjectName::from(ident("myhandler", 43, 52))),
+            ForeignDataWrapperRoutineClause::NoHandler,
+            ForeignDataWrapperRoutineClause::Validator(ObjectName::from(ident(
+                "myvalidator",
+                74,
+                85,
+            ))),
+            ForeignDataWrapperRoutineClause::NoValidator,
+        ],
+        options: Some(vec![CreateServerOption {
+            key: ident("debug", 108, 113),
+            value: Ident {
+                value: "true".to_string(),
+                quote_style: Some('\''),
+                span: Span::new(Location::new(1, 114), Location::new(1, 120)),
+            },
+        }]),
+    });
+
+    assert_eq!(
+        stmt.to_string(),
+        "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler NO HANDLER VALIDATOR myvalidator NO VALIDATOR OPTIONS (debug 'true')"
+    );
+    assert_eq!(
+        stmt.span(),
+        Span::new(Location::new(1, 29), Location::new(1, 120))
+    );
 }
 
 #[test]

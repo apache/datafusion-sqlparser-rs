@@ -2095,8 +2095,20 @@ fn pragma_values() {
             "PRAGMA x = NULL",
             "Expected: number, name or string, found: NULL",
         ),
+        ("PRAGMA x()", "Expected: identifier, found: )"),
+        ("PRAGMA x = )", "Expected: identifier, found: )"),
+        ("PRAGMA x(=)", "Expected: identifier, found: ="),
     ] {
         let actual = sqlite_and_generic().parse_sql_statements(sql).unwrap_err();
         assert!(actual.to_string().contains(error), "{sql}: {actual}");
     }
+}
+
+#[cfg(feature = "bigdecimal")]
+#[test]
+fn pragma_values_reject_unrepresentable_signed_numbers() {
+    let error = sqlite_and_generic()
+        .parse_sql_statements("PRAGMA x = -1e999999999999999999999999")
+        .unwrap_err();
+    assert!(matches!(error, ParserError::ParserError(_)));
 }

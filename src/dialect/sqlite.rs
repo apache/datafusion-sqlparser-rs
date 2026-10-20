@@ -48,10 +48,7 @@ impl Dialect for SQLiteDialect {
 
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://www.sqlite.org/draft/tokenreq.html
-        ch.is_ascii_lowercase()
-            || ch.is_ascii_uppercase()
-            || ch == '_'
-            || ('\u{007f}'..='\u{ffff}').contains(&ch)
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_' || ch >= '\u{0080}'
     }
 
     fn supports_filter_during_aggregation(&self) -> bool {
@@ -63,7 +60,7 @@ impl Dialect for SQLiteDialect {
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ch.is_ascii_digit()
+        self.is_identifier_start(ch) || ch.is_ascii_digit() || ch == '$'
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
@@ -130,7 +127,27 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_double_eq_assignment(&self) -> bool {
+        true
+    }
+
+    fn supports_string_literal_column_names(&self) -> bool {
+        true
+    }
+
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
+        true
+    }
+
     fn supports_national_string_literal(&self) -> bool {
         false
+    }
+
+    fn supports_parens_around_table_factor(&self) -> bool {
+        true
+    }
+
+    fn supports_unterminated_block_comments(&self) -> bool {
+        true
     }
 }

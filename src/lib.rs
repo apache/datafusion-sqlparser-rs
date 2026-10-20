@@ -148,11 +148,10 @@
 //![`TokenWithLocation`]: tokenizer::TokenWithLocation
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(clippy::upper_case_acronyms)]
-// Permit large enum variants to keep a unified, expressive AST.
-// Splitting complex nodes (expressions, statements, types) into separate types
-// would bloat the API and hide intent. Extra memory is a worthwhile tradeoff.
-#![allow(clippy::large_enum_variant)]
+#![expect(
+    clippy::large_enum_variant,
+    reason = "a unified AST is worth the extra memory, and splitting nodes into separate types would bloat the API"
+)]
 #![forbid(clippy::unreachable)]
 #![forbid(missing_docs)]
 

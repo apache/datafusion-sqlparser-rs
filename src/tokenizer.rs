@@ -40,16 +40,16 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use crate::ast::{DollarQuotedString, QuoteDelimitedString};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use crate::{
-    ast::{DollarQuotedString, QuoteDelimitedString},
-    dialect::HiveDialect,
-};
+
+/// Chars that may join a preceding `-` or `!` into one token.
+pub(crate) const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1354,7 +1354,33 @@ impl<'a> Tokenizer<'a> {
                         );
                     }
 
+                    // A period directly after an identifier, `)`, `]` or a tuple index
+                    // starts a field access such as `t.1`, `(1, 2).1` or `t.1.2`, never a float.
+                    if ch == '.'
+                        && self.dialect.supports_tuple_element_access()
+                        && matches!(
+                            prev_token,
+                            Some(
+                                Token::Word(_)
+                                    | Token::RParen
+                                    | Token::RBracket
+                                    | Token::Number(..)
+                            )
+                        )
+                    {
+                        chars.next();
+                        return Ok(Some(Token::Period));
+                    }
+
                     let mut s = self.tokenize_number_part(chars, |ch| ch.is_ascii_digit())?;
+
+                    // A tuple index is an integer, so `t.1.2` is `(t.1).2`.
+                    if !s.is_empty()
+                        && self.dialect.supports_tuple_element_access()
+                        && prev_token == Some(&Token::Period)
+                    {
+                        return Ok(Some(Token::Number(s, false)));
+                    }
 
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
@@ -1710,9 +1736,15 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
+                '#' if self.dialect.supports_hash_comment()
+                    && (!self.dialect.requires_hash_comment_space()
+                        || chars
+                            .peekable
+                            .clone()
+                            .nth(1)
+                            .is_some_and(|c| c == ' ' || c == '!')) =>
                 {
-                    chars.next(); // consume the '#', starting a snowflake single-line comment
+                    chars.next(); // consume the '#', starting a single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
                         prefix: "#".to_owned(),
@@ -2363,6 +2395,9 @@ impl<'a> Tokenizer<'a> {
                     s.push(ch);
                 }
                 None => {
+                    if self.dialect.supports_unterminated_block_comments() {
+                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                    }
                     break self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",
@@ -2395,7 +2430,10 @@ impl<'a> Tokenizer<'a> {
         (s, last_char)
     }
 
-    #[allow(clippy::unnecessary_wraps)]
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the match arms in `next_token` return this value directly"
+    )]
     fn consume_and_return(
         &self,
         chars: &mut State,
@@ -4578,6 +4616,76 @@ mod tests {
             }
             .to_string(),
             "[a b]"
+        );
+    }
+
+    #[test]
+    fn tokenize_period_before_digits_after_identifier_or_bracket() {
+        let dialect = ClickHouseDialect {};
+        for (sql, expected) in [
+            (
+                "t.1",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "(1).1",
+                vec![
+                    Token::LParen,
+                    Token::Number("1".to_string(), false),
+                    Token::RParen,
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "a[1].1",
+                vec![
+                    Token::make_word("a", None),
+                    Token::LBracket,
+                    Token::Number("1".to_string(), false),
+                    Token::RBracket,
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "t.1.2",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::Number("1".to_string(), false),
+                    Token::Period,
+                    Token::Number("2".to_string(), false),
+                ],
+            ),
+            (
+                "t .1",
+                vec![
+                    Token::make_word("t", None),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Number(".1".to_string(), false),
+                ],
+            ),
+            ("1.5", vec![Token::Number("1.5".to_string(), false)]),
+            (".5", vec![Token::Number(".5".to_string(), false)]),
+        ] {
+            let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+            compare(expected, tokens);
+        }
+
+        let tokens = Tokenizer::new(&GenericDialect {}, "t.1")
+            .tokenize()
+            .unwrap();
+        compare(
+            vec![
+                Token::make_word("t", None),
+                Token::Number(".1".to_string(), false),
+            ],
+            tokens,
         );
     }
 }

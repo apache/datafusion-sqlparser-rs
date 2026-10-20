@@ -42,15 +42,15 @@ use crate::ast::{
         UniqueConstraint,
     },
     ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
-    CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr,
-    FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
-    FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
-    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
-    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, ResetConfig, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
-    TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
+    CreateFunctionUsing, CreateServerOption, CreateTableLikeKind, CreateTableOptions,
+    CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull,
+    FunctionDefinitionSetParam, FunctionDesc, FunctionDeterminismSpecifier, FunctionParallel,
+    FunctionSecurity, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat,
+    HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
+    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
+    ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject,
+    TriggerPeriod, TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -2919,6 +2919,41 @@ impl fmt::Display for CreateIndex {
     }
 }
 
+/// An item of SQLite's `table-options` list, which follows the column
+/// definitions of `CREATE TABLE`.
+///
+/// See [SQLite documentation](https://www.sqlite.org/lang_createtable.html).
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SqliteTableOption {
+    /// `WITHOUT ROWID`
+    WithoutRowid,
+    /// `STRICT`
+    Strict,
+}
+
+impl fmt::Display for SqliteTableOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            SqliteTableOption::WithoutRowid => "WITHOUT ROWID",
+            SqliteTableOption::Strict => "STRICT",
+        })
+    }
+}
+
+/// SQLite's `table-options` list of `CREATE TABLE`, empty when absent.
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SqliteTableOptions {
+    /// Whether a comma separates the list from the column definitions,
+    /// as in `(a INT), STRICT`.
+    pub leading_comma: bool,
+    /// The options, in source order.
+    pub options: Vec<SqliteTableOption>,
+}
+
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2966,8 +3001,8 @@ pub struct CreateTable {
     pub location: Option<String>,
     /// Query used to populate the table
     pub query: Option<Box<Query>>,
-    /// If the table should be created without a rowid (SQLite)
-    pub without_rowid: bool,
+    /// SQLite `table-options`
+    pub sqlite_table_options: SqliteTableOptions,
     /// `LIKE` clause
     pub like: Option<CreateTableLikeKind>,
     /// `CLONE` clause
@@ -3015,10 +3050,6 @@ pub struct CreateTable {
     /// PostgreSQL partition bound specification for PARTITION OF.
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
     pub for_values: Option<ForValues>,
-    /// SQLite "STRICT" clause.
-    /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
-    /// then strict typing rules apply to that table.
-    pub strict: bool,
     /// Snowflake "COPY GRANTS" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub copy_grants: bool,
@@ -3187,11 +3218,6 @@ impl fmt::Display for CreateTable {
             write!(f, " COMMENT '{comment}'")?;
         }
 
-        // Only for SQLite
-        if self.without_rowid {
-            write!(f, " WITHOUT ROWID")?;
-        }
-
         if let Some(CreateTableLikeKind::Plain(like)) = &self.like {
             write!(f, " {like}")?;
         }
@@ -3202,6 +3228,17 @@ impl fmt::Display for CreateTable {
 
         if let Some(version) = &self.version {
             write!(f, " {version}")?;
+        }
+
+        if !self.sqlite_table_options.options.is_empty() {
+            if self.sqlite_table_options.leading_comma {
+                f.write_str(",")?;
+            }
+            write!(
+                f,
+                " {}",
+                display_comma_separated(&self.sqlite_table_options.options)
+            )?;
         }
 
         match &self.hive_distribution {
@@ -3418,9 +3455,6 @@ impl fmt::Display for CreateTable {
                 None => "",
             };
             write!(f, " {on_commit}")?;
-        }
-        if self.strict {
-            write!(f, " STRICT")?;
         }
         if let Some(backup) = self.backup {
             write!(f, " BACKUP {}", if backup { "YES" } else { "NO" })?;
@@ -6004,5 +6038,77 @@ impl fmt::Display for AlterPolicy {
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
         crate::ast::Statement::AlterPolicy(v)
+    }
+}
+
+/// A `CREATE FOREIGN TABLE` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateForeignTable {
+    /// The foreign table name.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Whether `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// Column definitions.
+    pub columns: Vec<ColumnDef>,
+    /// Table-level constraints (e.g. `CHECK (...)`, composite `FOREIGN KEY`).
+    /// PostgreSQL's grammar accepts these here, but rejects primary key, unique,
+    /// foreign key and exclusion constraints on a foreign table at execution.
+    pub constraints: Vec<TableConstraint>,
+    /// The `SERVER server_name` clause.
+    pub server_name: Ident,
+    /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateForeignTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name,
+            columns = display_comma_separated(&self.columns),
+        )?;
+        if !self.columns.is_empty() && !self.constraints.is_empty() {
+            write!(f, ", ")?;
+        }
+        write!(f, "{}", display_comma_separated(&self.constraints))?;
+        write!(f, ") SERVER {}", self.server_name)?;
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateForeignTable> for crate::ast::Statement {
+    fn from(v: CreateForeignTable) -> Self {
+        crate::ast::Statement::CreateForeignTable(v)
+    }
+}
+
+impl Spanned for CreateForeignTable {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            core::iter::once(self.name.span())
+                .chain(self.columns.iter().map(|column| column.span()))
+                .chain(self.constraints.iter().map(|constraint| constraint.span()))
+                .chain(core::iter::once(self.server_name.span))
+                .chain(
+                    self.options
+                        .iter()
+                        .flatten()
+                        .flat_map(|option| [option.key.span, option.value.span]),
+                ),
+        )
     }
 }

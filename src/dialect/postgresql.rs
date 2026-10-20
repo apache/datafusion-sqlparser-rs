@@ -73,6 +73,10 @@ const AND_PREC: u8 = 20;
 const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
+    fn supports_cte_materialization(&self) -> bool {
+        true
+    }
+
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
     }
@@ -108,6 +112,12 @@ impl Dialect for PostgreSqlDialect {
     fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
         !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
             || RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS.contains(kw)
+    }
+
+    /// Aliases are identifiers, see `output_name` and `alias` in
+    /// <https://www.postgresql.org/docs/current/sql-select.html>
+    fn supports_string_literal_alias(&self) -> bool {
+        false
     }
 
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
@@ -281,6 +291,8 @@ impl Dialect for PostgreSqlDialect {
     /// ```sql
     /// SELECT from table_name
     /// ```
+    ///
+    /// The target list is optional in <https://www.postgresql.org/docs/current/sql-select.html>
     fn supports_empty_projections(&self) -> bool {
         true
     }
@@ -366,6 +378,11 @@ impl Dialect for PostgreSqlDialect {
     ///
     /// See <https://github.com/ossc-db/pg_hint_plan>
     fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }
 }

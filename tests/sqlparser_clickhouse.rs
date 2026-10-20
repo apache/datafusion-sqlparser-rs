@@ -1912,9 +1912,10 @@ fn parse_alter_table_column_position() {
         _ => unreachable!(),
     }
 
-    assert!(clickhouse()
-        .parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER")
-        .is_err());
+    assert_eq!(
+        clickhouse().parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER"),
+        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+    );
 }
 
 #[test]
@@ -1942,18 +1943,451 @@ fn parse_alter_table_modify_order_by() {
         _ => unreachable!(),
     }
 
-    for sql in [
-        "ALTER TABLE events MODIFY ORDER BY",
-        "ALTER TABLE events MODIFY ORDER BY (a",
-        "ALTER TABLE events MODIFY ORDER BY (,)",
-        "ALTER TABLE events MODIFY ORDER BY (a) b",
-        "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
+    for (sql, err) in [
+        (
+            "ALTER TABLE events MODIFY ORDER BY",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (a",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (,)",
+            "Expected: an expression, found: ,",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (a) b",
+            "Expected: end of statement, found: b",
+        ),
+        (
+            "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
+            "Expected: ), found: EOF",
+        ),
     ] {
-        assert!(
-            clickhouse_and_generic().parse_sql_statements(sql).is_err(),
+        assert_eq!(
+            clickhouse_and_generic().parse_sql_statements(sql),
+            Err(ParserError(err.to_string())),
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_object_type_parameter() {
+    for dialects in [
+        clickhouse(),
+        TestedDialects::new(vec![Box::new(GenericDialect {})]),
+    ] {
+        let statements = dialects
+            .parse_sql_statements("CREATE TABLE t (o Object('json'))")
+            .unwrap();
+        let [Statement::CreateTable(CreateTable { columns, .. })] = statements.as_slice() else {
+            unreachable!();
+        };
+
+        assert_eq!(
+            columns[0].data_type,
+            DataType::Custom(
+                ObjectName::from(vec![Ident::new("Object")]),
+                vec!["json".to_string()]
+            )
+        );
+
+        let formatted = statements[0].to_string();
+        assert_eq!(
+            dialects.parse_sql_statements(&formatted).unwrap(),
+            statements
+        );
+    }
+
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT(city VARCHAR NOT NULL))");
+
+    for (sql, modifiers) in [
+        ("CREATE TABLE t (o OBJECT(10))", vec!["10"]),
+        ("CREATE TABLE t (o OBJECT(foo))", vec!["foo"]),
+        ("CREATE TABLE t (o OBJECT(foo, bar))", vec!["foo", "bar"]),
+    ] {
+        for dialects in [
+            clickhouse(),
+            TestedDialects::new(vec![Box::new(GenericDialect {})]),
+        ] {
+            let statements = dialects.parse_sql_statements(sql).unwrap();
+            let [Statement::CreateTable(CreateTable { columns, .. })] = statements.as_slice()
+            else {
+                unreachable!();
+            };
+
+            assert_eq!(
+                columns[0].data_type,
+                DataType::Custom(
+                    ObjectName::from(vec![Ident::new("OBJECT")]),
+                    modifiers
+                        .iter()
+                        .map(|modifier| (*modifier).to_owned())
+                        .collect(),
+                )
+            );
+
+            let formatted = statements[0].to_string();
+            assert_eq!(
+                dialects.parse_sql_statements(&formatted).unwrap(),
+                statements
+            );
+        }
+    }
+}
+
+#[test]
+fn parse_tuple_element_access() {
+    for (sql, canonical) in [
+        ("SELECT t.1 FROM t", "SELECT t . 1 FROM t"),
+        (
+            "SELECT t.1 AS a, t.2 AS b FROM (SELECT (1, 'x') AS t)",
+            "SELECT t . 1 AS a, t . 2 AS b FROM (SELECT (1, 'x') AS t)",
+        ),
+        ("SELECT (1, 'a').1", "SELECT (1, 'a') . 1"),
+        ("SELECT tuple(1, 'a').2", "SELECT tuple(1, 'a') . 2"),
+        ("SELECT arr[1].1 FROM t", "SELECT arr[1] . 1 FROM t"),
+        ("SELECT `t`.1 FROM t", "SELECT `t` . 1 FROM t"),
+        ("SELECT t.1 + 1 FROM t", "SELECT t . 1 + 1 FROM t"),
+        (
+            "SELECT * FROM t WHERE t.1 = 1",
+            "SELECT * FROM t WHERE t . 1 = 1",
+        ),
+        ("SELECT t.1.2 FROM t", "SELECT t . 1 . 2 FROM t"),
+        (
+            "SELECT ((1, 2), 3).1.2, tuple(1, (2, 3)).2.1",
+            "SELECT ((1, 2), 3) . 1 . 2, tuple(1, (2, 3)) . 2 . 1",
+        ),
+    ] {
+        clickhouse().one_statement_parses_to(sql, canonical);
+    }
+
+    let select = clickhouse().verified_only_select("SELECT t . 1 FROM t");
+    assert_eq!(
+        select.projection[0],
+        UnnamedExpr(Expr::CompoundFieldAccess {
+            root: Box::new(Identifier(Ident::new("t"))),
+            access_chain: vec![AccessExpr::Dot(Expr::Value(number("1").with_empty_span()))],
+        })
+    );
+
+    let select = clickhouse().verified_only_select("SELECT t . 1 . 2 FROM t");
+    assert_eq!(
+        select.projection[0],
+        UnnamedExpr(Expr::CompoundFieldAccess {
+            root: Box::new(Identifier(Ident::new("t"))),
+            access_chain: vec![
+                AccessExpr::Dot(Expr::Value(number("1").with_empty_span())),
+                AccessExpr::Dot(Expr::Value(number("2").with_empty_span())),
+            ],
+        })
+    );
+
+    clickhouse().verified_stmt("SELECT 1.5, 1 + 0.5");
+    clickhouse().one_statement_parses_to("SELECT .5, 1e3", "SELECT 0.5, 1000");
+
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT t."),
+        Err(ParserError(
+            "Expected: an identifier or a '*' after '.', found: EOF".to_string()
+        ))
+    );
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT t.1."),
+        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+    );
+
+    all_dialects_where(|d| !d.supports_tuple_element_access()).verified_stmt("SELECT (1, 'a') . 1");
+    for (numeric_prefix, err) in [
+        (true, "Expected: an identifier or a '*' after '.', found: 1"),
+        (false, "Expected: end of statement, found: .1"),
+    ] {
+        assert_eq!(
+            all_dialects_where(|d| {
+                !d.supports_tuple_element_access() && d.supports_numeric_prefix() == numeric_prefix
+            })
+            .parse_sql_statements("SELECT t.1 FROM t"),
+            Err(ParserError(err.to_string()))
+        );
+    }
+}
+
+#[test]
+fn parse_global_in() {
+    let select = clickhouse().verified_only_select("SELECT * FROM t WHERE x GLOBAL IN (1, 2)");
+    assert_eq!(
+        select.selection.unwrap(),
+        Expr::InList {
+            expr: Box::new(Identifier(Ident::new("x"))),
+            list: vec![
+                Expr::Value(number("1").with_empty_span()),
+                Expr::Value(number("2").with_empty_span()),
+            ],
+            negated: false,
+            global: true,
+        }
+    );
+
+    let select = clickhouse()
+        .verified_only_select("SELECT * FROM t WHERE x GLOBAL NOT IN (SELECT y FROM t2)");
+    assert_eq!(
+        select.selection.unwrap(),
+        Expr::InSubquery {
+            expr: Box::new(Identifier(Ident::new("x"))),
+            subquery: Box::new(clickhouse().verified_query("SELECT y FROM t2")),
+            negated: true,
+            global: true,
+        }
+    );
+
+    clickhouse().one_statement_parses_to(
+        "SELECT * FROM t WHERE x GLOBAL IN t2",
+        "SELECT * FROM t WHERE x GLOBAL IN (t2)",
+    );
+
+    let select =
+        clickhouse().verified_only_select("SELECT * FROM t WHERE x GLOBAL IN (1) AND y = 2");
+    assert!(matches!(
+        select.selection.unwrap(),
+        BinaryOp {
+            op: BinaryOperator::And,
+            ..
+        }
+    ));
+
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT * FROM t WHERE x GLOBAL y"),
+        Err(ParserError(
+            "Expected: end of statement, found: GLOBAL".to_string()
+        ))
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_global_in())
+            .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL IN (1)"),
+        Err(ParserError(
+            "Expected: end of statement, found: GLOBAL".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_in_unparenthesized_expr_precedence() {
+    for (sql, canonical, op) in [
+        (
+            "SELECT * FROM t WHERE x IN t2 AND y = 2",
+            "SELECT * FROM t WHERE x IN (t2) AND y = 2",
+            BinaryOperator::And,
+        ),
+        (
+            "SELECT * FROM t WHERE x GLOBAL IN t2 AND y = 2",
+            "SELECT * FROM t WHERE x GLOBAL IN (t2) AND y = 2",
+            BinaryOperator::And,
+        ),
+        (
+            "SELECT * FROM t WHERE x GLOBAL NOT IN t2 OR y = 2",
+            "SELECT * FROM t WHERE x GLOBAL NOT IN (t2) OR y = 2",
+            BinaryOperator::Or,
+        ),
+        (
+            "SELECT * FROM t WHERE x IN t2 = 1",
+            "SELECT * FROM t WHERE x IN (t2) = 1",
+            BinaryOperator::Eq,
+        ),
+    ] {
+        let select = clickhouse().verified_only_select_with_canonical(sql, canonical);
+        match select.selection.unwrap() {
+            BinaryOp { op: got, .. } => assert_eq!(got, op, "{sql}"),
+            other => panic!("{sql}: expected BinaryOp, got {other:?}"),
+        }
+    }
+
+    // Higher-precedence operators still belong to the IN operand.
+    clickhouse().one_statement_parses_to(
+        "SELECT * FROM t WHERE x IN 1 + 2",
+        "SELECT * FROM t WHERE x IN (1 + 2)",
+    );
+}
+
+#[test]
+fn global_in_bare_table_binds_before_and() {
+    let expr =
+        clickhouse().expr_parses_to("x GLOBAL IN t2 AND y = 2", "x GLOBAL IN (t2) AND y = 2");
+    assert!(matches!(
+        expr,
+        BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            ..
+        } if matches!(*left, Expr::InList { global: true, .. })
+    ));
+}
+
+#[test]
+fn global_in_bare_table_binds_before_equality() {
+    let expr = clickhouse().expr_parses_to("x GLOBAL IN t2 = 1", "x GLOBAL IN (t2) = 1");
+    assert!(matches!(
+        expr,
+        BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            ..
+        } if matches!(*left, Expr::InList { global: true, .. })
+    ));
+}
+
+#[test]
+fn parse_delete_on_cluster_and_settings() {
+    clickhouse_and_generic().verified_stmt("DELETE FROM db.hits ON CLUSTER c1 WHERE x = 1");
+    clickhouse_and_generic().verified_stmt("DELETE FROM hits ON CLUSTER '{cluster}' WHERE x = 1");
+    clickhouse_and_generic()
+        .verified_stmt("DELETE FROM hits WHERE x = 1 SETTINGS lightweight_deletes_sync = 0");
+
+    match clickhouse_and_generic()
+        .verified_stmt("DELETE FROM hits ON CLUSTER c1 WHERE x = 1 SETTINGS a = 1, b = 'x'")
+    {
+        Statement::Delete(Delete {
+            on_cluster,
+            settings,
+            ..
+        }) => {
+            assert_eq!(on_cluster, Some(Ident::new("c1")));
+            assert_eq!(
+                settings,
+                Some(vec![
+                    Setting {
+                        key: Ident::new("a"),
+                        value: Expr::value(number("1")),
+                    },
+                    Setting {
+                        key: Ident::new("b"),
+                        value: Expr::value(Value::SingleQuotedString("x".into())),
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, err) in [
+        (
+            "DELETE FROM hits SETTINGS a = 1 WHERE x = 1",
+            "Expected: end of statement, found: WHERE",
+        ),
+        (
+            "DELETE FROM hits WHERE x = 1 ON CLUSTER c1",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "DELETE FROM hits ON CLUSTER 1 WHERE x = 1",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "DELETE FROM hits WHERE x = 1 SETTINGS a",
+            "Expected: =, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err(),
+            ParserError(err.to_string())
+        );
+    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_settings())
+            .parse_sql_statements("DELETE FROM hits WHERE x = 1 SETTINGS a = 1")
+            .unwrap_err(),
+        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+    );
+}
+
+#[test]
+fn parse_update_on_cluster_and_settings() {
+    clickhouse_and_generic().verified_stmt("UPDATE db.hits ON CLUSTER c1 SET x = 1 WHERE y = 2");
+    clickhouse_and_generic()
+        .verified_stmt("UPDATE hits ON CLUSTER '{cluster}' SET x = 1, z = 2 WHERE y = 2");
+    clickhouse_and_generic()
+        .verified_stmt("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS update_parallel_mode = 'auto'");
+
+    match clickhouse_and_generic()
+        .verified_stmt("UPDATE hits ON CLUSTER c1 SET x = 1 WHERE y = 2 SETTINGS a = 1")
+    {
+        Statement::Update(Update {
+            on_cluster,
+            settings,
+            ..
+        }) => {
+            assert_eq!(on_cluster, Some(Ident::new("c1")));
+            assert_eq!(
+                settings,
+                Some(vec![Setting {
+                    key: Ident::new("a"),
+                    value: Expr::value(number("1")),
+                }])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, err) in [
+        (
+            "UPDATE hits SET x = 1 ON CLUSTER c1 WHERE y = 2",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "UPDATE hits SET x = 1 SETTINGS a = 1 WHERE y = 2",
+            "Expected: end of statement, found: WHERE",
+        ),
+        (
+            "UPDATE hits ON CLUSTER 1 SET x = 1 WHERE y = 2",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a",
+            "Expected: =, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err(),
+            ParserError(err.to_string())
+        );
+    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_settings())
+            .parse_sql_statements("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a = 1")
+            .unwrap_err(),
+        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+    );
+}
+
+#[test]
+fn parse_dollar_in_identifier() {
+    let select = clickhouse_and_generic().verified_only_select("SELECT a$b, c$$, d$e$ FROM t");
+    assert_eq!(
+        select.projection,
+        vec![
+            UnnamedExpr(Identifier(Ident::new("a$b"))),
+            UnnamedExpr(Identifier(Ident::new("c$$"))),
+            UnnamedExpr(Identifier(Ident::new("d$e$"))),
+        ]
+    );
+    // Dollar-quoted strings still take precedence at the start of a token.
+    clickhouse_and_generic().verified_stmt("SELECT $$abc$$, $tag$abc$tag$");
+    // Tokenizes like ClickHouse does; only the parser rejects it.
+    let err = clickhouse()
+        .parse_sql_statements("INSERT I$$$$$$$$$$$$$$$$$$$$$$$$$$")
+        .unwrap_err();
+    assert!(matches!(err, ParserError(_)), "{err}");
+
+    all_dialects_where(|d| !d.is_identifier_part('$'))
+        .parse_sql_statements("SELECT a$b FROM t")
+        .unwrap_err();
 }
 
 fn clickhouse() -> TestedDialects {
@@ -1965,4 +2399,12 @@ fn clickhouse_and_generic() -> TestedDialects {
         Box::new(ClickHouseDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+#[test]
+fn parse_create_table_engine_name_quoting() {
+    clickhouse_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) ENGINE = "MergeTree""#);
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `MergeTree`");
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
+    clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
 }

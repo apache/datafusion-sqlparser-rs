@@ -146,4 +146,8 @@ impl Dialect for SQLiteDialect {
     fn supports_parens_around_table_factor(&self) -> bool {
         true
     }
+
+    fn supports_unterminated_block_comments(&self) -> bool {
+        true
+    }
 }

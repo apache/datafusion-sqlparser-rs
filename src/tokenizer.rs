@@ -2395,6 +2395,9 @@ impl<'a> Tokenizer<'a> {
                     s.push(ch);
                 }
                 None => {
+                    if self.dialect.supports_unterminated_block_comments() {
+                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                    }
                     break self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",

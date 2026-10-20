@@ -20835,3 +20835,24 @@ fn display_nested_unary_minus_in_linear_time() {
         .expect("display should not take exponential time");
     assert_eq!(printed, sql);
 }
+
+#[test]
+fn parse_window_spec_keyword_base_window_name() {
+    let dialects = all_dialects();
+    for name in ["w", "id", "part"] {
+        let sql = format!("SELECT count(*) OVER ({name} ORDER BY a) FROM t");
+        let select = dialects.verified_only_select(&sql);
+        match expr_from_projection(&select.projection[0]) {
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(spec)),
+                ..
+            }) => assert_eq!(spec.window_name, Some(Ident::new(name)), "{sql}"),
+            other => panic!("{sql}: unexpected {other:?}"),
+        }
+    }
+    dialects.verified_stmt("SELECT count(*) OVER (ORDER BY a) FROM t");
+    dialects.verified_stmt("SELECT count(*) OVER (PARTITION BY a) FROM t");
+    dialects.verified_stmt(
+        "SELECT count(*) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
+    );
+}

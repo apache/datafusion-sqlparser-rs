@@ -1212,6 +1212,9 @@ fn parse_over_as_column_alias_after_function() {
     sqlite().verified_stmt("SELECT f() OVER partition");
     // Window function syntax still works when OVER is followed by `(`.
     sqlite().verified_stmt("SELECT f() OVER ()");
+    // A quoted string names the window, so OVER cannot be an alias for it
+    sqlite().verified_stmt("SELECT f() OVER 'partition'");
+    sqlite().verified_stmt(r#"SELECT f() OVER "partition""#);
     // Other dialects keep the greedy OVER parse and reject the bare form.
     let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
     assert_eq!(

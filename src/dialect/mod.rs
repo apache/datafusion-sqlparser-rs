@@ -459,6 +459,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `CREATE ROLE` accepts `IF NOT EXISTS`.
+    fn supports_create_role_if_not_exists(&self) -> bool {
+        true
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false

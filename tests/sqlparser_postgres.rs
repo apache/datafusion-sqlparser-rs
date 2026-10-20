@@ -4740,11 +4740,11 @@ fn parse_operator_empty_parens_rejected() {
 
 #[test]
 fn parse_create_role() {
-    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    let sql = "CREATE ROLE mysql_a, mysql_b";
     match pg().verified_stmt(sql) {
         Statement::CreateRole(create_role) => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
-            assert!(create_role.if_not_exists);
+            assert!(!create_role.if_not_exists);
         }
         _ => unreachable!(),
     }
@@ -11258,4 +11258,15 @@ fn parse_user_group_statements_is_dialect_gated() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_create_role_if_not_exists_rejected() {
+    assert_eq!(
+        pg().parse_sql_statements("CREATE ROLE IF NOT EXISTS r"),
+        Err(ParserError::ParserError(
+            "IF NOT EXISTS is not supported for CREATE ROLE".to_string()
+        ))
+    );
+    pg().verified_stmt(r#"CREATE ROLE "IF""#);
 }

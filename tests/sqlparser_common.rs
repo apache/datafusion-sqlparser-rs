@@ -74,15 +74,25 @@ fn parse_numeric_literal_underscore() {
         vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
 
+    let err = dialects.parse_sql_statements("SELECT 1._000").unwrap_err();
+    assert_eq!(
+        "sql parser error: Unexpected character '_' at Line: 1, Column: 10",
+        err.to_string()
+    );
+
+    // Identifiers where the dialect allows them, see `parse_digit_leading_identifiers`
+    // in `sqlparser_clickhouse.rs`.
+    let strict_dialects = all_dialects_where(|d| {
+        d.supports_numeric_literal_underscores() && !d.supports_numeric_prefix()
+    });
     for (sql, column) in [
         ("SELECT 10__00", 10),
         ("SELECT 10_00_", 13),
-        ("SELECT 1._000", 10),
         ("SELECT 1_a", 9),
         ("SELECT 1e_1", 10),
         ("SELECT 1e1_", 11),
     ] {
-        let err = dialects.parse_sql_statements(sql).unwrap_err();
+        let err = strict_dialects.parse_sql_statements(sql).unwrap_err();
         assert_eq!(
             format!("sql parser error: Unexpected character '_' at Line: 1, Column: {column}"),
             err.to_string()
@@ -1508,16 +1518,16 @@ fn parse_null_in_select() {
 
 #[test]
 fn parse_exponent_in_select() -> Result<(), ParserError> {
-    // all except Hive, as it allows numbers to start an identifier
+    // all except Hive, ClickHouse and MySQL, as they allow numbers to start an identifier
     let dialects = TestedDialects::new(vec![
         Box::new(AnsiDialect {}),
         Box::new(BigQueryDialect {}),
-        Box::new(ClickHouseDialect {}),
+        // Box::new(ClickHouseDialect {}),
         Box::new(DuckDbDialect {}),
         Box::new(GenericDialect {}),
         // Box::new(HiveDialect {}),
         Box::new(MsSqlDialect {}),
-        Box::new(MySqlDialect {}),
+        // Box::new(MySqlDialect {}),
         Box::new(PostgreSqlDialect {}),
         Box::new(RedshiftSqlDialect {}),
         Box::new(SnowflakeDialect {}),
@@ -20432,7 +20442,7 @@ fn parse_compound_field_access_numeric_display() {
     all_dialects().verified_stmt("SELECT 1 . 2 . 3");
     all_dialects().verified_stmt("SELECT a.b.c");
 
-    let err = all_dialects_where(|d| !d.supports_numeric_prefix())
+    let err = all_dialects()
         .parse_sql_statements("SELECT (1.i)")
         .unwrap_err();
     assert_eq!(

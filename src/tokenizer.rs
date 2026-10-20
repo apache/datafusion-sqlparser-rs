@@ -1338,6 +1338,19 @@ impl<'a> Tokenizer<'a> {
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
+                    if ch != '.'
+                        && self.dialect.supports_numeric_prefix()
+                        && self
+                            .dialect
+                            .is_digit_leading_identifier(&chars.peekable, prev_token)
+                    {
+                        let word =
+                            peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
+                        if !word.is_empty() {
+                            return Ok(Some(Token::make_word_owned(word, None)));
+                        }
+                    }
+
                     // special case where if ._ is encountered after a word then that word
                     // is a table and the _ is the start of the col name.
                     // if the prev token is not a word, then this is not a valid sql
@@ -1395,15 +1408,17 @@ impl<'a> Tokenizer<'a> {
                         chars.next();
                     }
 
-                    // If the dialect supports identifiers that start with a numeric prefix
-                    // and we have now consumed a dot, check if the previous token was a Word.
-                    // If so, what follows is definitely not part of a decimal number and
-                    // we should yield the dot as a dedicated token so compound identifiers
-                    // starting with digits can be parsed correctly.
-                    if s == "." && self.dialect.supports_numeric_prefix() {
-                        if let Some(Token::Word(_)) = prev_token {
-                            return Ok(Some(Token::Period));
-                        }
+                    // A period after a word that is followed by a digit-leading identifier, as
+                    // in `db.1table`, is its own token rather than the start of a decimal.
+                    if s == "."
+                        && matches!(prev_token, Some(Token::Word(_)))
+                        && chars.peek().is_some_and(|ch| ch.is_ascii_digit())
+                        && self.dialect.supports_numeric_prefix()
+                        && self
+                            .dialect
+                            .is_digit_leading_identifier(&chars.peekable, Some(&Token::Period))
+                    {
+                        return Ok(Some(Token::Period));
                     }
 
                     // Consume fractional digits.
@@ -1445,27 +1460,6 @@ impl<'a> Tokenizer<'a> {
                             }
                             // Not an exponent, discard the work done
                             _ => (),
-                        }
-                    }
-
-                    // If the dialect supports identifiers that start with a numeric prefix,
-                    // we need to check if the value is in fact an identifier and must thus
-                    // be tokenized as a word.
-                    if self.dialect.supports_numeric_prefix() {
-                        if exponent_part.is_empty() {
-                            // If it is not a number with an exponent, it may be
-                            // an identifier starting with digits.
-                            let word =
-                                peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
-
-                            if !word.is_empty() {
-                                s += word.as_str();
-                                return Ok(Some(Token::make_word_owned(s, None)));
-                            }
-                        } else if prev_token == Some(&Token::Period) {
-                            // If the previous token was a period, thus not belonging to a number,
-                            // the value we have is part of an identifier.
-                            return Ok(Some(Token::make_word_owned(s, None)));
                         }
                     }
 
@@ -2814,11 +2808,20 @@ mod tests {
         );
 
         for dialect in &numeric_underscore_dialects.dialects {
+            for sql in ["SELECT 1_000.123_", "SELECT 1._000"] {
+                let err = Tokenizer::new(&**dialect, sql).tokenize().unwrap_err();
+                assert_eq!("Unexpected character '_'", err.message, "{sql}");
+            }
+        }
+
+        // Identifiers where the dialect allows them, see `tokenize_digit_leading_identifiers`.
+        let strict_dialects = all_dialects_where(|dialect| {
+            dialect.supports_numeric_literal_underscores() && !dialect.supports_numeric_prefix()
+        });
+        for dialect in &strict_dialects.dialects {
             for sql in [
                 "SELECT 10_00_",
                 "SELECT 10___0",
-                "SELECT 1_000.123_",
-                "SELECT 1._000",
                 "SELECT 1_a",
                 "SELECT 1e_1",
                 "SELECT 1e1_",
@@ -2827,7 +2830,46 @@ mod tests {
                 "SELECT 0x1_",
             ] {
                 let err = Tokenizer::new(&**dialect, sql).tokenize().unwrap_err();
-                assert_eq!("Unexpected character '_'", err.message);
+                assert_eq!("Unexpected character '_'", err.message, "{sql}");
+            }
+        }
+    }
+
+    #[test]
+    fn tokenize_digit_leading_identifiers() {
+        // ClickHouse: digit-leading identifiers together with `_` separators in numbers.
+        let dialects = all_dialects_where(|dialect| {
+            dialect.supports_numeric_literal_underscores() && dialect.supports_numeric_prefix()
+        });
+        for word in [
+            "8_e", "8large", "10_00_", "10___0", "1_a", "1e_1", "1e1_", "1e3a", "0x1_", "0x_1",
+            "1L",
+        ] {
+            dialects.tokenizes_to(word, vec![Token::make_word(word, None)]);
+        }
+        dialects.tokenizes_to(
+            "8_e, 1_000, 1e1_0, 0xFF_FF, 1e+5",
+            vec![
+                Token::make_word("8_e", None),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1_000".to_string(), false),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1e1_0".to_string(), false),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::HexStringLiteral("FF_FF".to_string()),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1e+5".to_string(), false),
+            ],
+        );
+        // A stray underscore after a period or an exponent sign is still an error.
+        for dialect in &dialects.dialects {
+            for sql in ["1_000.123_", "1._000", "1e+_1"] {
+                let err = Tokenizer::new(&**dialect, sql).tokenize().unwrap_err();
+                assert_eq!("Unexpected character '_'", err.message, "{sql}");
             }
         }
     }
@@ -4358,6 +4400,32 @@ mod tests {
                 Token::make_word("1two3", None),
             ],
         );
+
+        // MySQL 8.4: a run is a number only as digits, a float with an exponent, or `0x` hex.
+        // ClickHouse reads `1e3a` as one identifier and has its own rule.
+        let dialects = all_dialects_where(|dialect| {
+            dialect.supports_numeric_prefix()
+                && !dialect.is_digit_leading_identifier(&"1e3a".chars().peekable(), None)
+        });
+        for word in ["1_a", "1e", "1ea", "0x1_a", "0xg", "0b01z", "100L", "0X1F"] {
+            dialects.tokenizes_to(word, vec![Token::make_word(word, None)]);
+        }
+        dialects.tokenizes_to(
+            "1e3a, 1e+5, t.1",
+            vec![
+                Token::Number("1e3".to_string(), false),
+                Token::make_word("a", None),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1e+5".to_string(), false),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("t", None),
+                Token::Period,
+                Token::make_word("1", None),
+            ],
+        );
+        dialects.tokenizes_to("0x1F", vec![Token::HexStringLiteral("1F".to_string())]);
     }
 
     #[test]

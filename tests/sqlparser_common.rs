@@ -12071,6 +12071,13 @@ fn parse_pivot_table() {
         "SELECT * FROM t PIVOT(SUM(1) x, COUNT(42) y FOR a.abc IN (1))",
         "SELECT * FROM t PIVOT(SUM(1) AS x, COUNT(42) AS y FOR a.abc IN (1))",
     );
+
+    assert_eq!(
+        all_dialects().parse_sql_statements("SELECT * FROM t PIVOT(SUM(a) AS 1 FOR b IN (1))"),
+        Err(ParserError::ParserError(
+            "Expected: an identifier after AS, found: 1".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -17499,6 +17506,12 @@ fn parse_pipe_operator_aggregate() {
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE GROUP BY a, b");
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) GROUP BY a, b");
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) ASC");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT * FROM tbl |> AGGREGATE COUNT(*) AS 1"),
+        Err(ParserError::ParserError(
+            "Expected: an identifier after AS, found: 1".to_string()
+        ))
+    );
 }
 
 #[test]

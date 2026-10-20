@@ -10950,3 +10950,112 @@ fn parse_create_aggregate_rejects_output_arguments_and_defaults() {
         );
     }
 }
+
+fn parse_alter_default_privileges_rejects_malformed_statements() {
+    for (sql, expected) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ALL GRANT SELECT ON TABLES TO app",
+            "Expected: one of ROLE or USER, found: ALL",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT ON TABLES TO app",
+            "Expected: a privilege keyword, found: ON",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT TO app",
+            "Expected: ON, found: TO",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON INDEXES TO app",
+            "Expected: TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES, SCHEMAS or LARGE OBJECTS, found: INDEXES",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn display_alter_default_privileges_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let grant = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g WITH GRANT OPTION",
+    );
+    for rejected in ["D", "r", "g", "W"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{grant}"), Err(fmt::Error));
+    }
+
+    let revoke = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON TABLES FROM g CASCADE",
+    );
+    for rejected in ["K", "N", "g", "CASCADE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{revoke}"), Err(fmt::Error));
+    }
+}
+
+#[test]
+fn parse_alter_default_privileges_spans() {
+    for (sql, start, end) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g",
+            35,
+            76,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM g",
+            55,
+            56,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r GRANT SELECT ON TABLES TO PUBLIC",
+            35,
+            36,
+        ),
+    ] {
+        let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+        assert_eq!(
+            statements[0].span(),
+            Span::new(Location::new(1, start), Location::new(1, end)),
+            "span for {sql}"
+        );
+    }
+    let sql = "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM 'bob'@'localhost'";
+    let statements = Parser::parse_sql(&sqlparser::dialect::GenericDialect {}, sql).unwrap();
+    assert_eq!(
+        statements[0].span(),
+        Span::new(Location::new(1, 55), Location::new(1, 72))
+    );
+}

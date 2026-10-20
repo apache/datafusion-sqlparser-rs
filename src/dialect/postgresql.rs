@@ -359,6 +359,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_create_role_if_not_exists(&self) -> bool {
+        false
+    }
+
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
             Precedence::Period => PERIOD_PREC,

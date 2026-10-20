@@ -7097,15 +7097,17 @@ impl<'a> Parser<'a> {
         &mut self,
         role_keyword: RoleKeyword,
     ) -> Result<CreateRole, ParserError> {
-        if matches!(role_keyword, RoleKeyword::Group)
+        let supports_if_not_exists = matches!(role_keyword, RoleKeyword::Role)
+            && self.dialect.supports_create_role_if_not_exists();
+        if !supports_if_not_exists
             && self.peek_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
         {
             return parser_err!(
-                "IF NOT EXISTS is not supported for CREATE GROUP",
+                format!("IF NOT EXISTS is not supported for CREATE {role_keyword}"),
                 self.peek_token_ref().span.start
             );
         }
-        let if_not_exists = matches!(role_keyword, RoleKeyword::Role)
+        let if_not_exists = supports_if_not_exists
             && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 

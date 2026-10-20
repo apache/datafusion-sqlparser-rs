@@ -10416,7 +10416,7 @@ fn parse_create_role() {
     }
 
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
-    match verified_stmt(sql) {
+    match all_dialects_where(|d| d.supports_create_role_if_not_exists()).verified_stmt(sql) {
         Statement::CreateRole(create_role) => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
             assert!(create_role.if_not_exists);

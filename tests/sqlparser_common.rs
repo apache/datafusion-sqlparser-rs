@@ -21025,6 +21025,47 @@ fn parse_transaction_deferrable_mode() {
 }
 
 #[test]
+fn parse_transaction_deferrable_mode_malformed_not() {
+    let dialects = all_dialects_except(|d|
+        // BigQuery and Snowflake do not support this syntax
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
+
+    assert_eq!(
+        ParserError::ParserError("Expected: DEFERRABLE, found: ,".to_string()),
+        dialects
+            .parse_sql_statements("START TRANSACTION NOT,")
+            .unwrap_err()
+    );
+
+    let Statement::StartTransaction { modes, .. } =
+        dialects.verified_stmt("START TRANSACTION NOT DEFERRABLE, READ ONLY")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        modes,
+        vec![
+            TransactionMode::Deferrable(false),
+            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+        ]
+    );
+}
+
+#[test]
+#[cfg(all(feature = "serde", feature = "json_example"))]
+fn serde_roundtrip_transaction_deferrable_mode() {
+    for sql in [
+        "START TRANSACTION DEFERRABLE",
+        "START TRANSACTION NOT DEFERRABLE",
+    ] {
+        let stmt = verified_stmt(sql);
+        let json = serde_json::to_string(&stmt).unwrap();
+        let roundtripped: Statement = serde_json::from_str(&json).unwrap();
+        assert_eq!(stmt, roundtripped);
+    }
+}
+
+#[test]
 fn parse_alter_table_column_position() {
     let dialects = all_dialects_where(|d| d.supports_alter_column_position());
     match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD COLUMN c INT FIRST")) {

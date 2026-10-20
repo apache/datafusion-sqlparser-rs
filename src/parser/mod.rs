@@ -8857,7 +8857,7 @@ impl<'a> Parser<'a> {
         let names = self.parse_comma_separated(|p| p.parse_identifier())?;
         let cascade_or_restrict =
             self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]);
-        Ok(Statement::DropExtension(Box::new(DropExtension {
+        Ok(Statement::from(DropExtension {
             names,
             if_exists,
             cascade_or_restrict: cascade_or_restrict
@@ -8867,7 +8867,7 @@ impl<'a> Parser<'a> {
                     _ => self.expected_ref("CASCADE or RESTRICT", self.peek_token_ref()),
                 })
                 .transpose()?,
-        })))
+        }))
     }
 
     /// Parse a[Statement::DropOperator] statement.
@@ -8876,11 +8876,11 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let operators = self.parse_comma_separated(|p| p.parse_drop_operator_signature())?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropOperator(Box::new(DropOperator {
+        Ok(Statement::from(DropOperator {
             if_exists,
             operators,
             drop_behavior,
-        })))
+        }))
     }
 
     /// Parse an operator signature for a [Statement::DropOperator]
@@ -8919,14 +8919,12 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::USING)?;
         let using = self.parse_identifier()?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropOperatorFamily(Box::new(
-            DropOperatorFamily {
-                if_exists,
-                names,
-                using,
-                drop_behavior,
-            },
-        )))
+        Ok(Statement::from(DropOperatorFamily {
+            if_exists,
+            names,
+            using,
+            drop_behavior,
+        }))
     }
 
     /// Parse a [Statement::DropOperatorClass]
@@ -8938,12 +8936,12 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::USING)?;
         let using = self.parse_identifier()?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropOperatorClass(Box::new(DropOperatorClass {
+        Ok(Statement::from(DropOperatorClass {
             if_exists,
             names,
             using,
             drop_behavior,
-        })))
+        }))
     }
 
     /// Parse Hive distribution style.
@@ -11931,13 +11929,13 @@ impl<'a> Parser<'a> {
             );
         };
 
-        Ok(Statement::AlterFunction(Box::new(AlterFunction {
+        Ok(Statement::from(AlterFunction {
             kind,
             function,
             aggregate_order_by,
             aggregate_star,
             operation,
-        })))
+        }))
     }
 
     /// Parse a [Statement::AlterTable]
@@ -12008,10 +12006,10 @@ impl<'a> Parser<'a> {
 
         if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             let new_name = self.parse_identifier()?;
-            Ok(Statement::AlterType(Box::new(AlterType {
+            Ok(Statement::from(AlterType {
                 name,
                 operation: AlterTypeOperation::Rename(AlterTypeRename { new_name }),
-            })))
+            }))
         } else if self.parse_keywords(&[Keyword::ADD, Keyword::VALUE]) {
             let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
             let new_enum_value = self.parse_identifier()?;
@@ -12023,26 +12021,26 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::AlterType(Box::new(AlterType {
+            Ok(Statement::from(AlterType {
                 name,
                 operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
                     if_not_exists,
                     value: new_enum_value,
                     position,
                 }),
-            })))
+            }))
         } else if self.parse_keywords(&[Keyword::RENAME, Keyword::VALUE]) {
             let existing_enum_value = self.parse_identifier()?;
             self.expect_keyword(Keyword::TO)?;
             let new_enum_value = self.parse_identifier()?;
 
-            Ok(Statement::AlterType(Box::new(AlterType {
+            Ok(Statement::from(AlterType {
                 name,
                 operation: AlterTypeOperation::RenameValue(AlterTypeRenameValue {
                     from: existing_enum_value,
                     to: new_enum_value,
                 }),
-            })))
+            }))
         } else {
             self.expected_ref(
                 "{RENAME TO | { RENAME | ADD } VALUE}",
@@ -12415,11 +12413,11 @@ impl<'a> Parser<'a> {
         } else {
             return self.expected_ref("ALTER SCHEMA operation", self.peek_token_ref());
         };
-        Ok(Statement::AlterSchema(Box::new(AlterSchema {
+        Ok(Statement::from(AlterSchema {
             name,
             if_exists,
             operations: vec![operation],
-        })))
+        }))
     }
 
     /// Parse a `CALL procedure_name(arg1, arg2, ...)`
@@ -12428,14 +12426,14 @@ impl<'a> Parser<'a> {
         let object_name = self.parse_object_name(false)?;
         if self.peek_token_ref().token == Token::LParen {
             match self.parse_function(object_name)? {
-                Expr::Function(f) => Ok(Statement::Call(Box::new(f))),
+                Expr::Function(f) => Ok(Statement::from(f)),
                 other => parser_err!(
                     format!("Expected a simple procedure call but found: {other}"),
                     self.peek_token_ref().span.start
                 ),
             }
         } else {
-            Ok(Statement::Call(Box::new(Function {
+            Ok(Statement::from(Function {
                 name: object_name,
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
@@ -12444,7 +12442,7 @@ impl<'a> Parser<'a> {
                 filter: None,
                 null_treatment: None,
                 within_group: vec![],
-            })))
+            }))
         }
     }
 
@@ -12528,9 +12526,9 @@ impl<'a> Parser<'a> {
     /// Parse [Statement::Open]
     fn parse_open(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::OPEN)?;
-        Ok(Statement::Open(Box::new(OpenStatement {
+        Ok(Statement::from(OpenStatement {
             cursor_name: self.parse_identifier()?,
-        })))
+        }))
     }
 
     /// Parse a `CLOSE` cursor statement.
@@ -15002,7 +15000,7 @@ impl<'a> Parser<'a> {
         };
         let settings = self.parse_settings()?;
 
-        Ok(Statement::Delete(Box::new(Delete {
+        Ok(Statement::from(Delete {
             delete_token: delete_token.into(),
             optimizer_hints,
             tables,
@@ -15019,7 +15017,7 @@ impl<'a> Parser<'a> {
             order_by,
             limit,
             settings,
-        })))
+        }))
     }
 
     /// Parse a `KILL` statement, optionally specifying `CONNECTION`, `QUERY`, or `MUTATION`.
@@ -16644,10 +16642,10 @@ impl<'a> Parser<'a> {
 
     fn parse_show_charset(&mut self, is_shorthand: bool) -> Result<Statement, ParserError> {
         // parse one of keywords
-        Ok(Statement::ShowCharset(Box::new(ShowCharset {
+        Ok(Statement::from(ShowCharset {
             is_shorthand,
             filter: self.parse_show_statement_filter()?,
-        })))
+        }))
     }
 
     fn parse_show_catalogs(&mut self, terse: bool) -> Result<Statement, ParserError> {
@@ -16797,7 +16795,7 @@ impl<'a> Parser<'a> {
         let parsed_keyword = if dialect_of!(self is HiveDialect) {
             // HiveDialect accepts USE DEFAULT; statement without any db specified
             if self.parse_keyword(Keyword::DEFAULT) {
-                return Ok(Statement::Use(Box::new(Use::Default)));
+                return Ok(Statement::from(Use::Default));
             }
             None // HiveDialect doesn't expect any other specific keyword after `USE`
         } else if dialect_of!(self is DatabricksDialect) {
@@ -16828,7 +16826,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(Statement::Use(Box::new(result)))
+        Ok(Statement::from(result))
     }
 
     fn parse_secondary_roles(&mut self) -> Result<Use, ParserError> {
@@ -18985,13 +18983,13 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Deny(Box::new(DenyStatement {
+        Ok(Statement::from(DenyStatement {
             privileges,
             objects,
             grantees,
             cascade,
             granted_by,
-        })))
+        }))
     }
 
     /// Parse a REVOKE statement
@@ -21127,14 +21125,14 @@ impl<'a> Parser<'a> {
 
         let options = self.parse_pg_options_clause()?;
 
-        Ok(Statement::CreateServer(Box::new(CreateServerStatement {
+        Ok(Statement::from(CreateServerStatement {
             name,
             if_not_exists: ine,
             server_type,
             version,
             foreign_data_wrapper,
             options,
-        })))
+        }))
     }
 
     /// Parse an optional Postgres `OPTIONS ( key value [, ...] )` clause.
@@ -21639,9 +21637,9 @@ impl<'a> Parser<'a> {
 
     /// Parse [Statement::Print]
     fn parse_print(&mut self) -> Result<Statement, ParserError> {
-        Ok(Statement::Print(Box::new(PrintStatement {
+        Ok(Statement::from(PrintStatement {
             message: Box::new(self.parse_expr()?),
-        })))
+        }))
     }
 
     /// Parse [Statement::WaitFor]
@@ -21665,10 +21663,10 @@ impl<'a> Parser<'a> {
     /// Parse [Statement::Return]
     fn parse_return(&mut self) -> Result<Statement, ParserError> {
         match self.maybe_parse(|p| p.parse_expr())? {
-            Some(expr) => Ok(Statement::Return(Box::new(ReturnStatement {
+            Some(expr) => Ok(Statement::from(ReturnStatement {
                 value: Some(ReturnStatementValue::Expr(expr)),
-            }))),
-            None => Ok(Statement::Return(Box::new(ReturnStatement { value: None }))),
+            })),
+            None => Ok(Statement::from(ReturnStatement { value: None })),
         }
     }
 
@@ -21689,11 +21687,11 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         self.expect_keyword(Keyword::AS)?;
         let query = self.parse_query()?;
-        Ok(Statement::ExportData(Box::new(ExportData {
+        Ok(Statement::from(ExportData {
             options,
             query,
             connection,
-        })))
+        }))
     }
 
     fn parse_vacuum(&mut self) -> Result<Statement, ParserError> {
@@ -21718,7 +21716,7 @@ impl<'a> Parser<'a> {
                 }
                 _ => (None, None, false),
             };
-        Ok(Statement::Vacuum(Box::new(VacuumStatement {
+        Ok(Statement::from(VacuumStatement {
             full,
             sort_only,
             delete_only,
@@ -21727,7 +21725,7 @@ impl<'a> Parser<'a> {
             table_name,
             threshold,
             boost,
-        })))
+        }))
     }
 
     /// Consume the parser and return its underlying token buffer

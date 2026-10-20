@@ -18,10 +18,9 @@
 use crate::{
     ast::{
         ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterIndex, AlterSchemaOperation,
-        AlterTable, AlterView, Close, ColumnOptions, CopyIntoSnowflake, CopyStatement, CreateAggregate,
-        CreateAggregateArgs, CreateAggregateOption, CreateOperator, CreateOperatorClass,
-        CreateOperatorFamily, CreateView, CreateVirtualTable, Directory, ExportData, Install, Load,
-        Owner, TypedString,
+        AlterTable, AlterView, Close, ColumnOptions, CopyStatement, CreateAggregate, CreateAggregateArgs,
+        CreateAggregateOption, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
+        CreateVirtualTable, Directory, ExportData, Install, Load, Owner, TypedString,
     },
     tokenizer::TokenWithSpan,
 };
@@ -363,25 +362,6 @@ impl Spanned for Statement {
                 } = &**copy;
                 source.span()
             }
-            Statement::CopyIntoSnowflake(copy_into_snowflake) => {
-                let CopyIntoSnowflake {
-                    into: _,
-                    into_columns: _,
-                    from_obj: _,
-                    from_obj_alias: _,
-                    stage_params: _,
-                    from_transformations: _,
-                    files: _,
-                    pattern: _,
-                    file_format: _,
-                    copy_options: _,
-                    validation_mode: _,
-                    kind: _,
-                    from_query: _,
-                    partition: _,
-                } = &**copy_into_snowflake;
-                Span::empty()
-            }
             Statement::Open(open) => open.span(),
             Statement::Close(close) => {
                 let Close { cursor } = &**close;
@@ -415,10 +395,7 @@ impl Spanned for Statement {
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
             Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
-            Statement::CreateSecret(_) => Span::empty(),
-            Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateForeignTable(stmt) => stmt.span(),
-            Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {
                 create_operator_family.span()
@@ -444,99 +421,9 @@ impl Spanned for Statement {
                         .chain(with_options.iter().map(|i| i.span())),
                 )
             }
-            // These statements need to be implemented
-            Statement::AlterFunction { .. } => Span::empty(),
-            Statement::AlterType { .. } => Span::empty(),
-            Statement::AlterCollation { .. } => Span::empty(),
-            Statement::AlterOperator { .. } => Span::empty(),
-            Statement::AlterOperatorFamily { .. } => Span::empty(),
-            Statement::AlterOperatorClass { .. } => Span::empty(),
-            Statement::AlterTextSearch { .. } => Span::empty(),
-            Statement::AlterRole(_) => Span::empty(),
-            Statement::AlterSession(_) => Span::empty(),
-            Statement::AttachDatabase(_) => Span::empty(),
-            Statement::AttachDuckDBDatabase(_) => Span::empty(),
-            Statement::DetachDuckDBDatabase(_) => Span::empty(),
-            Statement::Drop(_) => Span::empty(),
             Statement::DropFunction(drop_function) => drop_function.span(),
-            Statement::DropDomain { .. } => Span::empty(),
-            Statement::DropProcedure(_) => Span::empty(),
-            Statement::DropSecret(_) => Span::empty(),
-            Statement::Declare(_) => Span::empty(),
-            Statement::Fetch(_) => Span::empty(),
-            Statement::Flush(_) => Span::empty(),
-            Statement::Discard(_) => Span::empty(),
-            Statement::Set(_) => Span::empty(),
-            Statement::ShowFunctions(_) => Span::empty(),
-            Statement::ShowVariable(_) => Span::empty(),
-            Statement::ShowStatus(_) => Span::empty(),
-            Statement::ShowVariables(_) => Span::empty(),
-            Statement::ShowCreate(_) => Span::empty(),
-            Statement::ShowColumns(_) => Span::empty(),
-            Statement::ShowTables(_) => Span::empty(),
-            Statement::ShowCollation(_) => Span::empty(),
-            Statement::ShowCharset { .. } => Span::empty(),
             Statement::Use(u) => u.span(),
-            Statement::StartTransaction(_) => Span::empty(),
-            Statement::Comment(_) => Span::empty(),
-            Statement::Commit(_) => Span::empty(),
-            Statement::Rollback(_) => Span::empty(),
-            Statement::CreateSchema(_) => Span::empty(),
-            Statement::CreateDatabase(_) => Span::empty(),
-            Statement::CreateFunction { .. } => Span::empty(),
-            Statement::CreateDomain { .. } => Span::empty(),
-            Statement::CreateTrigger { .. } => Span::empty(),
-            Statement::DropTrigger { .. } => Span::empty(),
-            Statement::CreateProcedure(_) => Span::empty(),
-            Statement::CreateMacro(_) => Span::empty(),
-            Statement::CreateStage(_) => Span::empty(),
-            Statement::CreateFileFormat(_) => Span::empty(),
-            Statement::CreateWarehouse(..) => Span::empty(),
-            Statement::Assert(_) => Span::empty(),
-            Statement::Grant { .. } => Span::empty(),
-            Statement::Deny { .. } => Span::empty(),
-            Statement::Revoke { .. } => Span::empty(),
-            Statement::Deallocate(_) => Span::empty(),
-            Statement::Execute(_) => Span::empty(),
-            Statement::Prepare(_) => Span::empty(),
-            Statement::Kill(_) => Span::empty(),
-            Statement::ExplainTable(_) => Span::empty(),
-            Statement::Explain(_) => Span::empty(),
-            Statement::Savepoint(_) => Span::empty(),
-            Statement::ReleaseSavepoint(_) => Span::empty(),
             Statement::Merge(merge) => merge.span(),
-            Statement::Cache(_) => Span::empty(),
-            Statement::UNCache(_) => Span::empty(),
-            Statement::CreateSequence(_) => Span::empty(),
-            Statement::CreateType(_) => Span::empty(),
-            Statement::Pragma(_) => Span::empty(),
-            Statement::Lock(_) => Span::empty(),
-            Statement::LockTables(_) => Span::empty(),
-            Statement::UnlockTables => Span::empty(),
-            Statement::Unload(_) => Span::empty(),
-            Statement::OptimizeTable(_) => Span::empty(),
-            Statement::CreatePolicy { .. } => Span::empty(),
-            Statement::AlterPolicy { .. } => Span::empty(),
-            Statement::AlterConnector(_) => Span::empty(),
-            Statement::DropPolicy { .. } => Span::empty(),
-            Statement::DropConnector(_) => Span::empty(),
-            Statement::ShowCatalogs(_) => Span::empty(),
-            Statement::ShowDatabases(_) => Span::empty(),
-            Statement::ShowProcessList(_) => Span::empty(),
-            Statement::ShowSchemas(_) => Span::empty(),
-            Statement::ShowObjects { .. } => Span::empty(),
-            Statement::ShowViews(_) => Span::empty(),
-            Statement::LISTEN(_) => Span::empty(),
-            Statement::NOTIFY(_) => Span::empty(),
-            Statement::LoadData(_) => Span::empty(),
-            Statement::UNLISTEN(_) => Span::empty(),
-            Statement::RenameTable { .. } => Span::empty(),
-            Statement::RaisError(_) => Span::empty(),
-            Statement::Throw(_) => Span::empty(),
-            Statement::Print { .. } => Span::empty(),
-            Statement::WaitFor(_) => Span::empty(),
-            Statement::Return { .. } => Span::empty(),
-            Statement::List(..) | Statement::Put(_) | Statement::Remove(..) => Span::empty(),
             Statement::ExportData(export_data) => {
                 let ExportData {
                     options,
@@ -551,12 +438,107 @@ impl Spanned for Statement {
                         .chain(connection.iter().map(|i| i.span())),
                 )
             }
-            Statement::CreateUser(..) => Span::empty(),
             Statement::AlterSchema(s) => s.span(),
-            Statement::Vacuum(..) => Span::empty(),
-            Statement::AlterUser(..) => Span::empty(),
-            Statement::Reset(..) => Span::empty(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
+            Statement::CopyIntoSnowflake(_)
+            | Statement::CreateSecret(_)
+            | Statement::CreateServer { .. }
+            | Statement::CreateConnector { .. }
+            | Statement::AlterFunction { .. }
+            | Statement::AlterType { .. }
+            | Statement::AlterCollation { .. }
+            | Statement::AlterOperator { .. }
+            | Statement::AlterOperatorFamily { .. }
+            | Statement::AlterOperatorClass { .. }
+            | Statement::AlterTextSearch { .. }
+            | Statement::AlterRole(_)
+            | Statement::AlterSession(_)
+            | Statement::AttachDatabase(_)
+            | Statement::AttachDuckDBDatabase(_)
+            | Statement::DetachDuckDBDatabase(_)
+            | Statement::Drop(_)
+            | Statement::DropDomain { .. }
+            | Statement::DropProcedure(_)
+            | Statement::DropSecret(_)
+            | Statement::Declare(_)
+            | Statement::Fetch(_)
+            | Statement::Flush(_)
+            | Statement::Discard(_)
+            | Statement::Set(_)
+            | Statement::ShowFunctions(_)
+            | Statement::ShowVariable(_)
+            | Statement::ShowStatus(_)
+            | Statement::ShowVariables(_)
+            | Statement::ShowCreate(_)
+            | Statement::ShowColumns(_)
+            | Statement::ShowTables(_)
+            | Statement::ShowCollation(_)
+            | Statement::ShowCharset { .. }
+            | Statement::StartTransaction(_)
+            | Statement::Comment(_)
+            | Statement::Commit(_)
+            | Statement::Rollback(_)
+            | Statement::CreateSchema(_)
+            | Statement::CreateDatabase(_)
+            | Statement::CreateFunction { .. }
+            | Statement::CreateDomain { .. }
+            | Statement::CreateTrigger { .. }
+            | Statement::DropTrigger { .. }
+            | Statement::CreateProcedure(_)
+            | Statement::CreateMacro(_)
+            | Statement::CreateStage(_)
+            | Statement::CreateFileFormat(_)
+            | Statement::CreateWarehouse(..)
+            | Statement::Assert(_)
+            | Statement::Grant { .. }
+            | Statement::Deny { .. }
+            | Statement::Revoke { .. }
+            | Statement::Deallocate(_)
+            | Statement::Execute(_)
+            | Statement::Prepare(_)
+            | Statement::Kill(_)
+            | Statement::ExplainTable(_)
+            | Statement::Explain(_)
+            | Statement::Savepoint(_)
+            | Statement::ReleaseSavepoint(_)
+            | Statement::Cache(_)
+            | Statement::UNCache(_)
+            | Statement::CreateSequence(_)
+            | Statement::CreateType(_)
+            | Statement::Pragma(_)
+            | Statement::Lock(_)
+            | Statement::LockTables(_)
+            | Statement::UnlockTables
+            | Statement::Unload(_)
+            | Statement::OptimizeTable(_)
+            | Statement::CreatePolicy { .. }
+            | Statement::AlterPolicy { .. }
+            | Statement::AlterConnector(_)
+            | Statement::DropPolicy { .. }
+            | Statement::DropConnector(_)
+            | Statement::ShowCatalogs(_)
+            | Statement::ShowDatabases(_)
+            | Statement::ShowProcessList(_)
+            | Statement::ShowSchemas(_)
+            | Statement::ShowObjects { .. }
+            | Statement::ShowViews(_)
+            | Statement::LISTEN(_)
+            | Statement::NOTIFY(_)
+            | Statement::LoadData(_)
+            | Statement::UNLISTEN(_)
+            | Statement::RenameTable { .. }
+            | Statement::RaisError(_)
+            | Statement::Throw(_)
+            | Statement::Print { .. }
+            | Statement::WaitFor(_)
+            | Statement::Return { .. }
+            | Statement::List(..)
+            | Statement::Put(_)
+            | Statement::Remove(..)
+            | Statement::CreateUser(..)
+            | Statement::Vacuum(..)
+            | Statement::AlterUser(..)
+            | Statement::Reset(..) => Span::empty(),
         }
     }
 }
@@ -3101,9 +3083,6 @@ SETTINGS update_parallel_mode = 'auto'"#;
         assert_eq!(stmt_span.end, (17, 37).into());
 
         // ~ individual tokens within the statement
-        let Statement::Merge(merge) = &r[0] else {
-            panic!("not a MERGE statement");
-        };
         let Merge {
             merge_token,
             optimizer_hints: _,
@@ -3113,7 +3092,11 @@ SETTINGS update_parallel_mode = 'auto'"#;
             on: _,
             clauses,
             output,
-        } = &**merge;
+        } = if let Statement::Merge(merge) = &r[0] {
+            merge.as_ref()
+        } else {
+            panic!("not a MERGE statement");
+        };
         assert_eq!(
             merge_token.0.span,
             Span::new(Location::new(4, 9), Location::new(4, 14))
@@ -3384,5 +3367,43 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let expr = test.0.parse_expr().unwrap();
             assert_eq!(test.get_source(expr.span()), expected, "{sql}");
         }
+    }
+
+#[test]
+    fn test_boxed_statement_spans() {
+        let cases: &[(&dyn Dialect, &str, &str)] = &[
+            (&crate::dialect::DuckDbDialect, "INSTALL tpch", "tpch"),
+            (&crate::dialect::DuckDbDialect, "LOAD my_extension", "my_extension"),
+            (&crate::dialect::HiveDialect {}, "INSERT OVERWRITE LOCAL DIRECTORY '/home/blah' STORED AS TEXTFILE SELECT * FROM db.table", "SELECT * FROM db.table"),
+            (&crate::dialect::PostgreSqlDialect {}, "COPY users FROM 'data.csv'", "users"),
+            (&GenericDialect, "CLOSE my_cursor", "my_cursor"),
+            (&GenericDialect, "CLOSE ALL", ""),
+            (&crate::dialect::SQLiteDialect {}, "CREATE VIRTUAL TABLE IF NOT EXISTS t USING module_name (arg1, arg2)", "t USING module_name (arg1, arg2"),
+            (&GenericDialect, "ALTER INDEX idx RENAME TO idx_new", "idx RENAME TO idx_new"),
+            (&GenericDialect, "ALTER VIEW myschema.myview AS SELECT foo FROM bar", "myschema.myview AS SELECT foo FROM bar"),
+            (&GenericDialect, "ALTER VIEW v (has, cols) AS SELECT 1, 2", "v (has, cols) AS SELECT 1, 2"),
+            (&GenericDialect, "ALTER VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1", "v WITH (foo = 'bar', a = 123) AS SELECT 1"),
+            (&crate::dialect::BigQueryDialect, "EXPORT DATA OPTIONS(uri = 'gs://bucket/folder/*') AS SELECT field1 FROM mydataset.table1", "uri = 'gs://bucket/folder/*') AS SELECT field1 FROM mydataset.table1"),
+            (&crate::dialect::BigQueryDialect, "EXPORT DATA WITH CONNECTION myconnection.myproject.us OPTIONS(uri = 'gs://bucket/folder/*') AS SELECT field1 FROM mydataset.table1", "myconnection.myproject.us OPTIONS(uri = 'gs://bucket/folder/*') AS SELECT field1 FROM mydataset.table1"),
+        ];
+        for (dialect, sql, expected) in cases {
+            let test = SpanTest::new(*dialect, sql);
+            let statements = Parser::parse_sql(*dialect, sql).unwrap();
+            let span = statements[0].span();
+            if expected.is_empty() {
+                assert_eq!(Span::empty(), span, "{sql}");
+            } else {
+                assert_eq!(test.get_source(span), *expected, "{sql}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_statement_span_union_ignores_unlocated_statements() {
+        let sql = "COMMIT; SELECT a FROM t; ROLLBACK";
+        let test = SpanTest::new(&GenericDialect, sql);
+        let statements = Parser::parse_sql(&GenericDialect, sql).unwrap();
+        let span = Span::union_iter(statements.iter().map(Spanned::span));
+        assert_eq!(test.get_source(span), "SELECT a FROM t");
     }
 }

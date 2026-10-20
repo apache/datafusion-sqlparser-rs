@@ -22073,6 +22073,14 @@ fn parse_comparison_in_between_low_bound() {
             "SELECT a BETWEEN b BETWEEN 1 AND 2 AND c",
             "Expected: AND, found: BETWEEN",
         ),
+        (
+            "SELECT a BETWEEN (1 AND 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
+        (
+            "SELECT a BETWEEN b = (1, 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
     ] {
         assert_eq!(
             dialects.parse_sql_statements(sql),

@@ -9346,7 +9346,7 @@ impl<'a> Parser<'a> {
                     Ok(Some(SqlOption::NamedParenthesizedList(
                         NamedParenthesizedList {
                             key: Ident::new("ENGINE"),
-                            name: Some(Ident::new(w.value)),
+                            name: Some(w.into_ident(value.span)),
                             values: parameters,
                         },
                     )))
@@ -13739,8 +13739,9 @@ impl<'a> Parser<'a> {
             Token::Word(w) if validator(after_as, &w.keyword, self) => {
                 Ok(Some(w.into_ident(next_token.span)))
             }
-            // For backwards-compatibility, we accept quoted strings as aliases regardless of the context.
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            Token::SingleQuotedString(s) if self.dialect.supports_string_literal_alias() => {
+                Ok(Some(Ident::with_quote('\'', s)))
+            }
             Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
             _ => {
                 if after_as {

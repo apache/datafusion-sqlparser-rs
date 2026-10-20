@@ -1199,7 +1199,8 @@ pub trait Dialect: Debug + Any {
     /// SELECT * FROM (mytable) AS alias;
     /// ```
     ///
-    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from),
+    /// [SQLite](https://www.sqlite.org/syntax/table-or-subquery.html)
     fn supports_parens_around_table_factor(&self) -> bool {
         false
     }
@@ -1288,6 +1289,18 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports nested comments
     /// e.g. `/* /* nested */ */`
     fn supports_nested_comments(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `#` as the start of a single line comment,
+    /// e.g. `SELECT 1 # comment`
+    fn supports_hash_comment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `#` starts a single line comment only when followed by an ASCII
+    /// space or `!`, so `# comment` and `#! comment` are comments but `#comment` is not.
+    fn requires_hash_comment_space(&self) -> bool {
         false
     }
 
@@ -1522,6 +1535,14 @@ pub trait Dialect: Debug + Any {
     /// to enable looking ahead if needed.
     fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
         explicit || self.is_table_alias(kw, parser)
+    }
+
+    /// Returns true if a single-quoted string can be an alias, as in `SELECT 1 AS 'x'`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/problems-with-alias.html),
+    /// [SQLite](https://www.sqlite.org/lang_keywords.html)
+    fn supports_string_literal_alias(&self) -> bool {
+        true
     }
 
     /// Returns true if this dialect supports querying historical table data

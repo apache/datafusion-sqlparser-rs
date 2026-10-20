@@ -29,7 +29,9 @@ impl Dialect for ClickHouseDialect {
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ch.is_ascii_digit()
+        // Undocumented, but the server accepts `$` in identifiers for MySQL compatibility
+        // since https://github.com/ClickHouse/ClickHouse/pull/14232
+        self.is_identifier_start(ch) || ch.is_ascii_digit() || ch == '$'
     }
 
     /// ClickHouse accepts both backticks and double quotes, but its own
@@ -132,6 +134,16 @@ impl Dialect for ClickHouseDialect {
     /// Supported since 2020.
     /// See <https://clickhouse.com/docs/whats-new/changelog/2020#backward-incompatible-change-2>
     fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/sql-reference/syntax#comments>
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
+    /// See <https://github.com/ClickHouse/ClickHouse/blob/master/src/Parsers/Lexer.cpp>
+    fn requires_hash_comment_space(&self) -> bool {
         true
     }
 

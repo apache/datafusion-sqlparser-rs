@@ -2366,6 +2366,30 @@ fn parse_update_on_cluster_and_settings() {
     );
 }
 
+#[test]
+fn parse_dollar_in_identifier() {
+    let select = clickhouse_and_generic().verified_only_select("SELECT a$b, c$$, d$e$ FROM t");
+    assert_eq!(
+        select.projection,
+        vec![
+            UnnamedExpr(Identifier(Ident::new("a$b"))),
+            UnnamedExpr(Identifier(Ident::new("c$$"))),
+            UnnamedExpr(Identifier(Ident::new("d$e$"))),
+        ]
+    );
+    // Dollar-quoted strings still take precedence at the start of a token.
+    clickhouse_and_generic().verified_stmt("SELECT $$abc$$, $tag$abc$tag$");
+    // Tokenizes like ClickHouse does; only the parser rejects it.
+    let err = clickhouse()
+        .parse_sql_statements("INSERT I$$$$$$$$$$$$$$$$$$$$$$$$$$")
+        .unwrap_err();
+    assert!(matches!(err, ParserError(_)), "{err}");
+
+    all_dialects_where(|d| !d.is_identifier_part('$'))
+        .parse_sql_statements("SELECT a$b FROM t")
+        .unwrap_err();
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }
@@ -2375,4 +2399,12 @@ fn clickhouse_and_generic() -> TestedDialects {
         Box::new(ClickHouseDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+#[test]
+fn parse_create_table_engine_name_quoting() {
+    clickhouse_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) ENGINE = "MergeTree""#);
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `MergeTree`");
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
+    clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
 }

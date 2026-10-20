@@ -1117,6 +1117,31 @@ fn parse_create_table_options_list() {
     }
 }
 
+#[test]
+fn parse_parenthesized_table_factor() {
+    for (sql, canonical) in [
+        ("SELECT * FROM (t)", "SELECT * FROM t"),
+        ("SELECT * FROM ((t))", "SELECT * FROM t"),
+        ("SELECT * FROM (t) AS a", "SELECT * FROM t AS a"),
+        ("SELECT * FROM (t AS a)", "SELECT * FROM t AS a"),
+        (
+            "SELECT * FROM ((SELECT 1) AS s)",
+            "SELECT * FROM (SELECT 1) AS s",
+        ),
+        ("SELECT * FROM f(), (t)", "SELECT * FROM f(), t"),
+    ] {
+        sqlite_and_generic().one_statement_parses_to(sql, canonical);
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_parens_around_table_factor())
+            .parse_sql_statements("SELECT * FROM (t)"),
+        Err(ParserError::ParserError(
+            "Expected: joined table, found: )".to_string()
+        ))
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

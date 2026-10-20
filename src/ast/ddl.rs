@@ -6043,6 +6043,8 @@ impl From<AlterPolicy> for crate::ast::Statement {
 
 /// DROP RULE statement.
 ///
+/// Its source span covers `name` and `table_name`.
+///
 /// ```sql
 /// DROP RULE [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
 /// ```

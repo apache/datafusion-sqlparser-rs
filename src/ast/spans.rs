@@ -33,13 +33,14 @@ use super::{
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
     ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement,
-    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
-    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
-    HavingBound, IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate,
-    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    LimitClause, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
+    CreateTableOptions, Cte, Delete, DoUpdate, DropRule, ExceptSelectItem,
+    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
+    IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
+    JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge,
+    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
+    NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
     OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
     Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
@@ -490,7 +491,7 @@ impl Spanned for Statement {
             Statement::AlterPolicy { .. } => Span::empty(),
             Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
-            Statement::DropRule { .. } => Span::empty(),
+            Statement::DropRule(rule) => rule.span(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowCatalogs { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
@@ -527,6 +528,12 @@ impl Spanned for Statement {
             Statement::Reset(..) => Span::empty(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
+    }
+}
+
+impl Spanned for DropRule {
+    fn span(&self) -> Span {
+        self.name.span.union(&self.table_name.span())
     }
 }
 

@@ -10250,3 +10250,18 @@ fn parse_custom_type_typed_string() {
         ParserError::ParserError("Expected: end of statement, found: 5".to_string())
     );
 }
+
+#[test]
+fn parse_geometric_keyword_as_column_name() {
+    pg().verified_stmt("SELECT circle FROM t");
+    pg().verified_stmt("SELECT point FROM t");
+}
+
+#[test]
+fn parse_geometric_typed_literal_error_propagates() {
+    assert_eq!(
+        pg().parse_sql_statements("SELECT circle( FROM t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a value, found: (".to_string())
+    );
+}

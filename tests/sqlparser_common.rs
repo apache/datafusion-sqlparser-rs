@@ -20943,8 +20943,6 @@ fn parse_stage_table_factor() {
 
 #[test]
 fn parse_transaction_deferrable_mode() {
-    // The third transaction mode of the SQL standard, spelled the same in
-    // PostgreSQL: <https://www.postgresql.org/docs/current/sql-set-transaction.html>
     let dialects = all_dialects_except(|d|
         // BigQuery and Snowflake do not support this syntax
         d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());

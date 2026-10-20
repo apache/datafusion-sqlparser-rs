@@ -20858,9 +20858,9 @@ impl<'a> Parser<'a> {
                 return self.expected_ref("number, name or string", self.peek_token_ref());
             }
         }
-        match self.maybe_parse(|parser| parser.parse_value())? {
-            Some(value) => Ok(Expr::Value(value)),
-            None => Ok(Expr::Identifier(self.parse_identifier()?)),
+        match self.try_parse(|parser| parser.parse_value()) {
+            Ok(value) => Ok(Expr::Value(value)),
+            Err(_) => Ok(Expr::Identifier(self.parse_identifier()?)),
         }
     }
 

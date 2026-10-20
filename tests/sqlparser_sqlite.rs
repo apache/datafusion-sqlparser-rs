@@ -1541,6 +1541,14 @@ fn parse_between_low_bound_precedence() {
     sqlite().verified_expr("5 BETWEEN 1 AND NULL IS NULL");
     sqlite().verified_expr("5 BETWEEN 1 AND 10 = 1");
 
+    // The inner AND belongs to the bound expression, so the missing `)` is reported at FROM.
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT a BETWEEN (1 AND 2 FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: FROM".to_string()
+        ))
+    );
+
     assert_eq!(
         TestedDialects::new(vec![Box::new(GenericDialect {})])
             .parse_sql_statements("SELECT a BETWEEN b > 1 AND c FROM t"),

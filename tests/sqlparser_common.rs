@@ -22851,3 +22851,69 @@ fn parse_grant_on_tables_named_after_object_types() {
         verified_stmt(&format!("GRANT SELECT ON {name}.t TO r"));
     }
 }
+
+#[test]
+fn parse_lambda_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    // Every lambda in the chain fails because the final body is incomplete.
+    let sql = format!("SELECT {}1 +", "(x) -> ".repeat(24));
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let dialects = all_dialects_where(|d| d.supports_lambda_functions());
+        let _ = tx.send(dialects.dialects.iter().all(|dialect| {
+            Parser::new(dialect.as_ref())
+                .with_recursion_limit(256)
+                .try_with_sql(&sql)
+                .and_then(|mut p| p.parse_statements())
+                .is_err()
+        }));
+    });
+
+    let rejected = rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("parser should finish quickly, not loop exponentially");
+    assert!(rejected);
+}
+
+#[test]
+fn parse_lambda_forms_with_arrow_fallback() {
+    let dialects = all_dialects_where(|d| d.supports_lambda_functions());
+    match dialects.verified_expr("(x) -> (y) -> x + y") {
+        Expr::Lambda(LambdaFunction { body, .. }) => {
+            assert!(matches!(*body, Expr::Lambda(_)), "{body:?}")
+        }
+        other => panic!("expected a lambda, got {other:?}"),
+    }
+    // `(1)` cannot be a parameter list, so it falls back to `->` around a lambda.
+    match dialects.verified_expr("(1) -> (x) -> x") {
+        Expr::BinaryOp {
+            op: BinaryOperator::Arrow,
+            right,
+            ..
+        } => assert!(matches!(*right, Expr::Lambda(_)), "{right:?}"),
+        other => panic!("expected `->` around a lambda, got {other:?}"),
+    }
+    // The lambda inside the parentheses is the left operand of `->`.
+    match dialects.verified_expr("((x) -> 1) -> 'k'") {
+        Expr::BinaryOp {
+            op: BinaryOperator::Arrow,
+            left,
+            ..
+        } => assert!(
+            matches!(&*left, Expr::Nested(inner) if matches!(**inner, Expr::Lambda(_))),
+            "{left:?}"
+        ),
+        other => panic!("expected `->` with a lambda operand, got {other:?}"),
+    }
+    // The inner lambda is retried from the cache and fails as it did uncached.
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT (x) -> (x) -> 1 +"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: EOF".to_string()
+        ))
+    );
+}

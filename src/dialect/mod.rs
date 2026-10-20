@@ -132,7 +132,7 @@ pub use self::teradata::TeradataDialect;
 #[cfg(feature = "derive-dialect")]
 pub use sqlparser_derive::derive_dialect;
 
-use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
+use crate::ast::{ColumnOption, DataType, Expr, GranteesType, Ident, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -1051,6 +1051,11 @@ pub trait Dialect: Debug + Any {
         None
     }
 
+    /// Parses a dialect-specific type, leaving the cursor unchanged on `None` to use standard parsing.
+    fn parse_data_type(&self, _parser: &mut Parser) -> Option<Result<DataType, ParserError>> {
+        None
+    }
+
     /// Dialect-specific column option parser override
     ///
     /// This method is called to parse the next column option.
@@ -1323,12 +1328,6 @@ pub trait Dialect: Debug + Any {
     /// Returns true if `#` starts a single line comment only when followed by an ASCII
     /// space or `!`, so `# comment` and `#! comment` are comments but `#comment` is not.
     fn requires_hash_comment_space(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect allows signed and decimal values in type modifiers.
-    /// e.g. `CHAR(+10)`, `CHAR(-1)`, `VARCHAR(2.5)`, `DECIMAL(99999999999999999999999,2)`
-    fn supports_signed_type_modifier(&self) -> bool {
         false
     }
 

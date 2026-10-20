@@ -16,10 +16,9 @@
 // under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
+use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::ast::BinaryOperator;
-use crate::ast::{Expr, Statement};
+use crate::ast::{BinaryOperator, DataType, Expr, ObjectName, Statement};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
@@ -75,6 +74,10 @@ impl Dialect for SQLiteDialect {
         } else {
             None
         }
+    }
+
+    fn parse_data_type(&self, parser: &mut Parser) -> Option<Result<DataType, ParserError>> {
+        peek_nonstandard_type_modifiers(parser).then(|| parse_type_with_numeric_modifiers(parser))
     }
 
     fn parse_infix(
@@ -164,10 +167,6 @@ impl Dialect for SQLiteDialect {
         true
     }
 
-    fn supports_signed_type_modifier(&self) -> bool {
-        true
-    }
-
     fn supports_double_eq_assignment(&self) -> bool {
         true
     }
@@ -241,4 +240,58 @@ impl Dialect for SQLiteDialect {
     fn supports_bitwise_shift_operators(&self) -> bool {
         true
     }
+}
+
+fn peek_nonstandard_type_modifiers(parser: &Parser) -> bool {
+    if !matches!(parser.peek_token_ref().token, Token::Word(_))
+        || parser.peek_nth_token_ref(1).token != Token::LParen
+    {
+        return false;
+    }
+    let mut is_non_standard = false;
+    let mut nth = 2;
+    for _ in 0..2 {
+        if matches!(
+            parser.peek_nth_token_ref(nth).token,
+            Token::Plus | Token::Minus
+        ) {
+            is_non_standard = true;
+            nth += 1;
+        }
+        match &parser.peek_nth_token_ref(nth).token {
+            Token::Number(n, _) => is_non_standard |= n.parse::<u64>().is_err(),
+            _ => return false,
+        }
+        match parser.peek_nth_token_ref(nth + 1).token {
+            Token::RParen => return is_non_standard,
+            Token::Comma => nth += 2,
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn parse_type_with_numeric_modifiers(parser: &mut Parser) -> Result<DataType, ParserError> {
+    let type_ident = parser.parse_identifier()?;
+    parser.expect_token(&Token::LParen)?;
+    let mut modifiers = Vec::with_capacity(2);
+    loop {
+        let mut modifier = String::new();
+        if parser.consume_token(&Token::Minus) {
+            modifier.push('-');
+        } else if parser.consume_token(&Token::Plus) {
+            modifier.push('+');
+        }
+        let next_token = parser.next_token();
+        match next_token.token {
+            Token::Number(n, _) => modifier.push_str(&n),
+            _ => return parser.expected("a number in type modifier", next_token),
+        }
+        modifiers.push(modifier);
+        if modifiers.len() == 2 || !parser.consume_token(&Token::Comma) {
+            break;
+        }
+    }
+    parser.expect_token(&Token::RParen)?;
+    Ok(DataType::Custom(ObjectName::from(type_ident), modifiers))
 }

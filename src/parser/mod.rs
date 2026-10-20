@@ -13229,8 +13229,8 @@ impl<'a> Parser<'a> {
         let _guard = self.recursion_counter.try_decrease()?;
 
         let dialect = self.dialect;
-        if dialect.supports_signed_type_modifier() && self.peek_type_with_signed_modifier() {
-            return Ok((self.parse_type_with_signed_modifier()?, false.into()));
+        if let Some(data_type) = dialect.parse_data_type(self) {
+            return data_type.map(|data_type| (data_type, false.into()));
         }
         self.advance_token();
         let next_token = self.get_current_token();
@@ -14857,69 +14857,6 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected_ref("number", current_token),
         }
-    }
-
-    /// Returns true if the next tokens are a single-word type name followed by
-    /// `(signed-number [, signed-number])` where some modifier has a sign or is not
-    /// an unsigned 64-bit integer. Plain lists such as `CHAR(10)` return false and
-    /// keep the standard data type parsing.
-    fn peek_type_with_signed_modifier(&self) -> bool {
-        if !matches!(self.peek_token_ref().token, Token::Word(_))
-            || self.peek_nth_token_ref(1).token != Token::LParen
-        {
-            return false;
-        }
-        let mut is_non_standard = false;
-        let mut nth = 2;
-        for _ in 0..2 {
-            if matches!(
-                self.peek_nth_token_ref(nth).token,
-                Token::Plus | Token::Minus
-            ) {
-                is_non_standard = true;
-                nth += 1;
-            }
-            match &self.peek_nth_token_ref(nth).token {
-                Token::Number(n, _) => is_non_standard |= n.parse::<u64>().is_err(),
-                _ => return false,
-            }
-            match self.peek_nth_token_ref(nth + 1).token {
-                Token::RParen => return is_non_standard,
-                Token::Comma => nth += 2,
-                _ => return false,
-            }
-        }
-        false
-    }
-
-    /// Parses a type accepted by [`Self::peek_type_with_signed_modifier`], keeping
-    /// each modifier verbatim.
-    fn parse_type_with_signed_modifier(&mut self) -> Result<DataType, ParserError> {
-        let type_ident = self.parse_identifier()?;
-        self.expect_token(&Token::LParen)?;
-        let mut modifiers = Vec::with_capacity(2);
-        loop {
-            let mut modifier = String::new();
-            if self.consume_token(&Token::Minus) {
-                modifier.push('-');
-            } else if self.consume_token(&Token::Plus) {
-                modifier.push('+');
-            }
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Number(n, _) => modifier.push_str(&n),
-                _ => return self.expected("a number in type modifier", next_token),
-            }
-            modifiers.push(modifier);
-            if modifiers.len() == 2 || !self.consume_token(&Token::Comma) {
-                break;
-            }
-        }
-        self.expect_token(&Token::RParen)?;
-        Ok(DataType::Custom(
-            ObjectName::from(vec![type_ident]),
-            modifiers,
-        ))
     }
 
     /// Parse optional type modifiers appearing in parentheses e.g. `(UNSIGNED, ZEROFILL)`.

@@ -10438,3 +10438,36 @@ fn parse_copy_from_stdin_payload_comment_on_semicolon_line() {
     );
     assert_copy_stdin_payload(&stmt, "O'Brien\n", true, "comment on the semicolon line");
 }
+
+#[test]
+fn parse_copy_from_stdin_payload_cr_only_line_ends() {
+    // The line end following the `;` prints as a single line feed.
+    let sql = "COPY t FROM STDIN;\rrow1\r\\.";
+    let canonical = "COPY t FROM STDIN;\nrow1\r\\.";
+    let stmt = pg_and_generic().one_statement_parses_to(sql, canonical);
+    assert_copy_stdin_payload(&stmt, "row1\r", true, "CR-only line ends");
+}
+
+#[test]
+fn display_copy_payload_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    // `q` fails the data write and `\` fails the terminator write.
+    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\nq1\n\\.");
+    for rejected in ['q', '\\'] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error));
+    }
+}

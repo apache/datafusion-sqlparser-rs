@@ -4928,13 +4928,29 @@ mod tests {
             payload.span,
             Span::new(Location::new(2, 1), Location::new(3, 3))
         );
-        match &payload.token {
-            Token::CopyData { data, terminated } => {
-                assert_eq!(data, "row1\n");
-                assert!(*terminated);
+        assert_eq!(
+            payload.token,
+            Token::CopyData {
+                data: "row1\n".to_string(),
+                terminated: true,
             }
-            other => panic!("expected CopyData, got {other:?}"),
-        }
+        );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload_malformed_semicolon_line() {
+        // An unterminated string on the `;` line fails the capture.
+        let sql = "COPY t FROM STDIN; 'unterminated";
+        let err = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize()
+            .unwrap_err();
+        assert_eq!(
+            err,
+            TokenizerError {
+                message: "Unterminated string literal".to_string(),
+                location: Location::new(1, 20),
+            }
+        );
     }
 
     #[test]

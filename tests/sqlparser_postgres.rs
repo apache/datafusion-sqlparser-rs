@@ -11860,6 +11860,83 @@ fn parse_variadic_as_identifier_function_argument() {
     dialects.verified_stmt("SELECT f(VARIADIC a)");
 }
 
+/// Where the ordinary reading of the argument stands alone and a clause
+/// follows it, the plain reading is kept and the clause is parsed as usual.
+#[test]
+fn parse_variadic_plain_reading_before_argument_clauses() {
+    let dialects = all_dialects_where(|d| {
+        d.supports_variadic_function_argument() && !d.is_reserved_for_identifier(Keyword::VARIADIC)
+    });
+    // A token that cannot extend the expression leaves the marker reading,
+    // while clause keywords keep the plain reading.
+    for sql in [
+        "SELECT f(VARIADIC 5)",
+        "SELECT f(variadic IGNORE NULLS)",
+        "SELECT f(variadic RESPECT NULLS)",
+        "SELECT f(variadic ON OVERFLOW ERROR)",
+        "SELECT f(variadic NULL ON NULL)",
+        "SELECT f(variadic ABSENT ON NULL)",
+        "SELECT f(variadic HAVING MIN 1)",
+        "SELECT f(variadic HAVING MAX 1)",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    // The plain argument keeps its identifier shape next to the clause.
+    let select = dialects.verified_only_select("SELECT f(variadic IGNORE NULLS)");
+    match expr_from_projection(only(&select.projection)) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::Identifier(Ident::new("variadic"))
+                ))],
+                args
+            );
+            assert_eq!(
+                &vec![FunctionArgumentClause::IgnoreOrRespectNulls(
+                    NullTreatment::IgnoreNulls
+                )],
+                clauses
+            );
+        }
+        other => panic!("Expected a function call, found {other:?}"),
+    }
+}
+
+/// The marker is rejected on non-final arguments in table function argument
+/// lists and `LATERAL` function calls as well.
+#[test]
+fn parse_variadic_not_last_in_table_function_argument_lists() {
+    let dialects = all_dialects_where(|d| d.supports_variadic_function_argument());
+    for sql in [
+        "SELECT * FROM f(VARIADIC a, b)",
+        "SELECT * FROM LATERAL f(VARIADIC a, b)",
+    ] {
+        assert_eq!(
+            ParserError::ParserError(
+                "A VARIADIC argument must be the last function argument".to_string()
+            ),
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            "{sql}"
+        );
+    }
+}
+
+/// A recursion limit exhausted inside the speculative plain reading is
+/// propagated rather than treated as a failed plain reading.
+#[test]
+fn parse_variadic_recursion_limit_in_plain_reading() {
+    let result = Parser::new(&GenericDialect {})
+        .with_recursion_limit(0)
+        .try_with_sql("VARIADIC 5")
+        .unwrap()
+        .parse_function_args();
+    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+}
+
 #[test]
 fn parse_pg_publication_tables_view_definition() {
     // `pg_get_viewdef('pg_publication_tables'::regclass, true)` on PostgreSQL 18.

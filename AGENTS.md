@@ -21,6 +21,7 @@
 - Cover both positive and negative cases: valid input parses and round-trips, invalid input fails with the expected error.
 - Cover every dialect the syntax is relevant to, e.g. via `all_dialects_where(...)`.
 - When adding new syntax, run the fuzzer to check for panics (see `docs/fuzzing.md`).
+- When fixing a bug, add one seed file to `fuzz/fuzz_seeds/`, as small as still triggers the original path. Name it `<dialect>_<issue>_<topic>.sql`. For a fix with no issue, use the PR number.
 - When testing a multi-line SQL statement, use a raw string literal, i.e. `r#"..."#` to preserve formatting.
 - The parser builds an abstract syntax tree (AST) from the SQL statement and has functionality to display the tree as SQL. Use the following template for simple unit tests where you expect the SQL created from the AST to be the same as the input SQL:
 ```rust

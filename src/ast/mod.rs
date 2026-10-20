@@ -46,10 +46,10 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
     display_utils::SpaceOrNewline,
-    tokenizer::{Span, Token},
+    tokenizer::{Span, Token, OPERATOR_CHARS},
 };
 use crate::{
-    display_utils::{Indent, NewLine},
+    display_utils::{first_char, Indent, NewLine},
     keywords::Keyword,
 };
 
@@ -82,14 +82,14 @@ pub use self::ddl::{
     IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
     OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
     Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef, WithData,
+    ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
-    Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, MultiTableInsertIntoClause,
+    Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
+    MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, MultiTableInsertIntoClause,
     MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
     MultiTableInsertWhenClause, OutputClause, Update,
 };
@@ -2002,11 +2002,13 @@ impl fmt::Display for Expr {
                 | UnaryOperator::PGSquareRoot
                 | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
                 UnaryOperator::Minus | UnaryOperator::BangNot => {
+                    // Written before the check, so an enclosing
+                    // `starts_with_operator_char` stops at this operator.
+                    write!(f, "{op}")?;
                     if starts_with_operator_char(expr) {
-                        write!(f, "{op} {expr}")
-                    } else {
-                        write!(f, "{op}{expr}")
+                        f.write_str(" ")?;
                     }
+                    write!(f, "{expr}")
                 }
                 UnaryOperator::Plus | UnaryOperator::PGPrefixFactorial => write!(f, "{op}{expr}"),
             },
@@ -3607,7 +3609,6 @@ impl fmt::Display for Analyze {
 }
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -5165,9 +5166,10 @@ impl fmt::Display for Statement {
     /// FROM
     ///   table_1"#);
     /// ```
-    // Clippy thinks this function is too complicated, but it is painful to
-    // split up without extracting structs for each `Statement` variant.
-    #[allow(clippy::cognitive_complexity)]
+    #[expect(
+        clippy::cognitive_complexity,
+        reason = "splitting this match would need a struct for each `Statement` variant"
+    )]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Flush {
@@ -5570,9 +5572,11 @@ impl fmt::Display for Statement {
                     temp = if *temporary { "TEMPORARY " } else { "" },
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
-                if let Some(args) = args {
-                    write!(f, "({})", display_comma_separated(args))?;
-                }
+                write!(
+                    f,
+                    "({})",
+                    display_comma_separated(args.as_deref().unwrap_or(&[]))
+                )?;
                 match definition {
                     MacroDefinition::Expr(expr) => write!(f, " AS {expr}")?,
                     MacroDefinition::Table(query) => write!(f, " AS TABLE {query}")?,
@@ -8134,14 +8138,8 @@ impl fmt::Display for FunctionArg {
 /// Whether `expr` renders with an operator character first. A prefix `-` or `!`
 /// must not abut one, since `--` starts a line comment and compound tokens
 /// like `!!` or `!~` alter the parsed AST or fail to parse.
-fn starts_with_operator_char(mut expr: &Expr) -> bool {
-    loop {
-        match expr {
-            Expr::UnaryOp { op, .. } => return !matches!(op, UnaryOperator::Not),
-            Expr::BinaryOp { left, .. } => expr = left,
-            _ => return false,
-        }
-    }
+fn starts_with_operator_char(expr: &Expr) -> bool {
+    first_char(expr).is_some_and(|c| OPERATOR_CHARS.contains(c))
 }
 
 /// `FunctionArgOperator::Space` has no token of its own, so the name and the
@@ -8938,7 +8936,6 @@ impl fmt::Display for DescribeAlias {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-#[allow(clippy::large_enum_variant)]
 /// Hive input/output format specification used in `CREATE TABLE`.
 pub enum HiveIOFormat {
     /// Generic IO format with separate input and output expressions.
@@ -10698,7 +10695,6 @@ impl fmt::Display for HiveSetLocation {
 }
 
 /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

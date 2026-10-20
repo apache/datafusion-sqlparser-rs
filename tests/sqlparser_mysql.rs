@@ -529,22 +529,21 @@ fn parse_show_tables() {
 
 #[test]
 fn parse_show_extended_full() {
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL TABLES")
-        .is_ok());
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL COLUMNS FROM mytable")
-        .is_ok());
+    mysql_and_generic().verified_stmt("SHOW EXTENDED FULL TABLES");
+    mysql_and_generic().verified_stmt("SHOW EXTENDED FULL COLUMNS FROM mytable");
     // SHOW EXTENDED/FULL can only be used with COLUMNS and TABLES
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL CREATE TABLE mytable")
-        .is_err());
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL COLLATION")
-        .is_err());
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL VARIABLES")
-        .is_err());
+    for sql in [
+        "SHOW EXTENDED FULL CREATE TABLE mytable",
+        "SHOW EXTENDED FULL COLLATION",
+        "SHOW EXTENDED FULL VARIABLES",
+    ] {
+        assert_eq!(
+            mysql_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "EXTENDED/FULL are not supported with this type of SHOW query".to_string()
+            ))
+        );
+    }
 }
 
 #[test]
@@ -1664,12 +1663,20 @@ fn parse_escaped_backticks_with_no_escape() {
 #[test]
 fn parse_unterminated_escape() {
     let sql = r"SELECT 'I\'m not fine\'";
-    let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
-    assert!(result.is_err());
+    assert_eq!(
+        mysql().parse_sql_statements(sql),
+        Err(ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 8".to_string()
+        ))
+    );
 
     let sql = r"SELECT 'I\\'m not fine'";
-    let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
-    assert!(result.is_err());
+    assert_eq!(
+        mysql().parse_sql_statements(sql),
+        Err(ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 23".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -1913,6 +1920,45 @@ fn parse_deprecated_mysql_unsigned_data_types() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_zerofill() {
+    for data_type in [
+        "TINYINT",
+        "SMALLINT",
+        "MEDIUMINT",
+        "INT",
+        "INTEGER",
+        "BIGINT",
+        "INT2",
+        "INT4",
+        "INT8",
+        "DECIMAL",
+        "DEC",
+        "NUMERIC",
+        "FLOAT",
+        "FLOAT4",
+        "FLOAT8",
+        "DOUBLE",
+        "REAL",
+    ] {
+        mysql_and_generic().verified_stmt(&format!("CREATE TABLE t (a {data_type} ZEROFILL)"));
+    }
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT(10) UNSIGNED ZEROFILL)");
+    assert_eq!(
+        mysql_and_generic().parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
+    );
+    assert_eq!(
+        all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
+            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -2733,6 +2779,8 @@ fn parse_update_with_joins() {
             optimizer_hints,
             update_token: _,
             output: _,
+            on_cluster: None,
+            settings: None,
         }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {
@@ -3587,10 +3635,14 @@ fn parse_create_table_with_index_definition() {
 #[test]
 fn parse_create_table_unallow_constraint_then_index() {
     let sql = "CREATE TABLE foo (bar INT, CONSTRAINT constr INDEX index (bar))";
-    assert!(mysql_and_generic().parse_sql_statements(sql).is_err());
+    assert_eq!(
+        mysql_and_generic().parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE, found: INDEX".to_string()
+        ))
+    );
 
-    let sql = "CREATE TABLE foo (bar INT, INDEX index (bar))";
-    assert!(mysql_and_generic().parse_sql_statements(sql).is_ok());
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar INT, INDEX index (bar))");
 }
 
 #[test]
@@ -4686,27 +4738,35 @@ fn parse_select_modifiers_canonical_ordering() {
 
 #[test]
 fn parse_select_modifiers_errors() {
-    assert!(mysql()
-        .parse_sql_statements("SELECT DISTINCT DISTINCT * FROM t")
-        .is_err());
-    assert!(mysql()
-        .parse_sql_statements("SELECT DISTINCTROW DISTINCTROW * FROM t")
-        .is_err());
-    assert!(mysql()
-        .parse_sql_statements("SELECT DISTINCT DISTINCTROW * FROM t")
-        .is_err());
-    assert!(mysql()
-        .parse_sql_statements("SELECT ALL DISTINCT * FROM t")
-        .is_err());
-    assert!(mysql()
-        .parse_sql_statements("SELECT DISTINCT ALL * FROM t")
-        .is_err());
-    assert!(mysql()
-        .parse_sql_statements("SELECT ALL DISTINCTROW * FROM t")
-        .is_err());
-    assert!(mysql()
-        .parse_sql_statements("SELECT ALL ALL * FROM t")
-        .is_err());
+    for (sql, err) in [
+        (
+            "SELECT DISTINCT DISTINCT * FROM t",
+            "Expected: HIGH_PRIORITY, STRAIGHT_JOIN, or other MySQL select modifier, found: DISTINCT",
+        ),
+        (
+            "SELECT DISTINCTROW DISTINCTROW * FROM t",
+            "Expected: HIGH_PRIORITY, STRAIGHT_JOIN, or other MySQL select modifier, found: DISTINCTROW",
+        ),
+        (
+            "SELECT DISTINCT DISTINCTROW * FROM t",
+            "Expected: HIGH_PRIORITY, STRAIGHT_JOIN, or other MySQL select modifier, found: DISTINCTROW",
+        ),
+        ("SELECT ALL DISTINCT * FROM t", "Cannot specify ALL then DISTINCT"),
+        ("SELECT DISTINCT ALL * FROM t", "Cannot specify DISTINCT then ALL"),
+        (
+            "SELECT ALL DISTINCTROW * FROM t",
+            "Expected: HIGH_PRIORITY, STRAIGHT_JOIN, or other MySQL select modifier, found: DISTINCTROW",
+        ),
+        (
+            "SELECT ALL ALL * FROM t",
+            "Expected: HIGH_PRIORITY, STRAIGHT_JOIN, or other MySQL select modifier, found: ALL",
+        ),
+    ] {
+        assert_eq!(
+            mysql().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string()))
+        );
+    }
 }
 
 #[test]
@@ -4956,25 +5016,22 @@ fn parse_create_database_with_charset() {
 
 #[test]
 fn parse_create_database_with_charset_errors() {
-    // Missing charset name after CHARACTER SET
-    assert!(mysql_and_generic()
-        .parse_sql_statements("CREATE DATABASE mydb DEFAULT CHARACTER SET")
-        .is_err());
-
-    // Missing charset name after CHARSET
-    assert!(mysql_and_generic()
-        .parse_sql_statements("CREATE DATABASE mydb CHARSET")
-        .is_err());
-
-    // Missing collation name after COLLATE
-    assert!(mysql_and_generic()
-        .parse_sql_statements("CREATE DATABASE mydb DEFAULT COLLATE")
-        .is_err());
-
-    // Equals sign but no value
-    assert!(mysql_and_generic()
-        .parse_sql_statements("CREATE DATABASE mydb CHARACTER SET =")
-        .is_err());
+    let missing = "Expected: identifier, found: EOF";
+    for sql in [
+        // Missing charset name after CHARACTER SET
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET",
+        // Missing charset name after CHARSET
+        "CREATE DATABASE mydb CHARSET",
+        // Missing collation name after COLLATE
+        "CREATE DATABASE mydb DEFAULT COLLATE",
+        // Equals sign but no value
+        "CREATE DATABASE mydb CHARACTER SET =",
+    ] {
+        assert_eq!(
+            mysql_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(missing.to_string()))
+        );
+    }
 }
 
 #[test]
@@ -5110,16 +5167,38 @@ fn parse_alter_table_column_position() {
     mysql_and_generic().verified_stmt("ALTER TABLE tab ADD COLUMN a INT FIRST, CHANGE COLUMN b c INT AFTER a, MODIFY COLUMN d INT AFTER c");
 
     // FIRST and AFTER are mutually exclusive, and AFTER needs a target.
-    for sql in [
-        "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
-        "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
-        "ALTER TABLE tab ADD COLUMN c INT AFTER",
-        "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
-        "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+    for (sql, err) in [
+        (
+            "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
+            "Expected: end of statement, found: AFTER",
+        ),
+        (
+            "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
+            "Expected: end of statement, found: FIRST",
+        ),
+        (
+            "ALTER TABLE tab ADD COLUMN c INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
     ] {
-        assert!(
-            mysql_and_generic().parse_sql_statements(sql).is_err(),
+        assert_eq!(
+            mysql_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_create_table_engine_name_quoting() {
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `InnoDB`");
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = InnoDB");
 }

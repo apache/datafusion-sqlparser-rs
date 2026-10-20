@@ -1912,9 +1912,10 @@ fn parse_alter_table_column_position() {
         _ => unreachable!(),
     }
 
-    assert!(clickhouse()
-        .parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER")
-        .is_err());
+    assert_eq!(
+        clickhouse().parse_sql_statements("ALTER TABLE t ADD COLUMN c UInt8 AFTER"),
+        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+    );
 }
 
 #[test]
@@ -1942,15 +1943,31 @@ fn parse_alter_table_modify_order_by() {
         _ => unreachable!(),
     }
 
-    for sql in [
-        "ALTER TABLE events MODIFY ORDER BY",
-        "ALTER TABLE events MODIFY ORDER BY (a",
-        "ALTER TABLE events MODIFY ORDER BY (,)",
-        "ALTER TABLE events MODIFY ORDER BY (a) b",
-        "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
+    for (sql, err) in [
+        (
+            "ALTER TABLE events MODIFY ORDER BY",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (a",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (,)",
+            "Expected: an expression, found: ,",
+        ),
+        (
+            "ALTER TABLE events MODIFY ORDER BY (a) b",
+            "Expected: end of statement, found: b",
+        ),
+        (
+            "CREATE TABLE events (a UInt8) ENGINE = MergeTree ORDER BY (a",
+            "Expected: ), found: EOF",
+        ),
     ] {
-        assert!(
-            clickhouse_and_generic().parse_sql_statements(sql).is_err(),
+        assert_eq!(
+            clickhouse_and_generic().parse_sql_statements(sql),
+            Err(ParserError(err.to_string())),
             "{sql}"
         );
     }
@@ -2072,15 +2089,29 @@ fn parse_tuple_element_access() {
     clickhouse().verified_stmt("SELECT 1.5, 1 + 0.5");
     clickhouse().one_statement_parses_to("SELECT .5, 1e3", "SELECT 0.5, 1000");
 
-    assert!(clickhouse().parse_sql_statements("SELECT t.").is_err());
-    assert!(clickhouse().parse_sql_statements("SELECT t.1.").is_err());
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT t."),
+        Err(ParserError(
+            "Expected: an identifier or a '*' after '.', found: EOF".to_string()
+        ))
+    );
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT t.1."),
+        Err(ParserError("Expected: identifier, found: EOF".to_string()))
+    );
 
-    let unsupported = all_dialects_where(|d| !d.supports_tuple_element_access());
-    unsupported.verified_stmt("SELECT (1, 'a') . 1");
-    for dialect in unsupported.dialects {
-        assert!(TestedDialects::new(vec![dialect])
-            .parse_sql_statements("SELECT t.1 FROM t")
-            .is_err());
+    all_dialects_where(|d| !d.supports_tuple_element_access()).verified_stmt("SELECT (1, 'a') . 1");
+    for (numeric_prefix, err) in [
+        (true, "Expected: an identifier or a '*' after '.', found: 1"),
+        (false, "Expected: end of statement, found: .1"),
+    ] {
+        assert_eq!(
+            all_dialects_where(|d| {
+                !d.supports_tuple_element_access() && d.supports_numeric_prefix() == numeric_prefix
+            })
+            .parse_sql_statements("SELECT t.1 FROM t"),
+            Err(ParserError(err.to_string()))
+        );
     }
 }
 
@@ -2127,15 +2158,20 @@ fn parse_global_in() {
         }
     ));
 
-    assert!(clickhouse()
-        .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL y")
-        .is_err());
+    assert_eq!(
+        clickhouse().parse_sql_statements("SELECT * FROM t WHERE x GLOBAL y"),
+        Err(ParserError(
+            "Expected: end of statement, found: GLOBAL".to_string()
+        ))
+    );
 
-    for dialect in all_dialects_where(|d| !d.supports_global_in()).dialects {
-        assert!(TestedDialects::new(vec![dialect])
-            .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL IN (1)")
-            .is_err());
-    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_global_in())
+            .parse_sql_statements("SELECT * FROM t WHERE x GLOBAL IN (1)"),
+        Err(ParserError(
+            "Expected: end of statement, found: GLOBAL".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -2203,6 +2239,157 @@ fn global_in_bare_table_binds_before_equality() {
     ));
 }
 
+#[test]
+fn parse_delete_on_cluster_and_settings() {
+    clickhouse_and_generic().verified_stmt("DELETE FROM db.hits ON CLUSTER c1 WHERE x = 1");
+    clickhouse_and_generic().verified_stmt("DELETE FROM hits ON CLUSTER '{cluster}' WHERE x = 1");
+    clickhouse_and_generic()
+        .verified_stmt("DELETE FROM hits WHERE x = 1 SETTINGS lightweight_deletes_sync = 0");
+
+    match clickhouse_and_generic()
+        .verified_stmt("DELETE FROM hits ON CLUSTER c1 WHERE x = 1 SETTINGS a = 1, b = 'x'")
+    {
+        Statement::Delete(Delete {
+            on_cluster,
+            settings,
+            ..
+        }) => {
+            assert_eq!(on_cluster, Some(Ident::new("c1")));
+            assert_eq!(
+                settings,
+                Some(vec![
+                    Setting {
+                        key: Ident::new("a"),
+                        value: Expr::value(number("1")),
+                    },
+                    Setting {
+                        key: Ident::new("b"),
+                        value: Expr::value(Value::SingleQuotedString("x".into())),
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, err) in [
+        (
+            "DELETE FROM hits SETTINGS a = 1 WHERE x = 1",
+            "Expected: end of statement, found: WHERE",
+        ),
+        (
+            "DELETE FROM hits WHERE x = 1 ON CLUSTER c1",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "DELETE FROM hits ON CLUSTER 1 WHERE x = 1",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "DELETE FROM hits WHERE x = 1 SETTINGS a",
+            "Expected: =, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err(),
+            ParserError(err.to_string())
+        );
+    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_settings())
+            .parse_sql_statements("DELETE FROM hits WHERE x = 1 SETTINGS a = 1")
+            .unwrap_err(),
+        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+    );
+}
+
+#[test]
+fn parse_update_on_cluster_and_settings() {
+    clickhouse_and_generic().verified_stmt("UPDATE db.hits ON CLUSTER c1 SET x = 1 WHERE y = 2");
+    clickhouse_and_generic()
+        .verified_stmt("UPDATE hits ON CLUSTER '{cluster}' SET x = 1, z = 2 WHERE y = 2");
+    clickhouse_and_generic()
+        .verified_stmt("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS update_parallel_mode = 'auto'");
+
+    match clickhouse_and_generic()
+        .verified_stmt("UPDATE hits ON CLUSTER c1 SET x = 1 WHERE y = 2 SETTINGS a = 1")
+    {
+        Statement::Update(Update {
+            on_cluster,
+            settings,
+            ..
+        }) => {
+            assert_eq!(on_cluster, Some(Ident::new("c1")));
+            assert_eq!(
+                settings,
+                Some(vec![Setting {
+                    key: Ident::new("a"),
+                    value: Expr::value(number("1")),
+                }])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, err) in [
+        (
+            "UPDATE hits SET x = 1 ON CLUSTER c1 WHERE y = 2",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "UPDATE hits SET x = 1 SETTINGS a = 1 WHERE y = 2",
+            "Expected: end of statement, found: WHERE",
+        ),
+        (
+            "UPDATE hits ON CLUSTER 1 SET x = 1 WHERE y = 2",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a",
+            "Expected: =, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err(),
+            ParserError(err.to_string())
+        );
+    }
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_settings())
+            .parse_sql_statements("UPDATE hits SET x = 1 WHERE y = 2 SETTINGS a = 1")
+            .unwrap_err(),
+        ParserError("Expected: end of statement, found: SETTINGS".to_string())
+    );
+}
+
+#[test]
+fn parse_dollar_in_identifier() {
+    let select = clickhouse_and_generic().verified_only_select("SELECT a$b, c$$, d$e$ FROM t");
+    assert_eq!(
+        select.projection,
+        vec![
+            UnnamedExpr(Identifier(Ident::new("a$b"))),
+            UnnamedExpr(Identifier(Ident::new("c$$"))),
+            UnnamedExpr(Identifier(Ident::new("d$e$"))),
+        ]
+    );
+    // Dollar-quoted strings still take precedence at the start of a token.
+    clickhouse_and_generic().verified_stmt("SELECT $$abc$$, $tag$abc$tag$");
+    // Tokenizes like ClickHouse does; only the parser rejects it.
+    let err = clickhouse()
+        .parse_sql_statements("INSERT I$$$$$$$$$$$$$$$$$$$$$$$$$$")
+        .unwrap_err();
+    assert!(matches!(err, ParserError(_)), "{err}");
+
+    all_dialects_where(|d| !d.is_identifier_part('$'))
+        .parse_sql_statements("SELECT a$b FROM t")
+        .unwrap_err();
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }
@@ -2212,4 +2399,12 @@ fn clickhouse_and_generic() -> TestedDialects {
         Box::new(ClickHouseDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+#[test]
+fn parse_create_table_engine_name_quoting() {
+    clickhouse_and_generic().verified_stmt(r#"CREATE TABLE t (a INT) ENGINE = "MergeTree""#);
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `MergeTree`");
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
+    clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
 }

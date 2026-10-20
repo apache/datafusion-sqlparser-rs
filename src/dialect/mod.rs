@@ -386,6 +386,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `AS MATERIALIZED` and `AS NOT MATERIALIZED`
+    /// in a common table expression.
+    ///
+    /// ```sql
+    /// WITH cte AS MATERIALIZED (SELECT 1) SELECT * FROM cte
+    /// ```
+    fn supports_cte_materialization(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false
@@ -1189,7 +1199,8 @@ pub trait Dialect: Debug + Any {
     /// SELECT * FROM (mytable) AS alias;
     /// ```
     ///
-    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from),
+    /// [SQLite](https://www.sqlite.org/syntax/table-or-subquery.html)
     fn supports_parens_around_table_factor(&self) -> bool {
         false
     }
@@ -1278,6 +1289,18 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports nested comments
     /// e.g. `/* /* nested */ */`
     fn supports_nested_comments(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `#` as the start of a single line comment,
+    /// e.g. `SELECT 1 # comment`
+    fn supports_hash_comment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `#` starts a single line comment only when followed by an ASCII
+    /// space or `!`, so `# comment` and `#! comment` are comments but `#comment` is not.
+    fn requires_hash_comment_space(&self) -> bool {
         false
     }
 
@@ -1514,6 +1537,14 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_table_alias(kw, parser)
     }
 
+    /// Returns true if a single-quoted string can be an alias, as in `SELECT 1 AS 'x'`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/problems-with-alias.html),
+    /// [SQLite](https://www.sqlite.org/lang_keywords.html)
+    fn supports_string_literal_alias(&self) -> bool {
+        true
+    }
+
     /// Returns true if this dialect supports querying historical table data
     /// by specifying which version of the data to query.
     fn supports_table_versioning(&self) -> bool {
@@ -1645,6 +1676,18 @@ pub trait Dialect: Debug + Any {
     ///
     /// Note that this is canonicalized to `INT(20)`.
     fn supports_data_type_signed_suffix(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows an optional `ZEROFILL` suffix after numeric data types.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT(10) UNSIGNED ZEROFILL);
+    /// ```
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html>
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
         false
     }
 
@@ -2297,11 +2340,9 @@ mod tests {
             }
         }
 
-        #[allow(clippy::needless_raw_string_hashes)]
-        let statement = r#"SELECT 'Wayne\'s World'"#;
+        let statement = r"SELECT 'Wayne\'s World'";
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
-        assert!(res1.is_ok());
-        assert_eq!(res1, res2);
+        assert_eq!(res1.unwrap(), res2.unwrap());
     }
 }

@@ -108,6 +108,28 @@ pub(crate) fn indented_list<T: fmt::Display>(f: &mut fmt::Formatter, items: &[T]
     Indent(DisplayCommaSeparated(items)).fmt(f)
 }
 
+/// The first char `value` displays, rendering only up to it.
+///
+/// The sink fails once it holds a char. Stopping there relies on every
+/// `Display` impl propagating the formatter's errors.
+pub(crate) fn first_char(value: &impl Display) -> Option<char> {
+    struct FirstChar(Option<char>);
+
+    impl Write for FirstChar {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            self.0 = self.0.or_else(|| s.chars().next());
+            match self.0 {
+                Some(_) => Err(fmt::Error),
+                None => Ok(()),
+            }
+        }
+    }
+
+    let mut first = FirstChar(None);
+    let _ = write!(first, "{value}");
+    first.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +153,38 @@ mod tests {
             "Only the alternate form should be indented"
         );
         assert_eq!(format!("{:#}", indent), "  line 1\n  line 2");
+    }
+
+    #[test]
+    fn test_first_char_stops_at_first_char() {
+        struct Chunks(core::cell::Cell<usize>);
+
+        impl Display for Chunks {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                ["", "ab", "c"].iter().try_for_each(|chunk| {
+                    self.0.set(self.0.get() + 1);
+                    f.write_str(chunk)
+                })
+            }
+        }
+
+        let chunks = Chunks(Default::default());
+        assert_eq!(first_char(&chunks), Some('a'));
+        assert_eq!(chunks.0.get(), 2, "rendered past the first char");
+        assert_eq!(first_char(&""), None);
+    }
+
+    #[test]
+    fn test_first_char_keeps_first_char_when_errors_are_ignored() {
+        struct IgnoresErrors;
+
+        impl Display for IgnoresErrors {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let _ = f.write_str("a");
+                f.write_str("b")
+            }
+        }
+
+        assert_eq!(first_char(&IgnoresErrors), Some('a'));
     }
 }

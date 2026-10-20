@@ -31,7 +31,7 @@ use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{AnsiDialect, GenericDialect, SQLiteDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::{Token, Tokenizer};
 
 #[test]
 fn pragma_no_value() {
@@ -1871,4 +1871,13 @@ fn parse_colon_is_not_an_operator() {
         assert_eq!(sqlite().parse_sql_statements(sql), Err(err), "{sql}");
     }
     sqlite().verified_stmt("SELECT a FROM t WHERE b = :c");
+}
+
+#[test]
+fn tokenize_hash_digit_is_not_a_variable() {
+    let tokens = Tokenizer::new(&SQLiteDialect {}, "#123")
+        .tokenize()
+        .unwrap();
+    let expected = vec![Token::Sharp, Token::Number("123".to_string(), false)];
+    assert_eq!(tokens, expected);
 }

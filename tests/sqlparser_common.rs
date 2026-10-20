@@ -21097,6 +21097,7 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
+}
 
 #[test]
 fn parse_custom_type_modifier_spellings() {
@@ -21110,9 +21111,10 @@ fn parse_custom_type_modifier_spellings() {
     }
     let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
     generic.verified_stmt(r#"CREATE TABLE t (c foo("quoted"))"#);
+    generic.verified_stmt("CREATE TABLE t (c foo(9L))");
 
     let statements = generic
-        .parse_sql_statements("CREATE TABLE t (c foo(bar, 9, 'z'))")
+        .parse_sql_statements("CREATE TABLE t (c foo(bar, 9, 'z', 42L))")
         .unwrap();
     let Statement::CreateTable(create_table) = &statements[0] else {
         panic!("expected CREATE TABLE")
@@ -21124,6 +21126,7 @@ fn parse_custom_type_modifier_spellings() {
         TypeModifier::Identifier(Ident::new("bar")),
         TypeModifier::Number("9".to_string(), false),
         TypeModifier::String("z".to_string()),
+        TypeModifier::Number("42".to_string(), true),
     ];
     assert_eq!(modifiers, &expected);
 }

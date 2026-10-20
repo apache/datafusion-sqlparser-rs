@@ -137,9 +137,8 @@ impl DerefMut for ValueWithSpan {
 #[cfg(all(feature = "arbitrary", feature = "bigdecimal"))]
 fn bigdecimal_arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<BigDecimal> {
     use arbitrary::Arbitrary;
-    let mantissa = i64::arbitrary(u)?;
-    let scale = i64::arbitrary(u)? % 1_000_000;
-    Ok(BigDecimal::from(mantissa).with_scale(scale))
+    <(i64, i64)>::arbitrary(u)
+        .map(|(mantissa, scale)| BigDecimal::from(mantissa).with_scale(scale % 1_000_000))
 }
 
 /// Primitive SQL values such as number and string
@@ -805,5 +804,21 @@ fn test_arbitrary_bigdecimal_scale_is_bounded() {
     while !u.is_empty() {
         let number = bigdecimal_arbitrary(&mut u).unwrap();
         assert!(number.as_bigint_and_exponent().1.abs() < 1_000_000);
+    }
+}
+
+#[cfg(all(test, feature = "arbitrary", feature = "bigdecimal"))]
+#[test]
+fn test_arbitrary_bigdecimal_extreme_scales() {
+    for (mantissa, scale, expected_scale) in
+        [(17_i64, i64::MAX, 775_807), (-17_i64, i64::MIN, -775_808)]
+    {
+        let mut data = [0; 16];
+        data[..8].copy_from_slice(&mantissa.to_le_bytes());
+        data[8..].copy_from_slice(&scale.to_le_bytes());
+        let mut u = arbitrary::Unstructured::new(&data);
+        let number = bigdecimal_arbitrary(&mut u).unwrap();
+        assert_eq!(number.fractional_digit_count(), expected_scale);
+        assert!(u.is_empty());
     }
 }

@@ -1339,6 +1339,27 @@ fn parse_comma_join_constraint() {
             "Expected: end of statement, found: ON".to_string()
         ))
     );
+
+    // Malformed inputs after a comma join constraint
+    for (sql, error) in [
+        (
+            "SELECT * FROM t, u ON",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "SELECT * FROM t, u USING a",
+            "Expected: a list of columns in parentheses, found: a",
+        ),
+        (
+            "SELECT * FROM t, u ON t.a = u.a CROSS",
+            "Expected: JOIN or APPLY after CROSS, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string()))
+        );
+    }
 }
 
 fn sqlite() -> TestedDialects {

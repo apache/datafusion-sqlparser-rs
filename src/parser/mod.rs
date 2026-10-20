@@ -4213,8 +4213,8 @@ impl<'a> Parser<'a> {
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::JSON]) {
                         self.parse_is_json_predicate(expr, true)
                     } else if self.dialect.supports_is_operator() {
-                        if let Some((form, negated)) =
-                            self.maybe_parse(|parser| parser.parse_unicode_is_normalized_suffix())?
+                        if let Ok((form, negated)) =
+                            self.try_parse(|parser| parser.parse_unicode_is_normalized_suffix())
                         {
                             Ok(Expr::IsNormalized {
                                 expr: Box::new(expr),

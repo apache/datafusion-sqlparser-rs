@@ -1174,6 +1174,16 @@ fn sqlite_is_operators() {
         }
         other => panic!("expected InList on top, got {other:?}"),
     }
+
+    // A dangling right-hand side is rejected
+    for sql in ["SELECT a IS", "SELECT a IS NOT"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: an expression, found: EOF".to_string()
+            ))
+        );
+    }
 }
 
 #[test]

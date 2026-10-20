@@ -19521,16 +19521,17 @@ impl<'a> Parser<'a> {
             }
 
             let loc = self.peek_token_ref().span.start;
-            self.expect_keyword(Keyword::VARIADIC)?;
+            self.advance_token();
             let arg = self.parse_plain_function_args()?;
             // PostgreSQL's VARIADIC productions require expression operands,
             // so no wildcard argument form is valid.
-            let carries_wildcard = match &arg {
+            let carries_wildcard = matches!(
+                &arg,
                 FunctionArg::Unnamed(arg)
                 | FunctionArg::Named { arg, .. }
-                | FunctionArg::ExprNamed { arg, .. } => !matches!(arg, FunctionArgExpr::Expr(_)),
-                FunctionArg::Variadic(_) => false,
-            };
+                | FunctionArg::ExprNamed { arg, .. }
+                    if !matches!(arg, FunctionArgExpr::Expr(_))
+            );
             if carries_wildcard {
                 return parser_err!("A VARIADIC argument cannot be a wildcard", loc);
             }

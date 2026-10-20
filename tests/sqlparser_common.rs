@@ -21111,4 +21111,30 @@ fn parse_singular_value_keyword() {
             "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
         ))
     );
+
+    // Dialects with `INSERT` table aliases consume `VALUE` as an alias without a column list.
+    let sql = "INSERT INTO t VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    let without_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && !d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        without_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
+    let with_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        with_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: identifier, found: 1".to_string()
+        ))
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_singular_value_keyword());
+    dialects.verified_stmt("SELECT 1 UNION VALUE (2)");
+    dialects.verified_stmt("WITH c AS (VALUE (1)) SELECT * FROM c");
 }

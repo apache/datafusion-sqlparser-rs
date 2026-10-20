@@ -1144,6 +1144,34 @@ fn test_multiword_type_names() {
 }
 
 #[test]
+fn display_multiword_type_name_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let data_type = DataType::CustomMultiWord(
+        vec![Ident::new("signed"), Ident::new("int")],
+        vec![TypeModifier::Number("1".to_string(), false)],
+    );
+    // A writer that rejects the type name fails before the modifier list
+    let mut writer = RejectingWriter('s');
+    assert_eq!(write!(writer, "{data_type}"), Err(fmt::Error));
+    // A writer that only rejects the parenthesized list fails on the modifiers
+    let mut writer = RejectingWriter('(');
+    assert_eq!(write!(writer, "{data_type}"), Err(fmt::Error));
+}
+
+#[test]
 fn test_multiword_type_names_rejected_by_other_dialects() {
     // GenericDialect does not support multi-word type names
     assert_eq!(

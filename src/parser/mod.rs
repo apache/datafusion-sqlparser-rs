@@ -13814,8 +13814,8 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::SIGNED => {
                     if self.dialect.supports_multiword_type_names() {
-                        self.prev_token();
-                        return self.parse_multiword_type_name();
+                        let first = w.clone().into_ident(next_token.span);
+                        return self.parse_multiword_type_name(first);
                     }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::SignedInteger)
@@ -13825,8 +13825,8 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::UNSIGNED => {
                     if self.dialect.supports_multiword_type_names() {
-                        self.prev_token();
-                        return self.parse_multiword_type_name();
+                        let first = w.clone().into_ident(next_token.span);
+                        return self.parse_multiword_type_name(first);
                     }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::UnsignedInteger)
@@ -13841,10 +13841,11 @@ impl<'a> Parser<'a> {
                     Ok(DataType::TsQuery)
                 }
                 _ => {
-                    self.prev_token();
                     if self.dialect.supports_multiword_type_names() {
-                        return self.parse_multiword_type_name();
+                        let first = w.clone().into_ident(next_token.span);
+                        return self.parse_multiword_type_name(first);
                     }
+                    self.prev_token();
                     let type_name = self.parse_object_name(false)?;
                     if let Some(modifiers) = self.parse_optional_type_modifiers()? {
                         Ok(DataType::Custom(type_name, modifiers))
@@ -13853,9 +13854,9 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
-            Token::SingleQuotedString(_) if self.dialect.supports_multiword_type_names() => {
-                self.prev_token();
-                return self.parse_multiword_type_name();
+            Token::SingleQuotedString(value) if self.dialect.supports_multiword_type_names() => {
+                let first = Ident::with_quote('\'', value.clone());
+                return self.parse_multiword_type_name(first);
             }
             _ => self.expected_at("a data type name", next_token_index),
         }?;
@@ -15042,30 +15043,27 @@ impl<'a> Parser<'a> {
     /// Parse a space-separated multi-word typename per SQLite's `typename` grammar.
     fn parse_multiword_type_name(
         &mut self,
+        first: Ident,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
-        let mut parts: Vec<Ident> = vec![];
-        let first = self.next_token();
-        match first.token {
-            Token::Word(w) => parts.push(w.into_ident(first.span)),
-            Token::SingleQuotedString(s) => parts.push(Ident::with_quote('\'', s)),
-            _ => return self.expected("a data type name", first),
-        }
+        let mut parts = Vec::with_capacity(4);
+        parts.push(first);
         loop {
-            let can_extend = {
+            let next_part = {
                 let peeked = self.peek_token_ref();
                 match &peeked.token {
                     Token::Word(w) if w.keyword == Keyword::GENERATED => {
                         // `GENERATED` starts a constraint only when followed
                         // by `ALWAYS`, otherwise it is a type name word.
-                        !matches!(
-                            self.peek_nth_token(1).token,
+                        (!matches!(
+                            &self.peek_nth_token_ref(1).token,
                             Token::Word(w) if w.keyword == Keyword::ALWAYS
-                        )
+                        ))
+                        .then(|| w.clone().into_ident(peeked.span))
                     }
                     Token::Word(w) => {
                         // Fully-reserved keywords end the type name, see
                         // <https://www.sqlite.org/lang_keywords.html>
-                        !matches!(
+                        (!matches!(
                             w.keyword,
                             Keyword::ADD
                                 | Keyword::ALL
@@ -15133,21 +15131,20 @@ impl<'a> Parser<'a> {
                                 | Keyword::VALUES
                                 | Keyword::WHEN
                                 | Keyword::WHERE
-                        )
+                        ))
+                        .then(|| w.clone().into_ident(peeked.span))
                     }
-                    Token::SingleQuotedString(_) => true,
-                    _ => false,
+                    Token::SingleQuotedString(value) => {
+                        Some(Ident::with_quote('\'', value.clone()))
+                    }
+                    _ => None,
                 }
             };
-            if !can_extend {
+            let Some(next_part) = next_part else {
                 break;
-            }
-            let next = self.next_token();
-            match next.token {
-                Token::Word(w) => parts.push(w.into_ident(next.span)),
-                Token::SingleQuotedString(s) => parts.push(Ident::with_quote('\'', s)),
-                _ => break,
-            }
+            };
+            self.advance_token();
+            parts.push(next_part);
         }
         let modifiers = self.parse_optional_type_modifiers()?.unwrap_or_default();
         if parts.len() == 1 {

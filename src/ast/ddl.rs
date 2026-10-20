@@ -6090,22 +6090,28 @@ impl fmt::Display for CreateForeignTable {
     }
 }
 
-/// The handler/validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
+/// A handler or validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ForeignDataWrapperRoutineClause {
-    /// A named function, e.g. `HANDLER myhandler` or `VALIDATOR myvalidator`.
-    Function(ObjectName),
-    /// The `NO HANDLER` / `NO VALIDATOR` form.
-    Absent,
+    /// `HANDLER handler_function`
+    Handler(ObjectName),
+    /// `NO HANDLER`
+    NoHandler,
+    /// `VALIDATOR validator_function`
+    Validator(ObjectName),
+    /// `NO VALIDATOR`
+    NoValidator,
 }
 
-impl ForeignDataWrapperRoutineClause {
-    fn fmt_with_label(&self, f: &mut fmt::Formatter<'_>, label: &str) -> fmt::Result {
+impl fmt::Display for ForeignDataWrapperRoutineClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ForeignDataWrapperRoutineClause::Function(name) => write!(f, " {label} {name}"),
-            ForeignDataWrapperRoutineClause::Absent => write!(f, " NO {label}"),
+            ForeignDataWrapperRoutineClause::Handler(name) => write!(f, "HANDLER {name}"),
+            ForeignDataWrapperRoutineClause::NoHandler => f.write_str("NO HANDLER"),
+            ForeignDataWrapperRoutineClause::Validator(name) => write!(f, "VALIDATOR {name}"),
+            ForeignDataWrapperRoutineClause::NoValidator => f.write_str("NO VALIDATOR"),
         }
     }
 }
@@ -6120,10 +6126,9 @@ pub struct CreateForeignDataWrapper {
     /// The name of the foreign-data wrapper. Per PostgreSQL this is a bare
     /// identifier and cannot be schema-qualified.
     pub name: Ident,
-    /// Optional `HANDLER handler_function` or `NO HANDLER` clause.
-    pub handler: Option<ForeignDataWrapperRoutineClause>,
-    /// Optional `VALIDATOR validator_function` or `NO VALIDATOR` clause.
-    pub validator: Option<ForeignDataWrapperRoutineClause>,
+    /// `HANDLER` and `VALIDATOR` clauses in source order. PostgreSQL's grammar
+    /// accepts repeated clauses and rejects them only when executing the statement.
+    pub routines: Vec<ForeignDataWrapperRoutineClause>,
     /// Optional `OPTIONS (key 'value', ...)` clause.
     pub options: Option<Vec<CreateServerOption>>,
 }
@@ -6131,11 +6136,8 @@ pub struct CreateForeignDataWrapper {
 impl fmt::Display for CreateForeignDataWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "CREATE FOREIGN DATA WRAPPER {}", self.name)?;
-        if let Some(handler) = &self.handler {
-            handler.fmt_with_label(f, "HANDLER")?;
-        }
-        if let Some(validator) = &self.validator {
-            validator.fmt_with_label(f, "VALIDATOR")?;
+        for routine in &self.routines {
+            write!(f, " {routine}")?;
         }
         if let Some(options) = &self.options {
             write!(f, " OPTIONS ({})", display_comma_separated(options))?;
@@ -6175,14 +6177,13 @@ impl From<CreateForeignDataWrapper> for crate::ast::Statement {
 
 impl Spanned for CreateForeignDataWrapper {
     fn span(&self) -> Span {
-        let routine_span = |clause: &Option<ForeignDataWrapperRoutineClause>| match clause {
-            Some(ForeignDataWrapperRoutineClause::Function(name)) => Some(name.span()),
-            _ => None,
-        };
         Span::union_iter(
             core::iter::once(self.name.span)
-                .chain(routine_span(&self.handler))
-                .chain(routine_span(&self.validator))
+                .chain(self.routines.iter().filter_map(|routine| match routine {
+                    ForeignDataWrapperRoutineClause::Handler(name)
+                    | ForeignDataWrapperRoutineClause::Validator(name) => Some(name.span()),
+                    _ => None,
+                }))
                 .chain(
                     self.options
                         .iter()

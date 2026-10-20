@@ -20815,41 +20815,27 @@ impl<'a> Parser<'a> {
     ) -> Result<CreateForeignDataWrapper, ParserError> {
         let name = self.parse_identifier()?;
 
-        // PostgreSQL accepts HANDLER and VALIDATOR in either order, so they are
-        // consumed in a loop rather than positionally.
-        let mut handler = None;
-        let mut validator = None;
+        let mut routines = Vec::new();
         loop {
-            let loc = self.peek_token_ref().span.start;
-            let (slot, clause) = if self.parse_keyword(Keyword::HANDLER) {
-                (
-                    &mut handler,
-                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
-                )
+            let routine = if self.parse_keyword(Keyword::HANDLER) {
+                ForeignDataWrapperRoutineClause::Handler(self.parse_object_name(false)?)
             } else if self.parse_keywords(&[Keyword::NO, Keyword::HANDLER]) {
-                (&mut handler, ForeignDataWrapperRoutineClause::Absent)
+                ForeignDataWrapperRoutineClause::NoHandler
             } else if self.parse_keyword(Keyword::VALIDATOR) {
-                (
-                    &mut validator,
-                    ForeignDataWrapperRoutineClause::Function(self.parse_object_name(false)?),
-                )
+                ForeignDataWrapperRoutineClause::Validator(self.parse_object_name(false)?)
             } else if self.parse_keywords(&[Keyword::NO, Keyword::VALIDATOR]) {
-                (&mut validator, ForeignDataWrapperRoutineClause::Absent)
+                ForeignDataWrapperRoutineClause::NoValidator
             } else {
                 break;
             };
-            if slot.is_some() {
-                return parser_err!("conflicting or redundant options", loc);
-            }
-            *slot = Some(clause);
+            routines.push(routine);
         }
 
         let options = self.parse_pg_options_clause()?;
 
         Ok(CreateForeignDataWrapper {
             name,
-            handler,
-            validator,
+            routines,
             options,
         })
     }

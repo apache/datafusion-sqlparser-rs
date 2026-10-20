@@ -5459,12 +5459,7 @@ fn parse_alter_table_add_column() {
 
 #[test]
 fn parse_alter_table_add_column_if_not_exists() {
-    let dialects = TestedDialects::new(vec![
-        Box::new(PostgreSqlDialect {}),
-        Box::new(BigQueryDialect {}),
-        Box::new(GenericDialect {}),
-        Box::new(DuckDbDialect {}),
-    ]);
+    let dialects = all_dialects_where(|d| d.supports_add_column_if_not_exists());
 
     match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD IF NOT EXISTS foo TEXT")) {
         AlterTableOperation::AddColumn { if_not_exists, .. } => {

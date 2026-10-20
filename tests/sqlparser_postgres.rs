@@ -11164,3 +11164,58 @@ SELECT p.pubname,
     let reparsed = pg().parse_sql_statements(&statement.to_string()).unwrap();
     assert_eq!(vec![statement], reparsed);
 }
+
+#[test]
+fn variadic_not_last_error_points_to_keyword() {
+    for (sql, line, column) in [
+        ("SELECT f(VARIADIC a, b)", 1, 10),
+        ("SELECT f(1, VARIADIC a, b)", 1, 13),
+        ("SELECT f(VARIADIC a, VARIADIC b)", 1, 10),
+        ("SELECT * FROM f(VARIADIC a, b)", 1, 17),
+        ("SELECT * FROM LATERAL f(VARIADIC a, b)", 1, 25),
+        (
+            r#"SELECT f(
+  VARIADIC /* marker */ a, b)"#,
+            2,
+            3,
+        ),
+    ] {
+        assert_eq!(
+            Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql),
+            Err(ParserError::ParserError(format!(
+                "A VARIADIC argument must be the last function argument at Line: {line}, Column: {column}",
+            ))),
+            "{sql}",
+        );
+    }
+}
+
+#[test]
+fn variadic_argument_operand_span() {
+    let dialect = sqlparser::dialect::PostgreSqlDialect {};
+    let arg = Parser::new(&dialect)
+        .try_with_sql("VARIADIC schema.x")
+        .unwrap()
+        .parse_function_args()
+        .unwrap();
+    assert_eq!(
+        sqlparser::ast::Spanned::span(&arg),
+        sqlparser::tokenizer::Span::new(
+            sqlparser::tokenizer::Location::new(1, 10),
+            sqlparser::tokenizer::Location::new(1, 18),
+        ),
+    );
+}
+
+#[test]
+fn variadic_table_argument_preserves_operand_errors() {
+    assert_eq!(
+        Parser::parse_sql(
+            &sqlparser::dialect::PostgreSqlDialect {},
+            "SELECT * FROM LATERAL f(VARIADIC *)",
+        ),
+        Err(ParserError::ParserError(
+            "A VARIADIC argument cannot be a wildcard at Line: 1, Column: 25".to_string(),
+        )),
+    );
+}

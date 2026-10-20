@@ -4219,8 +4219,7 @@ impl<'a> Parser<'a> {
                             } else {
                                 BinaryOperator::Is
                             };
-                            // SQLite parses `IS` at the same left-associative level as the
-                            // comparison operators, see <https://www.sqlite.org/syntax/expr.html>
+                            // SQLite gives `IS` the same precedence as `=` (https://www.sqlite.org/lang_expr.html).
                             Ok(Expr::BinaryOp {
                                 left: Box::new(expr),
                                 op,

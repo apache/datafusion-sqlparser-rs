@@ -33,7 +33,8 @@ use super::{
     Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
-    CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem,
+    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, Cte, Delete,
+    DoUpdate, ExceptSelectItem,
     ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
     FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
@@ -488,7 +489,7 @@ impl Spanned for Statement {
             Statement::Unload { .. } => Span::empty(),
             Statement::OptimizeTable { .. } => Span::empty(),
             Statement::CreatePolicy { .. } => Span::empty(),
-            Statement::CreateRule { .. } => Span::empty(),
+            Statement::CreateRule(rule) => rule.span(),
             Statement::AlterPolicy { .. } => Span::empty(),
             Statement::AlterTrigger(trigger) => trigger.span(),
             Statement::AlterConnector { .. } => Span::empty(),
@@ -567,6 +568,27 @@ impl Spanned for Use {
             Use::Object(object_name) => object_name.span(),
             Use::Default => Span::empty(),
         }
+    }
+}
+
+impl Spanned for CreateRule {
+    fn span(&self) -> Span {
+        let action_span = match &self.action {
+            CreateRuleAction::Nothing => Span::empty(),
+            CreateRuleAction::Statement(statement) => statement.span(),
+            CreateRuleAction::Statements(statements) => {
+                union_spans(statements.iter().map(Spanned::span))
+            }
+        };
+        union_spans(
+            [
+                self.name.span,
+                self.table_name.span(),
+                self.condition.as_ref().map_or(Span::empty(), Spanned::span),
+                action_span,
+            ]
+            .into_iter(),
+        )
     }
 }
 

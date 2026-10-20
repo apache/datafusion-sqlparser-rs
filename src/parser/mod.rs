@@ -19765,6 +19765,18 @@ impl<'a> Parser<'a> {
         self.parse_plain_function_args()
     }
 
+    fn parse_function_arg_in_list(
+        &mut self,
+        first_variadic_location: &mut Option<Location>,
+    ) -> Result<FunctionArg, ParserError> {
+        let loc = self.peek_token_ref().span.start;
+        let arg = self.parse_function_args()?;
+        if matches!(arg, FunctionArg::Variadic(_)) && first_variadic_location.is_none() {
+            *first_variadic_location = Some(loc);
+        }
+        Ok(arg)
+    }
+
     /// Returns true when the next token can follow a complete function
     /// argument, for example the argument separator, the end of the list, or a
     /// clause that [`Parser::parse_function_argument_list`] accepts after the
@@ -19793,21 +19805,26 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Rejects a `VARIADIC` marker on any but the final argument, as
-    /// PostgreSQL's grammar carries it on the last one only.
-    fn verify_variadic_argument_is_last(args: &[FunctionArg]) -> Result<(), ParserError> {
+    /// Rejects non-final `VARIADIC` arguments at the marker's source location.
+    fn verify_variadic_argument_is_last(
+        args: &[FunctionArg],
+        first_variadic_location: Option<Location>,
+    ) -> Result<(), ParserError> {
         let Some((_, preceding)) = args.split_last() else {
             return Ok(());
         };
-        match preceding
-            .iter()
-            .find(|arg| matches!(arg, FunctionArg::Variadic(_)))
-        {
-            Some(arg) => parser_err!(
-                "A VARIADIC argument must be the last function argument",
-                arg.span().start
-            ),
-            None => Ok(()),
+        match first_variadic_location {
+            Some(loc)
+                if preceding
+                    .iter()
+                    .any(|arg| matches!(arg, FunctionArg::Variadic(_))) =>
+            {
+                parser_err!(
+                    "A VARIADIC argument must be the last function argument",
+                    loc
+                )
+            }
+            _ => Ok(()),
         }
     }
 
@@ -19937,8 +19954,11 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {
-            let args = self.parse_comma_separated(Parser::parse_function_args)?;
-            Self::verify_variadic_argument_is_last(&args)?;
+            let mut first_variadic_location = None;
+            let args = self.parse_comma_separated(|p| {
+                p.parse_function_arg_in_list(&mut first_variadic_location)
+            })?;
+            Self::verify_variadic_argument_is_last(&args, first_variadic_location)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }
@@ -19952,16 +19972,17 @@ impl<'a> Parser<'a> {
             });
         }
         let mut args = vec![];
+        let mut first_variadic_location = None;
         let settings = loop {
             if let Some(settings) = self.parse_settings()? {
                 break Some(settings);
             }
-            args.push(self.parse_function_args()?);
+            args.push(self.parse_function_arg_in_list(&mut first_variadic_location)?);
             if self.is_parse_comma_separated_end() {
                 break None;
             }
         };
-        Self::verify_variadic_argument_is_last(&args)?;
+        Self::verify_variadic_argument_is_last(&args, first_variadic_location)?;
         self.expect_token(&Token::RParen)?;
         Ok(TableFunctionArgs { args, settings })
     }
@@ -19999,15 +20020,18 @@ impl<'a> Parser<'a> {
 
         let loc = self.peek_token_ref().span.start;
         let duplicate_treatment = self.parse_duplicate_treatment()?;
+        let mut first_variadic_location = None;
         let args = if duplicate_treatment != Some(DuplicateTreatment::Distinct)
             && self.dialect.supports_aggregate_order_by_with_empty_args()
             && self.peek_keywords(&[Keyword::ORDER, Keyword::BY])
         {
             vec![]
         } else {
-            self.parse_comma_separated(Parser::parse_function_args)?
+            self.parse_comma_separated(|p| {
+                p.parse_function_arg_in_list(&mut first_variadic_location)
+            })?
         };
-        Self::verify_variadic_argument_is_last(&args)?;
+        Self::verify_variadic_argument_is_last(&args, first_variadic_location)?;
 
         // PostgreSQL pairs the marker with neither `DISTINCT` nor `ALL`.
         if duplicate_treatment.is_some() && matches!(args.last(), Some(FunctionArg::Variadic(_))) {

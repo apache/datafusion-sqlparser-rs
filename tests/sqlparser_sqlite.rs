@@ -1274,6 +1274,35 @@ fn parse_indexed_by() {
     );
 }
 
+#[test]
+fn display_index_directives_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for (sql, rejected) in [
+        ("SELECT * FROM t INDEXED BY idx_b", 'b'),
+        ("SELECT * FROM t NOT INDEXED", 'N'),
+    ] {
+        let select = sqlite().verified_only_select(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{}", select.from[0].relation),
+            Err(fmt::Error)
+        );
+    }
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

@@ -7461,22 +7461,31 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::AS)?;
         self.expect_keyword_is(Keyword::ON)?;
-        let event = match self.expect_one_of_keywords(&[
-            Keyword::SELECT,
-            Keyword::INSERT,
-            Keyword::UPDATE,
-            Keyword::DELETE,
-        ])? {
-            Keyword::SELECT => CreateRuleEvent::Select,
-            Keyword::INSERT => CreateRuleEvent::Insert,
-            Keyword::UPDATE => CreateRuleEvent::Update,
-            Keyword::DELETE => CreateRuleEvent::Delete,
-            unexpected_keyword => {
-                return Err(ParserError::ParserError(format!(
-                "Internal parser error: unexpected keyword `{unexpected_keyword}` in rule event"
-            )))
+        let event = match &self.peek_token_ref().token {
+            Token::Word(Word {
+                keyword: Keyword::SELECT,
+                ..
+            }) => CreateRuleEvent::Select,
+            Token::Word(Word {
+                keyword: Keyword::INSERT,
+                ..
+            }) => CreateRuleEvent::Insert,
+            Token::Word(Word {
+                keyword: Keyword::UPDATE,
+                ..
+            }) => CreateRuleEvent::Update,
+            Token::Word(Word {
+                keyword: Keyword::DELETE,
+                ..
+            }) => CreateRuleEvent::Delete,
+            _ => {
+                return self.expected_ref(
+                    "one of SELECT or INSERT or UPDATE or DELETE",
+                    self.peek_token_ref(),
+                )
             }
         };
+        self.advance_token();
         self.expect_keyword_is(Keyword::TO)?;
         let table_name = self.parse_object_name(false)?;
 

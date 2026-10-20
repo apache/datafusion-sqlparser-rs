@@ -21597,3 +21597,157 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
         dialects.tokenizes_to(sql, vec![token]);
     }
 }
+
+#[test]
+fn parse_create_rule_action_boundaries() {
+    let dialects = all_dialects();
+    let Statement::CreateRule(CreateRule {
+        action: CreateRuleAction::Statements(commands),
+        ..
+    }) = dialects.verified_stmt("CREATE RULE r AS ON INSERT TO t DO ()")
+    else {
+        panic!("expected a rule with a command list");
+    };
+    assert!(commands.is_empty());
+
+    let statements = dialects
+        .parse_sql_statements(
+            "CREATE RULE r AS ON INSERT TO t DO (;; INSERT INTO audit VALUES (1);; DELETE FROM pending;;); SELECT 9",
+        )
+        .unwrap();
+    assert_eq!(
+        statements.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        [
+            "CREATE RULE r AS ON INSERT TO t DO (INSERT INTO audit VALUES (1); DELETE FROM pending)",
+            "SELECT 9",
+        ]
+    );
+}
+
+#[test]
+fn parse_create_rule_invalid_components() {
+    let dialects = all_dialects();
+    for (sql, expected) in [
+        ("CREATE RULE", "Expected: identifier, found: EOF"),
+        (
+            "CREATE RULE r ON UPDATE TO t DO NOTHING",
+            "Expected: AS, found: ON",
+        ),
+        (
+            "CREATE RULE r AS UPDATE TO t DO NOTHING",
+            "Expected: ON, found: UPDATE",
+        ),
+        (
+            "CREATE RULE r AS ON 1 TO t DO NOTHING",
+            "Expected: one of SELECT or INSERT or UPDATE or DELETE, found: 1",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t WHERE (",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO",
+            "Expected: an SQL statement, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (BOGUS)",
+            "Expected: an SQL statement, found: BOGUS",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (SELECT 1 SELECT 2)",
+            "Expected: ), found: SELECT",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (SELECT 1",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(expected.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_rule_spans() {
+    let dialects = all_dialects();
+    for (sql, end) in [
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO NOTHING",
+            Location::new(1, 34),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t WHERE new.id > 0 DO NOTHING",
+            Location::new(1, 51),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO SELECT 1",
+            Location::new(1, 46),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO ()",
+            Location::new(1, 34),
+        ),
+        (
+            r#"CREATE RULE r AS ON UPDATE TO s.t
+WHERE old.id = new.id
+DO ALSO (
+  UPDATE audit SET id = new.id;
+  DELETE FROM archive WHERE id = old.id
+)"#,
+            Location::new(5, 40),
+        ),
+    ] {
+        for dialect in &dialects.dialects {
+            let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+            assert_eq!(
+                statements[0].span(),
+                Span::new(Location::new(1, 13), end),
+                "{dialect:?} {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn display_create_rule_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let dialects = all_dialects();
+    let statement = dialects.verified_stmt(
+        "CREATE OR REPLACE RULE r AS ON UPDATE TO t WHERE id > 0 DO ALSO (DELETE FROM audit)",
+    );
+    for rejected in ["CREATE ", "r", "UPDATE", "t", ">", " DO", "ALSO", "(", ")"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+    for (sql, rejected) in [
+        ("CREATE RULE r AS ON INSERT TO t DO NOTHING", "NOTHING"),
+        (
+            "CREATE RULE r AS ON DELETE TO t DO DELETE FROM audit",
+            "audit",
+        ),
+    ] {
+        let statement = dialects.verified_stmt(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}

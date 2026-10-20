@@ -6042,7 +6042,7 @@ impl From<AlterPolicy> for crate::ast::Statement {
     }
 }
 
-/// CREATE RULE statement.
+/// A PostgreSQL rule with source spans derived from its identifiers, condition and actions.
 ///
 /// ```sql
 /// CREATE [ OR REPLACE ] RULE name AS ON event

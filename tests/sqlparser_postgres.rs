@@ -10903,13 +10903,13 @@ fn parse_create_group() {
         other => panic!("expected CREATE ROLE statement, got {other:?}"),
     }
 
-    // `IF NOT EXISTS` belongs to `CREATE ROLE`, and PostgreSQL rejects it in `CREATE GROUP`.
     assert_eq!(
         pg().parse_sql_statements("CREATE GROUP IF NOT EXISTS g"),
         Err(ParserError::ParserError(
-            "Expected: end of statement, found: NOT".to_string()
+            "IF NOT EXISTS is not supported for CREATE GROUP".to_string()
         ))
     );
+    pg().verified_stmt(r#"CREATE GROUP "IF""#);
 }
 
 #[test]

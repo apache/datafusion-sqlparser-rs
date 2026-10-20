@@ -1288,6 +1288,16 @@ fn parse_comparison_binds_tighter_than_equality() {
     );
 }
 
+#[test]
+fn parse_rejects_star_qualified_wildcard_in_boolean_context() {
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT * FROM t WHERE a.*"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: .".to_string()
+        )),
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

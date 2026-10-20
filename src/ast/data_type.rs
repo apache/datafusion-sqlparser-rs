@@ -346,6 +346,10 @@ pub enum DataType {
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
     DoublePrecisionUnsigned,
+    /// [MySQL] numeric type padded with zeros, e.g. `INT(10) UNSIGNED ZEROFILL`.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
+    Zerofill(Box<DataType>),
     /// Bool is an alias for Boolean, see [PostgreSQL].
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
@@ -672,6 +676,7 @@ impl fmt::Display for DataType {
             DataType::Float8 => write!(f, "FLOAT8"),
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::DoublePrecisionUnsigned => write!(f, "DOUBLE PRECISION UNSIGNED"),
+            DataType::Zerofill(data_type) => write!(f, "{data_type} ZEROFILL"),
             DataType::Bool => write!(f, "BOOL"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),

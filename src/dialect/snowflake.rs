@@ -140,6 +140,10 @@ impl Dialect for SnowflakeDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
     /// See <https://docs.snowflake.com/en/sql-reference/identifiers-syntax>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
@@ -866,7 +870,10 @@ fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, Pars
 /// Parse snowflake create table statement.
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each flag is a `CREATE` modifier the caller parsed before `TABLE`"
+)]
 pub fn parse_create_table(
     or_replace: bool,
     global: Option<bool>,
@@ -1906,6 +1913,7 @@ fn parse_multi_table_insert(
         assignments: vec![],
         partitioned: None,
         after_columns: vec![],
+        overriding: None,
         has_table_keyword: false,
         on: None,
         returning: None,

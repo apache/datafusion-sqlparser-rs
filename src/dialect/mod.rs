@@ -386,6 +386,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `AS MATERIALIZED` and `AS NOT MATERIALIZED`
+    /// in a common table expression.
+    ///
+    /// ```sql
+    /// WITH cte AS MATERIALIZED (SELECT 1) SELECT * FROM cte
+    /// ```
+    fn supports_cte_materialization(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false
@@ -458,6 +468,11 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports a bare expression as the right-hand
     /// side of `IN`, without a parenthesized list — as in `x IN 'a'`.
     fn supports_in_unparenthesized_expr(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `GLOBAL IN` and `GLOBAL NOT IN`.
+    fn supports_global_in(&self) -> bool {
         false
     }
 
@@ -914,6 +929,20 @@ pub trait Dialect: Debug + Any {
                 Ok(p!(Is))
             }
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
+            Token::Word(w) if w.keyword == Keyword::GLOBAL && self.supports_global_in() => {
+                match (
+                    &parser.peek_nth_token_ref(1).token,
+                    &parser.peek_nth_token_ref(2).token,
+                ) {
+                    (Token::Word(w), _) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                    (Token::Word(w), Token::Word(w2))
+                        if w.keyword == Keyword::NOT && w2.keyword == Keyword::IN =>
+                    {
+                        Ok(p!(Between))
+                    }
+                    _ => Ok(self.prec_unknown()),
+                }
+            }
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
@@ -1170,7 +1199,8 @@ pub trait Dialect: Debug + Any {
     /// SELECT * FROM (mytable) AS alias;
     /// ```
     ///
-    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from),
+    /// [SQLite](https://www.sqlite.org/syntax/table-or-subquery.html)
     fn supports_parens_around_table_factor(&self) -> bool {
         false
     }
@@ -1240,6 +1270,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows string literals as column names in `CREATE TABLE`.
+    /// SQLite's grammar rule `nm ::= id | STRING | JOIN_KW` permits this.
+    fn supports_string_literal_column_names(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `a!` expressions
     fn supports_factorial_operator(&self) -> bool {
         false
@@ -1253,6 +1289,18 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports nested comments
     /// e.g. `/* /* nested */ */`
     fn supports_nested_comments(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `#` as the start of a single line comment,
+    /// e.g. `SELECT 1 # comment`
+    fn supports_hash_comment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `#` starts a single line comment only when followed by an ASCII
+    /// space or `!`, so `# comment` and `#! comment` are comments but `#comment` is not.
+    fn requires_hash_comment_space(&self) -> bool {
         false
     }
 
@@ -1330,6 +1378,12 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
     fn supports_create_table_select(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `PROC` as an abbreviation for
+    /// `PROCEDURE` in a `CREATE` statement.
+    fn supports_create_proc_syntax(&self) -> bool {
         false
     }
 
@@ -1483,6 +1537,14 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_table_alias(kw, parser)
     }
 
+    /// Returns true if a single-quoted string can be an alias, as in `SELECT 1 AS 'x'`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/problems-with-alias.html),
+    /// [SQLite](https://www.sqlite.org/lang_keywords.html)
+    fn supports_string_literal_alias(&self) -> bool {
+        true
+    }
+
     /// Returns true if this dialect supports querying historical table data
     /// by specifying which version of the data to query.
     fn supports_table_versioning(&self) -> bool {
@@ -1614,6 +1676,18 @@ pub trait Dialect: Debug + Any {
     ///
     /// Note that this is canonicalized to `INT(20)`.
     fn supports_data_type_signed_suffix(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows an optional `ZEROFILL` suffix after numeric data types.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT(10) UNSIGNED ZEROFILL);
+    /// ```
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html>
+    fn supports_data_type_zerofill_suffix(&self) -> bool {
         false
     }
 
@@ -1957,6 +2031,25 @@ pub trait Dialect: Debug + Any {
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect accepts `==` as an alternative to `=` in `UPDATE SET` assignments.
+    ///
+    /// See <https://www.sqlite.org/lang_update.html>
+    fn supports_double_eq_assignment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `CAST(expr AS)` with an empty type name.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT CAST(a AS)
+    /// ```
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html)
+    fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.
@@ -2247,11 +2340,9 @@ mod tests {
             }
         }
 
-        #[allow(clippy::needless_raw_string_hashes)]
-        let statement = r#"SELECT 'Wayne\'s World'"#;
+        let statement = r"SELECT 'Wayne\'s World'";
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
-        assert!(res1.is_ok());
-        assert_eq!(res1, res2);
+        assert_eq!(res1.unwrap(), res2.unwrap());
     }
 }

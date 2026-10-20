@@ -72,6 +72,10 @@ impl Dialect for BigQueryDialect {
         Some('`')
     }
 
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
     fn supports_projection_trailing_commas(&self) -> bool {
         true
     }

@@ -21122,3 +21122,30 @@ fn parse_create_index_operator_class_before_sort_options() {
     );
     assert_eq!(column.column.options.sort, Some(OrderBySort::Desc));
 }
+
+#[test]
+fn display_index_column_propagates_expression_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statements = all_dialects()
+        .parse_sql_statements("CREATE INDEX ii ON t(c ops DESC)")
+        .unwrap();
+    let Statement::CreateIndex(create_index) = &statements[0] else {
+        panic!("expected CREATE INDEX")
+    };
+    let column = &create_index.columns[0];
+    let mut writer = RejectingWriter('c');
+    assert_eq!(write!(writer, "{column}"), Err(fmt::Error));
+}

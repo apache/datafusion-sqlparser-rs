@@ -7898,6 +7898,14 @@ fn parse_alter_type() {
                 position: None,
             }),
         },
+        TestCase {
+            sql: "ALTER TYPE public.my_type RENAME VALUE 'label5' TO 'label6'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::RenameValue(AlterTypeRenameValue {
+                from: Ident::with_quote('\'', "label5"),
+                to: Ident::with_quote('\'', "label6"),
+            }),
+        },
     ]
     .into_iter()
     .enumerate()

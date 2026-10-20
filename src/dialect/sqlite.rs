@@ -16,7 +16,7 @@
 // under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String};
 
 use crate::ast::{BinaryOperator, DataType, Expr, ObjectName, Statement};
 use crate::dialect::{Dialect, Precedence};

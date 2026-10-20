@@ -6080,6 +6080,8 @@ impl From<AlterPolicy> for crate::ast::Statement {
 
 /// ALTER TRIGGER statement.
 ///
+/// Its source span covers `name`, `table_name` and `operation`.
+///
 /// ```sql
 /// ALTER TRIGGER <NAME> ON <TABLE NAME> <OPERATION>
 /// ```

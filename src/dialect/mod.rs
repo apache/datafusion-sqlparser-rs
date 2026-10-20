@@ -286,7 +286,7 @@ pub trait Dialect: Debug + Any {
     ///
     /// This describes the server contract rather than every placeholder the parser can tokenize.
     /// `None` means this dialect does not specify an ordered bind syntax.
-    /// See [`Dialect::supports_dollar_placeholder`] for SQLite-style named `$name` placeholders.
+    /// Dollar-quoted strings are controlled by [`Dialect::supports_dollar_placeholder`].
     fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
         None
     }
@@ -1277,11 +1277,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect allows SQLite-style named dollar placeholders,
-    /// for example `SELECT $name`.
-    ///
-    /// This does not describe PostgreSQL-style ordered binds such as `SELECT $1`.
-    /// See [`Dialect::ordered_bind_placeholder_style`].
+    /// Enables SQLite `$` placeholders containing `$` characters and disables dollar-quoted strings.
     fn supports_dollar_placeholder(&self) -> bool {
         false
     }
@@ -2395,6 +2391,10 @@ mod tests {
             (&MySqlDialect {}, Some(BindPlaceholderStyle::QuestionMark)),
             (
                 &PostgreSqlDialect {},
+                Some(BindPlaceholderStyle::DollarNumbered),
+            ),
+            (
+                &RedshiftSqlDialect {},
                 Some(BindPlaceholderStyle::DollarNumbered),
             ),
             (&SQLiteDialect {}, Some(BindPlaceholderStyle::QuestionMark)),

@@ -4723,6 +4723,47 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_comment_hint_underscore_after_non_word_is_error() {
+        let sql = "SELECT 1 /*!50110 ._a */ FROM t";
+        let dialect = MySqlDialect {};
+        let err = Tokenizer::new(&dialect, sql).tokenize().unwrap_err();
+        assert_eq!(
+            err,
+            TokenizerError {
+                message: "Unexpected character '_'".to_string(),
+                location: Location::new(1, 11),
+            }
+        );
+    }
+
+    #[test]
+    fn tokenize_into_existing_buffer_keeps_qualified_name_context() {
+        let dialect = MySqlDialect {};
+        let mut tokens = Tokenizer::new(&dialect, "SELECT t ")
+            .tokenize_with_location()
+            .unwrap();
+        Tokenizer::new(&dialect, "._col FROM t")
+            .tokenize_with_location_into_buf(&mut tokens)
+            .unwrap();
+        let tokens = tokens
+            .into_iter()
+            .map(|token| token.token)
+            .filter(|token| !matches!(token, Token::Whitespace(_)))
+            .collect();
+        compare(
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::make_word("t", None),
+                Token::Period,
+                Token::make_word("_col", None),
+                Token::make_keyword("FROM"),
+                Token::make_word("t", None),
+            ],
+            tokens,
+        );
+    }
+
+    #[test]
     fn tokenize_lt() {
         all_dialects().tokenizes_to(
             "select a <-50",

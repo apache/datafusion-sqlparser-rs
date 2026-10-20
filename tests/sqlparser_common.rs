@@ -21248,3 +21248,9 @@ fn tokenize_long_whitespace_run_in_comment_hint_completes() {
     assert_eq!(response_id, request_id);
     result.expect("whitespace-separated qualified name in hint should tokenize");
 }
+
+#[test]
+fn parse_qualified_underscore_column_from_comment_hint() {
+    let dialects = all_dialects_where(|d| d.supports_multiline_comment_hints());
+    dialects.one_statement_parses_to("SELECT t /*!50110 ._col */ FROM t", "SELECT t._col FROM t");
+}

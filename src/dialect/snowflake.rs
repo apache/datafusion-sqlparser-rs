@@ -1861,10 +1861,10 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
 fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
     let show_options = parser.parse_show_stmt_options()?;
-    Ok(Statement::ShowObjects(Box::new(ShowObjects {
+    Ok(Statement::from(ShowObjects {
         terse,
         show_options,
-    })))
+    }))
 }
 
 /// Parse multi-table INSERT statement.

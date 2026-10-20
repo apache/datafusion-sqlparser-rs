@@ -12427,6 +12427,17 @@ fn parse_cache_table() {
     );
 
     assert_eq!(
+        verified_stmt("CACHE TABLE 'cache_table_name' AS SELECT a, b, c FROM foo"),
+        Statement::Cache(Box::new(Cache {
+            table_flag: None,
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: true,
+            options: vec![],
+            query: Some(Box::new(query.clone())),
+        }))
+    );
+
+    assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}'").as_str()),
         Statement::Cache(Box::new(Cache {
             table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),

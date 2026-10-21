@@ -2264,11 +2264,11 @@ fn parse_not_precedence() {
         verified_expr(sql),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
-            expr: Box::new(Expr::InList {
+            expr: Box::new(Expr::In {
                 expr: Box::new(Expr::Identifier("a".into())),
-                list: vec![Expr::Value(
+                target: InTarget::List(vec![Expr::Value(
                     (Value::SingleQuotedString("a".into())).with_empty_span()
-                )],
+                )]),
                 negated: true,
                 global: false,
             }),
@@ -2546,12 +2546,12 @@ fn parse_in_list() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::InList {
+            Expr::In {
                 expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-                list: vec![
+                target: InTarget::List(vec![
                     Expr::Value((Value::SingleQuotedString("HIGH".to_string())).with_empty_span()),
                     Expr::Value((Value::SingleQuotedString("MED".to_string())).with_empty_span()),
-                ],
+                ]),
                 negated,
                 global: false,
             },
@@ -2567,9 +2567,9 @@ fn parse_in_subquery() {
     let sql = "SELECT * FROM customers WHERE segment IN (SELECT segm FROM bar)";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::InSubquery {
+        Expr::In {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: Box::new(verified_query("SELECT segm FROM bar")),
+            target: InTarget::Subquery(Box::new(verified_query("SELECT segm FROM bar"))),
             negated: false,
             global: false,
         },
@@ -2582,11 +2582,11 @@ fn parse_in_union() {
     let sql = "SELECT * FROM customers WHERE segment IN ((SELECT segm FROM bar) UNION (SELECT segm FROM bar2))";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::InSubquery {
+        Expr::In {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: Box::new(verified_query(
+            target: InTarget::Subquery(Box::new(verified_query(
                 "(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)"
-            )),
+            ))),
             negated: false,
             global: false,
         },
@@ -2603,10 +2603,11 @@ fn parse_in_unnest() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::InUnnest {
+            Expr::In {
                 expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-                array_expr: Box::new(verified_expr("expr")),
+                target: InTarget::Unnest(Box::new(verified_expr("expr"))),
                 negated,
+                global: false,
             },
             select.selection.unwrap()
         );
@@ -20599,9 +20600,9 @@ fn parse_in_list_leading_subquery() {
 
     let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u), 1)");
     assert_eq!(
-        Expr::InList {
+        Expr::In {
             expr: x(),
-            list: vec![subquery(), Expr::value(number("1"))],
+            target: InTarget::List(vec![subquery(), Expr::value(number("1"))]),
             negated: false,
             global: false,
         },
@@ -20610,9 +20611,12 @@ fn parse_in_list_leading_subquery() {
 
     let select = verified_only_select("SELECT * FROM t WHERE x NOT IN (((SELECT a FROM u)), 1)");
     assert_eq!(
-        Expr::InList {
+        Expr::In {
             expr: x(),
-            list: vec![Expr::Nested(Box::new(subquery())), Expr::value(number("1"))],
+            target: InTarget::List(vec![
+                Expr::Nested(Box::new(subquery())),
+                Expr::value(number("1"))
+            ]),
             negated: true,
             global: false,
         },
@@ -20621,16 +20625,16 @@ fn parse_in_list_leading_subquery() {
 
     let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u) + 1, 2)");
     assert_eq!(
-        Expr::InList {
+        Expr::In {
             expr: x(),
-            list: vec![
+            target: InTarget::List(vec![
                 Expr::BinaryOp {
                     left: Box::new(subquery()),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::value(number("1"))),
                 },
                 Expr::value(number("2"))
-            ],
+            ]),
             negated: false,
             global: false,
         },
@@ -20640,16 +20644,16 @@ fn parse_in_list_leading_subquery() {
     let select = pg_and_generic()
         .verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u)[1], 2)");
     assert_matches!(
-        select.selection,
-        Some(Expr::InList { ref list, .. })
+        select.selection.as_ref(),
+        Some(Expr::In { target: InTarget::List(list), .. })
             if matches!(&list[0], Expr::CompoundFieldAccess { root, .. } if **root == subquery())
     );
 
     let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u))");
     assert_eq!(
-        Expr::InSubquery {
+        Expr::In {
             expr: x(),
-            subquery: Box::new(verified_query("(SELECT a FROM u)")),
+            target: InTarget::Subquery(Box::new(verified_query("(SELECT a FROM u)"))),
             negated: false,
             global: false,
         },

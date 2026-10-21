@@ -92,6 +92,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_literal_prefix_in_qualified_name(&self) -> bool {
+        true
+    }
+
     fn supports_bitwise_shift_operators(&self) -> bool {
         true
     }

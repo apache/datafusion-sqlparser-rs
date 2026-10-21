@@ -142,6 +142,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/expressions.html#temporal-intervals>
+    fn supports_compound_date_time_fields(&self) -> bool {
+        true
+    }
+
     fn supports_limit_comma(&self) -> bool {
         true
     }

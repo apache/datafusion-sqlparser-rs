@@ -117,6 +117,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_compound_date_time_fields(&self) -> bool {
+        true
+    }
+
     fn allow_extract_single_quotes(&self) -> bool {
         true
     }

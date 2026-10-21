@@ -12069,6 +12069,13 @@ fn parse_pivot_table() {
         "SELECT * FROM t PIVOT(SUM(1) x, COUNT(42) y FOR a.abc IN (1))",
         "SELECT * FROM t PIVOT(SUM(1) AS x, COUNT(42) AS y FOR a.abc IN (1))",
     );
+
+    assert_eq!(
+        all_dialects().parse_sql_statements("SELECT * FROM t PIVOT(SUM(a) AS 1 FOR b IN (1))"),
+        Err(ParserError::ParserError(
+            "Expected: an identifier after AS, found: 1".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -17609,6 +17616,12 @@ fn parse_pipe_operator_aggregate() {
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE GROUP BY a, b");
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) GROUP BY a, b");
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) ASC");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT * FROM tbl |> AGGREGATE COUNT(*) AS 1"),
+        Err(ParserError::ParserError(
+            "Expected: an identifier after AS, found: 1".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -20886,10 +20899,82 @@ fn unary_prefix_operator_renders_apart_from_cast_operand() {
 
 #[test]
 fn parse_string_literal_alias() {
-    let dialects = all_dialects_where(|d| d.supports_string_literal_alias());
-    dialects.one_statement_parses_to("SELECT 1 'x'", "SELECT 1 AS 'x'");
-    dialects.verified_stmt("SELECT 1 AS 'x'");
-    dialects.verified_stmt("SELECT a FROM t AS 'y'");
+    for (sql, canonical, table, explicit, error) in [
+        (
+            "SELECT 1 AS 'x'",
+            "SELECT 1 AS 'x'",
+            false,
+            true,
+            "Expected: an identifier after AS, found: 'x'",
+        ),
+        (
+            "SELECT 1 'x'",
+            "SELECT 1 AS 'x'",
+            false,
+            false,
+            "Expected: end of statement, found: 'x'",
+        ),
+        (
+            "SELECT a FROM t AS 'y'",
+            "SELECT a FROM t AS 'y'",
+            true,
+            true,
+            "Expected: an identifier after AS, found: 'y'",
+        ),
+        (
+            "SELECT a FROM t 'y'",
+            "SELECT a FROM t 'y'",
+            true,
+            false,
+            "Expected: end of statement, found: 'y'",
+        ),
+    ] {
+        let supported = |d: &dyn Dialect| {
+            if table {
+                d.supports_string_literal_table_alias(explicit)
+            } else {
+                d.supports_string_literal_column_alias(explicit)
+            }
+        };
+        all_dialects_where(supported).one_statement_parses_to(sql, canonical);
+        assert_eq!(
+            all_dialects_where(|d| !supported(d)).parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_string_literal_alias_per_engine() {
+    let forms = [
+        "SELECT 1 AS 'x'",
+        "SELECT 1 'x'",
+        "SELECT a FROM t AS 'y'",
+        "SELECT a FROM t 'y'",
+    ];
+    let dialects: [(Box<dyn Dialect>, [bool; 4]); 8] = [
+        (Box::new(PostgreSqlDialect {}), [false, false, false, false]),
+        (Box::new(SQLiteDialect {}), [true, true, true, true]),
+        (Box::new(DuckDbDialect {}), [true, false, true, false]),
+        (Box::new(MySqlDialect {}), [true, true, false, false]),
+        (
+            Box::new(sqlparser::dialect::SparkSqlDialect {}),
+            [false, false, false, false],
+        ),
+        (Box::new(DatabricksDialect {}), [false, false, false, false]),
+        (Box::new(HiveDialect {}), [false, false, false, false]),
+        (Box::new(ClickHouseDialect {}), [false, false, false, false]),
+    ];
+    for (dialect, accepted) in dialects {
+        for (sql, accepted) in forms.iter().zip(accepted) {
+            assert_eq!(
+                Parser::parse_sql(dialect.as_ref(), sql).is_ok(),
+                accepted,
+                "{dialect:?}: {sql}"
+            );
+        }
+    }
 }
 
 #[test]

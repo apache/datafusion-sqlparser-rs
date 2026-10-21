@@ -834,18 +834,24 @@ impl State<'_> {
         self.peekable.peek()
     }
 
-    /// Collect matching characters into a new string, leaving the first
-    /// non-matching character unread.
-    fn peeking_take_while(&mut self, mut predicate: impl FnMut(char) -> bool) -> String {
-        let mut s = String::new();
+    /// Append matching characters to `output`, leaving the first non-matching
+    /// character unread.
+    fn peeking_read_while(&mut self, output: &mut String, mut predicate: impl FnMut(char) -> bool) {
         while let Some(&ch) = self.peek() {
             if predicate(ch) {
-                self.next(); // consume
-                s.push(ch);
+                self.next();
+                output.push(ch);
             } else {
                 break;
             }
         }
+    }
+
+    /// Collect matching characters into a new string, leaving the first
+    /// non-matching character unread.
+    fn peeking_take_while(&mut self, predicate: impl FnMut(char) -> bool) -> String {
+        let mut s = String::new();
+        self.peeking_read_while(&mut s, predicate);
         s
     }
 
@@ -1283,8 +1289,7 @@ impl<'a> Tokenizer<'a> {
                 col: 0,
             };
             let mut s = inner_state.peeking_take_while(|ch| matches!(ch, '0'..='9' | '.'));
-            let s2 = chars.peeking_take_while(|ch| matches!(ch, '0'..='9' | '.'));
-            s += s2.as_str();
+            chars.peeking_read_while(&mut s, |ch| matches!(ch, '0'..='9' | '.'));
             return Ok(Some(Token::Number(s, false)));
         }
 
@@ -1694,11 +1699,12 @@ impl<'a> Tokenizer<'a> {
                         if exponent_part.is_empty() {
                             // If it is not a number with an exponent, it may be
                             // an identifier starting with digits.
-                            let word =
-                                chars.peeking_take_while(|ch| self.dialect.is_identifier_part(ch));
+                            let prefix_len = s.len();
+                            chars.peeking_read_while(&mut s, |ch| {
+                                self.dialect.is_identifier_part(ch)
+                            });
 
-                            if !word.is_empty() {
-                                s += word.as_str();
+                            if s.len() != prefix_len {
                                 return Ok(Some(Token::make_word_owned(s, None)));
                             }
                         } else if prev_token == Some(&Token::Period) {
@@ -2214,12 +2220,12 @@ impl<'a> Tokenizer<'a> {
                 }))
             };
         } else {
-            value.push_str(&chars.peeking_take_while(|ch| {
+            chars.peeking_read_while(&mut value, |ch| {
                 ch.is_alphanumeric()
                     || ch == '_'
                     // Allow $ as a placeholder character if the dialect supports it
                     || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
-            }));
+            });
 
             // If the dialect supports a dollar sign as a money prefix (e.g. SQL Server),
             // and the value so far is all digits, check for a decimal part, e.g. `$123.45`
@@ -2230,7 +2236,7 @@ impl<'a> Tokenizer<'a> {
             {
                 value.push('.');
                 chars.next();
-                value.push_str(&chars.peeking_take_while(|ch| ch.is_ascii_digit()));
+                chars.peeking_read_while(&mut value, |ch| ch.is_ascii_digit());
                 return Ok(Token::Placeholder(format!("${value}")));
             }
 
@@ -2329,7 +2335,7 @@ impl<'a> Tokenizer<'a> {
     /// Tokenize an identifier or keyword, after the first char is already consumed.
     fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
         let mut s = first_chars.into();
-        s.push_str(&chars.peeking_take_while(|ch| self.dialect.is_identifier_part(ch)));
+        chars.peeking_read_while(&mut s, |ch| self.dialect.is_identifier_part(ch));
         s
     }
 
@@ -5113,6 +5119,147 @@ mod tests {
                 tokens.iter().all(|t| !matches!(t, Token::CopyData { .. })),
                 "{sql}"
             );
+        }
+    }
+    #[test]
+    fn peeking_read_while_appends_and_preserves_boundaries() {
+        for (sql, suffix, location, inspected, remainder) in [
+            ("", "", Location::new(7, 3), "", ""),
+            ("!tail", "", Location::new(7, 3), "!", "!tail"),
+            ("abc", "abc", Location::new(7, 6), "abc", ""),
+            ("abc,def", "abc", Location::new(7, 6), "abc,", ",def"),
+            ("é\nz!tail", "é\nz", Location::new(8, 2), "é\nz!", "!tail"),
+            ("é\nz", "é\nz", Location::new(8, 2), "é\nz", ""),
+        ] {
+            let mut chars = State {
+                peekable: sql.chars().peekable(),
+                line: 7,
+                col: 3,
+            };
+            let mut output = String::from("prefix:");
+            let mut seen = String::new();
+            chars.peeking_read_while(&mut output, |ch| {
+                seen.push(ch);
+                ch != '!' && ch != ','
+            });
+            assert_eq!(output, format!("prefix:{suffix}"), "{sql:?}");
+            assert_eq!(seen, inspected, "{sql:?}");
+            assert_eq!(chars.location(), location, "{sql:?}");
+            assert_eq!(
+                core::iter::from_fn(|| chars.next()).collect::<String>(),
+                remainder,
+                "{sql:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn tokenize_identifier_prefixes_and_unicode_spans() {
+        let suffixes = [
+            String::new(),
+            "_name".to_owned(),
+            "alpha".to_owned(),
+            "é".to_owned(),
+            "漢字".to_owned(),
+            "λ".to_owned(),
+            "\u{0301}".to_owned(),
+            "a".repeat(128),
+        ];
+        for dialect in all_dialects().dialects {
+            for prefix in [
+                "a", "b", "B", "n", "N", "nq", "NQ", "nQ", "Nq", "q", "Q", "r", "R", "x", "X", "e",
+                "E", "u", "U", "é", "漢", "λ",
+            ] {
+                for suffix in &suffixes {
+                    let word = format!("{prefix}{suffix}");
+                    let mut chars = word.chars();
+                    if !dialect.is_identifier_start(chars.next().unwrap())
+                        || !chars.all(|ch| dialect.is_identifier_part(ch))
+                    {
+                        continue;
+                    }
+                    let sql = format!("\n{word}\t/*tail*/");
+                    let tokens = Tokenizer::new(&*dialect, &sql)
+                        .tokenize_with_location()
+                        .unwrap();
+                    assert_eq!(
+                        tokens.iter().map(|t| t.token.clone()).collect::<Vec<_>>(),
+                        vec![
+                            Token::Whitespace(Whitespace::Newline),
+                            Token::make_word(&word, None),
+                            Token::Whitespace(Whitespace::Tab),
+                            Token::Whitespace(Whitespace::MultiLineComment("tail".to_owned())),
+                        ],
+                        "{dialect:?}: {sql:?}"
+                    );
+                    assert_eq!(
+                        tokens[1].span,
+                        Span::new(
+                            Location::new(2, 1),
+                            Location::new(2, word.chars().count() as u64 + 1)
+                        ),
+                        "{dialect:?}: {sql:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tokenize_identifier_at_eof_and_before_error() {
+        for dialect in all_dialects().dialects {
+            let word = "nQalpha";
+            let tokens = Tokenizer::new(&*dialect, word)
+                .tokenize_with_location()
+                .unwrap();
+            assert_eq!(tokens.len(), 1, "{dialect:?}");
+            assert_eq!(tokens[0].token, Token::make_word(word, None));
+            assert_eq!(
+                tokens[0].span,
+                Span::new(Location::new(1, 1), Location::new(1, 8))
+            );
+
+            let mut buf = tokens.clone();
+            let error = Tokenizer::new(&*dialect, "nQalpha '")
+                .tokenize_with_location_into_buf(&mut buf)
+                .unwrap_err();
+            assert_eq!(error.message, "Unterminated string literal", "{dialect:?}");
+            // Quote error positions differ by dialect.
+            let quote_error = Tokenizer::new(&*dialect, "'").tokenize().unwrap_err();
+            assert_eq!(
+                error.location,
+                Location::new(1, quote_error.location.column + word.len() as u64 + 1),
+                "{dialect:?}"
+            );
+            assert_eq!(buf.len(), 3, "{dialect:?}");
+            assert_eq!(buf[0], tokens[0]);
+            assert_eq!(buf[1], tokens[0]);
+            assert_eq!(buf[2].token, Token::Whitespace(Whitespace::Space));
+            assert_eq!(
+                buf[2].span,
+                Span::new(Location::new(1, 8), Location::new(1, 9))
+            );
+        }
+    }
+
+    #[test]
+    fn tokenize_numeric_word_preserves_prefix_and_stops_before_suffix() {
+        let dialect = GenericDialect {};
+        for (sql, number, remaining, column) in
+            [("12", "12", None, 3), ("12.34tail", "12.34", Some('t'), 6)]
+        {
+            let tokenizer = Tokenizer::new(&dialect, sql);
+            let mut state = State {
+                peekable: sql.chars().peekable(),
+                line: 1,
+                col: 1,
+            };
+            let token = tokenizer
+                .tokenize_identifier_or_keyword(['1'], &mut state)
+                .unwrap();
+            assert_eq!(token, Some(Token::Number(number.to_owned(), false)));
+            assert_eq!(state.peek().copied(), remaining);
+            assert_eq!((state.line, state.col), (1, column));
         }
     }
 }

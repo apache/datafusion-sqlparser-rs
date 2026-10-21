@@ -46,13 +46,6 @@ impl Dialect for SQLiteDialect {
         ch == '`' || ch == '"' || ch == '['
     }
 
-    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        match parser.peek_token_ref().token {
-            Token::Colon => Some(Ok(self.prec_unknown())),
-            _ => None,
-        }
-    }
-
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')
     }
@@ -124,6 +117,7 @@ impl Dialect for SQLiteDialect {
                 Some(Ok(self.prec_value(Precedence::Ampersand)))
             }
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Some(Ok(COMPARISON_PREC)),
+            Token::Colon => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }

@@ -899,6 +899,7 @@ impl fmt::Display for CaseWhen {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum InTarget {
     /// `(val1, val2, ...)`
     List(Vec<Expr>),
@@ -3196,6 +3197,7 @@ impl fmt::Display for DeclareType {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DeclareSeparator {
     /// Each declaration ends with `;`, as in a Snowflake Scripting `DECLARE` section.
     ///

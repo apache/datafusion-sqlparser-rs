@@ -1503,10 +1503,19 @@ const fn is_number_expr(expr: &Expr) -> bool {
     matches!(expr, Expr::Value(v) if matches!(v.value, Value::Number(_, _)))
 }
 
+/// Whether a leading `.` would merge into `expr` when the displayed SQL is
+/// re-lexed: `.1` lexes as a number in front of a numeric literal or an
+/// unquoted identifier starting with a digit (Hive allows such words).
+fn dot_merges_with_expr(expr: &Expr) -> bool {
+    is_number_expr(expr)
+        || matches!(expr, Expr::Identifier(ident) if ident.quote_style.is_none()
+            && ident.value.starts_with(|c: char| c.is_ascii_digit()))
+}
+
 impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccessExpr::Dot(expr) if is_number_expr(expr) => write!(f, " . {expr}"),
+            AccessExpr::Dot(expr) if dot_merges_with_expr(expr) => write!(f, " . {expr}"),
             AccessExpr::Dot(expr) => write!(f, ".{expr}"),
             AccessExpr::Subscript(subscript) => write!(f, "[{subscript}]"),
         }

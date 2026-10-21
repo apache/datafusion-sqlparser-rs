@@ -871,6 +871,30 @@ impl fmt::Display for CaseWhen {
     }
 }
 
+/// The right-hand side of an `IN` predicate, see [`Expr::In`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum InTarget {
+    /// `(val1, val2, ...)`
+    List(Vec<Expr>),
+    /// `(SELECT ...)`
+    Subquery(Box<Query>),
+    /// `UNNEST(array_expression)`, see
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators)
+    Unnest(Box<Expr>),
+}
+
+impl fmt::Display for InTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            InTarget::List(list) => write!(f, "({})", display_comma_separated(list)),
+            InTarget::Subquery(subquery) => write!(f, "({subquery})"),
+            InTarget::Unnest(array_expr) => write!(f, "UNNEST({array_expr})"),
+        }
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// # Semantics / Type Checking
@@ -975,36 +999,16 @@ pub enum Expr {
         /// `true` when `NOT` is present.
         negated: bool,
     },
-    /// `[ GLOBAL ] [ NOT ] IN (val1, val2, ...)`
-    InList {
+    /// `<expr> [ GLOBAL ] [ NOT ] IN <target>`
+    In {
         /// Left-hand expression to test for membership.
         expr: Box<Expr>,
-        /// Literal list of expressions to check against.
-        list: Vec<Expr>,
+        /// What `expr` is tested against.
+        target: InTarget,
         /// `true` when the `NOT` modifier is present.
         negated: bool,
         /// `true` when the ClickHouse `GLOBAL` modifier is present.
         global: bool,
-    },
-    /// `[ GLOBAL ] [ NOT ] IN (SELECT ...)`
-    InSubquery {
-        /// Left-hand expression to test for membership.
-        expr: Box<Expr>,
-        /// The subquery providing the candidate values.
-        subquery: Box<Query>,
-        /// `true` when the `NOT` modifier is present.
-        negated: bool,
-        /// `true` when the ClickHouse `GLOBAL` modifier is present.
-        global: bool,
-    },
-    /// `[ NOT ] IN UNNEST(array_expression)`
-    InUnnest {
-        /// Left-hand expression to test for membership.
-        expr: Box<Expr>,
-        /// Array expression being unnested.
-        array_expr: Box<Expr>,
-        /// `true` when the `NOT` modifier is present.
-        negated: bool,
     },
     /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
     Between {
@@ -1801,42 +1805,18 @@ impl fmt::Display for Expr {
                 }
                 Ok(())
             }
-            Expr::InList {
+            Expr::In {
                 expr,
-                list,
+                target,
                 negated,
                 global,
             } => write!(
                 f,
-                "{} {}{}IN ({})",
+                "{} {}{}IN {}",
                 expr,
                 if *global { "GLOBAL " } else { "" },
                 if *negated { "NOT " } else { "" },
-                display_comma_separated(list)
-            ),
-            Expr::InSubquery {
-                expr,
-                subquery,
-                negated,
-                global,
-            } => write!(
-                f,
-                "{} {}{}IN ({})",
-                expr,
-                if *global { "GLOBAL " } else { "" },
-                if *negated { "NOT " } else { "" },
-                subquery
-            ),
-            Expr::InUnnest {
-                expr,
-                array_expr,
-                negated,
-            } => write!(
-                f,
-                "{} {}IN UNNEST({})",
-                expr,
-                if *negated { "NOT " } else { "" },
-                array_expr
+                target
             ),
             Expr::Between {
                 expr,
@@ -3144,6 +3124,22 @@ impl fmt::Display for DeclareType {
     }
 }
 
+/// Separator written between the declarations collected by one `DECLARE` keyword.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DeclareSeparator {
+    /// Each declaration ends with `;`, as in a Snowflake Scripting `DECLARE` section.
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare)
+    #[default]
+    Semicolon,
+    /// One comma-separated list, as in `DECLARE @a INT, @b INT`.
+    ///
+    /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql)
+    Comma,
+}
+
 /// A `DECLARE` statement.
 /// [PostgreSQL] [Snowflake] [BigQuery]
 ///
@@ -4088,6 +4084,8 @@ pub enum Statement {
     Declare {
         /// Cursor declaration statements collected by `DECLARE`.
         stmts: Vec<Declare>,
+        /// Separator between `stmts` in the rendered SQL.
+        separator: DeclareSeparator,
     },
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
@@ -5276,9 +5274,12 @@ impl fmt::Display for Statement {
                 write!(f, "{statement}")
             }
             Statement::Query(s) => s.fmt(f),
-            Statement::Declare { stmts } => {
-                write!(f, "DECLARE ")?;
-                write!(f, "{}", display_separated(stmts, "; "))
+            Statement::Declare { stmts, separator } => {
+                let sep = match separator {
+                    DeclareSeparator::Comma => ", ",
+                    DeclareSeparator::Semicolon => "; ",
+                };
+                write!(f, "DECLARE {}", display_separated(stmts, sep))
             }
             Statement::Fetch {
                 name,

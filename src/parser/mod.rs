@@ -366,6 +366,13 @@ pub struct Parser<'a> {
     failed_in_subquery_positions: BTreeMap<usize, Option<usize>>,
 }
 
+/// Whether an alias names a select item or a table.
+#[derive(Debug, Clone, Copy)]
+enum AliasKind {
+    Column,
+    Table,
+}
+
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
 /// memoization, so the caches hold no strings.
 #[derive(Debug, Clone, Copy)]
@@ -1420,7 +1427,7 @@ impl<'a> Parser<'a> {
         fn validator(explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
             explicit || !&[Keyword::ASC, Keyword::DESC, Keyword::GROUP].contains(kw)
         }
-        let alias = self.parse_optional_alias_inner(None, validator)?;
+        let alias = self.parse_optional_alias_inner(None, AliasKind::Column, validator)?;
         let order_by = OrderByOptions {
             sort: self.parse_optional_order_by_sort(),
             nulls_first: None,
@@ -1671,17 +1678,26 @@ impl<'a> Parser<'a> {
             Keyword::LAMBDA if self.dialect.supports_lambda_keyword_syntax() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
-            _ if self.dialect.supports_geometric_types() => match w.keyword {
-                Keyword::CIRCLE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Circle)?)),
-                Keyword::BOX => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricBox)?)),
-                Keyword::PATH => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricPath)?)),
-                Keyword::LINE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Line)?)),
-                Keyword::LSEG => Ok(Some(self.parse_geometric_type(GeometricTypeKind::LineSegment)?)),
-                Keyword::POINT => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Point)?)),
-                Keyword::POLYGON => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Polygon)?)),
-                _ => Ok(None),
+            _ => match self.geometric_type_kind(w.keyword) {
+                Some(kind) => Ok(Some(self.parse_geometric_type(kind)?)),
+                None => Ok(None),
             },
-            _ => Ok(None),
+        }
+    }
+
+    fn geometric_type_kind(&self, keyword: Keyword) -> Option<GeometricTypeKind> {
+        if !self.dialect.supports_geometric_types() {
+            return None;
+        }
+        match keyword {
+            Keyword::CIRCLE => Some(GeometricTypeKind::Circle),
+            Keyword::BOX => Some(GeometricTypeKind::GeometricBox),
+            Keyword::PATH => Some(GeometricTypeKind::GeometricPath),
+            Keyword::LINE => Some(GeometricTypeKind::Line),
+            Keyword::LSEG => Some(GeometricTypeKind::LineSegment),
+            Keyword::POINT => Some(GeometricTypeKind::Point),
+            Keyword::POLYGON => Some(GeometricTypeKind::Polygon),
+            _ => None,
         }
     }
 
@@ -1765,6 +1781,20 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn peek_custom_typed_string(&self, first_keyword: Keyword, name: &ObjectName) -> bool {
+        let qualified = name.0.len() > 1;
+        matches!(
+            self.peek_token_ref().token,
+            Token::SingleQuotedString(_)
+                | Token::EscapedStringLiteral(_)
+                | Token::UnicodeStringLiteral(_)
+                | Token::DollarQuotedString(_)
+        ) && self
+            .dialect
+            .is_custom_type_typed_string(first_keyword, qualified)
+            && (qualified || self.geometric_type_kind(first_keyword).is_none())
+    }
+
     /// Parse an expression prefix.
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
@@ -1818,26 +1848,23 @@ impl<'a> Parser<'a> {
         // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
         // expression that should parse as the column name "date".
         let loc = self.peek_token_ref().span.start;
+        let first_keyword = match &self.peek_token_ref().token {
+            Token::Word(w) => Some(w.keyword),
+            _ => None,
+        };
         let opt_expr = self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval { .. } => parser.parse_interval(),
-                // PostgreSQL allows almost any identifier to be used as custom data type name,
-                // and we support that in `parse_data_type()`. But unlike Postgres we don't
-                // have a list of globally reserved keywords (since they vary across dialects),
-                // so given `NOT 'a' LIKE 'b'`, we'd accept `NOT` as a possible custom data type
-                // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
-                // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
-                // `type 'string'` syntax for the custom data types at all ...
-                //
-                // ... with the exception of `xml '...'` on dialects that support XML
-                // expressions, which is a valid PostgreSQL typed string literal.
-                DataType::Custom(ref name, ref modifiers)
+                // Custom names need dialect consent, else `NOT 'a'` would read as a typed string.
+                DataType::Custom(name, modifiers)
                     if modifiers.is_empty()
-                        && Self::is_simple_unquoted_object_name(name, "xml")
-                        && parser.dialect.supports_xml_expressions() =>
+                        && ((Self::is_simple_unquoted_object_name(&name, "xml")
+                            && parser.dialect.supports_xml_expressions())
+                            || first_keyword
+                                .is_some_and(|kw| parser.peek_custom_typed_string(kw, &name))) =>
                 {
                     Ok(Expr::TypedString(TypedString {
-                        data_type: DataType::Custom(name.clone(), modifiers.clone()),
+                        data_type: DataType::Custom(name, modifiers),
                         value: parser.parse_value()?,
                         uses_odbc_syntax: false,
                     }))
@@ -2184,13 +2211,14 @@ impl<'a> Parser<'a> {
                             Some(expr) => {
                                 chain.push(AccessExpr::Dot(expr));
                             }
-                            // If the expression is not a valid suffix, fall back to
-                            // parsing as an identifier. This handles cases like `T.interval`
-                            // where `interval` is a keyword but should be treated as an identifier.
                             None => {
-                                chain.push(AccessExpr::Dot(Expr::Identifier(
-                                    self.parse_identifier()?,
-                                )));
+                                let ident = self.parse_identifier()?;
+                                let field = if self.peek_token_ref().token == Token::LParen {
+                                    self.parse_function(ObjectName::from(vec![ident]))?
+                                } else {
+                                    Expr::Identifier(ident)
+                                };
+                                chain.push(AccessExpr::Dot(field));
                             }
                         }
                     }
@@ -4482,26 +4510,30 @@ impl<'a> Parser<'a> {
     ) -> Result<Expr, ParserError> {
         // BigQuery allows `IN UNNEST(array_expression)`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
-        if !global && self.parse_keyword(Keyword::UNNEST) {
+        let target = if !global && self.parse_keyword(Keyword::UNNEST) {
             self.expect_token(&Token::LParen)?;
             let array_expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            return Ok(Expr::InUnnest {
-                expr: Box::new(expr),
-                array_expr: Box::new(array_expr),
-                negated,
-            });
-        }
-        if self.dialect.supports_in_unparenthesized_expr()
+            InTarget::Unnest(Box::new(array_expr))
+        } else if self.dialect.supports_in_unparenthesized_expr()
             && self.peek_token_ref().token != Token::LParen
         {
-            return Ok(Expr::InList {
-                expr: Box::new(expr),
-                list: vec![self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?],
-                negated,
-                global,
-            });
-        }
+            InTarget::List(vec![
+                self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?
+            ])
+        } else {
+            self.parse_in_parenthesized_target()?
+        };
+        Ok(Expr::In {
+            expr: Box::new(expr),
+            target,
+            negated,
+            global,
+        })
+    }
+
+    /// Parses the parenthesized subquery or value list of an `IN` predicate.
+    fn parse_in_parenthesized_target(&mut self) -> Result<InTarget, ParserError> {
         self.expect_token(&Token::LParen)?;
         // A leading query is the whole subquery only when `)` follows it,
         // otherwise it is the first item of a list, as in `IN ((SELECT 1), 2)`.
@@ -4514,12 +4546,7 @@ impl<'a> Parser<'a> {
                 let mut missing_rparen = None;
                 if let Some(subquery) = self.maybe_parse(|p| p.parse_query())? {
                     if self.consume_token(&Token::RParen) {
-                        return Ok(Expr::InSubquery {
-                            expr: Box::new(expr),
-                            subquery,
-                            negated,
-                            global,
-                        });
+                        return Ok(InTarget::Subquery(subquery));
                     }
                     missing_rparen = Some(self.index);
                     self.index = start;
@@ -4535,12 +4562,7 @@ impl<'a> Parser<'a> {
             self.parse_comma_separated(Parser::parse_expr)
         };
         match list.and_then(|list| self.expect_token(&Token::RParen).map(|_| list)) {
-            Ok(list) => Ok(Expr::InList {
-                expr: Box::new(expr),
-                list,
-                negated,
-                global,
-            }),
+            Ok(list) => Ok(InTarget::List(list)),
             Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
             Err(e) => match missing_rparen {
                 Some(index) if self.index <= index => {
@@ -8017,6 +8039,7 @@ impl<'a> Parser<'a> {
                 hold,
                 for_query: query,
             }],
+            separator: DeclareSeparator::Semicolon,
         })
     }
 
@@ -8060,6 +8083,7 @@ impl<'a> Parser<'a> {
                 hold: None,
                 for_query: None,
             }],
+            separator: DeclareSeparator::Semicolon,
         })
     }
 
@@ -8176,7 +8200,10 @@ impl<'a> Parser<'a> {
             break;
         }
 
-        Ok(Statement::Declare { stmts })
+        Ok(Statement::Declare {
+            stmts,
+            separator: DeclareSeparator::Semicolon,
+        })
     }
 
     /// Parse a [MsSql] `DECLARE` statement.
@@ -8193,7 +8220,10 @@ impl<'a> Parser<'a> {
     pub fn parse_mssql_declare(&mut self) -> Result<Statement, ParserError> {
         let stmts = self.parse_comma_separated(Parser::parse_mssql_declare_stmt)?;
 
-        Ok(Statement::Declare { stmts })
+        Ok(Statement::Declare {
+            stmts,
+            separator: DeclareSeparator::Comma,
+        })
     }
 
     /// Parse the body of a [MsSql] `DECLARE`statement.
@@ -13612,7 +13642,7 @@ impl<'a> Parser<'a> {
         fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
             parser.dialect.is_select_item_alias(explicit, kw, parser)
         }
-        self.parse_optional_alias_inner(None, validator)
+        self.parse_optional_alias_inner(None, AliasKind::Column, validator)
     }
 
     /// Optionally parses an alias for a table like in `... FROM generate_series(1, 10) AS t (col)`.
@@ -13623,7 +13653,7 @@ impl<'a> Parser<'a> {
             parser.dialect.is_table_factor_alias(explicit, kw, parser)
         }
         let explicit = self.peek_keyword(Keyword::AS);
-        match self.parse_optional_alias_inner(None, validator)? {
+        match self.parse_optional_alias_inner(None, AliasKind::Table, validator)? {
             Some(name) => {
                 let columns = self.parse_table_alias_column_defs()?;
                 let at = if self.dialect.supports_partiql() && self.parse_keyword(Keyword::AT) {
@@ -13711,7 +13741,7 @@ impl<'a> Parser<'a> {
         fn validator(_explicit: bool, _kw: &Keyword, _parser: &mut Parser) -> bool {
             false
         }
-        self.parse_optional_alias_inner(Some(reserved_kwds), validator)
+        self.parse_optional_alias_inner(Some(reserved_kwds), AliasKind::Column, validator)
     }
 
     /// Parses an optional alias after a SQL element such as a select list item
@@ -13723,6 +13753,7 @@ impl<'a> Parser<'a> {
     fn parse_optional_alias_inner<F>(
         &mut self,
         reserved_kwds: Option<&[Keyword]>,
+        kind: AliasKind,
         validator: F,
     ) -> Result<Option<Ident>, ParserError>
     where
@@ -13746,7 +13777,14 @@ impl<'a> Parser<'a> {
             Token::Word(w) if validator(after_as, &w.keyword, self) => {
                 Ok(Some(w.into_ident(next_token.span)))
             }
-            Token::SingleQuotedString(s) if self.dialect.supports_string_literal_alias() => {
+            Token::SingleQuotedString(s)
+                if match kind {
+                    AliasKind::Column => {
+                        self.dialect.supports_string_literal_column_alias(after_as)
+                    }
+                    AliasKind::Table => self.dialect.supports_string_literal_table_alias(after_as),
+                } =>
+            {
                 Ok(Some(Ident::with_quote('\'', s)))
             }
             Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
@@ -17915,7 +17953,7 @@ impl<'a> Parser<'a> {
                 // ~ for a PIVOT aggregate function the alias must not be a "FOR"; in any dialect
                 kw != &Keyword::FOR && parser.dialect.is_select_item_alias(explicit, kw, parser)
             }
-            self.parse_optional_alias_inner(None, validator)?
+            self.parse_optional_alias_inner(None, AliasKind::Column, validator)?
         };
         Ok(ExprWithAlias { expr, alias })
     }

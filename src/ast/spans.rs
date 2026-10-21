@@ -3550,8 +3550,8 @@ SETTINGS update_parallel_mode = 'auto'"#;
             assert_eq!(test.get_source(stmt.span()), expected, "{sql}");
         }
     }
-#[test]
-#[test]
+
+    #[test]
     fn test_boxed_statement_spans() {
         let cases: &[(&dyn Dialect, &str, &str)] = &[
             (&crate::dialect::DuckDbDialect, "INSTALL tpch", "tpch"),

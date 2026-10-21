@@ -9719,6 +9719,7 @@ impl<'a> Parser<'a> {
                 CheckConstraint {
                     name: None, // Column-level check constraints don't have names
                     expr: Box::new(expr),
+                    parenthesized: true,
                     no_inherit,
                     enforced,
                 }
@@ -10180,16 +10181,18 @@ impl<'a> Parser<'a> {
                 ))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
-                let has_paren = if self.dialect.supports_unparenthesized_check_constraint() {
-                    self.consume_token(&Token::LParen)
-                } else {
-                    self.expect_token(&Token::LParen)?;
-                    true
-                };
-                let expr = Box::new(self.parse_expr()?);
-                if has_paren {
-                    self.expect_token(&Token::RParen)?;
-                }
+                let (expr, parenthesized) =
+                    if self.dialect.supports_unparenthesized_check_constraint() {
+                        match self.parse_expr()? {
+                            Expr::Nested(expr) => (expr, true),
+                            expr => (Box::new(expr), false),
+                        }
+                    } else {
+                        self.expect_token(&Token::LParen)?;
+                        let expr = Box::new(self.parse_expr()?);
+                        self.expect_token(&Token::RParen)?;
+                        (expr, true)
+                    };
                 let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
                 let enforced = if self.parse_keyword(Keyword::ENFORCED) {
@@ -10204,6 +10207,7 @@ impl<'a> Parser<'a> {
                     CheckConstraint {
                         name,
                         expr,
+                        parenthesized,
                         no_inherit,
                         enforced,
                     }
@@ -10217,15 +10221,16 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     return Ok(None);
                 };
-                let expr = match self.parse_expr()? {
-                    Expr::Nested(expr) => expr,
-                    expr => Box::new(expr),
+                let (expr, parenthesized) = match self.parse_expr()? {
+                    Expr::Nested(expr) => (expr, true),
+                    expr => (Box::new(expr), false),
                 };
 
                 Ok(Some(
                     AssumeConstraint {
                         name: identifier,
                         expr,
+                        parenthesized,
                     }
                     .into(),
                 ))

@@ -82,12 +82,12 @@ pub enum TableConstraint {
     ///
     /// The parentheses are only optional to parse when
     /// [`supports_unparenthesized_check_constraint`](crate::dialect::Dialect::supports_unparenthesized_check_constraint)
-    /// is true for the dialect (e.g. ClickHouse); the constraint always displays with parentheses.
+    /// is true for the dialect (e.g. ClickHouse).
     Check(CheckConstraint),
     /// ClickHouse [table constraint][1]: `CONSTRAINT <name> ASSUME (<expr>)`.
     /// Unlike the other constraints here, the name is mandatory.
     ///
-    /// The parentheses are optional to parse; the constraint always displays with parentheses.
+    /// The parentheses are optional.
     ///
     /// [1]: https://clickhouse.com/docs/reference/statements/create/table#constraints
     Assume(AssumeConstraint),
@@ -210,6 +210,8 @@ pub struct CheckConstraint {
     pub name: Option<Ident>,
     /// The boolean expression the CHECK constraint enforces.
     pub expr: Box<Expr>,
+    /// Whether `expr` is wrapped in parentheses.
+    pub parenthesized: bool,
     /// PostgreSQL-specific `NO INHERIT` flag: child tables do not inherit the constraint.
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
     pub no_inherit: bool,
@@ -221,12 +223,12 @@ pub struct CheckConstraint {
 impl fmt::Display for CheckConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use crate::ast::ddl::display_constraint_name;
-        write!(
-            f,
-            "{}CHECK ({})",
-            display_constraint_name(&self.name),
-            self.expr
-        )?;
+        write!(f, "{}CHECK ", display_constraint_name(&self.name))?;
+        if self.parenthesized {
+            write!(f, "({})", self.expr)?;
+        } else {
+            write!(f, "{}", self.expr)?;
+        }
         if self.no_inherit {
             write!(f, " NO INHERIT")?;
         }
@@ -254,11 +256,18 @@ pub struct AssumeConstraint {
     pub name: Ident,
     /// The boolean expression the ASSUME constraint claims is true.
     pub expr: Box<Expr>,
+    /// Whether `expr` is wrapped in parentheses.
+    pub parenthesized: bool,
 }
 
 impl fmt::Display for AssumeConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "CONSTRAINT {} ASSUME ({})", self.name, self.expr)
+        write!(f, "CONSTRAINT {} ASSUME ", self.name)?;
+        if self.parenthesized {
+            write!(f, "({})", self.expr)
+        } else {
+            write!(f, "{}", self.expr)
+        }
     }
 }
 

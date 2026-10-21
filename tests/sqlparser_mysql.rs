@@ -5202,3 +5202,85 @@ fn parse_create_table_engine_name_quoting() {
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `InnoDB`");
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = InnoDB");
 }
+
+#[test]
+fn parse_caret_precedence() {
+    fn num(n: &str) -> Expr {
+        Expr::value(number(n))
+    }
+    fn bin(left: Expr, op: BinaryOperator, right: Expr) -> Expr {
+        Expr::BinaryOp {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        }
+    }
+    use BinaryOperator::{
+        BitwiseAnd, BitwiseXor, Divide, Modulo, Multiply, MyIntegerDivide, PGBitwiseShiftLeft, Plus,
+    };
+
+    for (sql, expected) in [
+        (
+            "2 ^ 3 * 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Multiply, num("4")),
+        ),
+        (
+            "2 * 3 ^ 4",
+            bin(num("2"), Multiply, bin(num("3"), BitwiseXor, num("4"))),
+        ),
+        (
+            "2 ^ 3 / 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Divide, num("4")),
+        ),
+        (
+            "2 ^ 3 DIV 4",
+            bin(
+                bin(num("2"), BitwiseXor, num("3")),
+                MyIntegerDivide,
+                num("4"),
+            ),
+        ),
+        (
+            "2 DIV 3 ^ 4",
+            bin(
+                num("2"),
+                MyIntegerDivide,
+                bin(num("3"), BitwiseXor, num("4")),
+            ),
+        ),
+        (
+            "2 ^ 3 % 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Modulo, num("4")),
+        ),
+        (
+            "2 ^ 3 + 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Plus, num("4")),
+        ),
+        (
+            "2 ^ 3 ^ 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), BitwiseXor, num("4")),
+        ),
+        (
+            "2 << 3 ^ 4",
+            bin(
+                num("2"),
+                PGBitwiseShiftLeft,
+                bin(num("3"), BitwiseXor, num("4")),
+            ),
+        ),
+        (
+            "2 & 3 ^ 4",
+            bin(num("2"), BitwiseAnd, bin(num("3"), BitwiseXor, num("4"))),
+        ),
+        (
+            "2 ^ (3 * 4)",
+            bin(
+                num("2"),
+                BitwiseXor,
+                Expr::Nested(Box::new(bin(num("3"), Multiply, num("4")))),
+            ),
+        ),
+    ] {
+        assert_eq!(mysql().verified_expr(sql), expected, "{sql}");
+    }
+}

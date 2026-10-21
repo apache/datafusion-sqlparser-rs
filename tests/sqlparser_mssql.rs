@@ -812,7 +812,8 @@ fn parse_alter_role() {
                     value: "new_name".into(),
                     quote_style: None,
                     span: Span::empty(),
-                }
+                },
+                use_with_name: true,
             },
         }]
     );
@@ -3012,4 +3013,12 @@ fn parse_mssql_declare_comma_list_display() {
     ms().verified_stmt("DECLARE @a INT, @b INT");
     ms().verified_stmt("DECLARE @a INT = 1, @b TEXT = 'x'");
     ms().verified_stmt("DECLARE @foo CURSOR, @bar INT");
+}
+
+#[test]
+fn mssql_alter_role_with_name_roundtrip() {
+    // `WITH NAME =` is the only rename form T-SQL accepts; the shared
+    // RenameRole variant must not render as `RENAME TO`.
+    ms().verified_stmt("ALTER ROLE old_name WITH NAME = new_name");
+    ms().verified_stmt("ALTER ROLE [old_name] WITH NAME = [new_name]");
 }

@@ -147,6 +147,8 @@ pub enum AlterRoleOperation {
     RenameRole {
         /// Role name to rename.
         role_name: Ident,
+        /// Whether the MS SQL `WITH NAME =` form was used instead of `RENAME TO`.
+        use_with_name: bool,
     },
     /// MS SQL Server
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-role-transact-sql>
@@ -194,8 +196,15 @@ pub enum AlterRoleOperation {
 impl fmt::Display for AlterRoleOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AlterRoleOperation::RenameRole { role_name } => {
-                write!(f, "RENAME TO {role_name}")
+            AlterRoleOperation::RenameRole {
+                role_name,
+                use_with_name,
+            } => {
+                if *use_with_name {
+                    write!(f, "WITH NAME = {role_name}")
+                } else {
+                    write!(f, "RENAME TO {role_name}")
+                }
             }
             AlterRoleOperation::AddMember { member_name } => {
                 write!(f, "ADD MEMBER {member_name}")

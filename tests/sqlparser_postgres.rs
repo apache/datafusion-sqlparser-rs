@@ -4562,7 +4562,8 @@ fn parse_alter_role() {
                     value: "new_name".into(),
                     quote_style: None,
                     span: Span::empty(),
-                }
+                },
+                use_with_name: false,
             },
         }
     );
@@ -4774,6 +4775,7 @@ fn parse_alter_user() {
             name: Ident::new("old_name"),
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident::new("new_name"),
+                use_with_name: false,
             },
         }
     );

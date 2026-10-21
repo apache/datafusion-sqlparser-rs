@@ -1222,7 +1222,6 @@ fn parse_over_as_column_alias_after_function() {
         Err(ParserError::ParserError(
             "Expected: identifier, found: EOF".to_string()
         ))
-        ))
     );
 }
 
@@ -1260,9 +1259,9 @@ fn parse_comparison_binds_tighter_than_equality() {
     // `IN` and `BETWEEN` sit on the level of `=`
     assert_eq!(
         sqlite().verified_expr("a < b IN (1)"),
-        Expr::InList {
+        Expr::In {
             expr: Box::new(binary(id("a"), BinaryOperator::Lt, id("b"))),
-            list: vec![Expr::value(number("1"))],
+            target: InTarget::List(vec![Expr::value(number("1"))]),
             negated: false,
             global: false,
         },

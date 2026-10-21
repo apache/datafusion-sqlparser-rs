@@ -1147,9 +1147,9 @@ fn sqlite_is_operators() {
     );
 
     match sqlite().verified_expr("a IS b IN (1)") {
-        Expr::InList {
+        Expr::In {
             expr,
-            list,
+            target: InTarget::List(list),
             negated,
             global,
         } => {

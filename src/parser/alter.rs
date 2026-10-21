@@ -356,7 +356,7 @@ impl Parser<'_> {
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NAME]) {
             if self.consume_token(&Token::Eq) {
                 let role_name = self.parse_identifier()?;
-                AlterRoleOperation::RenameRole { role_name }
+                AlterRoleOperation::RenameRoleWithName { role_name }
             } else {
                 return self.expected_ref("= after WITH NAME ", self.peek_token_ref());
             }

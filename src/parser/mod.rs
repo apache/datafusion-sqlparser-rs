@@ -8004,6 +8004,7 @@ impl<'a> Parser<'a> {
         let query = Some(self.parse_query()?);
 
         Ok(Statement::Declare {
+            delimiter: DeclareDelimiter::Comma,
             stmts: vec![Declare {
                 names: vec![name],
                 data_type: None,
@@ -8047,6 +8048,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Declare {
+            delimiter: DeclareDelimiter::Comma,
             stmts: vec![Declare {
                 names,
                 data_type,
@@ -8174,7 +8176,10 @@ impl<'a> Parser<'a> {
             break;
         }
 
-        Ok(Statement::Declare { stmts })
+        Ok(Statement::Declare {
+            stmts,
+            delimiter: DeclareDelimiter::Semicolon,
+        })
     }
 
     /// Parse a [MsSql] `DECLARE` statement.
@@ -8191,7 +8196,10 @@ impl<'a> Parser<'a> {
     pub fn parse_mssql_declare(&mut self) -> Result<Statement, ParserError> {
         let stmts = self.parse_comma_separated(Parser::parse_mssql_declare_stmt)?;
 
-        Ok(Statement::Declare { stmts })
+        Ok(Statement::Declare {
+            stmts,
+            delimiter: DeclareDelimiter::Comma,
+        })
     }
 
     /// Parse the body of a [MsSql] `DECLARE`statement.

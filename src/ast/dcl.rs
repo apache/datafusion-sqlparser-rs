@@ -150,6 +150,14 @@ pub enum AlterRoleOperation {
     },
     /// MS SQL Server
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-role-transact-sql>
+    ///
+    /// `ALTER ROLE role_name WITH NAME = new_name`
+    RenameRoleWithName {
+        /// New name for the role.
+        role_name: Ident,
+    },
+    /// MS SQL Server
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-role-transact-sql>
     AddMember {
         /// Member name to add to the role.
         member_name: Ident,
@@ -196,6 +204,9 @@ impl fmt::Display for AlterRoleOperation {
         match self {
             AlterRoleOperation::RenameRole { role_name } => {
                 write!(f, "RENAME TO {role_name}")
+            }
+            AlterRoleOperation::RenameRoleWithName { role_name } => {
+                write!(f, "WITH NAME = {role_name}")
             }
             AlterRoleOperation::AddMember { member_name } => {
                 write!(f, "ADD MEMBER {member_name}")

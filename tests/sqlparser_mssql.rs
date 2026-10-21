@@ -29,6 +29,7 @@ use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text, Varbinary};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
+use sqlparser::ast::DeclareDelimiter;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
@@ -800,21 +801,21 @@ fn parse_mssql_create_role() {
 fn parse_alter_role() {
     let sql = "ALTER ROLE old_name WITH NAME = new_name";
     assert_eq!(
-        ms().parse_sql_statements(sql).unwrap(),
-        [Statement::AlterRole {
+        ms().verified_stmt(sql),
+        Statement::AlterRole {
             name: Ident {
                 value: "old_name".into(),
                 quote_style: None,
                 span: Span::empty(),
             },
-            operation: AlterRoleOperation::RenameRole {
+            operation: AlterRoleOperation::RenameRoleWithName {
                 role_name: Ident {
                     value: "new_name".into(),
                     quote_style: None,
                     span: Span::empty(),
                 }
             },
-        }]
+        }
     );
 
     let sql = "ALTER ROLE role_name ADD MEMBER new_member";
@@ -1423,10 +1424,12 @@ fn parse_substring_in_select() {
 #[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
+    let _ = ms().verified_stmt("DECLARE @foo CURSOR, @bar INT, @baz TEXT = 'foobar'");
     let ast = ms().parse_sql_statements(sql).unwrap();
 
     assert_eq!(
         vec![Statement::Declare {
+            delimiter: DeclareDelimiter::Comma,
             stmts: vec![
                 Declare {
                     names: vec![Ident {
@@ -1485,6 +1488,7 @@ fn parse_mssql_declare() {
     assert_eq!(
         vec![
             Statement::Declare {
+                delimiter: DeclareDelimiter::Comma,
                 stmts: vec![Declare {
                     names: vec![Ident::new("@bar"),],
                     data_type: Some(Int(None)),

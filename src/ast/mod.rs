@@ -3097,6 +3097,19 @@ impl fmt::Display for DeclareAssignment {
     }
 }
 
+/// The delimiter separating the declarations collected by a `DECLARE`
+/// statement ([Statement::Declare]).
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DeclareDelimiter {
+    /// Comma-separated declarations, e.g. `DECLARE @a INT, @b INT` (MsSql).
+    Comma,
+    /// Semicolon-separated declarations, e.g. `DECLARE a INT; b INT`
+    /// (Snowflake).
+    Semicolon,
+}
+
 /// Represents the type of a `DECLARE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4088,6 +4101,8 @@ pub enum Statement {
     Declare {
         /// Cursor declaration statements collected by `DECLARE`.
         stmts: Vec<Declare>,
+        /// The delimiter used between the collected declarations.
+        delimiter: DeclareDelimiter,
     },
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
@@ -5266,9 +5281,16 @@ impl fmt::Display for Statement {
                 write!(f, "{statement}")
             }
             Statement::Query(s) => s.fmt(f),
-            Statement::Declare { stmts } => {
+            Statement::Declare { stmts, delimiter } => {
                 write!(f, "DECLARE ")?;
-                write!(f, "{}", display_separated(stmts, "; "))
+                match delimiter {
+                    DeclareDelimiter::Comma => {
+                        write!(f, "{}", display_comma_separated(stmts))
+                    }
+                    DeclareDelimiter::Semicolon => {
+                        write!(f, "{}", display_separated(stmts, "; "))
+                    }
+                }
             }
             Statement::Fetch {
                 name,

@@ -22908,3 +22908,17 @@ fn parse_alter_table_reset_options() {
         );
     }
 }
+
+#[test]
+fn display_string_literal_backslash_quote_parity() {
+    // A `'` after an even-length backslash run is not escaped in the decoded
+    // value, so it must be doubled when the value is displayed. Previously it
+    // was treated as escaped, which serialized to SQL that reparsed as extra
+    // statements or failed to parse. See
+    // https://github.com/apache/datafusion-sqlparser-rs/issues/2603
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    dialects.verified_stmt(r#"SELECT 'a\\''b'"#);
+    // A bare `'` in a decoded value requires every `'` to be doubled,
+    // including `'` that follows a backslash.
+    dialects.verified_stmt(r#"SELECT 'a\''b''c'"#);
+}

@@ -336,4 +336,8 @@ impl Dialect for GenericDialect {
     fn supports_alter_column_position(&self) -> bool {
         true
     }
+
+    fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
 }

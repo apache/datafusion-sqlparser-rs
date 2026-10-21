@@ -10845,6 +10845,7 @@ fn parse_geometric_typed_literal_error_propagates() {
         pg().parse_sql_statements("SELECT circle( FROM t")
             .unwrap_err(),
         ParserError::ParserError("Expected: a value, found: (".to_string())
+    );
 }
 
 #[test]

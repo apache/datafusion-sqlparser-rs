@@ -313,6 +313,7 @@ impl Dialect for SnowflakeDialect {
         }
 
         if parser.parse_keyword(Keyword::CREATE) {
+            let create_token_index = parser.get_current_index();
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
             let or_replace = parser.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
@@ -353,7 +354,10 @@ impl Dialect for SnowflakeDialect {
                         or_replace, global, temporary, volatile, transient, iceberg, dynamic,
                         parser,
                     )
-                    .map(Into::into),
+                    .map(|mut table| {
+                        table.create_token = parser.token_at(create_token_index).clone().into();
+                        table.into()
+                    }),
                 );
             } else if parser.parse_keyword(Keyword::DATABASE) {
                 return Some(parse_create_database(or_replace, transient, parser));
@@ -2030,4 +2034,23 @@ fn parse_multi_table_insert_when_clauses(
     }
 
     Ok((when_clauses, else_clause))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::Spanned;
+    use crate::tokenizer::{Span, Token};
+
+    #[test]
+    fn create_table_span_snowflake_direct_entry() {
+        let mut parser = Parser::new(&SnowflakeDialect)
+            .try_with_sql("t (id INT); SELECT 1")
+            .unwrap();
+        let table = parse_create_table(false, None, false, false, false, false, false, &mut parser)
+            .unwrap();
+        assert_eq!(table.create_token.0.span, Span::empty());
+        assert_eq!(table.span().start, table.name.span().start);
+        assert_eq!(parser.peek_token_ref().token, Token::SemiColon);
+    }
 }

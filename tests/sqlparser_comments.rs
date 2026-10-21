@@ -180,3 +180,24 @@ fn into_comments_with_eof() {
         }]
     );
 }
+
+#[test]
+fn create_table_span_find_before() {
+    use sqlparser::ast::{Spanned, Statement};
+
+    let sql = r#"-- users docs
+CREATE TABLE IF NOT EXISTS users (id INT)"#;
+    all_dialects().one_of_identical_results(|dialect| {
+        let (statements, comments) = Parser::parse_sql_with_comments(dialect, sql).unwrap();
+        let Statement::CreateTable(table) = &statements[0] else {
+            panic!("Expected CREATE TABLE");
+        };
+        assert_eq!(
+            comments
+                .find_before(table.span().start)
+                .map(|comment| comment.as_str())
+                .collect::<Vec<_>>(),
+            vec![" users docs"]
+        );
+    });
+}

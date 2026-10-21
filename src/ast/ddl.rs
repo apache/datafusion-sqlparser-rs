@@ -2959,6 +2959,8 @@ pub struct SqliteTableOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateTable {
+    /// The opening `CREATE` token, empty for tables constructed without one.
+    pub create_token: AttachedToken,
     /// `OR REPLACE` clause
     pub or_replace: bool,
     /// `TEMP` or `TEMPORARY` clause

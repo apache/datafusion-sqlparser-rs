@@ -551,6 +551,7 @@ impl Spanned for Use {
 impl Spanned for CreateTable {
     fn span(&self) -> Span {
         let CreateTable {
+            create_token,
             or_replace: _,    // bool
             temporary: _,     // bool
             unlogged: _,      // bool
@@ -617,7 +618,8 @@ impl Spanned for CreateTable {
         } = self;
 
         union_spans(
-            core::iter::once(name.span())
+            core::iter::once(create_token.0.span)
+                .chain(core::iter::once(name.span()))
                 .chain(core::iter::once(table_options.span()))
                 .chain(columns.iter().map(|i| i.span()))
                 .chain(constraints.iter().map(|i| i.span()))

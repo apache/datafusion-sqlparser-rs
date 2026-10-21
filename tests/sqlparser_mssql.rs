@@ -1935,6 +1935,7 @@ fn parse_create_table_with_valid_options() {
         assert_eq!(
             ms_and_generic().verified_stmt(sql),
             Statement::CreateTable(CreateTable {
+                create_token: AttachedToken::empty(),
                 or_replace: false,
                 temporary: false,
                 unlogged: false,
@@ -2132,6 +2133,7 @@ fn parse_create_table_with_identity_column() {
         assert_eq!(
             ms_and_generic().verified_stmt(sql),
             Statement::CreateTable(CreateTable {
+                create_token: AttachedToken::empty(),
                 or_replace: false,
                 temporary: false,
                 unlogged: false,

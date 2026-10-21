@@ -20856,3 +20856,134 @@ fn parse_window_spec_keyword_base_window_name() {
         "SELECT count(*) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
     );
 }
+
+#[test]
+fn create_table_span_starts_at_create() {
+    for (sql, expected_start) in [
+        ("CREATE TABLE t (id INT)", Location::new(1, 1)),
+        (
+            "CREATE TABLE IF NOT EXISTS users (id INT)",
+            Location::new(1, 1),
+        ),
+        (
+            r#"-- table docs
+CREATE TABLE
+  users (id INT)"#,
+            Location::new(2, 1),
+        ),
+        ("  CREATE TEMPORARY TABLE t (id INT)", Location::new(1, 3)),
+    ] {
+        all_dialects().one_of_identical_results(|dialect| {
+            let statements = Parser::parse_sql(dialect, sql).unwrap();
+            let Statement::CreateTable(table) = &statements[0] else {
+                panic!("Expected CREATE TABLE");
+            };
+            assert_eq!(statements[0].span().start, expected_start, "{sql}");
+            assert_eq!(table.span().start, expected_start, "{sql}");
+        });
+    }
+}
+
+#[test]
+fn create_table_span_prefixes() {
+    for prefix in [
+        "CREATE",
+        "CREATE OR REPLACE",
+        "CREATE TEMPORARY",
+        "CREATE OR REPLACE TEMPORARY",
+        "CREATE LOCAL TEMPORARY",
+        "CREATE GLOBAL TEMPORARY",
+        "CREATE TRANSIENT",
+        "CREATE VOLATILE",
+        "CREATE UNLOGGED",
+        "CREATE SET",
+        "CREATE MULTISET",
+        "CREATE MULTISET VOLATILE",
+        "CREATE EXTERNAL",
+    ] {
+        let canonical = format!("{prefix} TABLE IF NOT EXISTS t (id INT)");
+        all_dialects().verified_stmt(&canonical);
+        all_dialects().one_of_identical_results(|dialect| {
+            let sql = format!("SELECT 1;\n  {canonical}");
+            let statements = Parser::parse_sql(dialect, &sql).unwrap();
+            assert_eq!(statements[1].span().start, Location::new(2, 3), "{sql}");
+        });
+    }
+}
+
+#[test]
+fn create_table_span_semantic_identity() {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    fn hash(value: &impl Hash) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    all_dialects().one_of_identical_results(|dialect| {
+        let sql = "CREATE TABLE t AS SELECT 1";
+        let original = Parser::parse_sql(dialect, sql).unwrap().remove(0);
+        let shifted = Parser::parse_sql(dialect, &format!("\n  {sql}"))
+            .unwrap()
+            .remove(0);
+        assert_eq!(original, shifted);
+        assert_eq!(original.cmp(&shifted), core::cmp::Ordering::Equal);
+        assert_eq!(hash(&original), hash(&shifted));
+        let (Statement::CreateTable(original), Statement::CreateTable(shifted)) =
+            (&original, &shifted)
+        else {
+            panic!("Expected CREATE TABLE");
+        };
+        assert_ne!(original.span().start, shifted.span().start);
+        assert_eq!(original, shifted);
+        assert_eq!(original.cmp(shifted), core::cmp::Ordering::Equal);
+        assert_eq!(hash(original), hash(shifted));
+        assert_eq!(
+            original.span().end,
+            original.query.as_ref().unwrap().span().end
+        );
+        assert_eq!(
+            shifted.span().end,
+            shifted.query.as_ref().unwrap().span().end
+        );
+    });
+}
+
+#[test]
+fn create_table_span_direct_entries() {
+    for (sql, consume_create, expected_start) in [
+        (
+            "  CREATE TABLE t (id INT); SELECT 1",
+            true,
+            Location::new(1, 3),
+        ),
+        ("TABLE t (id INT); SELECT 1", false, Location::new(1, 7)),
+    ] {
+        let mut parser = Parser::new(&GenericDialect).try_with_sql(sql).unwrap();
+        if consume_create {
+            parser.expect_keyword_is(Keyword::CREATE).unwrap();
+        }
+        let statement = parser.parse_create().unwrap();
+        assert_eq!(statement.span().start, expected_start);
+        assert_eq!(parser.peek_token_ref().token, Token::SemiColon);
+    }
+
+    for (entry, sql) in [
+        (0, "t (id INT); SELECT 1"),
+        (1, "TABLE t (id INT); SELECT 1"),
+        (2, "SNAPSHOT TABLE t CLONE source; SELECT 1"),
+    ] {
+        let mut parser = Parser::new(&GenericDialect).try_with_sql(sql).unwrap();
+        let table = match entry {
+            0 => parser.parse_create_table(false, false, false, None, false, false, None),
+            1 => parser.parse_create_external_table(false),
+            _ => parser.parse_create_snapshot_table(),
+        }
+        .unwrap();
+        assert_eq!(table.create_token.0.span, Span::empty());
+        assert_eq!(table.span().start, table.name.span().start);
+        assert_eq!(parser.peek_token_ref().token, Token::SemiColon);
+    }
+}

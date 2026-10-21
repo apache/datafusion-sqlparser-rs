@@ -7020,6 +7020,7 @@ fn parse_trigger_related_functions() {
     assert_eq!(
         create_table,
         CreateTable {
+            create_token: AttachedToken::empty(),
             or_replace: false,
             temporary: false,
             unlogged: false,

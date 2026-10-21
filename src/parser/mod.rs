@@ -5352,6 +5352,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        let create_token_index = self.index.checked_sub(1).filter(|&index| {
+            matches!(&self.token_at(index).token, Token::Word(word) if word.keyword == Keyword::CREATE)
+        });
         let modifier_loc = self.peek_token_ref().span.start;
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
@@ -5377,7 +5380,7 @@ impl<'a> Parser<'a> {
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
-        if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
+        let mut statement = if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             self.parse_create_text_search().map(Into::into)
@@ -5478,7 +5481,13 @@ impl<'a> Parser<'a> {
             self.parse_create_foreign_table().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
+        }?;
+        if let Statement::CreateTable(table) = &mut statement {
+            if let Some(index) = create_token_index {
+                table.create_token = self.token_at(index).clone().into();
+            }
         }
+        Ok(statement)
     }
 
     fn parse_text_search_object_type(&mut self) -> Result<TextSearchObjectType, ParserError> {

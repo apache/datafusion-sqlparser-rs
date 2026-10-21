@@ -700,6 +700,7 @@ fn test_duckdb_union_datatype() {
     let stmt = duckdb_and_generic().verified_stmt(sql);
     assert_eq!(
         Statement::CreateTable(CreateTable {
+            create_token: AttachedToken::empty(),
             or_replace: Default::default(),
             temporary: Default::default(),
             unlogged: Default::default(),

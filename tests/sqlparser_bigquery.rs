@@ -3001,3 +3001,27 @@ fn test_byte_and_raw_string_quote_escaping() {
         err
     );
 }
+
+#[test]
+fn create_table_span_snapshot() {
+    use sqlparser::ast::Spanned;
+    use sqlparser::parser::Parser;
+    use sqlparser::tokenizer::Location;
+
+    for canonical in [
+        "CREATE SNAPSHOT TABLE t CLONE source",
+        "CREATE SNAPSHOT TABLE IF NOT EXISTS t CLONE source",
+        "CREATE OR REPLACE EXTERNAL TABLE t (id INT)",
+    ] {
+        bigquery_and_generic().verified_stmt(canonical);
+        bigquery_and_generic().one_of_identical_results(|dialect| {
+            let sql = format!("SELECT 1;\n  {canonical}");
+            let statements = Parser::parse_sql(dialect, &sql).unwrap();
+            let Statement::CreateTable(table) = &statements[1] else {
+                panic!("Expected CREATE TABLE");
+            };
+            assert_eq!(table.span().start, Location::new(2, 3));
+            assert_eq!(statements[1].span().start, Location::new(2, 3));
+        });
+    }
+}

@@ -23,7 +23,7 @@ use sqlparser::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionK
 use sqlparser::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageLoadSelectItemKind};
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, SnowflakeDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::*;
 use test_utils::*;
 
@@ -5100,4 +5100,27 @@ fn test_stage_name_delimiters() {
             .unwrap_err(),
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
+}
+
+#[test]
+fn create_table_span_snowflake_prefixes() {
+    use sqlparser::ast::Spanned;
+    use sqlparser::tokenizer::Location;
+
+    for canonical in [
+        "CREATE OR REPLACE TRANSIENT TABLE t (id INT)",
+        "CREATE ICEBERG TABLE t (id INT) BASE_LOCATION='t'",
+        "CREATE DYNAMIC TABLE t TARGET_LAG='DOWNSTREAM' WAREHOUSE=wh AS SELECT 1",
+        "CREATE DYNAMIC ICEBERG TABLE t BASE_LOCATION='t' TARGET_LAG='DOWNSTREAM' WAREHOUSE=wh AS SELECT 1",
+        "CREATE GLOBAL TEMPORARY TABLE IF NOT EXISTS t (id INT)",
+    ] {
+        snowflake().verified_stmt(canonical);
+        let sql = format!("SELECT 1;\n  {canonical}");
+        let statements = Parser::parse_sql(&SnowflakeDialect, &sql).unwrap();
+        let Statement::CreateTable(table) = &statements[1] else {
+            panic!("Expected CREATE TABLE");
+        };
+        assert_eq!(table.span().start, Location::new(2, 3));
+        assert_eq!(statements[1].span().start, Location::new(2, 3));
+    }
 }

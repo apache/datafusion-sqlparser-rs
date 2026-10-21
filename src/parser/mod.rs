@@ -3362,6 +3362,43 @@ impl<'a> Parser<'a> {
                 Keyword::TIMEZONE_HOUR => Ok(DateTimeField::TimezoneHour),
                 Keyword::TIMEZONE_MINUTE => Ok(DateTimeField::TimezoneMinute),
                 Keyword::TIMEZONE_REGION => Ok(DateTimeField::TimezoneRegion),
+                Keyword::SECOND_MICROSECOND
+                    if self.dialect.supports_compound_date_time_fields() =>
+                {
+                    Ok(DateTimeField::SecondMicrosecond)
+                }
+                Keyword::MINUTE_MICROSECOND
+                    if self.dialect.supports_compound_date_time_fields() =>
+                {
+                    Ok(DateTimeField::MinuteMicrosecond)
+                }
+                Keyword::MINUTE_SECOND if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::MinuteSecond)
+                }
+                Keyword::HOUR_MICROSECOND if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::HourMicrosecond)
+                }
+                Keyword::HOUR_SECOND if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::HourSecond)
+                }
+                Keyword::HOUR_MINUTE if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::HourMinute)
+                }
+                Keyword::DAY_MICROSECOND if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::DayMicrosecond)
+                }
+                Keyword::DAY_SECOND if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::DaySecond)
+                }
+                Keyword::DAY_MINUTE if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::DayMinute)
+                }
+                Keyword::DAY_HOUR if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::DayHour)
+                }
+                Keyword::YEAR_MONTH if self.dialect.supports_compound_date_time_fields() => {
+                    Ok(DateTimeField::YearMonth)
+                }
                 _ if self.dialect.allow_extract_custom() => {
                     self.prev_token();
                     let custom = self.parse_identifier()?;

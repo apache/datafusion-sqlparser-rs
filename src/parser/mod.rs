@@ -10214,19 +10214,13 @@ impl<'a> Parser<'a> {
                 if w.keyword == Keyword::ASSUME && self.dialect.supports_assume_constraint() =>
             {
                 let Some(identifier) = name else {
-                    return self.expected(
-                        "CONSTRAINT <name> before ASSUME",
-                        TokenWithSpan {
-                            token: Token::make_keyword("ASSUME"),
-                            span: next_token.span,
-                        },
-                    );
+                    self.prev_token();
+                    return Ok(None);
                 };
-                let has_paren = self.consume_token(&Token::LParen);
-                let expr = Box::new(self.parse_expr()?);
-                if has_paren {
-                    self.expect_token(&Token::RParen)?;
-                }
+                let expr = match self.parse_expr()? {
+                    Expr::Nested(expr) => expr,
+                    expr => Box::new(expr),
+                };
 
                 Ok(Some(
                     AssumeConstraint {

@@ -250,7 +250,7 @@ impl crate::ast::Spanned for CheckConstraint {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// An `ASSUME` constraint (`CONSTRAINT <name> ASSUME <expr>`).
 pub struct AssumeConstraint {
-    /// Optional constraint name.
+    /// Constraint name.
     pub name: Ident,
     /// The boolean expression the ASSUME constraint claims is true.
     pub expr: Box<Expr>,
@@ -258,14 +258,7 @@ pub struct AssumeConstraint {
 
 impl fmt::Display for AssumeConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use crate::ast::ddl::display_constraint_name;
-        write!(
-            f,
-            "{}ASSUME ({})",
-            display_constraint_name(&Some(self.name.clone())),
-            self.expr
-        )?;
-        Ok(())
+        write!(f, "CONSTRAINT {} ASSUME ({})", self.name, self.expr)
     }
 }
 

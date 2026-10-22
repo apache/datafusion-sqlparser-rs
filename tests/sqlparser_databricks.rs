@@ -803,9 +803,13 @@ fn test_interval_numeric_requires_unit() {
 
 #[test]
 fn test_interval_rejects_value_arithmetic() {
-    assert!(databricks()
-        .parse_sql_statements("SELECT INTERVAL 1 + 1 DAY")
-        .is_err());
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("SELECT INTERVAL 1 + 1 DAY")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: INTERVAL requires a unit after the literal value"
+    );
 }
 
 #[test]

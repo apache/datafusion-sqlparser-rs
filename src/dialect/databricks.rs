@@ -31,6 +31,19 @@ impl Dialect for DatabricksDialect {
         matches!(ch, '`')
     }
 
+    /// Aliases are identifiers, see `column_alias` in
+    /// <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select.html> and
+    /// <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-identifiers.html>
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// Aliases are identifiers, see
+    /// <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-identifiers.html>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
     /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-identifiers.html>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')

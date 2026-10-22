@@ -1475,7 +1475,8 @@ fn parse_mssql_declare() {
                     hold: None,
                     for_query: None
                 }
-            ]
+            ],
+            separator: DeclareSeparator::Comma,
         }],
         ast
     );
@@ -1495,7 +1496,8 @@ fn parse_mssql_declare() {
                     scroll: None,
                     hold: None,
                     for_query: None
-                }]
+                }],
+                separator: DeclareSeparator::Comma,
             },
             Statement::Set(Set::SingleAssignment {
                 scope: None,
@@ -3036,4 +3038,11 @@ fn parse_create_proc() {
         .parse_sql_statements("CREATE PROC test AS BEGIN SELECT 1; END")
         .expect_err("PROC should remain MSSQL-specific");
     ms_and_generic().verified_stmt("SELECT proc FROM jobs");
+}
+
+#[test]
+fn parse_mssql_declare_comma_list_display() {
+    ms().verified_stmt("DECLARE @a INT, @b INT");
+    ms().verified_stmt("DECLARE @a INT = 1, @b TEXT = 'x'");
+    ms().verified_stmt("DECLARE @foo CURSOR, @bar INT");
 }

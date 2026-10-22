@@ -36,6 +36,18 @@ impl Dialect for SparkSqlDialect {
         matches!(ch, '`')
     }
 
+    /// Aliases are identifiers, see `named_expression` in
+    /// <https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html> and
+    /// <https://spark.apache.org/docs/latest/sql-ref-identifier.html>
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// Aliases are identifiers, see <https://spark.apache.org/docs/latest/sql-ref-identifier.html>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
     /// See <https://spark.apache.org/docs/latest/sql-ref-identifier.html>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')

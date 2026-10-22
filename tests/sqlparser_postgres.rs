@@ -10202,3 +10202,66 @@ fn parse_string_literal_alias_rejected() {
     }
     pg().verified_stmt(r#"SELECT a AS "x" FROM t AS "y""#);
 }
+
+#[test]
+fn parse_custom_type_typed_string() {
+    assert_eq!(
+        pg().verified_expr("public.mood 'happy'"),
+        Expr::TypedString(TypedString {
+            data_type: DataType::Custom(
+                ObjectName::from(vec!["public".into(), "mood".into()]),
+                vec![]
+            ),
+            value: Value::SingleQuotedString("happy".to_string()).with_empty_span(),
+            uses_odbc_syntax: false,
+        })
+    );
+    pg().verified_stmt("SELECT mood 'happy'");
+    pg().verified_stmt("SELECT count(*) FROM t WHERE m = mood 'sad'");
+    pg().verified_stmt("SELECT pg_typeof(mood 'happy')");
+    pg().verified_stmt(r#"SELECT "mood" 'happy'"#);
+    pg().verified_stmt("SELECT status 'on'");
+    pg().verified_stmt("SELECT left 'x'");
+    pg().verified_stmt("SELECT pg_catalog.coalesce 'x'");
+    pg().verified_stmt("SELECT mood E'happy'");
+    pg().verified_stmt("SELECT mood $$happy$$");
+
+    assert!(matches!(
+        pg().verified_expr("NOT 'a' LIKE 'b'"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    ));
+    assert!(matches!(
+        pg().verified_expr("point '1,2'"),
+        Expr::TypedString(TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Point),
+            ..
+        })
+    ));
+    assert_eq!(
+        pg().parse_sql_statements("SELECT pg_typeof(coalesce 'x')")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: 'x'".to_string())
+    );
+    assert_eq!(
+        pg().parse_sql_statements("SELECT mood 5").unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: 5".to_string())
+    );
+}
+
+#[test]
+fn parse_geometric_keyword_as_column_name() {
+    pg().verified_stmt("SELECT circle FROM t");
+    pg().verified_stmt("SELECT point FROM t");
+}
+
+#[test]
+fn parse_geometric_typed_literal_error_propagates() {
+    assert_eq!(
+        pg().parse_sql_statements("SELECT circle( FROM t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a value, found: (".to_string())
+    );
+}

@@ -2264,11 +2264,11 @@ fn parse_not_precedence() {
         verified_expr(sql),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
-            expr: Box::new(Expr::InList {
+            expr: Box::new(Expr::In {
                 expr: Box::new(Expr::Identifier("a".into())),
-                list: vec![Expr::Value(
+                target: InTarget::List(vec![Expr::Value(
                     (Value::SingleQuotedString("a".into())).with_empty_span()
-                )],
+                )]),
                 negated: true,
                 global: false,
             }),
@@ -2546,12 +2546,12 @@ fn parse_in_list() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::InList {
+            Expr::In {
                 expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-                list: vec![
+                target: InTarget::List(vec![
                     Expr::Value((Value::SingleQuotedString("HIGH".to_string())).with_empty_span()),
                     Expr::Value((Value::SingleQuotedString("MED".to_string())).with_empty_span()),
-                ],
+                ]),
                 negated,
                 global: false,
             },
@@ -2567,9 +2567,9 @@ fn parse_in_subquery() {
     let sql = "SELECT * FROM customers WHERE segment IN (SELECT segm FROM bar)";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::InSubquery {
+        Expr::In {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: Box::new(verified_query("SELECT segm FROM bar")),
+            target: InTarget::Subquery(Box::new(verified_query("SELECT segm FROM bar"))),
             negated: false,
             global: false,
         },
@@ -2582,11 +2582,11 @@ fn parse_in_union() {
     let sql = "SELECT * FROM customers WHERE segment IN ((SELECT segm FROM bar) UNION (SELECT segm FROM bar2))";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::InSubquery {
+        Expr::In {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: Box::new(verified_query(
+            target: InTarget::Subquery(Box::new(verified_query(
                 "(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)"
-            )),
+            ))),
             negated: false,
             global: false,
         },
@@ -2603,10 +2603,11 @@ fn parse_in_unnest() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::InUnnest {
+            Expr::In {
                 expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-                array_expr: Box::new(verified_expr("expr")),
+                target: InTarget::Unnest(Box::new(verified_expr("expr"))),
                 negated,
+                global: false,
             },
             select.selection.unwrap()
         );
@@ -5459,12 +5460,7 @@ fn parse_alter_table_add_column() {
 
 #[test]
 fn parse_alter_table_add_column_if_not_exists() {
-    let dialects = TestedDialects::new(vec![
-        Box::new(PostgreSqlDialect {}),
-        Box::new(BigQueryDialect {}),
-        Box::new(GenericDialect {}),
-        Box::new(DuckDbDialect {}),
-    ]);
+    let dialects = all_dialects_where(|d| d.supports_add_column_if_not_exists());
 
     match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD IF NOT EXISTS foo TEXT")) {
         AlterTableOperation::AddColumn { if_not_exists, .. } => {
@@ -8509,7 +8505,9 @@ fn parse_trim() {
 
     assert_eq!(
         ParserError::ParserError("Expected: ), found: 'xyz'".to_owned()),
-        parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
+        all_dialects_where(|d| !d.is_custom_type_typed_string(Keyword::NoKeyword, false))
+            .parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')")
+            .unwrap_err()
     );
 
     // dialects that support comma-separated TRIM syntax
@@ -12076,6 +12074,13 @@ fn parse_pivot_table() {
     one_statement_parses_to(
         "SELECT * FROM t PIVOT(SUM(1) x, COUNT(42) y FOR a.abc IN (1))",
         "SELECT * FROM t PIVOT(SUM(1) AS x, COUNT(42) AS y FOR a.abc IN (1))",
+    );
+
+    assert_eq!(
+        all_dialects().parse_sql_statements("SELECT * FROM t PIVOT(SUM(a) AS 1 FOR b IN (1))"),
+        Err(ParserError::ParserError(
+            "Expected: an identifier after AS, found: 1".to_string()
+        ))
     );
 }
 
@@ -16206,6 +16211,81 @@ fn test_keywords_as_column_names_after_dot() {
 }
 
 #[test]
+fn test_qualified_keyword_function_calls() {
+    let pg = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
+
+    for (qualifier, func) in [
+        ("public", "floor"),
+        ("pg_catalog", "floor"),
+        ("pg_catalog", "ceil"),
+    ] {
+        let sql = format!("SELECT {qualifier}.{func}(3)");
+        match expr_from_projection(&pg.verified_only_select(&sql).projection[0]) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+                ..
+            }) => {
+                assert_eq!(
+                    name,
+                    &ObjectName::from(vec![Ident::new(qualifier), Ident::new(func)])
+                );
+                assert_eq!(
+                    args,
+                    &[FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+                        number("3")
+                    )))]
+                );
+            }
+            other => panic!("Expected a qualified function call, got: {other:?}"),
+        }
+    }
+
+    for (func, sql_args) in [
+        ("extract", "3"),
+        ("trim", "'abc'"),
+        ("substring", "'abc', 1, 2"),
+        ("overlay", "'abc', 'xy', 1"),
+        ("position", "'a', 'b'"),
+        ("convert", "'abc', 1"),
+        ("array", "1, 2, 3"),
+    ] {
+        let sql = format!("SELECT pg_catalog.{func}({sql_args})");
+        match expr_from_projection(&pg.verified_only_select(&sql).projection[0]) {
+            Expr::Function(Function { name, .. }) => assert_eq!(
+                name,
+                &ObjectName::from(vec![Ident::new("pg_catalog"), Ident::new(func)])
+            ),
+            other => panic!("Expected a qualified function call, got: {other:?}"),
+        }
+    }
+
+    assert_matches!(
+        pg.parse_sql_statements("SELECT pg_catalog.overlay('abc' PLACING 'xy' FROM 1)"),
+        Err(ParserError::ParserError(_))
+    );
+    assert_matches!(
+        pg.parse_sql_statements("SELECT pg_catalog.position('a' IN 'b')"),
+        Err(ParserError::ParserError(_))
+    );
+
+    match expr_from_projection(&pg.verified_only_select("SELECT FLOOR(3)").projection[0]) {
+        Expr::Floor { .. } => {}
+        other => panic!("Expected Expr::Floor, got: {other:?}"),
+    }
+
+    match expr_from_projection(
+        &pg.verified_only_select("SELECT t.interval FROM tbl t")
+            .projection[0],
+    ) {
+        Expr::CompoundIdentifier(idents) => {
+            assert_eq!(idents, &vec![Ident::new("t"), Ident::new("interval")])
+        }
+        other => panic!("Expected CompoundIdentifier, got: {other:?}"),
+    }
+}
+
+#[test]
 fn parse_create_table_with_bit_types() {
     let sql = "CREATE TABLE t (a BIT, b BIT VARYING, c BIT(42), d BIT VARYING(43))";
     match verified_stmt(sql) {
@@ -16526,6 +16606,43 @@ fn parse_deeply_nested_boolean_expr_does_not_stackoverflow() {
 fn parse_select_without_projection() {
     let dialects = all_dialects_where(|d| d.supports_empty_projections());
     dialects.verified_stmt("SELECT FROM users");
+    for sql in [
+        "SELECT",
+        "SELECT ALL",
+        "SELECT INTO t",
+        "SELECT WHERE true",
+        "SELECT GROUP BY () HAVING true",
+        "SELECT WINDOW w AS ()",
+        "SELECT ORDER BY 1",
+        "SELECT LIMIT 1",
+        "SELECT OFFSET 1",
+        "SELECT FETCH FIRST 1 ROWS ONLY",
+        "SELECT FOR UPDATE",
+        "SELECT UNION SELECT",
+        "SELECT INTERSECT SELECT",
+        "SELECT EXCEPT SELECT",
+        "SELECT EXISTS (SELECT)",
+        "SELECT * FROM (SELECT) AS t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT; SELECT")
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT WHERE").unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_empty_projections());
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT").unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
 }
 
 #[test]
@@ -17505,6 +17622,12 @@ fn parse_pipe_operator_aggregate() {
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE GROUP BY a, b");
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) GROUP BY a, b");
     dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) ASC");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT * FROM tbl |> AGGREGATE COUNT(*) AS 1"),
+        Err(ParserError::ParserError(
+            "Expected: an identifier after AS, found: 1".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -20496,9 +20619,9 @@ fn parse_in_list_leading_subquery() {
 
     let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u), 1)");
     assert_eq!(
-        Expr::InList {
+        Expr::In {
             expr: x(),
-            list: vec![subquery(), Expr::value(number("1"))],
+            target: InTarget::List(vec![subquery(), Expr::value(number("1"))]),
             negated: false,
             global: false,
         },
@@ -20507,9 +20630,12 @@ fn parse_in_list_leading_subquery() {
 
     let select = verified_only_select("SELECT * FROM t WHERE x NOT IN (((SELECT a FROM u)), 1)");
     assert_eq!(
-        Expr::InList {
+        Expr::In {
             expr: x(),
-            list: vec![Expr::Nested(Box::new(subquery())), Expr::value(number("1"))],
+            target: InTarget::List(vec![
+                Expr::Nested(Box::new(subquery())),
+                Expr::value(number("1"))
+            ]),
             negated: true,
             global: false,
         },
@@ -20518,16 +20644,16 @@ fn parse_in_list_leading_subquery() {
 
     let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u) + 1, 2)");
     assert_eq!(
-        Expr::InList {
+        Expr::In {
             expr: x(),
-            list: vec![
+            target: InTarget::List(vec![
                 Expr::BinaryOp {
                     left: Box::new(subquery()),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::value(number("1"))),
                 },
                 Expr::value(number("2"))
-            ],
+            ]),
             negated: false,
             global: false,
         },
@@ -20537,16 +20663,16 @@ fn parse_in_list_leading_subquery() {
     let select = pg_and_generic()
         .verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u)[1], 2)");
     assert_matches!(
-        select.selection,
-        Some(Expr::InList { ref list, .. })
+        select.selection.as_ref(),
+        Some(Expr::In { target: InTarget::List(list), .. })
             if matches!(&list[0], Expr::CompoundFieldAccess { root, .. } if **root == subquery())
     );
 
     let select = verified_only_select("SELECT * FROM t WHERE x IN ((SELECT a FROM u))");
     assert_eq!(
-        Expr::InSubquery {
+        Expr::In {
             expr: x(),
-            subquery: Box::new(verified_query("(SELECT a FROM u)")),
+            target: InTarget::Subquery(Box::new(verified_query("(SELECT a FROM u)"))),
             negated: false,
             global: false,
         },
@@ -20760,9 +20886,212 @@ fn parse_cte_materialization() {
 }
 
 #[test]
+fn unary_prefix_operator_renders_apart_from_cast_operand() {
+    for (op, expected) in [
+        (UnaryOperator::Minus, "- -x::INT"),
+        (UnaryOperator::BangNot, "! !x::INT"),
+    ] {
+        let cast = Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(UnaryOp {
+                op,
+                expr: Box::new(Identifier(Ident::new("x"))),
+            }),
+            data_type: DataType::Int(None),
+            format: None,
+        };
+        let expr = UnaryOp {
+            op,
+            expr: Box::new(cast),
+        };
+        assert_eq!(expr.to_string(), expected);
+    }
+}
+
+#[test]
 fn parse_string_literal_alias() {
-    let dialects = all_dialects_where(|d| d.supports_string_literal_alias());
-    dialects.one_statement_parses_to("SELECT 1 'x'", "SELECT 1 AS 'x'");
-    dialects.verified_stmt("SELECT 1 AS 'x'");
-    dialects.verified_stmt("SELECT a FROM t AS 'y'");
+    for (sql, canonical, table, explicit, error) in [
+        (
+            "SELECT 1 AS 'x'",
+            "SELECT 1 AS 'x'",
+            false,
+            true,
+            "Expected: an identifier after AS, found: 'x'",
+        ),
+        (
+            "SELECT 1 'x'",
+            "SELECT 1 AS 'x'",
+            false,
+            false,
+            "Expected: end of statement, found: 'x'",
+        ),
+        (
+            "SELECT a FROM t AS 'y'",
+            "SELECT a FROM t AS 'y'",
+            true,
+            true,
+            "Expected: an identifier after AS, found: 'y'",
+        ),
+        (
+            "SELECT a FROM t 'y'",
+            "SELECT a FROM t 'y'",
+            true,
+            false,
+            "Expected: end of statement, found: 'y'",
+        ),
+    ] {
+        let supported = |d: &dyn Dialect| {
+            if table {
+                d.supports_string_literal_table_alias(explicit)
+            } else {
+                d.supports_string_literal_column_alias(explicit)
+            }
+        };
+        all_dialects_where(supported).one_statement_parses_to(sql, canonical);
+        assert_eq!(
+            all_dialects_where(|d| !supported(d)).parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_string_literal_alias_per_engine() {
+    let forms = [
+        "SELECT 1 AS 'x'",
+        "SELECT 1 'x'",
+        "SELECT a FROM t AS 'y'",
+        "SELECT a FROM t 'y'",
+    ];
+    let dialects: [(Box<dyn Dialect>, [bool; 4]); 8] = [
+        (Box::new(PostgreSqlDialect {}), [false, false, false, false]),
+        (Box::new(SQLiteDialect {}), [true, true, true, true]),
+        (Box::new(DuckDbDialect {}), [true, false, true, false]),
+        (Box::new(MySqlDialect {}), [true, true, false, false]),
+        (
+            Box::new(sqlparser::dialect::SparkSqlDialect {}),
+            [false, false, false, false],
+        ),
+        (Box::new(DatabricksDialect {}), [false, false, false, false]),
+        (Box::new(HiveDialect {}), [false, false, false, false]),
+        (Box::new(ClickHouseDialect {}), [false, false, false, false]),
+    ];
+    for (dialect, accepted) in dialects {
+        for (sql, accepted) in forms.iter().zip(accepted) {
+            assert_eq!(
+                Parser::parse_sql(dialect.as_ref(), sql).is_ok(),
+                accepted,
+                "{dialect:?}: {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn display_nested_unary_minus_in_linear_time() {
+    use core::time::Duration;
+    use std::sync::mpsc;
+    use std::thread;
+
+    let depth = 200;
+    let sql = format!("SELECT {}-x", "- ".repeat(depth - 1));
+    let statement = Parser::new(&GenericDialect {})
+        .with_recursion_limit(depth * 10)
+        .try_with_sql(&sql)
+        .and_then(|mut p| p.parse_statement())
+        .unwrap();
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(statement.to_string());
+    });
+
+    let printed = rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("display should not take exponential time");
+    assert_eq!(printed, sql);
+}
+
+#[test]
+fn parse_window_spec_keyword_base_window_name() {
+    let dialects = all_dialects();
+    for name in ["w", "id", "part"] {
+        let sql = format!("SELECT count(*) OVER ({name} ORDER BY a) FROM t");
+        let select = dialects.verified_only_select(&sql);
+        match expr_from_projection(&select.projection[0]) {
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(spec)),
+                ..
+            }) => assert_eq!(spec.window_name, Some(Ident::new(name)), "{sql}"),
+            other => panic!("{sql}: unexpected {other:?}"),
+        }
+    }
+    dialects.verified_stmt("SELECT count(*) OVER (ORDER BY a) FROM t");
+    dialects.verified_stmt("SELECT count(*) OVER (PARTITION BY a) FROM t");
+    dialects.verified_stmt(
+        "SELECT count(*) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
+    );
+}
+
+#[test]
+fn parse_qualified_column_named_like_a_literal_prefix() {
+    let dialects = all_dialects_where(|d| d.supports_literal_prefix_in_qualified_name());
+    for (prefix, value) in [
+        ("x", "ff"),
+        ("X", "ff"),
+        ("b", "01"),
+        ("B", "01"),
+        ("n", "nat"),
+        ("N", "nat"),
+        ("r", "raw"),
+        ("R", "raw"),
+        ("e", "es"),
+        ("E", "es"),
+    ] {
+        dialects.one_statement_parses_to(
+            &format!("SELECT t.{prefix}'{value}' FROM t"),
+            &format!("SELECT t.{prefix} AS '{value}' FROM t"),
+        );
+    }
+    dialects.one_statement_parses_to("SELECT t.u&'uni' FROM t", "SELECT t.u & 'uni' FROM t");
+}
+
+#[test]
+fn tokenize_qualified_literal_prefix_without_capability() {
+    all_dialects_where(|d| !d.supports_literal_prefix_in_qualified_name()).tokenizes_to(
+        "t.x'ff'",
+        vec![
+            Token::make_word("t", None),
+            Token::Period,
+            Token::HexStringLiteral("ff".to_string()),
+        ],
+    );
+}
+
+#[test]
+fn parse_qualified_literal_prefix_requires_adjacent_period() {
+    let dialects = all_dialects_where(|d| d.supports_literal_prefix_in_qualified_name());
+    for sql in [
+        "SELECT t. x'ff' FROM t",
+        "SELECT t./* comment */x'ff' FROM t",
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: an identifier or a '*' after '.', found: X'ff'".to_string()
+            )),
+            "{sql}"
+        );
+    }
+    for (sql, token) in [
+        ("x'ff'", Token::HexStringLiteral("ff".to_string())),
+        (
+            "b'01'",
+            Token::SingleQuotedByteStringLiteral("01".to_string()),
+        ),
+        ("n'nat'", Token::NationalStringLiteral("nat".to_string())),
+    ] {
+        dialects.tokenizes_to(sql, vec![token]);
+    }
 }

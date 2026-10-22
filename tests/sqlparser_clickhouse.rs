@@ -2120,12 +2120,12 @@ fn parse_global_in() {
     let select = clickhouse().verified_only_select("SELECT * FROM t WHERE x GLOBAL IN (1, 2)");
     assert_eq!(
         select.selection.unwrap(),
-        Expr::InList {
+        Expr::In {
             expr: Box::new(Identifier(Ident::new("x"))),
-            list: vec![
+            target: InTarget::List(vec![
                 Expr::Value(number("1").with_empty_span()),
                 Expr::Value(number("2").with_empty_span()),
-            ],
+            ]),
             negated: false,
             global: true,
         }
@@ -2135,9 +2135,9 @@ fn parse_global_in() {
         .verified_only_select("SELECT * FROM t WHERE x GLOBAL NOT IN (SELECT y FROM t2)");
     assert_eq!(
         select.selection.unwrap(),
-        Expr::InSubquery {
+        Expr::In {
             expr: Box::new(Identifier(Ident::new("x"))),
-            subquery: Box::new(clickhouse().verified_query("SELECT y FROM t2")),
+            target: InTarget::Subquery(Box::new(clickhouse().verified_query("SELECT y FROM t2"))),
             negated: true,
             global: true,
         }
@@ -2222,7 +2222,7 @@ fn global_in_bare_table_binds_before_and() {
             left,
             op: BinaryOperator::And,
             ..
-        } if matches!(*left, Expr::InList { global: true, .. })
+        } if matches!(*left, Expr::In { target: InTarget::List(_), global: true, .. })
     ));
 }
 
@@ -2235,7 +2235,7 @@ fn global_in_bare_table_binds_before_equality() {
             left,
             op: BinaryOperator::Eq,
             ..
-        } if matches!(*left, Expr::InList { global: true, .. })
+        } if matches!(*left, Expr::In { target: InTarget::List(_), global: true, .. })
     ));
 }
 
@@ -2364,6 +2364,30 @@ fn parse_update_on_cluster_and_settings() {
             .unwrap_err(),
         ParserError("Expected: end of statement, found: SETTINGS".to_string())
     );
+}
+
+#[test]
+fn parse_dollar_in_identifier() {
+    let select = clickhouse_and_generic().verified_only_select("SELECT a$b, c$$, d$e$ FROM t");
+    assert_eq!(
+        select.projection,
+        vec![
+            UnnamedExpr(Identifier(Ident::new("a$b"))),
+            UnnamedExpr(Identifier(Ident::new("c$$"))),
+            UnnamedExpr(Identifier(Ident::new("d$e$"))),
+        ]
+    );
+    // Dollar-quoted strings still take precedence at the start of a token.
+    clickhouse_and_generic().verified_stmt("SELECT $$abc$$, $tag$abc$tag$");
+    // Tokenizes like ClickHouse does; only the parser rejects it.
+    let err = clickhouse()
+        .parse_sql_statements("INSERT I$$$$$$$$$$$$$$$$$$$$$$$$$$")
+        .unwrap_err();
+    assert!(matches!(err, ParserError(_)), "{err}");
+
+    all_dialects_where(|d| !d.is_identifier_part('$'))
+        .parse_sql_statements("SELECT a$b FROM t")
+        .unwrap_err();
 }
 
 fn clickhouse() -> TestedDialects {

@@ -41,9 +41,7 @@ The three oracle targets compile their engine from source, so each builds only w
 
 `fuzz_stage_cost` times tokenizing, parsing and printing the input with every dialect and fails when parsing takes more than 50 times as long as tokenizing, or printing more than 50 times as long as parsing, once the slower stage passes 10 ms. It reports superlinear paths whose cost stays far below the fuzzer's timeout.
 
-ClusterFuzzLite runs continuous fuzzing. Every pull request fuzzes for 10 minutes in
-`code-change` mode, a daily batch job grows the shared corpus stored on the
-`clusterfuzzlite` branch, and a daily prune compacts it.
+ClusterFuzzLite runs daily batch fuzzing to grow the shared corpus stored on the `clusterfuzzlite` branch, and a daily prune compacts it.
 
 `fuzz_seeds/` is a committed corpus of valid SQL that random mutation would never produce.
 The run command above uses it and `build.sh` packages it for ClusterFuzzLite.

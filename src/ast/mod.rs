@@ -111,8 +111,8 @@ pub use self::query::{
     TableIndexHintType, TableIndexHints, TableIndexType, TableSample, TableSampleBucket,
     TableSampleKind, TableSampleMethod, TableSampleModifier, TableSampleQuantity, TableSampleSeed,
     TableSampleSeedModifier, TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity,
-    UpdateTableFromKind, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
-    XmlNamespaceDefinition, XmlPassingArgument, XmlPassingClause, XmlTableColumn,
+    UpdateTableFromKind, ValueTableMode, Values, WildcardAdditionalOptions, With, WithExpression,
+    WithFill, XmlNamespaceDefinition, XmlPassingArgument, XmlPassingClause, XmlTableColumn,
     XmlTableColumnOption,
 };
 

@@ -5874,6 +5874,17 @@ fn parse_drop_procedure() {
 }
 
 #[test]
+fn parse_create_rule() {
+    // Example from the PostgreSQL documentation. NOTIFY parsing is limited to
+    // dialects with `supports_listen_notify`.
+    pg().verified_stmt("CREATE RULE notify_me AS ON UPDATE TO mytable DO ALSO NOTIFY mytable");
+    // OLD and NEW parse as plain identifiers inside rule conditions and actions.
+    pg_and_generic().verified_stmt(
+        "CREATE RULE r AS ON UPDATE TO t WHERE old.balance <> new.balance DO INSTEAD UPDATE shadow SET balance = new.balance WHERE id = old.id",
+    );
+}
+
+#[test]
 fn parse_dollar_quoted_string() {
     let sql = "SELECT $$hello$$, $tag_name$world$tag_name$, $$Foo$Bar$$, $$Foo$Bar$$col_name, $$$$, $tag_name$$tag_name$";
 
@@ -10845,17 +10856,6 @@ fn parse_geometric_typed_literal_error_propagates() {
         pg().parse_sql_statements("SELECT circle( FROM t")
             .unwrap_err(),
         ParserError::ParserError("Expected: a value, found: (".to_string())
-    );
-}
-
-#[test]
-fn parse_create_rule() {
-    // Example from the PostgreSQL documentation. NOTIFY parsing is limited to
-    // dialects with `supports_listen_notify`.
-    pg().verified_stmt("CREATE RULE notify_me AS ON UPDATE TO mytable DO ALSO NOTIFY mytable");
-    // OLD and NEW parse as plain identifiers inside rule conditions and actions.
-    pg_and_generic().verified_stmt(
-        "CREATE RULE r AS ON UPDATE TO t WHERE old.balance <> new.balance DO INSTEAD UPDATE shadow SET balance = new.balance WHERE id = old.id",
     );
 }
 

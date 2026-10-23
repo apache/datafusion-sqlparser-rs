@@ -15669,6 +15669,21 @@ fn parse_alter_trigger_spans() {
 }
 
 #[test]
+fn parse_alter_rejects_missing_or_unknown_object_type() {
+    let objects = "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
+    for (sql, found) in [
+        ("ALTER", "EOF"),
+        ("ALTER 1", "1"),
+        ("ALTER unknown", "unknown"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("Expected: {objects}, found: {found}")),
+        );
+    }
+}
+
+#[test]
 fn test_create_connector() {
     let sql = "CREATE CONNECTOR my_connector \
                TYPE 'jdbc' \
@@ -21674,20 +21689,5 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
         ("n'nat'", Token::NationalStringLiteral("nat".to_string())),
     ] {
         dialects.tokenizes_to(sql, vec![token]);
-    }
-}
-
-#[test]
-fn parse_alter_rejects_missing_or_unknown_object_type() {
-    let objects = "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
-    for (sql, found) in [
-        ("ALTER", "EOF"),
-        ("ALTER 1", "1"),
-        ("ALTER unknown", "unknown"),
-    ] {
-        assert_eq!(
-            all_dialects().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(format!("Expected: {objects}, found: {found}")),
-        );
     }
 }

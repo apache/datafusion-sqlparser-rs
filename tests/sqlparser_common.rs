@@ -197,6 +197,44 @@ fn parse_insert_values() {
 }
 
 #[test]
+fn parse_singular_value_keyword() {
+    let sql = "INSERT INTO t (a) VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_singular_value_keyword()).parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
+
+    // Dialects with `INSERT` table aliases consume `VALUE` as an alias without a column list.
+    let sql = "INSERT INTO t VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    let without_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && !d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        without_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
+    let with_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        with_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: identifier, found: 1".to_string()
+        ))
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_singular_value_keyword());
+    dialects.verified_stmt("SELECT 1 UNION VALUE (2)");
+    dialects.verified_stmt("WITH c AS (VALUE (1)) SELECT * FROM c");
+}
+
+#[test]
 fn parse_insert_set() {
     let dialects = all_dialects_where(|d| d.supports_insert_set());
     dialects.verified_stmt("INSERT INTO tbl1 SET col1 = 1, col2 = 'abc', col3 = current_date()");
@@ -21099,42 +21137,4 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
-}
-
-#[test]
-fn parse_singular_value_keyword() {
-    let sql = "INSERT INTO t (a) VALUE (1)";
-    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
-    assert_eq!(
-        all_dialects_where(|d| !d.supports_singular_value_keyword()).parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
-        ))
-    );
-
-    // Dialects with `INSERT` table aliases consume `VALUE` as an alias without a column list.
-    let sql = "INSERT INTO t VALUE (1)";
-    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
-    let without_table_alias = all_dialects_where(|d| {
-        !d.supports_singular_value_keyword() && !d.supports_insert_table_alias()
-    });
-    assert_eq!(
-        without_table_alias.parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
-        ))
-    );
-    let with_table_alias = all_dialects_where(|d| {
-        !d.supports_singular_value_keyword() && d.supports_insert_table_alias()
-    });
-    assert_eq!(
-        with_table_alias.parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: identifier, found: 1".to_string()
-        ))
-    );
-
-    let dialects = all_dialects_where(|d| d.supports_singular_value_keyword());
-    dialects.verified_stmt("SELECT 1 UNION VALUE (2)");
-    dialects.verified_stmt("WITH c AS (VALUE (1)) SELECT * FROM c");
 }

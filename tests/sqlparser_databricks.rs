@@ -56,6 +56,12 @@ fn test_databricks_identifiers() {
 }
 
 #[test]
+fn parse_non_reserved_keyword_table_names() {
+    databricks().verified_stmt("SELECT * FROM limit");
+    databricks().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}
+
+#[test]
 fn test_databricks_exists() {
     // exists is a function in databricks
     assert_eq!(
@@ -783,10 +789,4 @@ fn parse_databricks_collated_data_types() {
             "Expected: >, found: COLLATE".to_string()
         ))
     );
-}
-
-#[test]
-fn parse_non_reserved_keyword_table_names() {
-    databricks().verified_stmt("SELECT * FROM limit");
-    databricks().verified_stmt("SELECT * FROM t JOIN limit ON true");
 }

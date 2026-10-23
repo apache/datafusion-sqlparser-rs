@@ -1027,6 +1027,38 @@ fn test_non_bmp_identifiers() {
 }
 
 #[test]
+fn parse_create_table_string_column_names() {
+    sqlite().verified_stmt("CREATE TABLE t ('a')");
+    sqlite().verified_stmt(r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL)"#);
+    sqlite().verified_stmt(
+        r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL, 'name' TEXT NOT NULL, 'zip' INT UNSIGNED NULL)"#,
+    );
+    // Generic dialect does not support this
+    assert_eq!(
+        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')"),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'a' at Line: 1, Column: 17"
+                .to_string()
+        ))
+    );
+}
+
+#[test]
+fn test_cast_empty_type() {
+    // SQLite allows CAST(expr AS) with an empty type name (typetoken can be empty)
+    // See https://www.sqlite.org/lang_expr.html
+    sqlite().verified_stmt("SELECT CAST(a AS)");
+
+    // Rejected by dialects without the flag
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("SELECT CAST(a AS)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a data type name, found: )".to_string())
+    );
+}
+
+#[test]
 fn test_signed_type_modifiers() {
     // signed and decimal modifiers round-trip verbatim for any type name
     sqlite().verified_stmt("CREATE TABLE t (a CHAR(+10))");
@@ -1125,38 +1157,6 @@ fn test_signed_type_modifiers() {
         Err(ParserError::ParserError(
             "Expected: literal int, found: +".to_string()
         ))
-    );
-}
-
-#[test]
-fn parse_create_table_string_column_names() {
-    sqlite().verified_stmt("CREATE TABLE t ('a')");
-    sqlite().verified_stmt(r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL)"#);
-    sqlite().verified_stmt(
-        r#"CREATE TABLE '""' ('id' INT UNSIGNED NOT NULL, 'name' TEXT NOT NULL, 'zip' INT UNSIGNED NULL)"#,
-    );
-    // Generic dialect does not support this
-    assert_eq!(
-        sqlparser::parser::Parser::parse_sql(&GenericDialect {}, "CREATE TABLE t ('a')"),
-        Err(ParserError::ParserError(
-            "Expected: column name or constraint definition, found: 'a' at Line: 1, Column: 17"
-                .to_string()
-        ))
-    );
-}
-
-#[test]
-fn test_cast_empty_type() {
-    // SQLite allows CAST(expr AS) with an empty type name (typetoken can be empty)
-    // See https://www.sqlite.org/lang_expr.html
-    sqlite().verified_stmt("SELECT CAST(a AS)");
-
-    // Rejected by dialects without the flag
-    assert_eq!(
-        TestedDialects::new(vec![Box::new(GenericDialect {})])
-            .parse_sql_statements("SELECT CAST(a AS)")
-            .unwrap_err(),
-        ParserError::ParserError("Expected: a data type name, found: )".to_string())
     );
 }
 

@@ -1059,6 +1059,49 @@ fn test_cast_empty_type() {
 }
 
 #[test]
+fn parse_keyword_column_aliases() {
+    for kw in [
+        "analyze",
+        "cluster",
+        "distribute",
+        "end",
+        "exclude",
+        "explain",
+        "fetch",
+        "lateral",
+        "minus",
+        "offset",
+        "sort",
+        "top",
+        "view",
+        "with",
+    ] {
+        sqlite().one_statement_parses_to(
+            &format!("SELECT a {kw} FROM t"),
+            &format!("SELECT a AS {kw} FROM t"),
+        );
+        sqlite().one_statement_parses_to(&format!("SELECT 1 {kw}"), &format!("SELECT 1 AS {kw}"));
+    }
+    for (sql, error) in [
+        ("SELECT 1 WHERE", "Expected: an expression, found: EOF"),
+        ("SELECT 1 GROUP", "Expected: end of statement, found: GROUP"),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}"
+        );
+    }
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("SELECT a view FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: view".to_string()
+        ))
+    );
+}
+
+#[test]
 fn parse_n_prefix_not_national_string() {
     // In SQLite, `n'...'` is the identifier `n` followed by a string literal.
     // The string becomes an implicit alias, so `t.n''` round-trips as `t.n AS ''`.
@@ -1157,6 +1200,27 @@ fn parse_unterminated_block_comment() {
             .parse_sql_statements("SELECT 1 /* x"),
         Err(ParserError::TokenizerError(
             "Unexpected EOF while in a multi-line comment at Line: 1, Column: 14".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_over_as_column_alias_after_function() {
+    // In SQLite, OVER is a fallback identifier so `f() OVER` aliases the result as `over`.
+    sqlite().one_statement_parses_to("SELECT f() OVER", "SELECT f() AS OVER");
+    // A keyword window name is not mistaken for an alias candidate.
+    sqlite().verified_stmt("SELECT f() OVER partition");
+    // Window function syntax still works when OVER is followed by `(`.
+    sqlite().verified_stmt("SELECT f() OVER ()");
+    // A quoted string names the window, so OVER cannot be an alias for it
+    sqlite().verified_stmt("SELECT f() OVER 'partition'");
+    sqlite().verified_stmt(r#"SELECT f() OVER "partition""#);
+    // Other dialects keep the greedy OVER parse and reject the bare form.
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    assert_eq!(
+        generic.parse_sql_statements("SELECT f() OVER"),
+        Err(ParserError::ParserError(
+            "Expected: identifier, found: EOF".to_string()
         ))
     );
 }

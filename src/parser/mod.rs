@@ -2676,7 +2676,22 @@ impl<'a> Parser<'a> {
                 let window_spec = self.parse_window_spec()?;
                 Some(WindowType::WindowSpec(window_spec))
             } else {
-                Some(WindowType::NamedWindow(self.parse_identifier()?))
+                let over_is_alias = self.dialect.supports_over_keyword_as_column_alias()
+                    && match &self.peek_token_ref().token {
+                        Token::Word(w) => {
+                            let kw = w.keyword;
+                            let dialect = self.dialect;
+                            !dialect.is_column_alias(&kw, self)
+                        }
+                        Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => false,
+                        _ => true,
+                    };
+                if over_is_alias {
+                    self.prev_token();
+                    None
+                } else {
+                    Some(WindowType::NamedWindow(self.parse_identifier()?))
+                }
             }
         } else {
             None

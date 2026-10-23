@@ -8387,12 +8387,25 @@ fn parse_multiple_statements() {
     // ensure that SELECT/WITH is not parsed as a table or column alias if ';'
     // separating the statements is omitted:
     test_with("SELECT foo FROM baz", "SELECT", " bar");
-    test_with("SELECT foo", "WITH", " cte AS (SELECT 1 AS s) SELECT bar");
-    test_with(
-        "SELECT foo FROM baz",
-        "WITH",
-        " cte AS (SELECT 1 AS s) SELECT bar",
-    );
+    // WITH is a valid alias in SQLite so missing-semicolon detection skips it
+    for sql1 in ["SELECT foo", "SELECT foo FROM baz"] {
+        let cte_rest = " cte AS (SELECT 1 AS s) SELECT bar";
+        let res = parse_sql_statements(&(sql1.to_owned() + ";WITH" + cte_rest));
+        assert_eq!(
+            vec![
+                one_statement_parses_to(sql1, ""),
+                one_statement_parses_to(&("WITH".to_owned() + cte_rest), ""),
+            ],
+            res.unwrap()
+        );
+        one_statement_parses_to(&(sql1.to_owned() + ";"), sql1);
+        let res = all_dialects_except(|d| d.is::<SQLiteDialect>())
+            .parse_sql_statements(&(sql1.to_owned() + " WITH" + cte_rest));
+        assert_eq!(
+            ParserError::ParserError("Expected: end of statement, found: WITH".to_string()),
+            res.unwrap_err()
+        );
+    }
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
     // Since MySQL supports the `CREATE TABLE SELECT` syntax, this needs to be handled separately
@@ -9238,7 +9251,8 @@ fn parse_fetch() {
     });
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
+    let ast = all_dialects_except(|d| d.is::<SQLiteDialect>())
+        .verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
     assert_eq!(

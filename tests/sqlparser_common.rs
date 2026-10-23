@@ -6961,6 +6961,38 @@ fn parse_text_type_modifier_double_colon_cast() {
 }
 
 #[test]
+fn parse_custom_type_modifier_spellings() {
+    for sql in [
+        r#"CREATE TABLE t (c foo('a b'))"#,
+        r#"CREATE TABLE t (c foo(')'))"#,
+        r#"CREATE TABLE t (c foo('it''s'))"#,
+        "CREATE TABLE t (c foo(bar, 9))",
+    ] {
+        all_dialects().verified_stmt(sql);
+    }
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    generic.verified_stmt(r#"CREATE TABLE t (c foo("quoted"))"#);
+    generic.verified_stmt("CREATE TABLE t (c foo(9L))");
+
+    let statements = generic
+        .parse_sql_statements("CREATE TABLE t (c foo(bar, 9, 'z', 42L))")
+        .unwrap();
+    let Statement::CreateTable(create_table) = &statements[0] else {
+        panic!("expected CREATE TABLE")
+    };
+    let DataType::Custom(_, modifiers) = &create_table.columns[0].data_type else {
+        panic!("expected a custom type")
+    };
+    let expected = vec![
+        TypeModifier::Identifier(Ident::new("bar")),
+        TypeModifier::Number("9".to_string(), false),
+        TypeModifier::String("z".to_string()),
+        TypeModifier::Number("42".to_string(), true),
+    ];
+    assert_eq!(modifiers, &expected);
+}
+
+#[test]
 fn parse_interval_and_or_xor() {
     let sql = "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
@@ -21097,36 +21129,4 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
-}
-
-#[test]
-fn parse_custom_type_modifier_spellings() {
-    for sql in [
-        r#"CREATE TABLE t (c foo('a b'))"#,
-        r#"CREATE TABLE t (c foo(')'))"#,
-        r#"CREATE TABLE t (c foo('it''s'))"#,
-        "CREATE TABLE t (c foo(bar, 9))",
-    ] {
-        all_dialects().verified_stmt(sql);
-    }
-    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
-    generic.verified_stmt(r#"CREATE TABLE t (c foo("quoted"))"#);
-    generic.verified_stmt("CREATE TABLE t (c foo(9L))");
-
-    let statements = generic
-        .parse_sql_statements("CREATE TABLE t (c foo(bar, 9, 'z', 42L))")
-        .unwrap();
-    let Statement::CreateTable(create_table) = &statements[0] else {
-        panic!("expected CREATE TABLE")
-    };
-    let DataType::Custom(_, modifiers) = &create_table.columns[0].data_type else {
-        panic!("expected a custom type")
-    };
-    let expected = vec![
-        TypeModifier::Identifier(Ident::new("bar")),
-        TypeModifier::Number("9".to_string(), false),
-        TypeModifier::String("z".to_string()),
-        TypeModifier::Number("42".to_string(), true),
-    ];
-    assert_eq!(modifiers, &expected);
 }

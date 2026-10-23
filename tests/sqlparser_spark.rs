@@ -201,6 +201,25 @@ fn test_div_precedence() {
     );
 }
 
+// Spark is not part of all_dialects, so the between low bound comparison is pinned here.
+
+#[test]
+fn parse_comparison_in_between_low_bound() {
+    match spark().verified_expr("a BETWEEN b > 1 AND c") {
+        Expr::Between { low, .. } => assert!(
+            matches!(
+                &*low,
+                Expr::BinaryOp {
+                    op: BinaryOperator::Gt,
+                    ..
+                }
+            ),
+            "{low:?}"
+        ),
+        other => panic!("expected BETWEEN, got {other:?}"),
+    }
+}
+
 // --------------------------------
 // Struct support
 // --------------------------------
@@ -361,23 +380,4 @@ fn test_substring() {
 #[test]
 fn test_pipe_operator() {
     spark().verified_stmt("SELECT * FROM t |> WHERE x > 1 |> SELECT x AS y |> ORDER BY y");
-}
-
-// Spark is not part of all_dialects, so the between low bound comparison is pinned here.
-
-#[test]
-fn parse_comparison_in_between_low_bound() {
-    match spark().verified_expr("a BETWEEN b > 1 AND c") {
-        Expr::Between { low, .. } => assert!(
-            matches!(
-                &*low,
-                Expr::BinaryOp {
-                    op: BinaryOperator::Gt,
-                    ..
-                }
-            ),
-            "{low:?}"
-        ),
-        other => panic!("expected BETWEEN, got {other:?}"),
-    }
 }

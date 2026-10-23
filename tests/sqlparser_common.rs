@@ -3006,6 +3006,66 @@ fn parse_between_with_expr() {
 }
 
 #[test]
+fn parse_comparison_in_between_low_bound() {
+    let dialects = all_dialects_where(|d| d.supports_comparison_in_between_low_bound());
+    for (sql, expected) in [
+        ("a BETWEEN b > 1 AND c", BinaryOperator::Gt),
+        ("a BETWEEN b <> 1 AND c", BinaryOperator::NotEq),
+        ("a BETWEEN b + 1 >= 2 AND c", BinaryOperator::GtEq),
+    ] {
+        match dialects.verified_expr(sql) {
+            Expr::Between { low, .. } => assert!(
+                matches!(&*low, Expr::BinaryOp { op, .. } if *op == expected),
+                "{sql}: {low:?}"
+            ),
+            other => panic!("{sql}: expected BETWEEN, got {other:?}"),
+        }
+    }
+    for (sql, error) in [
+        (
+            "SELECT a BETWEEN b = 1 = true AND c",
+            "Expected: AND, found: =",
+        ),
+        (
+            "SELECT a BETWEEN b LIKE 'x' AND c",
+            "Expected: AND, found: LIKE",
+        ),
+        (
+            "SELECT a BETWEEN b IS NULL AND c",
+            "Expected: AND, found: IS",
+        ),
+        (
+            "SELECT a BETWEEN b BETWEEN 1 AND 2 AND c",
+            "Expected: AND, found: BETWEEN",
+        ),
+        (
+            "SELECT a BETWEEN (1 AND 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
+        (
+            "SELECT a BETWEEN b = (1, 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_except(|d| {
+            d.supports_comparison_in_between_low_bound() || d.is::<SQLiteDialect>()
+        })
+        .parse_sql_statements("SELECT a BETWEEN b > 1 AND c"),
+        Err(ParserError::ParserError(
+            "Expected: AND, found: >".to_string()
+        ))
+    );
+}
+
+#[test]
 fn parse_tuples() {
     let sql = "SELECT (1, 2), (1), ('foo', 3, baz)";
     let select = verified_only_select(sql);
@@ -22038,64 +22098,4 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
-}
-
-#[test]
-fn parse_comparison_in_between_low_bound() {
-    let dialects = all_dialects_where(|d| d.supports_comparison_in_between_low_bound());
-    for (sql, expected) in [
-        ("a BETWEEN b > 1 AND c", BinaryOperator::Gt),
-        ("a BETWEEN b <> 1 AND c", BinaryOperator::NotEq),
-        ("a BETWEEN b + 1 >= 2 AND c", BinaryOperator::GtEq),
-    ] {
-        match dialects.verified_expr(sql) {
-            Expr::Between { low, .. } => assert!(
-                matches!(&*low, Expr::BinaryOp { op, .. } if *op == expected),
-                "{sql}: {low:?}"
-            ),
-            other => panic!("{sql}: expected BETWEEN, got {other:?}"),
-        }
-    }
-    for (sql, error) in [
-        (
-            "SELECT a BETWEEN b = 1 = true AND c",
-            "Expected: AND, found: =",
-        ),
-        (
-            "SELECT a BETWEEN b LIKE 'x' AND c",
-            "Expected: AND, found: LIKE",
-        ),
-        (
-            "SELECT a BETWEEN b IS NULL AND c",
-            "Expected: AND, found: IS",
-        ),
-        (
-            "SELECT a BETWEEN b BETWEEN 1 AND 2 AND c",
-            "Expected: AND, found: BETWEEN",
-        ),
-        (
-            "SELECT a BETWEEN (1 AND 2 FROM t",
-            "Expected: ), found: FROM",
-        ),
-        (
-            "SELECT a BETWEEN b = (1, 2 FROM t",
-            "Expected: ), found: FROM",
-        ),
-    ] {
-        assert_eq!(
-            dialects.parse_sql_statements(sql),
-            Err(ParserError::ParserError(error.to_string())),
-            "{sql}"
-        );
-    }
-
-    assert_eq!(
-        all_dialects_except(|d| {
-            d.supports_comparison_in_between_low_bound() || d.is::<SQLiteDialect>()
-        })
-        .parse_sql_statements("SELECT a BETWEEN b > 1 AND c"),
-        Err(ParserError::ParserError(
-            "Expected: AND, found: >".to_string()
-        ))
-    );
 }

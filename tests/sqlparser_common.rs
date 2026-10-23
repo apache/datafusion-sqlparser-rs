@@ -10160,6 +10160,128 @@ fn parse_abort() {
 }
 
 #[test]
+fn parse_transaction_deferrable_mode() {
+    let dialects = all_dialects_except(|d|
+        // BigQuery and Snowflake do not support this syntax
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
+
+    let Statement::StartTransaction { modes, .. } =
+        dialects.verified_stmt("START TRANSACTION DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(modes, vec![TransactionMode::Deferrable(true)]);
+
+    dialects.verified_stmt("BEGIN TRANSACTION NOT DEFERRABLE");
+
+    // PostgreSQL's `BEGIN` needs no transaction keyword. MsSql is excluded because
+    // it reads a bare `BEGIN` followed by anything else as a `BEGIN ... END` block.
+    all_dialects_except(|d| {
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>() || d.is::<MsSqlDialect>()
+    })
+    .verified_stmt("BEGIN DEFERRABLE");
+
+    let Statement::StartTransaction { modes, .. } = dialects
+        .verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        modes,
+        vec![
+            TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+            TransactionMode::Deferrable(true),
+        ]
+    );
+
+    // As with the other modes, PostgreSQL allows the commas to be omitted.
+    let Statement::StartTransaction { modes, .. } = dialects.one_statement_parses_to(
+        "START TRANSACTION NOT DEFERRABLE READ WRITE",
+        "START TRANSACTION NOT DEFERRABLE, READ WRITE",
+    ) else {
+        unreachable!()
+    };
+    assert_eq!(
+        modes,
+        vec![
+            TransactionMode::Deferrable(false),
+            TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+        ]
+    );
+
+    let Statement::Set(Set::SetTransaction { modes, .. }) =
+        verified_stmt("SET TRANSACTION DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(modes, vec![TransactionMode::Deferrable(true)]);
+
+    let Statement::Set(Set::SetTransaction { modes, session, .. }) =
+        verified_stmt("SET SESSION CHARACTERISTICS AS TRANSACTION NOT DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(modes, vec![TransactionMode::Deferrable(false)]);
+    assert!(session);
+
+    assert_eq!(
+        ParserError::ParserError("Expected: DEFERRABLE, found: SERIALIZABLE".to_string()),
+        dialects
+            .parse_sql_statements("START TRANSACTION NOT SERIALIZABLE")
+            .unwrap_err()
+    );
+
+    assert_eq!(
+        ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
+        dialects
+            .parse_sql_statements("START TRANSACTION DEFERRABLE,")
+            .unwrap_err()
+    );
+}
+
+#[test]
+fn parse_transaction_deferrable_mode_malformed_not() {
+    let dialects = all_dialects_except(|d|
+        // BigQuery and Snowflake do not support this syntax
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
+
+    assert_eq!(
+        ParserError::ParserError("Expected: DEFERRABLE, found: ,".to_string()),
+        dialects
+            .parse_sql_statements("START TRANSACTION NOT,")
+            .unwrap_err()
+    );
+
+    let Statement::StartTransaction { modes, .. } =
+        dialects.verified_stmt("START TRANSACTION NOT DEFERRABLE, READ ONLY")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        modes,
+        vec![
+            TransactionMode::Deferrable(false),
+            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+        ]
+    );
+}
+
+#[test]
+#[cfg(all(feature = "serde", feature = "json_example"))]
+fn serde_roundtrip_transaction_deferrable_mode() {
+    for sql in [
+        "START TRANSACTION DEFERRABLE",
+        "START TRANSACTION NOT DEFERRABLE",
+    ] {
+        let stmt = verified_stmt(sql);
+        let json = serde_json::to_string(&stmt).unwrap();
+        let roundtripped: Statement = serde_json::from_str(&json).unwrap();
+        assert_eq!(stmt, roundtripped);
+    }
+}
+
+#[test]
 #[should_panic(expected = "Parse results with GenericDialect are different from PostgreSqlDialect")]
 fn ensure_multiple_dialects_are_tested() {
     // The SQL here must be parsed differently by different dialects.
@@ -20939,128 +21061,6 @@ fn parse_stage_table_factor() {
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
-}
-
-#[test]
-fn parse_transaction_deferrable_mode() {
-    let dialects = all_dialects_except(|d|
-        // BigQuery and Snowflake do not support this syntax
-        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
-
-    let Statement::StartTransaction { modes, .. } =
-        dialects.verified_stmt("START TRANSACTION DEFERRABLE")
-    else {
-        unreachable!()
-    };
-    assert_eq!(modes, vec![TransactionMode::Deferrable(true)]);
-
-    dialects.verified_stmt("BEGIN TRANSACTION NOT DEFERRABLE");
-
-    // PostgreSQL's `BEGIN` needs no transaction keyword. MsSql is excluded because
-    // it reads a bare `BEGIN` followed by anything else as a `BEGIN ... END` block.
-    all_dialects_except(|d| {
-        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>() || d.is::<MsSqlDialect>()
-    })
-    .verified_stmt("BEGIN DEFERRABLE");
-
-    let Statement::StartTransaction { modes, .. } = dialects
-        .verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE")
-    else {
-        unreachable!()
-    };
-    assert_eq!(
-        modes,
-        vec![
-            TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
-            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
-            TransactionMode::Deferrable(true),
-        ]
-    );
-
-    // As with the other modes, PostgreSQL allows the commas to be omitted.
-    let Statement::StartTransaction { modes, .. } = dialects.one_statement_parses_to(
-        "START TRANSACTION NOT DEFERRABLE READ WRITE",
-        "START TRANSACTION NOT DEFERRABLE, READ WRITE",
-    ) else {
-        unreachable!()
-    };
-    assert_eq!(
-        modes,
-        vec![
-            TransactionMode::Deferrable(false),
-            TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
-        ]
-    );
-
-    let Statement::Set(Set::SetTransaction { modes, .. }) =
-        verified_stmt("SET TRANSACTION DEFERRABLE")
-    else {
-        unreachable!()
-    };
-    assert_eq!(modes, vec![TransactionMode::Deferrable(true)]);
-
-    let Statement::Set(Set::SetTransaction { modes, session, .. }) =
-        verified_stmt("SET SESSION CHARACTERISTICS AS TRANSACTION NOT DEFERRABLE")
-    else {
-        unreachable!()
-    };
-    assert_eq!(modes, vec![TransactionMode::Deferrable(false)]);
-    assert!(session);
-
-    assert_eq!(
-        ParserError::ParserError("Expected: DEFERRABLE, found: SERIALIZABLE".to_string()),
-        dialects
-            .parse_sql_statements("START TRANSACTION NOT SERIALIZABLE")
-            .unwrap_err()
-    );
-
-    assert_eq!(
-        ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
-        dialects
-            .parse_sql_statements("START TRANSACTION DEFERRABLE,")
-            .unwrap_err()
-    );
-}
-
-#[test]
-fn parse_transaction_deferrable_mode_malformed_not() {
-    let dialects = all_dialects_except(|d|
-        // BigQuery and Snowflake do not support this syntax
-        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
-
-    assert_eq!(
-        ParserError::ParserError("Expected: DEFERRABLE, found: ,".to_string()),
-        dialects
-            .parse_sql_statements("START TRANSACTION NOT,")
-            .unwrap_err()
-    );
-
-    let Statement::StartTransaction { modes, .. } =
-        dialects.verified_stmt("START TRANSACTION NOT DEFERRABLE, READ ONLY")
-    else {
-        unreachable!()
-    };
-    assert_eq!(
-        modes,
-        vec![
-            TransactionMode::Deferrable(false),
-            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
-        ]
-    );
-}
-
-#[test]
-#[cfg(all(feature = "serde", feature = "json_example"))]
-fn serde_roundtrip_transaction_deferrable_mode() {
-    for sql in [
-        "START TRANSACTION DEFERRABLE",
-        "START TRANSACTION NOT DEFERRABLE",
-    ] {
-        let stmt = verified_stmt(sql);
-        let json = serde_json::to_string(&stmt).unwrap();
-        let roundtripped: Statement = serde_json::from_str(&json).unwrap();
-        assert_eq!(stmt, roundtripped);
-    }
 }
 
 #[test]

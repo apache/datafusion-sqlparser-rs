@@ -1902,6 +1902,207 @@ fn parse_copy_to_before_v9_0() {
     )
 }
 
+fn assert_copy_stdin_payload(stmt: &Statement, data: &str, terminated: bool, label: &str) {
+    match stmt {
+        Statement::Copy {
+            to: false,
+            target: CopyTarget::Stdin,
+            payload: Some(payload),
+            ..
+        } => {
+            assert_eq!(payload.data, data, "{label}");
+            assert_eq!(payload.terminated, terminated, "{label}");
+        }
+        other => panic!("expected a COPY t FROM STDIN payload for {label}, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_verbatim() {
+    // The payload is data rather than SQL, so quotes, backslashes, tabs and
+    // control characters stay in it verbatim.
+    let data_lines = [
+        "O'Brien",
+        "\"x",
+        "'a''b'",
+        "0\x1f1",
+        "E'\\x41'",
+        "1\tfoo\\.bar",
+    ];
+    for data_line in data_lines {
+        let sql = format!("COPY t FROM STDIN;\n{data_line}\n\\.");
+        let stmt = pg_and_generic().verified_stmt(&sql);
+        assert_copy_stdin_payload(&stmt, &format!("{data_line}\n"), true, data_line);
+    }
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_crlf() {
+    let sql = "COPY t FROM STDIN;\r\nrow1\r\nrow2\r\n\\.\r\n";
+    // The line end following the `;` prints as a single line feed.
+    let canonical = "COPY t FROM STDIN;\nrow1\r\nrow2\r\n\\.";
+    let stmt = pg_and_generic().one_statement_parses_to(sql, canonical);
+    assert_copy_stdin_payload(&stmt, "row1\r\nrow2\r\n", true, "crlf payload");
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_terminator_before_next_statement() {
+    let statements = pg_and_generic()
+        .parse_sql_statements("COPY t FROM STDIN;\nrow1\n\\.\nSELECT 1;")
+        .unwrap();
+    assert_eq!(statements.len(), 2);
+    assert_copy_stdin_payload(
+        &statements[0],
+        "row1\n",
+        true,
+        "payload before the terminator",
+    );
+    assert_eq!(statements[1].to_string(), "SELECT 1");
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_then_statement_on_same_line() {
+    // The statement after the `;` on the command line parses after the COPY,
+    // while the data still belongs to the COPY.
+    let statements = pg_and_generic()
+        .parse_sql_statements("COPY t FROM STDIN; SELECT 'after';\nrow1\n\\.\n")
+        .unwrap();
+    assert_eq!(statements.len(), 2);
+    assert_copy_stdin_payload(
+        &statements[0],
+        "row1\n",
+        true,
+        "payload with a same-line SELECT",
+    );
+    assert_eq!(statements[1].to_string(), "SELECT 'after'");
+}
+
+#[test]
+fn parse_copy_from_stdin_blank_trailing_line() {
+    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\n\n");
+    assert_copy_stdin_payload(&stmt, "\n", false, "blank trailing line");
+}
+
+#[test]
+fn parse_copy_from_stdin_unterminated_payload() {
+    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\nrow1");
+    assert_copy_stdin_payload(&stmt, "row1", false, "unterminated payload");
+}
+
+#[test]
+fn parse_copy_from_stdin_empty_terminated_payload() {
+    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\n\\.");
+    assert_copy_stdin_payload(&stmt, "", true, "empty terminated payload");
+}
+
+#[test]
+fn parse_copy_from_stdin_bare_semicolon() {
+    let stmt = pg_and_generic().one_statement_parses_to("COPY t FROM STDIN;", "COPY t FROM STDIN");
+    match stmt {
+        Statement::Copy {
+            to: false,
+            target: CopyTarget::Stdin,
+            payload: None,
+            ..
+        } => {}
+        other => panic!("expected a bare COPY t FROM STDIN, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_with_columns_and_options() {
+    let sql = "COPY t (a, b) FROM STDIN (FORMAT CSV);\n1\t2\n\\.";
+    let stmt = pg_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::Copy {
+            source:
+                CopySource::Table {
+                    table_name,
+                    columns,
+                },
+            to: false,
+            target: CopyTarget::Stdin,
+            options,
+            legacy_options,
+            payload: Some(payload),
+        } => {
+            assert_eq!(table_name, ObjectName::from(vec!["t".into()]));
+            assert_eq!(columns, vec!["a".into(), "b".into()]);
+            assert_eq!(options, vec![CopyOption::Format("CSV".into())]);
+            assert!(legacy_options.is_empty());
+            assert_eq!(payload.data, "1\t2\n");
+            assert!(payload.terminated);
+        }
+        other => panic!("expected COPY t (a, b) FROM STDIN, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_dialect_gating() {
+    // Dialects without `supports_copy_from_stdin_data` never capture the
+    // payload, so `COPY ... FROM STDIN` parses without inline data.
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(SnowflakeDialect {}),
+    ]);
+    for dialect in &dialects.dialects {
+        let tokens = Tokenizer::new(dialect.as_ref(), "COPY t FROM STDIN;\nrow1\n\\.\n")
+            .tokenize()
+            .unwrap();
+        assert!(
+            tokens
+                .iter()
+                .all(|token| !matches!(token, Token::CopyData { .. })),
+            "expected no CopyData token for {dialect:?}"
+        );
+    }
+    dialects.one_statement_parses_to("COPY t FROM STDIN;", "COPY t FROM STDIN");
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_comment_on_semicolon_line() {
+    // A single-line comment ends the `;` line, so the payload starts on the
+    // next line instead of being tokenized as SQL.
+    let stmt = pg().one_statement_parses_to(
+        "COPY t FROM STDIN; -- note\nO'Brien\n\\.\n",
+        "COPY t FROM STDIN;\nO'Brien\n\\.",
+    );
+    assert_copy_stdin_payload(&stmt, "O'Brien\n", true, "comment on the semicolon line");
+}
+
+#[test]
+fn parse_copy_from_stdin_payload_cr_only_line_ends() {
+    // The line end following the `;` prints as a single line feed.
+    let sql = "COPY t FROM STDIN;\rrow1\r\\.";
+    let canonical = "COPY t FROM STDIN;\nrow1\r\\.";
+    let stmt = pg_and_generic().one_statement_parses_to(sql, canonical);
+    assert_copy_stdin_payload(&stmt, "row1\r", true, "CR-only line ends");
+}
+
+#[test]
+fn display_copy_payload_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    // `q` fails the data write and `\` fails the terminator write.
+    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\nq1\n\\.");
+    for rejected in ['q', '\\'] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error));
+    }
+}
+
 #[test]
 fn parse_set() {
     let stmt = pg_and_generic().verified_stmt("SET a = b");
@@ -10269,205 +10470,4 @@ fn parse_geometric_typed_literal_error_propagates() {
             .unwrap_err(),
         ParserError::ParserError("Expected: a value, found: (".to_string())
     );
-}
-
-fn assert_copy_stdin_payload(stmt: &Statement, data: &str, terminated: bool, label: &str) {
-    match stmt {
-        Statement::Copy {
-            to: false,
-            target: CopyTarget::Stdin,
-            payload: Some(payload),
-            ..
-        } => {
-            assert_eq!(payload.data, data, "{label}");
-            assert_eq!(payload.terminated, terminated, "{label}");
-        }
-        other => panic!("expected a COPY t FROM STDIN payload for {label}, got {other:?}"),
-    }
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_verbatim() {
-    // The payload is data rather than SQL, so quotes, backslashes, tabs and
-    // control characters stay in it verbatim.
-    let data_lines = [
-        "O'Brien",
-        "\"x",
-        "'a''b'",
-        "0\x1f1",
-        "E'\\x41'",
-        "1\tfoo\\.bar",
-    ];
-    for data_line in data_lines {
-        let sql = format!("COPY t FROM STDIN;\n{data_line}\n\\.");
-        let stmt = pg_and_generic().verified_stmt(&sql);
-        assert_copy_stdin_payload(&stmt, &format!("{data_line}\n"), true, data_line);
-    }
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_crlf() {
-    let sql = "COPY t FROM STDIN;\r\nrow1\r\nrow2\r\n\\.\r\n";
-    // The line end following the `;` prints as a single line feed.
-    let canonical = "COPY t FROM STDIN;\nrow1\r\nrow2\r\n\\.";
-    let stmt = pg_and_generic().one_statement_parses_to(sql, canonical);
-    assert_copy_stdin_payload(&stmt, "row1\r\nrow2\r\n", true, "crlf payload");
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_terminator_before_next_statement() {
-    let statements = pg_and_generic()
-        .parse_sql_statements("COPY t FROM STDIN;\nrow1\n\\.\nSELECT 1;")
-        .unwrap();
-    assert_eq!(statements.len(), 2);
-    assert_copy_stdin_payload(
-        &statements[0],
-        "row1\n",
-        true,
-        "payload before the terminator",
-    );
-    assert_eq!(statements[1].to_string(), "SELECT 1");
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_then_statement_on_same_line() {
-    // The statement after the `;` on the command line parses after the COPY,
-    // while the data still belongs to the COPY.
-    let statements = pg_and_generic()
-        .parse_sql_statements("COPY t FROM STDIN; SELECT 'after';\nrow1\n\\.\n")
-        .unwrap();
-    assert_eq!(statements.len(), 2);
-    assert_copy_stdin_payload(
-        &statements[0],
-        "row1\n",
-        true,
-        "payload with a same-line SELECT",
-    );
-    assert_eq!(statements[1].to_string(), "SELECT 'after'");
-}
-
-#[test]
-fn parse_copy_from_stdin_blank_trailing_line() {
-    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\n\n");
-    assert_copy_stdin_payload(&stmt, "\n", false, "blank trailing line");
-}
-
-#[test]
-fn parse_copy_from_stdin_unterminated_payload() {
-    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\nrow1");
-    assert_copy_stdin_payload(&stmt, "row1", false, "unterminated payload");
-}
-
-#[test]
-fn parse_copy_from_stdin_empty_terminated_payload() {
-    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\n\\.");
-    assert_copy_stdin_payload(&stmt, "", true, "empty terminated payload");
-}
-
-#[test]
-fn parse_copy_from_stdin_bare_semicolon() {
-    let stmt = pg_and_generic().one_statement_parses_to("COPY t FROM STDIN;", "COPY t FROM STDIN");
-    match stmt {
-        Statement::Copy {
-            to: false,
-            target: CopyTarget::Stdin,
-            payload: None,
-            ..
-        } => {}
-        other => panic!("expected a bare COPY t FROM STDIN, got {other:?}"),
-    }
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_with_columns_and_options() {
-    let sql = "COPY t (a, b) FROM STDIN (FORMAT CSV);\n1\t2\n\\.";
-    let stmt = pg_and_generic().verified_stmt(sql);
-    match stmt {
-        Statement::Copy {
-            source:
-                CopySource::Table {
-                    table_name,
-                    columns,
-                },
-            to: false,
-            target: CopyTarget::Stdin,
-            options,
-            legacy_options,
-            payload: Some(payload),
-        } => {
-            assert_eq!(table_name, ObjectName::from(vec!["t".into()]));
-            assert_eq!(columns, vec!["a".into(), "b".into()]);
-            assert_eq!(options, vec![CopyOption::Format("CSV".into())]);
-            assert!(legacy_options.is_empty());
-            assert_eq!(payload.data, "1\t2\n");
-            assert!(payload.terminated);
-        }
-        other => panic!("expected COPY t (a, b) FROM STDIN, got {other:?}"),
-    }
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_dialect_gating() {
-    // Dialects without `supports_copy_from_stdin_data` never capture the
-    // payload, so `COPY ... FROM STDIN` parses without inline data.
-    let dialects = TestedDialects::new(vec![
-        Box::new(MySqlDialect {}),
-        Box::new(SnowflakeDialect {}),
-    ]);
-    for dialect in &dialects.dialects {
-        let tokens = Tokenizer::new(dialect.as_ref(), "COPY t FROM STDIN;\nrow1\n\\.\n")
-            .tokenize()
-            .unwrap();
-        assert!(
-            tokens
-                .iter()
-                .all(|token| !matches!(token, Token::CopyData { .. })),
-            "expected no CopyData token for {dialect:?}"
-        );
-    }
-    dialects.one_statement_parses_to("COPY t FROM STDIN;", "COPY t FROM STDIN");
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_comment_on_semicolon_line() {
-    // A single-line comment ends the `;` line, so the payload starts on the
-    // next line instead of being tokenized as SQL.
-    let stmt = pg().one_statement_parses_to(
-        "COPY t FROM STDIN; -- note\nO'Brien\n\\.\n",
-        "COPY t FROM STDIN;\nO'Brien\n\\.",
-    );
-    assert_copy_stdin_payload(&stmt, "O'Brien\n", true, "comment on the semicolon line");
-}
-
-#[test]
-fn parse_copy_from_stdin_payload_cr_only_line_ends() {
-    // The line end following the `;` prints as a single line feed.
-    let sql = "COPY t FROM STDIN;\rrow1\r\\.";
-    let canonical = "COPY t FROM STDIN;\nrow1\r\\.";
-    let stmt = pg_and_generic().one_statement_parses_to(sql, canonical);
-    assert_copy_stdin_payload(&stmt, "row1\r", true, "CR-only line ends");
-}
-
-#[test]
-fn display_copy_payload_propagates_formatter_errors() {
-    use core::fmt::{self, Write};
-
-    struct RejectingWriter(char);
-
-    impl Write for RejectingWriter {
-        fn write_str(&mut self, value: &str) -> fmt::Result {
-            if value.contains(self.0) {
-                Err(fmt::Error)
-            } else {
-                Ok(())
-            }
-        }
-    }
-
-    // `q` fails the data write and `\` fails the terminator write.
-    let stmt = pg_and_generic().verified_stmt("COPY t FROM STDIN;\nq1\n\\.");
-    for rejected in ['q', '\\'] {
-        let mut writer = RejectingWriter(rejected);
-        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error));
-    }
 }

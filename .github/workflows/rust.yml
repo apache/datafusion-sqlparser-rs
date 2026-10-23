@@ -49,23 +49,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup Rust Toolchain
         uses: ./.github/actions/setup-builder
-      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
-
-  benchmark-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Rust Toolchain
-        uses: ./.github/actions/setup-builder
-      - run: cd sqlparser_bench && cargo clippy --locked --all-targets --all-features -- -D warnings
-
-  compile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Rust Toolchain
-        uses: ./.github/actions/setup-builder
-      - run: cargo check --locked --all-targets --all-features
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
   docs:
     runs-on: ubuntu-latest
@@ -94,6 +78,8 @@ jobs:
       matrix:
         rust: [stable, beta, nightly]
     runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
     - name: Checkout
       uses: actions/checkout@v4

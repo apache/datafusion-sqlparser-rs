@@ -6018,6 +6018,12 @@ fn display_alter_view_propagates_write_errors() {
 }
 
 #[test]
+#[cfg(target_pointer_width = "64")]
+fn statement_enum_stays_small() {
+    assert!(core::mem::size_of::<Statement>() <= 16);
+}
+
+#[test]
 fn parse_alter_table_add_column() {
     match alter_table_op(verified_stmt("ALTER TABLE tab ADD foo TEXT")) {
         AlterTableOperation::AddColumn { column_keyword, .. } => {
@@ -22290,12 +22296,6 @@ fn parse_in_list_nested_leading_subquery_no_exponential_blowup() {
             .expect("parser should handle this quickly, not loop exponentially");
         assert!(parsed, "{level} nested 30 deep should parse");
     }
-}
-
-#[test]
-#[cfg(target_pointer_width = "64")]
-fn statement_enum_stays_small() {
-    assert!(core::mem::size_of::<Statement>() <= 16);
 }
 
 #[test]

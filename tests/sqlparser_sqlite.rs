@@ -1190,42 +1190,6 @@ fn parse_parenthesized_table_factor() {
 }
 
 #[test]
-fn parse_unterminated_block_comment() {
-    sqlite().one_statement_parses_to("SELECT 1 /* x", "SELECT 1");
-    sqlite().one_statement_parses_to("SELECT 1 /* x;", "SELECT 1");
-    assert_eq!(sqlite().parse_sql_statements("/* ;"), Ok(vec![]));
-
-    assert_eq!(
-        all_dialects_where(|d| !d.supports_unterminated_block_comments())
-            .parse_sql_statements("SELECT 1 /* x"),
-        Err(ParserError::TokenizerError(
-            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 14".to_string()
-        ))
-    );
-}
-
-#[test]
-fn parse_over_as_column_alias_after_function() {
-    // In SQLite, OVER is a fallback identifier so `f() OVER` aliases the result as `over`.
-    sqlite().one_statement_parses_to("SELECT f() OVER", "SELECT f() AS OVER");
-    // A keyword window name is not mistaken for an alias candidate.
-    sqlite().verified_stmt("SELECT f() OVER partition");
-    // Window function syntax still works when OVER is followed by `(`.
-    sqlite().verified_stmt("SELECT f() OVER ()");
-    // A quoted string names the window, so OVER cannot be an alias for it
-    sqlite().verified_stmt("SELECT f() OVER 'partition'");
-    sqlite().verified_stmt(r#"SELECT f() OVER "partition""#);
-    // Other dialects keep the greedy OVER parse and reject the bare form.
-    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
-    assert_eq!(
-        generic.parse_sql_statements("SELECT f() OVER"),
-        Err(ParserError::ParserError(
-            "Expected: identifier, found: EOF".to_string()
-        ))
-    );
-}
-
-#[test]
 fn parse_indexed_by() {
     let index_directives = |relation: &TableFactor| match relation {
         TableFactor::Table {
@@ -1301,6 +1265,42 @@ fn display_index_directives_propagates_formatter_errors() {
             Err(fmt::Error)
         );
     }
+}
+
+#[test]
+fn parse_unterminated_block_comment() {
+    sqlite().one_statement_parses_to("SELECT 1 /* x", "SELECT 1");
+    sqlite().one_statement_parses_to("SELECT 1 /* x;", "SELECT 1");
+    assert_eq!(sqlite().parse_sql_statements("/* ;"), Ok(vec![]));
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_unterminated_block_comments())
+            .parse_sql_statements("SELECT 1 /* x"),
+        Err(ParserError::TokenizerError(
+            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 14".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_over_as_column_alias_after_function() {
+    // In SQLite, OVER is a fallback identifier so `f() OVER` aliases the result as `over`.
+    sqlite().one_statement_parses_to("SELECT f() OVER", "SELECT f() AS OVER");
+    // A keyword window name is not mistaken for an alias candidate.
+    sqlite().verified_stmt("SELECT f() OVER partition");
+    // Window function syntax still works when OVER is followed by `(`.
+    sqlite().verified_stmt("SELECT f() OVER ()");
+    // A quoted string names the window, so OVER cannot be an alias for it
+    sqlite().verified_stmt("SELECT f() OVER 'partition'");
+    sqlite().verified_stmt(r#"SELECT f() OVER "partition""#);
+    // Other dialects keep the greedy OVER parse and reject the bare form.
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    assert_eq!(
+        generic.parse_sql_statements("SELECT f() OVER"),
+        Err(ParserError::ParserError(
+            "Expected: identifier, found: EOF".to_string()
+        ))
+    );
 }
 
 fn sqlite() -> TestedDialects {

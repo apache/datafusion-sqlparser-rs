@@ -12244,21 +12244,30 @@ impl<'a> Parser<'a> {
         while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option())? {
             legacy_options.push(opt);
         }
-        let values =
-            if matches!(target, CopyTarget::Stdin) && self.peek_token_ref().token != Token::EOF {
-                self.expect_token(&Token::SemiColon)?;
-                self.parse_tsv()
-            } else {
-                vec![]
-            };
+        let payload = if matches!(target, CopyTarget::Stdin) {
+            self.take_copy_payload()
+        } else {
+            None
+        };
         Ok(Statement::Copy {
             source,
             to,
             target,
             options,
             legacy_options,
-            values,
+            payload,
         })
+    }
+
+    /// Take the raw inline payload of a `COPY ... FROM STDIN` statement, or
+    /// `None` when the statement carried no inline data.
+    fn take_copy_payload(&mut self) -> Option<CopyPayload> {
+        let Token::CopyData { data, terminated } = &self.peek_token_ref().token else {
+            return None;
+        };
+        let (data, terminated) = (data.clone(), *terminated);
+        self.next_token();
+        Some(CopyPayload { data, terminated })
     }
 
     /// Parse [Statement::Open]
@@ -12596,42 +12605,6 @@ impl<'a> Parser<'a> {
             return parser_err!(format!("Expect a char, found {s:?}"), loc);
         }
         Ok(s.chars().next().unwrap())
-    }
-
-    /// Parse a tab separated values in
-    /// COPY payload
-    pub fn parse_tsv(&mut self) -> Vec<Option<String>> {
-        self.parse_tab_value()
-    }
-
-    /// Parse a single tab-separated value row used by `COPY` payload parsing.
-    pub fn parse_tab_value(&mut self) -> Vec<Option<String>> {
-        let mut values = vec![];
-        let mut content = String::new();
-        while let Some(t) = self.next_token_no_skip().map(|t| &t.token) {
-            match t {
-                Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Some(core::mem::take(&mut content)));
-                }
-                Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Some(core::mem::take(&mut content)));
-                }
-                Token::Backslash => {
-                    if self.consume_token(&Token::Period) {
-                        return values;
-                    }
-                    if let Token::Word(w) = self.next_token().token {
-                        if w.value == "N" {
-                            values.push(None);
-                        }
-                    }
-                }
-                _ => {
-                    content.push_str(&t.to_string());
-                }
-            }
-        }
-        values
     }
 
     /// Parse a literal value (numbers, strings, date/time, booleans)

@@ -163,6 +163,15 @@ pub enum Token {
     SemiColon,
     /// Backslash `\` used in terminating the COPY payload with `\.`
     Backslash,
+    /// The verbatim inline payload of a `COPY ... FROM STDIN` statement,
+    /// captured raw by the tokenizer. `terminated` records whether the `\.`
+    /// terminator line was present.
+    CopyData {
+        /// The payload text, without the terminator line.
+        data: String,
+        /// Whether the `\.` terminator line was present.
+        terminated: bool,
+    },
     /// Left bracket `[`
     LBracket,
     /// Right bracket `]`
@@ -339,6 +348,7 @@ impl fmt::Display for Token {
             Token::Assignment => f.write_str(":="),
             Token::SemiColon => f.write_str(";"),
             Token::Backslash => f.write_str("\\"),
+            Token::CopyData { data, .. } => f.write_str(data),
             Token::LBracket => f.write_str("["),
             Token::RBracket => f.write_str("]"),
             Token::Ampersand => f.write_str("&"),
@@ -833,6 +843,80 @@ impl State<'_> {
     }
 }
 
+/// Tracks whether the statement being tokenized is a `COPY ... FROM STDIN` statement.
+struct CopyStatementTracker {
+    enabled: bool,
+    first_token_seen: bool,
+    starts_with_copy: bool,
+    prev_was_from: bool,
+    from_stdin: bool,
+    paren_depth: u32,
+}
+
+impl CopyStatementTracker {
+    fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            first_token_seen: false,
+            starts_with_copy: false,
+            prev_was_from: false,
+            from_stdin: false,
+            paren_depth: 0,
+        }
+    }
+
+    /// Whether the `;` closing the current statement captures the raw payload.
+    fn captures_payload(&self) -> bool {
+        self.enabled && self.starts_with_copy && self.from_stdin
+    }
+
+    /// Record a token, ignoring whitespace, and reset the statement on `;`.
+    fn note(&mut self, token: &Token) {
+        if !self.enabled {
+            return;
+        }
+        match token {
+            Token::SemiColon => {
+                self.first_token_seen = false;
+                self.starts_with_copy = false;
+                self.prev_was_from = false;
+                self.from_stdin = false;
+                self.paren_depth = 0;
+            }
+            Token::LParen => {
+                self.paren_depth += 1;
+                self.first_token_seen = true;
+                self.prev_was_from = false;
+            }
+            Token::RParen => {
+                self.paren_depth = self.paren_depth.saturating_sub(1);
+                self.first_token_seen = true;
+                self.prev_was_from = false;
+            }
+            Token::Whitespace(_) => {}
+            Token::Word(word) => {
+                if !self.first_token_seen {
+                    self.first_token_seen = true;
+                    self.starts_with_copy = word.keyword == Keyword::COPY;
+                }
+                if self.prev_was_from && word.keyword == Keyword::STDIN && self.paren_depth == 0 {
+                    self.from_stdin = true;
+                }
+                self.prev_was_from = word.keyword == Keyword::FROM;
+            }
+            _ => {
+                self.first_token_seen = true;
+                self.prev_was_from = false;
+            }
+        }
+    }
+}
+
+/// The captured `COPY ... FROM STDIN` payload and the rest of the `;` line.
+/// The `Option` is the payload token, absent when the data is empty and
+/// unterminated, followed by the tokens of the rest of the line.
+type CopyCapture = (Option<(String, bool, Span)>, Vec<TokenWithSpan>);
+
 /// Represents how many quote characters enclose a string literal.
 #[derive(Copy, Clone)]
 enum NumStringQuoteChars {
@@ -964,8 +1048,31 @@ impl<'a> Tokenizer<'a> {
         };
 
         let mut location = state.location();
+        let mut copy = CopyStatementTracker::new(self.dialect.supports_copy_from_stdin_data());
         while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
             let span = location.span_to(state.location());
+
+            // Capture before tokenizing the rest of the line so both keep their source locations.
+            let mut payload: Option<CopyCapture> = None;
+            if let Token::SemiColon = &token {
+                if copy.captures_payload() {
+                    payload = Some(self.capture_copy_data(&mut state, Some(&token))?);
+                }
+            }
+            copy.note(&token);
+
+            let (copy_data, rest) = match payload {
+                Some((copy_data, rest)) => (copy_data, Some(rest)),
+                None => (None, None),
+            };
+
+            // The payload token precedes the `;` so the statement loop owns the delimiter.
+            if let Some((data, terminated, data_span)) = copy_data {
+                buf.push(mapper(TokenWithSpan {
+                    token: Token::CopyData { data, terminated },
+                    span: data_span,
+                }));
+            }
 
             // Check if this is a multiline comment hint that should be expanded
             match &token {
@@ -981,6 +1088,12 @@ impl<'a> Tokenizer<'a> {
                 }
             }
 
+            if let Some(rest_tokens) = rest {
+                for rest_token in rest_tokens {
+                    copy.note(&rest_token.token);
+                    buf.push(mapper(rest_token));
+                }
+            }
             location = state.location();
         }
         Ok(())
@@ -1028,6 +1141,77 @@ impl<'a> Tokenizer<'a> {
         }
 
         Ok(())
+    }
+
+    /// Capture the raw payload after the `;` of a `COPY ... FROM STDIN` statement, returning the rest
+    /// of that line as tokens to emit after the `;`. The payload token is absent when the data is
+    /// empty and unterminated, e.g. a bare `COPY t FROM STDIN;` at end of input.
+    fn capture_copy_data(
+        &self,
+        state: &mut State,
+        prev: Option<&Token>,
+    ) -> Result<CopyCapture, TokenizerError> {
+        let mut rest = Vec::new();
+        let mut location = state.location();
+        let mut prev = prev;
+        while let Some(token) = self.next_token(state, prev)? {
+            let span = location.span_to(state.location());
+            rest.push(TokenWithSpan { token, span });
+            location = state.location();
+            prev = Some(&rest.last().unwrap().token);
+            if matches!(prev, Some(&Token::Whitespace(Whitespace::Newline))) {
+                break;
+            }
+        }
+        let data_start = state.location();
+        let (data, terminated) = self.read_copy_data(state);
+        let payload = if data.is_empty() && !terminated {
+            None
+        } else {
+            Some((data, terminated, data_start.span_to(state.location())))
+        };
+        Ok((payload, rest))
+    }
+
+    /// Read the raw payload from `state` (at the start of a line) up to a
+    /// line holding only `\.` (the terminator, which is consumed) or end of
+    /// input.
+    fn read_copy_data(&self, state: &mut State) -> (String, bool) {
+        let mut data = String::new();
+        loop {
+            let mut line = String::new();
+            while let Some(&ch) = state.peek() {
+                if ch == '\n' || ch == '\r' {
+                    break;
+                }
+                line.push(ch);
+                state.next();
+            }
+            if line == "\\." {
+                // A final terminator without a line end still terminates.
+                if state.peek() == Some(&'\r') {
+                    state.next();
+                }
+                if state.peek() == Some(&'\n') {
+                    state.next();
+                }
+                return (data, true);
+            }
+            data.push_str(&line);
+            if state.peek() == Some(&'\n') {
+                data.push('\n');
+                state.next();
+            } else if state.peek() == Some(&'\r') {
+                data.push('\r');
+                state.next();
+                if state.peek() == Some(&'\n') {
+                    data.push('\n');
+                    state.next();
+                }
+            } else {
+                return (data, false);
+            }
+        }
     }
 
     // Tokenize the identifier or keywords in `ch`
@@ -4693,5 +4877,98 @@ mod tests {
             ],
             tokens,
         );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload() {
+        let sql = "COPY t FROM STDIN; SELECT 1;\nrow1\n\\.\nSELECT 2;";
+        let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::make_word("COPY", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("t", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("FROM", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("STDIN", None),
+                Token::CopyData {
+                    data: "row1\n".to_string(),
+                    terminated: true,
+                },
+                Token::SemiColon,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("SELECT", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+                Token::SemiColon,
+                Token::Whitespace(Whitespace::Newline),
+                Token::make_word("SELECT", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("2".to_string(), false),
+                Token::SemiColon,
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload_span() {
+        let sql = "COPY t FROM STDIN;\nrow1\n\\.";
+        let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize_with_location()
+            .unwrap();
+        let payload = tokens
+            .iter()
+            .find(|t| matches!(t.token, Token::CopyData { .. }))
+            .unwrap();
+        assert_eq!(
+            payload.span,
+            Span::new(Location::new(2, 1), Location::new(3, 3))
+        );
+        assert_eq!(
+            payload.token,
+            Token::CopyData {
+                data: "row1\n".to_string(),
+                terminated: true,
+            }
+        );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload_malformed_semicolon_line() {
+        // An unterminated string on the `;` line fails the capture.
+        let sql = "COPY t FROM STDIN; 'unterminated";
+        let err = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize()
+            .unwrap_err();
+        assert_eq!(
+            err,
+            TokenizerError {
+                message: "Unterminated string literal".to_string(),
+                location: Location::new(1, 20),
+            }
+        );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload_not_captured() {
+        // A `FROM STDIN` nested in parens, or a statement not starting with `COPY`,
+        // keeps the data out of a payload token.
+        for sql in [
+            "COPY (SELECT x FROM stdin) TO STDOUT;\nrow1\n\\.\n",
+            "SELECT * FROM stdin;\nrow1\n\\.\n",
+            "COPY t TO STDOUT;\nrow1\n\\.\n",
+        ] {
+            let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+                .tokenize()
+                .unwrap();
+            assert!(
+                tokens.iter().all(|t| !matches!(t, Token::CopyData { .. })),
+                "{sql}"
+            );
+        }
     }
 }

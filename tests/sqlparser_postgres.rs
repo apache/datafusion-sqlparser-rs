@@ -4836,6 +4836,108 @@ fn parse_create_role() {
 }
 
 #[test]
+fn parse_create_group() {
+    // `GROUP` names the same object as `ROLE` in PostgreSQL, but the keyword is preserved.
+    pg().verified_stmt("CREATE GROUP g");
+    pg().verified_stmt("CREATE GROUP staff SUPERUSER LOGIN CONNECTION LIMIT 5 USER karl, john");
+    pg().one_statement_parses_to(
+        "CREATE GROUP staff WITH SUPERUSER",
+        "CREATE GROUP staff SUPERUSER",
+    );
+
+    match pg().verified_stmt("CREATE GROUP staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Group);
+            assert_eq_vec(&["staff"], &create_role.names);
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+
+    // The `ROLE` spelling is unaffected.
+    match pg().verified_stmt("CREATE ROLE staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Role)
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE GROUP IF NOT EXISTS g"),
+        Err(ParserError::ParserError(
+            "IF NOT EXISTS is not supported for CREATE GROUP".to_string()
+        ))
+    );
+    pg().verified_stmt(r#"CREATE GROUP "IF""#);
+}
+
+#[test]
+fn parse_drop_group() {
+    pg().verified_stmt("DROP GROUP IF EXISTS staff, workers");
+
+    assert_eq!(
+        pg().verified_stmt("DROP GROUP staff"),
+        Statement::Drop {
+            object_type: ObjectType::Group,
+            if_exists: false,
+            names: vec![ObjectName::from(vec![Ident::new("staff")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    // PostgreSQL rejects a drop behavior after `DROP GROUP`, exactly as after `DROP ROLE`.
+    assert_eq!(
+        pg().parse_sql_statements("DROP GROUP staff CASCADE")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Cannot specify CASCADE, RESTRICT, or PURGE in DROP GROUP"
+    );
+
+    pg().verified_stmt("DROP ROLE staff");
+}
+
+#[test]
+fn parse_user_group_statements_is_dialect_gated() {
+    // Only PostgreSQL opts in. Redshift documents the same statements and can turn the hook
+    // on, but its narrower `CREATE GROUP` option list is a separate question.
+    let others = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(MySqlDialect {}),
+        Box::new(MsSqlDialect {}),
+    ]);
+    for (sql, err) in [
+        (
+            "CREATE GROUP staff",
+            "Expected: an object type after CREATE, found: GROUP",
+        ),
+        (
+            "DROP GROUP staff",
+            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP",
+        ),
+    ] {
+        assert_eq!(
+            others.parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_role_if_not_exists_rejected() {
+    assert_eq!(
+        pg().parse_sql_statements("CREATE ROLE IF NOT EXISTS r"),
+        Err(ParserError::ParserError(
+            "IF NOT EXISTS is not supported for CREATE ROLE".to_string()
+        ))
+    );
+    pg().verified_stmt(r#"CREATE ROLE "IF""#);
+}
+
+#[test]
 fn parse_alter_role() {
     let sql = "ALTER ROLE old_name RENAME TO new_name";
     assert_eq!(
@@ -11167,106 +11269,4 @@ fn parse_alter_table_attach_partition_of() {
             "{sql}"
         );
     }
-}
-
-#[test]
-fn parse_create_group() {
-    // `GROUP` names the same object as `ROLE` in PostgreSQL, but the keyword is preserved.
-    pg().verified_stmt("CREATE GROUP g");
-    pg().verified_stmt("CREATE GROUP staff SUPERUSER LOGIN CONNECTION LIMIT 5 USER karl, john");
-    pg().one_statement_parses_to(
-        "CREATE GROUP staff WITH SUPERUSER",
-        "CREATE GROUP staff SUPERUSER",
-    );
-
-    match pg().verified_stmt("CREATE GROUP staff") {
-        Statement::CreateRole(create_role) => {
-            assert_eq!(create_role.keyword, RoleKeyword::Group);
-            assert_eq_vec(&["staff"], &create_role.names);
-        }
-        other => panic!("expected CREATE ROLE statement, got {other:?}"),
-    }
-
-    // The `ROLE` spelling is unaffected.
-    match pg().verified_stmt("CREATE ROLE staff") {
-        Statement::CreateRole(create_role) => {
-            assert_eq!(create_role.keyword, RoleKeyword::Role)
-        }
-        other => panic!("expected CREATE ROLE statement, got {other:?}"),
-    }
-
-    assert_eq!(
-        pg().parse_sql_statements("CREATE GROUP IF NOT EXISTS g"),
-        Err(ParserError::ParserError(
-            "IF NOT EXISTS is not supported for CREATE GROUP".to_string()
-        ))
-    );
-    pg().verified_stmt(r#"CREATE GROUP "IF""#);
-}
-
-#[test]
-fn parse_drop_group() {
-    pg().verified_stmt("DROP GROUP IF EXISTS staff, workers");
-
-    assert_eq!(
-        pg().verified_stmt("DROP GROUP staff"),
-        Statement::Drop {
-            object_type: ObjectType::Group,
-            if_exists: false,
-            names: vec![ObjectName::from(vec![Ident::new("staff")])],
-            cascade: false,
-            restrict: false,
-            purge: false,
-            temporary: false,
-            table: None,
-        }
-    );
-
-    // PostgreSQL rejects a drop behavior after `DROP GROUP`, exactly as after `DROP ROLE`.
-    assert_eq!(
-        pg().parse_sql_statements("DROP GROUP staff CASCADE")
-            .unwrap_err()
-            .to_string(),
-        "sql parser error: Cannot specify CASCADE, RESTRICT, or PURGE in DROP GROUP"
-    );
-
-    pg().verified_stmt("DROP ROLE staff");
-}
-
-#[test]
-fn parse_user_group_statements_is_dialect_gated() {
-    // Only PostgreSQL opts in. Redshift documents the same statements and can turn the hook
-    // on, but its narrower `CREATE GROUP` option list is a separate question.
-    let others = TestedDialects::new(vec![
-        Box::new(GenericDialect {}),
-        Box::new(MySqlDialect {}),
-        Box::new(MsSqlDialect {}),
-    ]);
-    for (sql, err) in [
-        (
-            "CREATE GROUP staff",
-            "Expected: an object type after CREATE, found: GROUP",
-        ),
-        (
-            "DROP GROUP staff",
-            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP",
-        ),
-    ] {
-        assert_eq!(
-            others.parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_string())),
-            "{sql}"
-        );
-    }
-}
-
-#[test]
-fn parse_create_role_if_not_exists_rejected() {
-    assert_eq!(
-        pg().parse_sql_statements("CREATE ROLE IF NOT EXISTS r"),
-        Err(ParserError::ParserError(
-            "IF NOT EXISTS is not supported for CREATE ROLE".to_string()
-        ))
-    );
-    pg().verified_stmt(r#"CREATE ROLE "IF""#);
 }

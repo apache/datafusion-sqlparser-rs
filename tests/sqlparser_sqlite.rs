@@ -1362,26 +1362,6 @@ fn parse_over_as_column_alias_after_function() {
     );
 }
 
-#[test]
-fn parse_bitwise_shift_operators() {
-    sqlite().verified_stmt("SELECT a << 1 FROM t");
-    sqlite().verified_stmt("SELECT a >> 1 FROM t");
-
-    let unsupported = all_dialects_where(|d| !d.supports_bitwise_shift_operators());
-    for (sql, token) in [
-        ("SELECT a << 1 FROM t", "ShiftLeft"),
-        ("SELECT a >> 1 FROM t", "ShiftRight"),
-    ] {
-        assert_eq!(
-            unsupported.parse_sql_statements(sql),
-            Err(ParserError::ParserError(format!(
-                "No infix parser for token {token}"
-            ))),
-            "{sql}"
-        );
-    }
-}
-
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }
@@ -1541,6 +1521,26 @@ fn parse_bitwise_and_or_share_precedence() {
         ),
     ] {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
+}
+
+#[test]
+fn parse_bitwise_shift_operators() {
+    sqlite().verified_stmt("SELECT a << 1 FROM t");
+    sqlite().verified_stmt("SELECT a >> 1 FROM t");
+
+    let unsupported = all_dialects_where(|d| !d.supports_bitwise_shift_operators());
+    for (sql, token) in [
+        ("SELECT a << 1 FROM t", "ShiftLeft"),
+        ("SELECT a >> 1 FROM t", "ShiftRight"),
+    ] {
+        assert_eq!(
+            unsupported.parse_sql_statements(sql),
+            Err(ParserError::ParserError(format!(
+                "No infix parser for token {token}"
+            ))),
+            "{sql}"
+        );
     }
 }
 

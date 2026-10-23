@@ -49,6 +49,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_literal_prefix_in_qualified_name(&self) -> bool {
+        true
+    }
+
     fn supports_partition_by_after_order_by(&self) -> bool {
         true
     }
@@ -334,6 +338,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_alter_column_position(&self) -> bool {
+        true
+    }
+
+    fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }
 }

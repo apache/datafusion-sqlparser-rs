@@ -291,6 +291,14 @@ pub trait Dialect: Debug + Any {
         true
     }
 
+    /// Treats literal prefixes immediately after `.` as unquoted identifiers.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/identifiers.html),
+    /// [MariaDB](https://mariadb.com/docs/server/reference/sql-structure/sql-language-structure/identifier-names)
+    fn supports_literal_prefix_in_qualified_name(&self) -> bool {
+        false
+    }
+
     /// Determine whether the dialect strips the backslash when escaping LIKE wildcards (%, _).
     ///
     /// [MySQL] has a special case when escaping single quoted strings which leaves these unescaped
@@ -1357,6 +1365,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts an unterminated block comment at end of input
+    /// e.g. `SELECT 1 /* comment`
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_comment.html)
+    fn supports_unterminated_block_comments(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:
@@ -1584,11 +1600,20 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_table_alias(kw, parser)
     }
 
-    /// Returns true if a single-quoted string can be an alias, as in `SELECT 1 AS 'x'`.
+    /// Returns true if a single-quoted string can name a select item, as in `SELECT 1 AS 'x'`.
+    /// `explicit` is true when the alias follows `AS`.
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/problems-with-alias.html),
     /// [SQLite](https://www.sqlite.org/lang_keywords.html)
-    fn supports_string_literal_alias(&self) -> bool {
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        true
+    }
+
+    /// Returns true if a single-quoted string can name a table, as in `FROM t AS 'x'`.
+    /// `explicit` is true when the alias follows `AS`.
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_keywords.html)
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
         true
     }
 
@@ -1692,6 +1717,15 @@ pub trait Dialect: Debug + Any {
     ///  ALTER TABLE tbl ADD COLUMN c INT AFTER b
     /// ```
     fn supports_alter_column_position(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `ALTER TABLE ... ADD [COLUMN] IF NOT EXISTS <col>`.
+    /// Example:
+    ///  ```sql
+    ///  ALTER TABLE tbl ADD COLUMN IF NOT EXISTS c INT
+    /// ```
+    fn supports_add_column_if_not_exists(&self) -> bool {
         false
     }
 
@@ -2034,6 +2068,11 @@ pub trait Dialect: Debug + Any {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/functions-xml.html)
     fn supports_xml_expressions(&self) -> bool {
+        false
+    }
+
+    /// Whether a custom type name may introduce a typed string.
+    fn is_custom_type_typed_string(&self, _first_keyword: Keyword, _qualified: bool) -> bool {
         false
     }
 

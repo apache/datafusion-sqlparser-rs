@@ -28,6 +28,14 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_string_literal_column_alias(&self, explicit: bool) -> bool {
+        explicit
+    }
+
+    fn supports_string_literal_table_alias(&self, explicit: bool) -> bool {
+        explicit
+    }
+
     fn supports_trailing_commas(&self) -> bool {
         true
     }
@@ -148,6 +156,11 @@ impl Dialect for DuckDbDialect {
     }
 
     fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
+    /// See <https://duckdb.org/docs/stable/sql/statements/alter_table>
+    fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }
 }

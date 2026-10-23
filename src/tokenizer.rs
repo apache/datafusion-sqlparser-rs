@@ -1064,6 +1064,12 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
+                ch if prev_token == Some(&Token::Period)
+                    && ch.is_ascii_alphabetic()
+                    && self.dialect.supports_literal_prefix_in_qualified_name() =>
+                {
+                    self.tokenize_identifier_or_keyword([ch], chars)
+                }
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
                 '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
                 '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
@@ -2389,6 +2395,9 @@ impl<'a> Tokenizer<'a> {
                     s.push(ch);
                 }
                 None => {
+                    if self.dialect.supports_unterminated_block_comments() {
+                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                    }
                     break self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",

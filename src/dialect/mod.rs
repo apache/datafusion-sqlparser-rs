@@ -1521,6 +1521,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts `VALUE` as a synonym of `VALUES`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/insert.html)
+    fn supports_singular_value_keyword(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `SET` statements without an explicit
     /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
     fn supports_set_stmt_without_operator(&self) -> bool {

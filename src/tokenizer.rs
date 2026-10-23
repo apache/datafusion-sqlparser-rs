@@ -834,6 +834,21 @@ impl State<'_> {
         self.peekable.peek()
     }
 
+    /// Collect matching characters into a new string, leaving the first
+    /// non-matching character unread.
+    fn peeking_take_while(&mut self, mut predicate: impl FnMut(char) -> bool) -> String {
+        let mut s = String::new();
+        while let Some(&ch) = self.peek() {
+            if predicate(ch) {
+                self.next(); // consume
+                s.push(ch);
+            } else {
+                break;
+            }
+        }
+        s
+    }
+
     /// Return the current `Location` (line and column)
     pub fn location(&self) -> Location {
         Location {
@@ -1267,8 +1282,8 @@ impl<'a> Tokenizer<'a> {
                 line: 0,
                 col: 0,
             };
-            let mut s = peeking_take_while(&mut inner_state, |ch| matches!(ch, '0'..='9' | '.'));
-            let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
+            let mut s = inner_state.peeking_take_while(|ch| matches!(ch, '0'..='9' | '.'));
+            let s2 = chars.peeking_take_while(|ch| matches!(ch, '0'..='9' | '.'));
             s += s2.as_str();
             return Ok(Some(Token::Number(s, false)));
         }
@@ -1539,7 +1554,7 @@ impl<'a> Tokenizer<'a> {
                     let error_loc = chars.location();
 
                     chars.next(); // skip the first delimiter
-                    peeking_take_while(chars, |ch| ch.is_whitespace());
+                    chars.peeking_take_while(|ch| ch.is_whitespace());
                     if chars.peek() != Some(&nested_quote_start) {
                         return self.tokenizer_error(
                             error_loc,
@@ -1549,7 +1564,7 @@ impl<'a> Tokenizer<'a> {
                     word.push(nested_quote_start.into());
                     word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
                     word.push(nested_quote_end.into());
-                    peeking_take_while(chars, |ch| ch.is_whitespace());
+                    chars.peeking_take_while(|ch| ch.is_whitespace());
                     if chars.peek() != Some(&quote_end) {
                         return self.tokenizer_error(
                             error_loc,
@@ -1680,7 +1695,7 @@ impl<'a> Tokenizer<'a> {
                             // If it is not a number with an exponent, it may be
                             // an identifier starting with digits.
                             let word =
-                                peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
+                                chars.peeking_take_while(|ch| self.dialect.is_identifier_part(ch));
 
                             if !word.is_empty() {
                                 s += word.as_str();
@@ -2091,7 +2106,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 '?' => {
                     chars.next();
-                    let s = peeking_take_while(chars, |ch| ch.is_numeric());
+                    let s = chars.peeking_take_while(|ch| ch.is_numeric());
                     Ok(Some(Token::Placeholder(format!("?{s}"))))
                 }
 
@@ -2199,7 +2214,7 @@ impl<'a> Tokenizer<'a> {
                 }))
             };
         } else {
-            value.push_str(&peeking_take_while(chars, |ch| {
+            value.push_str(&chars.peeking_take_while(|ch| {
                 ch.is_alphanumeric()
                     || ch == '_'
                     // Allow $ as a placeholder character if the dialect supports it
@@ -2215,7 +2230,7 @@ impl<'a> Tokenizer<'a> {
             {
                 value.push('.');
                 chars.next();
-                value.push_str(&peeking_take_while(chars, |ch| ch.is_ascii_digit()));
+                value.push_str(&chars.peeking_take_while(|ch| ch.is_ascii_digit()));
                 return Ok(Token::Placeholder(format!("${value}")));
             }
 
@@ -2304,7 +2319,7 @@ impl<'a> Tokenizer<'a> {
 
     // Consume characters until newline
     fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
-        peeking_take_while(chars, |ch| match ch {
+        chars.peeking_take_while(|ch| match ch {
             '\n' => false,                                           // Always stop at \n
             '\r' if dialect_of!(self is PostgreSqlDialect) => false, // Stop at \r for Postgres
             _ => true, // Keep consuming for other characters
@@ -2314,9 +2329,7 @@ impl<'a> Tokenizer<'a> {
     /// Tokenize an identifier or keyword, after the first char is already consumed.
     fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
         let mut s = first_chars.into();
-        s.push_str(&peeking_take_while(chars, |ch| {
-            self.dialect.is_identifier_part(ch)
-        }));
+        s.push_str(&chars.peeking_take_while(|ch| self.dialect.is_identifier_part(ch)));
         s
     }
 
@@ -2666,22 +2679,6 @@ impl<'a> Tokenizer<'a> {
         chars.next();
         Ok(Some(t))
     }
-}
-
-/// Read from `chars` until `predicate` returns `false` or EOF is hit.
-/// Return the characters read as String, and keep the first non-matching
-/// char available as `chars.next()`.
-fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool) -> String {
-    let mut s = String::new();
-    while let Some(&ch) = chars.peek() {
-        if predicate(ch) {
-            chars.next(); // consume
-            s.push(ch);
-        } else {
-            break;
-        }
-    }
-    s
 }
 
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {

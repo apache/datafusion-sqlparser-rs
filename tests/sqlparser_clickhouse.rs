@@ -2120,12 +2120,12 @@ fn parse_global_in() {
     let select = clickhouse().verified_only_select("SELECT * FROM t WHERE x GLOBAL IN (1, 2)");
     assert_eq!(
         select.selection.unwrap(),
-        Expr::InList {
+        Expr::In {
             expr: Box::new(Identifier(Ident::new("x"))),
-            list: vec![
+            target: InTarget::List(vec![
                 Expr::Value(number("1").with_empty_span()),
                 Expr::Value(number("2").with_empty_span()),
-            ],
+            ]),
             negated: false,
             global: true,
         }
@@ -2135,9 +2135,9 @@ fn parse_global_in() {
         .verified_only_select("SELECT * FROM t WHERE x GLOBAL NOT IN (SELECT y FROM t2)");
     assert_eq!(
         select.selection.unwrap(),
-        Expr::InSubquery {
+        Expr::In {
             expr: Box::new(Identifier(Ident::new("x"))),
-            subquery: Box::new(clickhouse().verified_query("SELECT y FROM t2")),
+            target: InTarget::Subquery(Box::new(clickhouse().verified_query("SELECT y FROM t2"))),
             negated: true,
             global: true,
         }
@@ -2222,7 +2222,7 @@ fn global_in_bare_table_binds_before_and() {
             left,
             op: BinaryOperator::And,
             ..
-        } if matches!(*left, Expr::InList { global: true, .. })
+        } if matches!(*left, Expr::In { target: InTarget::List(_), global: true, .. })
     ));
 }
 
@@ -2235,7 +2235,7 @@ fn global_in_bare_table_binds_before_equality() {
             left,
             op: BinaryOperator::Eq,
             ..
-        } if matches!(*left, Expr::InList { global: true, .. })
+        } if matches!(*left, Expr::In { target: InTarget::List(_), global: true, .. })
     ));
 }
 

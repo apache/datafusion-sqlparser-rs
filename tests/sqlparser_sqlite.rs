@@ -524,7 +524,11 @@ fn parse_update_tuple_row_values() {
 fn parse_where_in_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN ()";
     let select = sqlite().verified_only_select(sql);
-    if let Expr::InList { list, .. } = select.selection.as_ref().unwrap() {
+    if let Expr::In {
+        target: InTarget::List(list),
+        ..
+    } = select.selection.as_ref().unwrap()
+    {
         assert_eq!(list.len(), 0);
     } else {
         unreachable!()
@@ -1142,6 +1146,21 @@ fn parse_parenthesized_table_factor() {
     );
 }
 
+#[test]
+fn parse_unterminated_block_comment() {
+    sqlite().one_statement_parses_to("SELECT 1 /* x", "SELECT 1");
+    sqlite().one_statement_parses_to("SELECT 1 /* x;", "SELECT 1");
+    assert_eq!(sqlite().parse_sql_statements("/* ;"), Ok(vec![]));
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_unterminated_block_comments())
+            .parse_sql_statements("SELECT 1 /* x"),
+        Err(ParserError::TokenizerError(
+            "Unexpected EOF while in a multi-line comment at Line: 1, Column: 14".to_string()
+        ))
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }
@@ -1170,4 +1189,64 @@ fn test_dollar_sign_in_identifier() {
     TestedDialects::new(vec![Box::new(AnsiDialect {})])
         .parse_sql_statements("SELECT a$ FROM t")
         .unwrap_err();
+}
+
+#[test]
+fn parse_bitwise_and_or_share_precedence() {
+    fn num(n: &str) -> Expr {
+        Expr::value(number(n))
+    }
+    fn bin(left: Expr, op: BinaryOperator, right: Expr) -> Expr {
+        Expr::BinaryOp {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        }
+    }
+    use BinaryOperator::{BitwiseAnd, BitwiseOr, Eq, Multiply, Plus};
+
+    for (sql, expected) in [
+        (
+            "6 | 1 & 3",
+            bin(bin(num("6"), BitwiseOr, num("1")), BitwiseAnd, num("3")),
+        ),
+        (
+            "6 & 3 | 8",
+            bin(bin(num("6"), BitwiseAnd, num("3")), BitwiseOr, num("8")),
+        ),
+        (
+            "1 & 2 & 3",
+            bin(bin(num("1"), BitwiseAnd, num("2")), BitwiseAnd, num("3")),
+        ),
+        (
+            "1 | 2 | 3",
+            bin(bin(num("1"), BitwiseOr, num("2")), BitwiseOr, num("3")),
+        ),
+        (
+            "1 | 2 + 3 & 4 * 5",
+            bin(
+                bin(num("1"), BitwiseOr, bin(num("2"), Plus, num("3"))),
+                BitwiseAnd,
+                bin(num("4"), Multiply, num("5")),
+            ),
+        ),
+        (
+            "6 | (1 & 3)",
+            bin(
+                num("6"),
+                BitwiseOr,
+                Expr::Nested(Box::new(bin(num("1"), BitwiseAnd, num("3")))),
+            ),
+        ),
+        (
+            "1 | 2 = 3 & 4",
+            bin(
+                bin(num("1"), BitwiseOr, num("2")),
+                Eq,
+                bin(num("3"), BitwiseAnd, num("4")),
+            ),
+        ),
+    ] {
+        assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
 }

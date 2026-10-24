@@ -2470,6 +2470,76 @@ fn parse_prepare() {
 }
 
 #[test]
+fn parse_pg_on_conflict_target_predicate() {
+    for (sql, action_selection) in [
+        (
+            "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT(a) WHERE b > 0 DO NOTHING",
+            None,
+        ),
+        (
+            "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT(a) WHERE b > 0 DO UPDATE SET b = EXCLUDED.b",
+            None,
+        ),
+        // The target's predicate and the action's condition are separate clauses.
+        (
+            "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT(a, c) WHERE b > 0 DO UPDATE SET b = EXCLUDED.b WHERE t.b < 10",
+            Some("t.b < 10"),
+        ),
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::Insert(Insert {
+                on:
+                    Some(OnInsert::OnConflict(OnConflict {
+                        conflict_target:
+                            Some(ConflictTarget::Columns {
+                                predicate: Some(predicate),
+                                ..
+                            }),
+                        action,
+                    })),
+                ..
+            }) => {
+                assert_eq!(predicate.to_string(), "b > 0");
+                let selection = match action {
+                    OnConflictAction::DoUpdate(DoUpdate { selection, .. }) => selection,
+                    OnConflictAction::DoNothing => None,
+                };
+                assert_eq!(selection.map(|e| e.to_string()).as_deref(), action_selection);
+            }
+            statement => panic!("Expected INSERT statement, got: {statement:?}"),
+        }
+    }
+
+    // A predicate only follows a column list: not `ON CONSTRAINT`, not an omitted target.
+    for sql in [
+        "INSERT INTO t (a) VALUES (1) ON CONFLICT ON CONSTRAINT t_a WHERE a > 0 DO NOTHING",
+        "INSERT INTO t (a) VALUES (1) ON CONFLICT WHERE a > 0 DO NOTHING",
+    ] {
+        assert!(
+            pg_and_generic().parse_sql_statements(sql).is_err(),
+            "{sql} should not parse"
+        );
+    }
+
+    // The predicate is an expression, and the action must still follow it.
+    for (sql, err) in [
+        (
+            "INSERT INTO t (a) VALUES (1) ON CONFLICT (a) WHERE",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "INSERT INTO t (a) VALUES (1) ON CONFLICT (a) WHERE a > 0",
+            "Expected: DO, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+        );
+    }
+}
+
+#[test]
 fn parse_pg_on_conflict() {
     let stmt = pg_and_generic().verified_stmt(
         "INSERT INTO distributors (did, dname) \
@@ -2481,7 +2551,11 @@ fn parse_pg_on_conflict() {
         Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target: Some(ConflictTarget::Columns(cols)),
+                    conflict_target:
+                        Some(ConflictTarget::Columns {
+                            columns: cols,
+                            predicate: None,
+                        }),
                     action,
                 })),
             ..
@@ -2513,7 +2587,11 @@ fn parse_pg_on_conflict() {
         Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target: Some(ConflictTarget::Columns(cols)),
+                    conflict_target:
+                        Some(ConflictTarget::Columns {
+                            columns: cols,
+                            predicate: None,
+                        }),
                     action,
                 })),
             ..
@@ -2575,7 +2653,11 @@ fn parse_pg_on_conflict() {
         Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target: Some(ConflictTarget::Columns(cols)),
+                    conflict_target:
+                        Some(ConflictTarget::Columns {
+                            columns: cols,
+                            predicate: None,
+                        }),
                     action,
                 })),
             ..

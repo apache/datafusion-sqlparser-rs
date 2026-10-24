@@ -1428,7 +1428,12 @@ impl Spanned for OnConflict {
 impl Spanned for ConflictTarget {
     fn span(&self) -> Span {
         match self {
-            ConflictTarget::Columns(vec) => union_spans(vec.iter().map(|i| i.span)),
+            ConflictTarget::Columns { columns, predicate } => union_spans(
+                columns
+                    .iter()
+                    .map(|i| i.span)
+                    .chain(predicate.iter().map(|p| p.span())),
+            ),
             ConflictTarget::OnConstraint(object_name) => object_name.span(),
         }
     }
@@ -2874,6 +2879,31 @@ ALTER TABLE users
 
         assert_eq!(stmt_span.start, (2, 11).into());
         assert_eq!(stmt_span.end, (4, 12).into());
+    }
+
+    #[test]
+    fn test_on_conflict_target_predicate_span() {
+        let dialect = crate::dialect::PostgreSqlDialect {};
+        let conflict_span = |sql: &str| -> Span {
+            let stmts = Parser::parse_sql(&dialect, sql).unwrap();
+            let Statement::Insert(Insert {
+                on: Some(OnInsert::OnConflict(on_conflict)),
+                ..
+            }) = &stmts[0]
+            else {
+                panic!("not an INSERT ... ON CONFLICT statement");
+            };
+            on_conflict.span()
+        };
+
+        // The target's predicate extends the clause's span past the column list.
+        let sql = "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT (a) WHERE b > 0 DO NOTHING";
+        let test = SpanTest::new(&dialect, sql);
+        assert_eq!(test.get_source(conflict_span(sql)), "a) WHERE b > 0");
+
+        let sql = "INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT (a) DO NOTHING";
+        let test = SpanTest::new(&dialect, sql);
+        assert_eq!(test.get_source(conflict_span(sql)), "a");
     }
 
     #[test]

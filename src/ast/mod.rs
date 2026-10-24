@@ -6917,8 +6917,18 @@ pub struct OnConflict {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Target specification for an `ON CONFLICT` clause.
 pub enum ConflictTarget {
-    /// Target specified as a list of columns.
-    Columns(Vec<Ident>),
+    /// Target specified as a list of columns, optionally followed by
+    /// `WHERE index_predicate`, which lets a partial unique index be inferred as the arbiter:
+    /// `ON CONFLICT (a) WHERE b > 0 DO ...`. PostgreSQL and SQLite both accept the predicate.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-insert.html>
+    /// and <https://www.sqlite.org/lang_upsert.html>
+    Columns {
+        /// The columns of the conflict target.
+        columns: Vec<Ident>,
+        /// The `WHERE index_predicate` after the columns, if any.
+        predicate: Option<Expr>,
+    },
     /// Target specified as a named constraint.
     OnConstraint(ObjectName),
 }
@@ -6968,7 +6978,13 @@ impl fmt::Display for OnConflict {
 impl fmt::Display for ConflictTarget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ConflictTarget::Columns(cols) => write!(f, "({})", display_comma_separated(cols)),
+            ConflictTarget::Columns { columns, predicate } => {
+                write!(f, "({})", display_comma_separated(columns))?;
+                if let Some(predicate) = predicate {
+                    write!(f, " WHERE {predicate}")?;
+                }
+                Ok(())
+            }
             ConflictTarget::OnConstraint(name) => write!(f, " ON CONSTRAINT {name}"),
         }
     }

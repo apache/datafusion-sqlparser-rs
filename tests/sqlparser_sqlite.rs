@@ -188,9 +188,7 @@ fn pragma_values() {
     ));
     sqlite_and_generic().verified_stmt("PRAGMA cache_size = +2000");
 
-    // hex integer tokenizes to a hex string literal
-    sqlite_and_generic()
-        .one_statement_parses_to("PRAGMA optimize = 0x10002", "PRAGMA optimize = X'10002'");
+    sqlite_and_generic().verified_stmt("PRAGMA optimize = 0x10002");
 
     // function-call form with a name argument
     let statement = sqlite_and_generic().verified_stmt("PRAGMA wal_checkpoint(TRUNCATE)");
@@ -2111,4 +2109,27 @@ fn parse_create_table_string_literal_column_with_dangling_constraint_name() {
             .to_string(),
         "sql parser error: Expected: constraint details after CONSTRAINT <name>, found: )"
     );
+}
+
+#[test]
+fn pragma_hexadecimal_numbers_round_trip() {
+    for sql in [
+        "PRAGMA user_version = 0x10",
+        "PRAGMA user_version = +0x10",
+        "PRAGMA user_version = -0x10",
+        "PRAGMA user_version(0xffffffffffffffff)",
+    ] {
+        sqlite_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn pragma_rejects_blob_literals() {
+    for sql in [
+        "PRAGMA user_version = X'10'",
+        "PRAGMA user_version = +X'10'",
+        "PRAGMA user_version = -X'10'",
+    ] {
+        sqlite_and_generic().parse_sql_statements(sql).unwrap_err();
+    }
 }

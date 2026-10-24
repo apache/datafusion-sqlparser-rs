@@ -5773,6 +5773,154 @@ fn parse_bad_constraint() {
 }
 
 #[test]
+fn parse_sequence_options_in_any_order() {
+    // The sequence options form an unordered list, so every permutation below
+    // is accepted and round-trips in the order written.
+    let dialects = all_dialects();
+    for sql in [
+        "CREATE SEQUENCE sa START WITH 1 INCREMENT BY 1",
+        "CREATE SEQUENCE sb INCREMENT BY 1 START WITH 1",
+        "CREATE SEQUENCE sc CACHE 1 START WITH 1",
+        "CREATE SEQUENCE sd CYCLE INCREMENT BY 2",
+        "CREATE SEQUENCE se NO MAXVALUE NO MINVALUE NO CYCLE INCREMENT 1",
+        "CREATE SEQUENCE sf AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+        "CREATE SEQUENCE sg START WITH 1 AS BIGINT",
+        "CREATE SEQUENCE sh OWNED BY t.c START WITH 5",
+        "CREATE SEQUENCE si OWNED BY NONE INCREMENT BY 2",
+        "CREATE SEQUENCE sj CACHE 1 AS BIGINT OWNED BY a.b START WITH 3",
+        "CREATE SEQUENCE sk OWNED BY none.c",
+        "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY ( START WITH 10 INCREMENT BY 1 CYCLE ))",
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( CACHE 2 INCREMENT 1 )",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    // This is what `pg_dump -s` emits for a table with a SERIAL column.
+    dialects.one_statement_parses_to(
+        r#"CREATE SEQUENCE public.accounts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1"#,
+        "CREATE SEQUENCE public.accounts_id_seq AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+    );
+
+    // The parsed options keep the order they were written in, and `OWNED BY NONE`
+    // is distinct from being owned by something called `NONE`.
+    let Statement::CreateSequence {
+        sequence_options, ..
+    } = dialects.verified_stmt("CREATE SEQUENCE sk CACHE 1 OWNED BY NONE AS BIGINT INCREMENT BY 3")
+    else {
+        panic!("expected a CREATE SEQUENCE statement");
+    };
+    assert!(matches!(
+        sequence_options.as_slice(),
+        [
+            SequenceOptions::Cache(_),
+            SequenceOptions::OwnedBy(None),
+            SequenceOptions::DataType(DataType::BigInt(None)),
+            SequenceOptions::IncrementBy(_, true),
+        ]
+    ));
+
+    for (sql, expected) in [
+        // Each option may appear only once.
+        (
+            "CREATE SEQUENCE s START WITH 1 START 2",
+            "START specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s INCREMENT 1 INCREMENT BY 2",
+            "INCREMENT specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s MINVALUE 1 NO MINVALUE",
+            "MINVALUE | NO MINVALUE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s MAXVALUE 1 NO MAXVALUE",
+            "MAXVALUE | NO MAXVALUE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s CACHE 1 CACHE 2",
+            "CACHE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s CYCLE NO CYCLE",
+            "CYCLE | NO CYCLE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s AS INT AS BIGINT",
+            "AS specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s OWNED BY a.b OWNED BY NONE",
+            "OWNED BY specified more than once",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (START 1 START 2))",
+            "START specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s AS",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "CREATE SEQUENCE s OWNED BY",
+            "Expected: identifier, found: EOF",
+        ),
+        // Identity columns take the shared list without `AS` and `OWNED BY`.
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (AS BIGINT))",
+            "Expected: ), found: AS",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (OWNED BY t.id))",
+            "Expected: ), found: OWNED",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn sequence_options_reject_non_numeric_values() {
+    let dialects = all_dialects();
+    for (sql, expected) in [
+        (
+            "CREATE SEQUENCE s MINVALUE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s MAXVALUE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s START WITH x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s CACHE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED BY DEFAULT AS IDENTITY (MINVALUE x))",
+            "Expected: a concrete value, found: x",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
 fn parse_scalar_function_in_projection() {
     let names = vec!["sqrt", "foo"];
 

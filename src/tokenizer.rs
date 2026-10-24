@@ -1074,10 +1074,14 @@ impl<'a> Tokenizer<'a> {
 
             // The payload token precedes the `;` so the statement loop owns the delimiter.
             if let Some((data, terminated, data_span)) = copy_data {
-                buf.push(mapper(TokenWithSpan {
+                let token = mapper(TokenWithSpan {
                     token: Token::CopyData { data, terminated },
                     span: data_span,
-                }));
+                });
+                if !matches!(token.token, Token::Whitespace(_)) {
+                    prev_non_ws = Some(buf.len());
+                }
+                buf.push(token);
             }
 
             // Check if this is a multiline comment hint that should be expanded
@@ -1101,7 +1105,11 @@ impl<'a> Tokenizer<'a> {
             if let Some(rest_tokens) = rest {
                 for rest_token in rest_tokens {
                     copy.note(&rest_token.token);
-                    buf.push(mapper(rest_token));
+                    let rest_token = mapper(rest_token);
+                    if !matches!(rest_token.token, Token::Whitespace(_)) {
+                        prev_non_ws = Some(buf.len());
+                    }
+                    buf.push(rest_token);
                 }
             }
             location = state.location();
@@ -1170,15 +1178,24 @@ impl<'a> Tokenizer<'a> {
         state: &mut State,
         prev: Option<&Token>,
     ) -> Result<CopyCapture, TokenizerError> {
-        let mut rest = Vec::new();
+        let mut rest: Vec<TokenWithSpan> = Vec::new();
         let mut location = state.location();
-        let mut prev = prev;
-        while let Some(token) = self.next_token(state, prev)? {
+        let mut prev_non_ws = None;
+        while let Some(token) = self.next_token(
+            state,
+            rest.last().map(|t| &t.token).or(prev),
+            prev_non_ws.map(|index: usize| &rest[index].token).or(prev),
+        )? {
             let span = location.span_to(state.location());
+            if !matches!(token, Token::Whitespace(_)) {
+                prev_non_ws = Some(rest.len());
+            }
             rest.push(TokenWithSpan { token, span });
             location = state.location();
-            prev = Some(&rest.last().unwrap().token);
-            if matches!(prev, Some(&Token::Whitespace(Whitespace::Newline))) {
+            if matches!(
+                rest.last().map(|t| &t.token),
+                Some(&Token::Whitespace(Whitespace::Newline))
+            ) {
                 break;
             }
         }
@@ -4985,6 +5002,43 @@ mod tests {
                 Token::SemiColon,
             ]
         );
+    }
+
+    #[test]
+    fn tokenize_qualified_underscore_across_copy_payload() {
+        for sql in [
+            "COPY t FROM STDIN; SELECT t ._a FROM t;\nrow1\n\\.\n",
+            "COPY t FROM STDIN; SELECT t\nrow1\n\\.\n ._a FROM t;",
+        ] {
+            let tokens: Vec<_> = Tokenizer::new(&PostgreSqlDialect {}, sql)
+                .tokenize()
+                .unwrap()
+                .into_iter()
+                .filter(|token| !matches!(token, Token::Whitespace(_)))
+                .collect();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::make_word("COPY", None),
+                    Token::make_word("t", None),
+                    Token::make_word("FROM", None),
+                    Token::make_word("STDIN", None),
+                    Token::CopyData {
+                        data: "row1\n".to_string(),
+                        terminated: true,
+                    },
+                    Token::SemiColon,
+                    Token::make_word("SELECT", None),
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("_a", None),
+                    Token::make_word("FROM", None),
+                    Token::make_word("t", None),
+                    Token::SemiColon,
+                ],
+                "{sql}"
+            );
+        }
     }
 
     #[test]

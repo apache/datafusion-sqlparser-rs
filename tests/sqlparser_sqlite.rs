@@ -391,6 +391,31 @@ fn test_placeholder() {
 }
 
 #[test]
+fn parse_colon_does_not_start_json_access() {
+    // SQLite rejects `SELECT c:se` (`near ":se": syntax error`); no `:` traversal.
+    for sql in ["SELECT c:se", "SELECT a:b FROM t"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: end of statement, found: :".to_string()
+            ))
+        );
+    }
+
+    let ast = sqlite().verified_only_select("SELECT :xxx");
+    assert_eq!(
+        ast.projection[0],
+        UnnamedExpr(Expr::Value(
+            (Value::Placeholder(":xxx".into())).with_empty_span()
+        )),
+    );
+
+    TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("SELECT a:b FROM t")
+        .unwrap();
+}
+
+#[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
     if let Statement::CreateTable(CreateTable {
@@ -1488,7 +1513,6 @@ fn parse_on_conflict_target_predicate() {
         other => panic!("unexpected statement: {other:?}"),
     }
 }
-
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

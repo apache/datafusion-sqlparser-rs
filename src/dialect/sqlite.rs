@@ -117,6 +117,8 @@ impl Dialect for SQLiteDialect {
                 Some(Ok(self.prec_value(Precedence::Ampersand)))
             }
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Some(Ok(COMPARISON_PREC)),
+            // lowest prec to prevent it from turning into a binary op
+            Token::Colon => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }

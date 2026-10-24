@@ -6178,7 +6178,7 @@ pub enum CreateAggregateArgs {
 
 impl From<CreateAggregate> for crate::ast::Statement {
     fn from(v: CreateAggregate) -> Self {
-        crate::ast::Statement::CreateAggregate(v)
+        crate::ast::Statement::CreateAggregate(Box::new(v))
     }
 }
 

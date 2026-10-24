@@ -3763,7 +3763,7 @@ pub enum Statement {
     /// CREATE AGGREGATE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createaggregate.html)
-    CreateAggregate(CreateAggregate),
+    CreateAggregate(Box<CreateAggregate>),
     /// ```sql
     /// ALTER TABLE
     /// ```

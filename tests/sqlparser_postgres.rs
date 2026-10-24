@@ -6984,10 +6984,8 @@ fn parse_create_simple_before_insert_trigger() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_insert")]),
-                args: None,
-            },
+            name: ObjectName::from(vec![Ident::new("check_account_insert")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -7023,10 +7021,8 @@ fn parse_create_after_update_trigger_with_condition() {
         }))),
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_update")]),
-                args: None,
-            },
+            name: ObjectName::from(vec![Ident::new("check_account_update")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -7055,10 +7051,8 @@ fn parse_create_instead_of_delete_trigger() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_deletes")]),
-                args: None,
-            },
+            name: ObjectName::from(vec![Ident::new("check_account_deletes")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -7091,10 +7085,8 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_changes")]),
-                args: None,
-            },
+            name: ObjectName::from(vec![Ident::new("check_account_changes")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -7138,10 +7130,8 @@ fn parse_create_trigger_with_referencing() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_referencing")]),
-                args: None,
-            },
+            name: ObjectName::from(vec![Ident::new("check_account_referencing")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -7453,10 +7443,8 @@ fn parse_trigger_related_functions() {
             condition: None,
             exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,
-                func_desc: FunctionDesc {
-                    name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-                    args: Some(vec![]),
-                }
+                name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+                args: Some(vec![]),
             }),
             statements_as: false,
             statements: None,
@@ -10722,6 +10710,42 @@ fn parse_stage_table_factor_rejected() {
 fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
+}
+
+#[test]
+fn parse_create_trigger_exec_body_args() {
+    for exec_type in ["FUNCTION", "PROCEDURE"] {
+        for args in ["()", "('api_key')", "('api_key', 42, 1.5, 'it''s', audit)"] {
+            pg_and_generic().verified_stmt(&format!(
+                "CREATE TRIGGER t_audit AFTER INSERT ON t FOR EACH ROW EXECUTE {exec_type} audit_row{args}"
+            ));
+        }
+    }
+
+    let sql = "CREATE TRIGGER t_audit AFTER INSERT ON t FOR EACH ROW EXECUTE FUNCTION audit_row('api_key', 42, audit)";
+    let Statement::CreateTrigger(CreateTrigger { exec_body, .. }) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        exec_body,
+        Some(TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            name: ObjectName::from(vec![Ident::new("audit_row")]),
+            args: Some(vec![
+                Expr::value(Value::SingleQuotedString("api_key".to_string())),
+                Expr::value(number("42")),
+                Expr::Identifier(Ident::new("audit")),
+            ]),
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements(
+            "CREATE TRIGGER t_audit AFTER INSERT ON t FOR EACH ROW EXECUTE FUNCTION audit_row('api_key'"
+        )
+        .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: EOF".to_string()),
+    );
 }
 
 #[test]

@@ -10875,3 +10875,53 @@ fn parse_create_aggregate_rejects_output_arguments_and_defaults() {
         );
     }
 }
+
+#[test]
+fn parse_drop_group() {
+    for (sql, expected_names, expected_if_exists) in [
+        ("DROP GROUP staff", vec!["staff"], false),
+        (
+            "DROP GROUP IF EXISTS staff, workers",
+            vec!["staff", "workers"],
+            true,
+        ),
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::Drop {
+                object_type,
+                if_exists,
+                names,
+                ..
+            } => {
+                assert_eq!(object_type, ObjectType::Group);
+                assert_eq_vec(&expected_names, &names);
+                assert_eq!(if_exists, expected_if_exists);
+            }
+            other => panic!("expected DROP statement, got {other:?}"),
+        }
+    }
+    pg().verified_stmt(r#"DROP GROUP "Mixed Name", "GROUP""#);
+}
+
+#[test]
+fn parse_drop_group_rejects_drop_behaviors() {
+    for behavior in ["CASCADE", "RESTRICT", "PURGE"] {
+        assert_eq!(
+            pg().parse_sql_statements(&format!("DROP GROUP staff {behavior}")),
+            Err(ParserError::ParserError(
+                "Cannot specify CASCADE, RESTRICT, or PURGE in DROP GROUP".to_string()
+            ))
+        );
+    }
+}
+
+#[test]
+fn parse_drop_group_is_dialect_gated() {
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_drop_group())
+            .parse_sql_statements("DROP GROUP staff"),
+        Err(ParserError::ParserError(
+            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
+        ))
+    );
+}

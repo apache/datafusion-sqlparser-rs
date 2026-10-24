@@ -1367,13 +1367,13 @@ fn test_signed_type_modifiers() {
     );
     sqlite().verified_stmt("SELECT abs(-1), round(1, 1.5), char(+1, -2)");
     // plain unsigned integer keeps the normal AST
-    let Statement::CreateTable(CreateTable { columns, .. }) =
+    let Statement::CreateTable(create_table) =
         sqlite().verified_stmt("CREATE TABLE t (a CHAR(10))")
     else {
         panic!("expected a CREATE TABLE statement");
     };
     assert_eq!(
-        columns[0].data_type,
+        create_table.columns[0].data_type,
         DataType::Char(Some(CharacterLength::IntegerLength {
             length: 10,
             unit: None,

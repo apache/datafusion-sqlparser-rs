@@ -1735,18 +1735,22 @@ fn parse_on_conflict_target_predicate() {
     // See <https://www.sqlite.org/lang_upsert.html>
     let sql = "INSERT INTO t VALUES (1, 2, 3) ON CONFLICT(a) WHERE b > 0 DO NOTHING";
     match sqlite().verified_stmt(sql) {
-        Statement::Insert(Insert {
-            on:
-                Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target:
-                        Some(ConflictTarget::Columns {
-                            columns,
-                            predicate: Some(predicate),
-                        }),
-                    action: OnConflictAction::DoNothing,
-                })),
-            ..
-        }) => {
+        Statement::Insert(insert) => {
+            let Insert {
+                on:
+                    Some(OnInsert::OnConflict(OnConflict {
+                        conflict_target:
+                            Some(ConflictTarget::Columns {
+                                columns,
+                                predicate: Some(predicate),
+                            }),
+                        action: OnConflictAction::DoNothing,
+                    })),
+                ..
+            } = *insert
+            else {
+                unreachable!()
+            };
             assert_eq!(columns, vec![Ident::new("a")]);
             assert_eq!(predicate.to_string(), "b > 0");
         }

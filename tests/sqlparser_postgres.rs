@@ -2624,18 +2624,22 @@ fn parse_pg_on_conflict_target_predicate() {
         ),
     ] {
         match pg_and_generic().verified_stmt(sql) {
-            Statement::Insert(Insert {
-                on:
-                    Some(OnInsert::OnConflict(OnConflict {
-                        conflict_target:
-                            Some(ConflictTarget::Columns {
-                                predicate: Some(predicate),
-                                ..
-                            }),
-                        action,
-                    })),
-                ..
-            }) => {
+            Statement::Insert(insert) => {
+                let Insert {
+                    on:
+                        Some(OnInsert::OnConflict(OnConflict {
+                            conflict_target:
+                                Some(ConflictTarget::Columns {
+                                    predicate: Some(predicate),
+                                    ..
+                                }),
+                            action,
+                        })),
+                    ..
+                } = *insert
+                else {
+                    unreachable!()
+                };
                 assert_eq!(predicate.to_string(), "b > 0");
                 let selection = match action {
                     OnConflictAction::DoUpdate(DoUpdate { selection, .. }) => selection,

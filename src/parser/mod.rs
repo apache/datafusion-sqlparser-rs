@@ -13258,6 +13258,11 @@ impl<'a> Parser<'a> {
             Token::SingleQuotedString(value) => Ident::with_quote('\'', value.clone()),
             _ => return self.expected_ref("a data type name", token),
         };
+        if self.peek_multiword_type_name_part().is_none() {
+            if let Some(error) = dedicated_error {
+                return Err(error);
+            }
+        }
         self.parse_multiword_type_name(first)
             .map_err(|error| dedicated_error.unwrap_or(error))
     }

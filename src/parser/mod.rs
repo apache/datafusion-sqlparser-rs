@@ -1718,6 +1718,7 @@ impl<'a> Parser<'a> {
             Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
             | Token::HexStringLiteral(_)
+            | Token::HexNumber(_)
                 if w.value.starts_with('_') =>
             {
                 Ok(Expr::Prefixed {
@@ -1729,6 +1730,7 @@ impl<'a> Parser<'a> {
             Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
             | Token::HexStringLiteral(_)
+            | Token::HexNumber(_)
                 if w.value.starts_with('_') =>
             {
                 Ok(Expr::Prefixed {
@@ -2052,7 +2054,8 @@ impl<'a> Parser<'a> {
             | Token::NationalStringLiteral(_)
             | Token::QuoteDelimitedStringLiteral(_)
             | Token::NationalQuoteDelimitedStringLiteral(_)
-            | Token::HexStringLiteral(_) => {
+            | Token::HexStringLiteral(_)
+            | Token::HexNumber(_) => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
@@ -3273,7 +3276,8 @@ impl<'a> Parser<'a> {
                     | Token::NationalStringLiteral(_)
                     | Token::QuoteDelimitedStringLiteral(_)
                     | Token::NationalQuoteDelimitedStringLiteral(_)
-                    | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
+                    | Token::HexStringLiteral(_)
+                    | Token::HexNumber(_) => Some(Box::new(self.parse_expr()?)),
                     _ => self.expected_ref(
                         "either filler, WITH, or WITHOUT in LISTAGG",
                         self.peek_token_ref(),
@@ -12939,6 +12943,7 @@ impl<'a> Parser<'a> {
                 ok_value(Value::UnicodeStringLiteral(s.to_string()))
             }
             Token::HexStringLiteral(ref s) => ok_value(Value::HexStringLiteral(s.to_string())),
+            Token::HexNumber(s) => ok_value(Value::HexNumber(s)),
             Token::Placeholder(ref s) => ok_value(Value::Placeholder(s.to_string())),
             tok @ Token::Colon | tok @ Token::AtSign => {
                 // 1. Not calling self.parse_identifier(false)?
@@ -13052,6 +13057,7 @@ impl<'a> Parser<'a> {
             Token::HexStringLiteral(ref s) => Ok(Expr::Value(
                 Value::HexStringLiteral(s.to_string()).with_span(span),
             )),
+            Token::HexNumber(s) => Ok(Expr::Value(Value::HexNumber(s).with_span(span))),
             unexpected => self.expected(
                 "a string value",
                 TokenWithSpan {
@@ -20833,44 +20839,53 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_pragma_value(&mut self) -> Result<ValueWithSpan, ParserError> {
-        let v = self.parse_value()?;
-        match &v.value {
-            Value::SingleQuotedString(_) => Ok(v),
-            Value::DoubleQuotedString(_) => Ok(v),
-            Value::Number(_, _) => Ok(v),
-            Value::Placeholder(_) => Ok(v),
-            _ => {
-                self.prev_token();
-                self.expected_ref("number or string or ? placeholder", self.peek_token_ref())
+    /// Parse a SQLite `pragma-value`: `signed-number | name | signed-literal`.
+    fn parse_pragma_value(&mut self) -> Result<Expr, ParserError> {
+        if matches!(self.peek_token_ref().token, Token::Plus | Token::Minus) {
+            let op = match self.next_token().token {
+                Token::Plus => UnaryOperator::Plus,
+                _ => UnaryOperator::Minus,
+            };
+            // SQLite only permits a sign before a number
+            if !matches!(
+                self.peek_token_ref().token,
+                Token::Number(..) | Token::HexNumber(_)
+            ) {
+                return self.expected_ref("number", self.peek_token_ref());
             }
+            return Ok(Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Value(self.parse_value()?)),
+            });
+        }
+        if matches!(
+            self.peek_token_ref().token,
+            Token::Word(Word {
+                keyword: Keyword::NULL,
+                ..
+            }) | Token::HexStringLiteral(_)
+        ) {
+            return self.expected_ref("number, name or string", self.peek_token_ref());
+        }
+        match self.try_parse(|parser| parser.parse_value()) {
+            Ok(value) => Ok(Expr::Value(value)),
+            Err(_) => Ok(Expr::Identifier(self.parse_identifier()?)),
         }
     }
 
     /// PRAGMA [schema-name '.'] pragma-name [('=' pragma-value) | '(' pragma-value ')']
     pub fn parse_pragma(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
-        if self.consume_token(&Token::LParen) {
+        let (value, is_eq) = if self.consume_token(&Token::LParen) {
             let value = self.parse_pragma_value()?;
             self.expect_token(&Token::RParen)?;
-            Ok(Statement::Pragma {
-                name,
-                value: Some(value),
-                is_eq: false,
-            })
+            (Some(value), false)
         } else if self.consume_token(&Token::Eq) {
-            Ok(Statement::Pragma {
-                name,
-                value: Some(self.parse_pragma_value()?),
-                is_eq: true,
-            })
+            (Some(self.parse_pragma_value()?), true)
         } else {
-            Ok(Statement::Pragma {
-                name,
-                value: None,
-                is_eq: false,
-            })
-        }
+            (None, false)
+        };
+        Ok(Statement::Pragma { name, value, is_eq })
     }
 
     /// `INSTALL [extension_name]`

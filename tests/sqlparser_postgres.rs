@@ -5103,6 +5103,156 @@ fn parse_alter_user() {
 }
 
 #[test]
+fn parse_alter_default_privileges() {
+    // What `pg_dump -s` emits for a default ACL.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO app_user");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE a, b IN SCHEMA s1, s2 GRANT SELECT, INSERT ON TABLES TO app WITH GRANT OPTION");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT ALL PRIVILEGES ON SEQUENCES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON ROUTINES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE ON TYPES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE, CREATE ON SCHEMAS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR ALL ON TABLES FROM app CASCADE",
+    );
+    // `FOR USER` normalises to `FOR ROLE`.
+    pg().one_statement_parses_to(
+        "ALTER DEFAULT PRIVILEGES FOR USER bob GRANT SELECT ON TABLES TO app",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE bob GRANT SELECT ON TABLES TO app",
+    );
+
+    // Options keep the order written.
+    for (sql, options) in [
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA s FOR ROLE r GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+            ],
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+            ],
+        ),
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::AlterDefaultPrivileges(stmt) => assert_eq!(stmt.options, options, "{sql}"),
+            _ => unreachable!(),
+        }
+    }
+    // `LARGE OBJECTS` is a valid object type for both `GRANT` and `REVOKE`.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT, UPDATE ON LARGE OBJECTS TO app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON LARGE OBJECTS FROM app CASCADE",
+    );
+    // Repeated options are rejected.
+    assert_eq!(
+        pg().parse_sql_statements(
+            "ALTER DEFAULT PRIVILEGES FOR ROLE a FOR ROLE b GRANT SELECT ON TABLES TO app"
+        )
+        .unwrap_err(),
+        ParserError::ParserError("FOR ROLE specified more than once".to_string()),
+    );
+    assert_eq!(
+        pg().parse_sql_statements(
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA s IN SCHEMA t GRANT SELECT ON TABLES TO app"
+        )
+        .unwrap_err(),
+        ParserError::ParserError("IN SCHEMA specified more than once".to_string()),
+    );
+
+    // `TABLES` is a keyword only here, so a table named `tables` still parses.
+    pg().verified_stmt("GRANT SELECT ON TABLES TO app");
+    assert_eq!(
+        pg().parse_sql_statements("ALTER DEFAULT PRIVILEGES FOR ROLE a")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: GRANT or REVOKE, found: EOF".to_string()),
+    );
+}
+
+#[test]
+fn parse_alter_default_privileges_rejects_malformed_statements() {
+    for (sql, expected) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ALL GRANT SELECT ON TABLES TO app",
+            "Expected: one of ROLE or USER, found: ALL",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT ON TABLES TO app",
+            "Expected: a privilege keyword, found: ON",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT TO app",
+            "Expected: ON, found: TO",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON INDEXES TO app",
+            "Expected: TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES, SCHEMAS or LARGE OBJECTS, found: INDEXES",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn parse_alter_default_privileges_spans() {
+    for (sql, start, end) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g",
+            35,
+            76,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM g",
+            55,
+            56,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r GRANT SELECT ON TABLES TO PUBLIC",
+            35,
+            36,
+        ),
+    ] {
+        let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+        assert_eq!(
+            statements[0].span(),
+            Span::new(Location::new(1, start), Location::new(1, end)),
+            "span for {sql}"
+        );
+    }
+    let sql = "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM 'bob'@'localhost'";
+    let statements = Parser::parse_sql(&sqlparser::dialect::GenericDialect {}, sql).unwrap();
+    assert_eq!(
+        statements[0].span(),
+        Span::new(Location::new(1, 55), Location::new(1, 72))
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = pg().verified_only_select(

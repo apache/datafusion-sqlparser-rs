@@ -6534,6 +6534,7 @@ impl Spanned for CreateForeignTable {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateAggregate {
     /// True if `OR REPLACE` was specified.
     pub or_replace: bool,
@@ -6573,6 +6574,7 @@ impl fmt::Display for CreateAggregate {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateAggregateArgs {
     /// No argument-list parentheses: the historical form that packs everything,
     /// usually including a `BASETYPE` option, into a single list.
@@ -6604,6 +6606,7 @@ impl From<CreateAggregate> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateAggregateOption {
     /// `SFUNC = state_transition_function`
     StateTransitionFunction(ObjectName),
@@ -6689,6 +6692,7 @@ impl fmt::Display for CreateAggregateOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AggregateModifyKind {
     /// The final function does not modify the transition state.
     ReadOnly,

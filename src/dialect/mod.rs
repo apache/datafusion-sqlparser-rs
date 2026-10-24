@@ -1610,6 +1610,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports SQLite's `INDEXED BY` and `NOT INDEXED` index-selection clauses.
+    ///
+    /// See <https://www.sqlite.org/lang_indexedby.html>
+    fn supports_indexed_by(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect requires a whitespace character after `--` to start a single line comment.
     ///
     /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>

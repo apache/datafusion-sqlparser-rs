@@ -20906,6 +20906,29 @@ fn parse_position_in_connect_by_list_after_state_change() {
 }
 
 #[test]
+fn parse_quoted_identifier_with_backslash_before_quote() {
+    for q in ['"', '`'] {
+        let dialects = all_dialects_where(|d| d.is_delimited_identifier_start(q));
+
+        let select = dialects.verified_only_select(&format!("SELECT {q}a\\{q}{q}{q}"));
+        assert_eq!(
+            select.projection[0],
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote(q, format!("a\\{q}"))))
+        );
+
+        // A backslash does not escape the closing quote.
+        let err = dialects
+            .parse_sql_statements(&format!("SELECT {q}a\\{q}{q}"))
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains(&format!("Expected close delimiter '{q}' before EOF")),
+            "{err}"
+        );
+    }
+}
+
+#[test]
 fn parse_array_suffix_after_nested_type() {
     // When `>>` closes two types at once, a following array suffix belongs to the outer one.
     let dialects = all_dialects_where(|d| {

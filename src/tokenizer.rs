@@ -1034,8 +1034,7 @@ impl<'a> Tokenizer<'a> {
         self.tokenize_with_location_into_buf_with_mapper(buf, |token| token)
     }
 
-    /// Tokenize the statement and produce a vector of tokens, mapping each token
-    /// with provided `mapper`
+    /// Tokenize into the provided buffer, using existing and mapped tokens as context for subsequent tokens.
     pub fn tokenize_with_location_into_buf_with_mapper(
         &mut self,
         buf: &mut Vec<TokenWithSpan>,
@@ -1047,9 +1046,16 @@ impl<'a> Tokenizer<'a> {
             col: 1,
         };
 
+        let mut prev_non_ws = buf
+            .iter()
+            .rposition(|t| !matches!(t.token, Token::Whitespace(_)));
         let mut location = state.location();
         let mut copy = CopyStatementTracker::new(self.dialect.supports_copy_from_stdin_data());
-        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = self.next_token(
+            &mut state,
+            buf.last().map(|t| &t.token),
+            prev_non_ws.map(|index| &buf[index].token),
+        )? {
             let span = location.span_to(state.location());
 
             // Capture before tokenizing the rest of the line so both keep their source locations.
@@ -1068,10 +1074,14 @@ impl<'a> Tokenizer<'a> {
 
             // The payload token precedes the `;` so the statement loop owns the delimiter.
             if let Some((data, terminated, data_span)) = copy_data {
-                buf.push(mapper(TokenWithSpan {
+                let token = mapper(TokenWithSpan {
                     token: Token::CopyData { data, terminated },
                     span: data_span,
-                }));
+                });
+                if !matches!(token.token, Token::Whitespace(_)) {
+                    prev_non_ws = Some(buf.len());
+                }
+                buf.push(token);
             }
 
             // Check if this is a multiline comment hint that should be expanded
@@ -1081,17 +1091,25 @@ impl<'a> Tokenizer<'a> {
                         && comment.starts_with('!') =>
                 {
                     // Re-tokenize the hints and add them to the buffer
-                    self.tokenize_comment_hints(comment, span, buf, &mut mapper)?;
+                    self.tokenize_comment_hints(comment, span, buf, &mut prev_non_ws, &mut mapper)?;
                 }
                 _ => {
-                    buf.push(mapper(TokenWithSpan { token, span }));
+                    let token = mapper(TokenWithSpan { token, span });
+                    if !matches!(token.token, Token::Whitespace(_)) {
+                        prev_non_ws = Some(buf.len());
+                    }
+                    buf.push(token);
                 }
             }
 
             if let Some(rest_tokens) = rest {
                 for rest_token in rest_tokens {
                     copy.note(&rest_token.token);
-                    buf.push(mapper(rest_token));
+                    let rest_token = mapper(rest_token);
+                    if !matches!(rest_token.token, Token::Whitespace(_)) {
+                        prev_non_ws = Some(buf.len());
+                    }
+                    buf.push(rest_token);
                 }
             }
             location = state.location();
@@ -1106,6 +1124,7 @@ impl<'a> Tokenizer<'a> {
         comment: &str,
         span: Span,
         buf: &mut Vec<TokenWithSpan>,
+        prev_non_ws: &mut Option<usize>,
         mut mapper: impl FnMut(TokenWithSpan) -> TokenWithSpan,
     ) -> Result<(), TokenizerError> {
         // Strip the leading '!' and any version digits (e.g., "50110")
@@ -1131,12 +1150,20 @@ impl<'a> Tokenizer<'a> {
 
         // Tokenize the hint content and add tokens to the buffer
         let mut location = state.location();
-        while let Some(token) = inner.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = inner.next_token(
+            &mut state,
+            buf.last().map(|t| &t.token),
+            prev_non_ws.map(|index| &buf[index].token),
+        )? {
             let token_span = location.span_to(state.location());
-            buf.push(mapper(TokenWithSpan {
+            let token = mapper(TokenWithSpan {
                 token,
                 span: token_span,
-            }));
+            });
+            if !matches!(token.token, Token::Whitespace(_)) {
+                *prev_non_ws = Some(buf.len());
+            }
+            buf.push(token);
             location = state.location();
         }
 
@@ -1151,15 +1178,24 @@ impl<'a> Tokenizer<'a> {
         state: &mut State,
         prev: Option<&Token>,
     ) -> Result<CopyCapture, TokenizerError> {
-        let mut rest = Vec::new();
+        let mut rest: Vec<TokenWithSpan> = Vec::new();
         let mut location = state.location();
-        let mut prev = prev;
-        while let Some(token) = self.next_token(state, prev)? {
+        let mut prev_non_ws = None;
+        while let Some(token) = self.next_token(
+            state,
+            rest.last().map(|t| &t.token).or(prev),
+            prev_non_ws.map(|index: usize| &rest[index].token).or(prev),
+        )? {
             let span = location.span_to(state.location());
+            if !matches!(token, Token::Whitespace(_)) {
+                prev_non_ws = Some(rest.len());
+            }
             rest.push(TokenWithSpan { token, span });
             location = state.location();
-            prev = Some(&rest.last().unwrap().token);
-            if matches!(prev, Some(&Token::Whitespace(Whitespace::Newline))) {
+            if matches!(
+                rest.last().map(|t| &t.token),
+                Some(&Token::Whitespace(Whitespace::Newline))
+            ) {
                 break;
             }
         }
@@ -1245,6 +1281,7 @@ impl<'a> Tokenizer<'a> {
         &self,
         chars: &mut State,
         prev_token: Option<&Token>,
+        prev_non_ws_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
@@ -1528,12 +1565,9 @@ impl<'a> Tokenizer<'a> {
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
-                    // special case where if ._ is encountered after a word then that word
-                    // is a table and the _ is the start of the col name.
-                    // if the prev token is not a word, then this is not a valid sql
-                    // word or number.
+                    // ._ after a word is a field access, not a decimal point
                     if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if let Some(Token::Word(_)) = prev_non_ws_token {
                             chars.next();
                             return Ok(Some(Token::Period));
                         }
@@ -4578,15 +4612,30 @@ mod tests {
 
         compare(expected, tokens);
 
-        let sql = String::from("SELECT ._123");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
+        // Whitespace between the word and ._ is accepted
+        let sql = String::from("SELECT table ._col");
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "table".to_string(),
+                quote_style: None,
+                keyword: Keyword::TABLE,
+            }),
+            Token::Whitespace(Whitespace::Space),
+            Token::Period,
+            Token::Word(Word {
+                value: "_col".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+        ];
+        compare(expected, tokens);
 
-        let sql = String::from("SELECT ._abc");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
+        // Without a preceding identifier ._ is still rejected
+        let err = Tokenizer::new(&dialect, "._abc").tokenize();
+        assert!(err.is_err(), "expected tokenizer error for bare ._abc");
     }
 
     #[test]
@@ -4685,6 +4734,47 @@ mod tests {
                 Token::Whitespace(Whitespace::Space),
                 Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
+            ],
+            tokens,
+        );
+    }
+
+    #[test]
+    fn tokenize_comment_hint_underscore_after_non_word_is_error() {
+        let sql = "SELECT 1 /*!50110 ._a */ FROM t";
+        let dialect = MySqlDialect {};
+        let err = Tokenizer::new(&dialect, sql).tokenize().unwrap_err();
+        assert_eq!(
+            err,
+            TokenizerError {
+                message: "Unexpected character '_'".to_string(),
+                location: Location::new(1, 11),
+            }
+        );
+    }
+
+    #[test]
+    fn tokenize_into_existing_buffer_keeps_qualified_name_context() {
+        let dialect = MySqlDialect {};
+        let mut tokens = Tokenizer::new(&dialect, "SELECT t ")
+            .tokenize_with_location()
+            .unwrap();
+        Tokenizer::new(&dialect, "._col FROM t")
+            .tokenize_with_location_into_buf(&mut tokens)
+            .unwrap();
+        let tokens = tokens
+            .into_iter()
+            .map(|token| token.token)
+            .filter(|token| !matches!(token, Token::Whitespace(_)))
+            .collect();
+        compare(
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::make_word("t", None),
+                Token::Period,
+                Token::make_word("_col", None),
+                Token::make_keyword("FROM"),
+                Token::make_word("t", None),
             ],
             tokens,
         );
@@ -4912,6 +5002,43 @@ mod tests {
                 Token::SemiColon,
             ]
         );
+    }
+
+    #[test]
+    fn tokenize_qualified_underscore_across_copy_payload() {
+        for sql in [
+            "COPY t FROM STDIN; SELECT t ._a FROM t;\nrow1\n\\.\n",
+            "COPY t FROM STDIN; SELECT t\nrow1\n\\.\n ._a FROM t;",
+        ] {
+            let tokens: Vec<_> = Tokenizer::new(&PostgreSqlDialect {}, sql)
+                .tokenize()
+                .unwrap()
+                .into_iter()
+                .filter(|token| !matches!(token, Token::Whitespace(_)))
+                .collect();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::make_word("COPY", None),
+                    Token::make_word("t", None),
+                    Token::make_word("FROM", None),
+                    Token::make_word("STDIN", None),
+                    Token::CopyData {
+                        data: "row1\n".to_string(),
+                        terminated: true,
+                    },
+                    Token::SemiColon,
+                    Token::make_word("SELECT", None),
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("_a", None),
+                    Token::make_word("FROM", None),
+                    Token::make_word("t", None),
+                    Token::SemiColon,
+                ],
+                "{sql}"
+            );
+        }
     }
 
     #[test]

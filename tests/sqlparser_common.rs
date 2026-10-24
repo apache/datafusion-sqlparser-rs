@@ -16294,6 +16294,87 @@ fn test_keywords_as_column_names_after_dot() {
 }
 
 #[test]
+fn parse_period_underscore_after_whitespace() {
+    let dialects = all_dialects_where(|d| d.is_identifier_start('_'));
+    dialects.verified_stmt("SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t ._a FROM t", "SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t . _a FROM t", "SELECT t._a FROM t");
+
+    let no_expression =
+        || ParserError::ParserError("Expected: an expression, found: .".to_string());
+    for (sql, error) in [
+        ("SELECT ._abc", no_expression()),
+        ("SELECT ._123", no_expression()),
+        (
+            "SELECT 1 ._a",
+            ParserError::TokenizerError(
+                "Unexpected character '_' at Line: 1, Column: 10".to_string(),
+            ),
+        ),
+    ] {
+        assert_eq!(dialects.parse_sql_statements(sql), Err(error), "{sql}");
+    }
+}
+
+#[test]
+fn tokenize_long_whitespace_run_completes() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let request_id = "tokenize-long-whitespace-run";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT{}t._a FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = Tokenizer::new(&GenericDialect {}, &sql)
+            .tokenize_with_location()
+            .map(drop);
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name should tokenize");
+}
+
+#[test]
+fn tokenize_long_whitespace_run_in_comment_hint_completes() {
+    use core::time::Duration;
+    use std::sync::mpsc;
+    use std::thread;
+
+    let request_id = "tokenize-long-whitespace-run-in-comment-hint";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT /*!{}t ._a */ FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = [&GenericDialect {} as &dyn Dialect, &MySqlDialect {}]
+            .into_iter()
+            .try_for_each(|dialect| {
+                Tokenizer::new(dialect, &sql)
+                    .tokenize_with_location()
+                    .map(drop)
+            });
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("hint tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name in hint should tokenize");
+}
+
+#[test]
+fn parse_qualified_underscore_column_from_comment_hint() {
+    let dialects = all_dialects_where(|d| d.supports_multiline_comment_hints());
+    dialects.one_statement_parses_to("SELECT t /*!50110 ._col */ FROM t", "SELECT t._col FROM t");
+}
+
+#[test]
 fn test_qualified_keyword_function_calls() {
     let pg = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
 

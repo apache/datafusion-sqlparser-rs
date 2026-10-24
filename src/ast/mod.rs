@@ -9318,7 +9318,7 @@ pub enum TransactionMode {
     AccessMode(TransactionAccessMode),
     /// Isolation level for a transaction (e.g. `SERIALIZABLE`).
     IsolationLevel(TransactionIsolationLevel),
-    /// `DEFERRABLE` when true, `NOT DEFERRABLE` when false.
+    /// PostgreSQL transaction deferrability for [`START TRANSACTION`](https://www.postgresql.org/docs/17/sql-start-transaction.html) and [`SET TRANSACTION`](https://www.postgresql.org/docs/17/sql-set-transaction.html), with `true` for `DEFERRABLE` and `false` for `NOT DEFERRABLE`.
     Deferrable(bool),
 }
 

@@ -1862,7 +1862,11 @@ impl<'a> Parser<'a> {
             _ => None,
         };
         let opt_expr = self.maybe_parse(|parser| {
-            match parser.parse_data_type()? {
+            let (data_type, trailing_bracket) = parser.parse_data_type_inner()?;
+            if trailing_bracket.0 {
+                return parser_err!("dummy", loc);
+            }
+            match data_type {
                 DataType::Interval { .. } => parser.parse_interval(),
                 // Custom names need dialect consent, else `NOT 'a'` would read as a typed string.
                 DataType::Custom(name, modifiers)
@@ -10124,6 +10128,7 @@ impl<'a> Parser<'a> {
                     Keyword::CONSTRAINT
                         | Keyword::PRIMARY
                         | Keyword::NOT
+                        | Keyword::NULL
                         | Keyword::UNIQUE
                         | Keyword::CHECK
                         | Keyword::DEFAULT
@@ -13356,10 +13361,41 @@ impl<'a> Parser<'a> {
         Ok(ty)
     }
 
-    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn parse_data_type_helper(
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        if !self.dialect.supports_multiword_type_names() {
+            return self.parse_data_type_inner();
+        }
+
+        let index = self.index;
+        let dedicated_error = match self.try_parse(|parser| parser.parse_data_type_inner()) {
+            Ok(data_type) => {
+                if self.peek_multiword_type_name_part().is_none() {
+                    return Ok(data_type);
+                }
+                self.index = index;
+                None
+            }
+            Err(ParserError::RecursionLimitExceeded) => {
+                return Err(ParserError::RecursionLimitExceeded);
+            }
+            Err(error) => Some(error),
+        };
+
+        self.advance_token();
+        let token = self.get_current_token();
+        let first = match &token.token {
+            Token::Word(word) => word.clone().into_ident(token.span),
+            Token::SingleQuotedString(value) => Ident::with_quote('\'', value.clone()),
+            _ => return self.expected_ref("a data type name", token),
+        };
+        self.parse_multiword_type_name(first)
+            .map_err(|error| dedicated_error.unwrap_or(error))
+    }
+
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
+    fn parse_data_type_inner(&mut self) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
 
         let dialect = self.dialect;
@@ -15040,6 +15076,88 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn peek_multiword_type_name_part(&self) -> Option<&TokenWithSpan> {
+        let peeked = self.peek_token_ref();
+        let is_part = match &peeked.token {
+            Token::Word(w) if w.keyword == Keyword::GENERATED => !matches!(
+                &self.peek_nth_token_ref(1).token,
+                Token::Word(w) if w.keyword == Keyword::ALWAYS
+            ),
+            Token::Word(w) => !matches!(
+                w.keyword,
+                Keyword::ADD
+                    | Keyword::ALL
+                    | Keyword::ALTER
+                    | Keyword::AND
+                    | Keyword::AS
+                    | Keyword::AUTOINCREMENT
+                    | Keyword::BETWEEN
+                    | Keyword::CASE
+                    | Keyword::CHECK
+                    | Keyword::COLLATE
+                    | Keyword::COMMIT
+                    | Keyword::CONSTRAINT
+                    | Keyword::CREATE
+                    | Keyword::CROSS
+                    | Keyword::DEFAULT
+                    | Keyword::DELETE
+                    | Keyword::DEFERRABLE
+                    | Keyword::DISTINCT
+                    | Keyword::DROP
+                    | Keyword::ELSE
+                    | Keyword::ESCAPE
+                    | Keyword::EXCEPT
+                    | Keyword::EXISTS
+                    | Keyword::FOREIGN
+                    | Keyword::FROM
+                    | Keyword::FULL
+                    | Keyword::GROUP
+                    | Keyword::HAVING
+                    | Keyword::IN
+                    | Keyword::INDEX
+                    | Keyword::INDEXED
+                    | Keyword::INNER
+                    | Keyword::INSERT
+                    | Keyword::INTERSECT
+                    | Keyword::INTO
+                    | Keyword::IS
+                    | Keyword::ISNULL
+                    | Keyword::JOIN
+                    | Keyword::LEFT
+                    | Keyword::LIMIT
+                    | Keyword::NATURAL
+                    | Keyword::NOT
+                    | Keyword::NULL
+                    | Keyword::NOTHING
+                    | Keyword::NOTNULL
+                    | Keyword::ON
+                    | Keyword::OR
+                    | Keyword::ORDER
+                    | Keyword::OUTER
+                    | Keyword::PRIMARY
+                    | Keyword::REFERENCES
+                    | Keyword::RETURNING
+                    | Keyword::RIGHT
+                    | Keyword::SELECT
+                    | Keyword::SET
+                    | Keyword::TABLE
+                    | Keyword::THEN
+                    | Keyword::TO
+                    | Keyword::TRANSACTION
+                    | Keyword::UNIQUE
+                    | Keyword::UNION
+                    | Keyword::UPDATE
+                    | Keyword::USING
+                    | Keyword::VALUES
+                    | Keyword::WHEN
+                    | Keyword::WHERE
+            ),
+            Token::SingleQuotedString(_) => true,
+            _ => false,
+        };
+        is_part.then_some(peeked)
+    }
+
     /// Parse a space-separated multi-word typename per SQLite's `typename` grammar.
     fn parse_multiword_type_name(
         &mut self,
@@ -15047,101 +15165,11 @@ impl<'a> Parser<'a> {
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let mut parts = Vec::with_capacity(4);
         parts.push(first);
-        loop {
-            let next_part = {
-                let peeked = self.peek_token_ref();
-                match &peeked.token {
-                    Token::Word(w) if w.keyword == Keyword::GENERATED => {
-                        // `GENERATED` starts a constraint only when followed
-                        // by `ALWAYS`, otherwise it is a type name word.
-                        (!matches!(
-                            &self.peek_nth_token_ref(1).token,
-                            Token::Word(w) if w.keyword == Keyword::ALWAYS
-                        ))
-                        .then(|| w.clone().into_ident(peeked.span))
-                    }
-                    Token::Word(w) => {
-                        // Fully-reserved keywords end the type name, see
-                        // <https://www.sqlite.org/lang_keywords.html>
-                        (!matches!(
-                            w.keyword,
-                            Keyword::ADD
-                                | Keyword::ALL
-                                | Keyword::ALTER
-                                | Keyword::AND
-                                | Keyword::AS
-                                | Keyword::AUTOINCREMENT
-                                | Keyword::BETWEEN
-                                | Keyword::CASE
-                                | Keyword::CHECK
-                                | Keyword::COLLATE
-                                | Keyword::COMMIT
-                                | Keyword::CONSTRAINT
-                                | Keyword::CREATE
-                                | Keyword::CROSS
-                                | Keyword::DEFAULT
-                                | Keyword::DELETE
-                                | Keyword::DEFERRABLE
-                                | Keyword::DISTINCT
-                                | Keyword::DROP
-                                | Keyword::ELSE
-                                | Keyword::ESCAPE
-                                | Keyword::EXCEPT
-                                | Keyword::EXISTS
-                                | Keyword::FOREIGN
-                                | Keyword::FROM
-                                | Keyword::FULL
-                                | Keyword::GROUP
-                                | Keyword::HAVING
-                                | Keyword::IN
-                                | Keyword::INDEX
-                                | Keyword::INDEXED
-                                | Keyword::INNER
-                                | Keyword::INSERT
-                                | Keyword::INTERSECT
-                                | Keyword::INTO
-                                | Keyword::IS
-                                | Keyword::ISNULL
-                                | Keyword::JOIN
-                                | Keyword::LEFT
-                                | Keyword::LIMIT
-                                | Keyword::NATURAL
-                                | Keyword::NOT
-                                | Keyword::NULL
-                                | Keyword::NOTHING
-                                | Keyword::NOTNULL
-                                | Keyword::ON
-                                | Keyword::OR
-                                | Keyword::ORDER
-                                | Keyword::OUTER
-                                | Keyword::PRIMARY
-                                | Keyword::REFERENCES
-                                | Keyword::RETURNING
-                                | Keyword::RIGHT
-                                | Keyword::SELECT
-                                | Keyword::SET
-                                | Keyword::TABLE
-                                | Keyword::THEN
-                                | Keyword::TO
-                                | Keyword::TRANSACTION
-                                | Keyword::UNIQUE
-                                | Keyword::UNION
-                                | Keyword::UPDATE
-                                | Keyword::USING
-                                | Keyword::VALUES
-                                | Keyword::WHEN
-                                | Keyword::WHERE
-                        ))
-                        .then(|| w.clone().into_ident(peeked.span))
-                    }
-                    Token::SingleQuotedString(value) => {
-                        Some(Ident::with_quote('\'', value.clone()))
-                    }
-                    _ => None,
-                }
-            };
-            let Some(next_part) = next_part else {
-                break;
+        while let Some(peeked) = self.peek_multiword_type_name_part() {
+            let next_part = match &peeked.token {
+                Token::Word(word) => word.clone().into_ident(peeked.span),
+                Token::SingleQuotedString(value) => Ident::with_quote('\'', value.clone()),
+                _ => break,
             };
             self.advance_token();
             parts.push(next_part);

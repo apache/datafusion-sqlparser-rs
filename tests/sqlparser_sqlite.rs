@@ -1844,6 +1844,52 @@ fn parse_left_shift_and_bitwise_and_are_left_associative() {
 }
 
 #[test]
+fn sqlite_type_name_builtin_prefixes() {
+    for type_name in [
+        "INT FOO",
+        "TEXT FOO",
+        "DOUBLE PRECISION FOO",
+        "INT FIRST",
+        "INT INVISIBLE",
+    ] {
+        let sql = format!("CREATE TABLE t (a {type_name})");
+        let Statement::CreateTable(table) = sqlite().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            table.columns[0].data_type,
+            DataType::CustomMultiWord(
+                type_name.split_whitespace().map(Ident::new).collect(),
+                vec![]
+            ),
+        );
+        sqlite().verified_stmt(&format!("SELECT CAST(1 AS {type_name})"));
+        sqlite().verified_stmt(&format!("ALTER TABLE t ADD a {type_name}"));
+    }
+    sqlite().verified_stmt("CREATE TABLE t (a INT FOO(10, 2))");
+    let Statement::CreateTable(table) =
+        sqlite().verified_stmt("CREATE TABLE t (a INT COMMENT 'note')")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        table.columns[0],
+        ColumnDef {
+            name: Ident::new("a"),
+            data_type: DataType::CustomMultiWord(
+                vec![
+                    Ident::new("INT"),
+                    Ident::new("COMMENT"),
+                    Ident::with_quote('\'', "note"),
+                ],
+                vec![],
+            ),
+            options: vec![],
+        },
+    );
+}
+
+#[test]
 fn parse_right_shift_and_bitwise_and_are_left_associative() {
     assert_eq!(
         sqlite().verified_expr("8 >> 1 & 2"),
@@ -1940,5 +1986,85 @@ fn parse_bitwise_shift_precedence_boundaries() {
         ),
     ] {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
+}
+
+#[test]
+fn sqlite_type_name_builtin_parse_errors() {
+    for type_name in ["ENUM FOO", "TIMESTAMP WITH FOO"] {
+        sqlite().verified_stmt(&format!("CREATE TABLE t (a {type_name})"));
+        sqlite().verified_stmt(&format!("SELECT CAST(1 AS {type_name})"));
+        sqlite().verified_stmt(&format!("ALTER TABLE t ADD a {type_name}"));
+    }
+}
+
+#[test]
+fn sqlite_type_name_builtin_prefix_constraint_boundaries() {
+    for (constraint, option) in [
+        ("NOT NULL", ColumnOption::NotNull),
+        ("NULL", ColumnOption::Null),
+        ("DEFAULT 0", ColumnOption::Default(Expr::value(number("0")))),
+        (
+            "COLLATE NOCASE",
+            ColumnOption::Collation(ObjectName::from(vec![Ident::new("NOCASE")])),
+        ),
+    ] {
+        let sql = format!("CREATE TABLE t (a TEXT FOO {constraint})");
+        let Statement::CreateTable(table) = sqlite().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            table.columns[0].data_type,
+            DataType::CustomMultiWord(vec![Ident::new("TEXT"), Ident::new("FOO")], vec![]),
+        );
+        assert_eq!(
+            table.columns[0].options,
+            vec![ColumnOptionDef { name: None, option }],
+        );
+    }
+    sqlite().verified_stmt("CREATE TABLE t (a TEXT FOO PRIMARY KEY)");
+    sqlite().verified_stmt("CREATE TABLE t (a INT FOO GENERATED ALWAYS AS (1), b INT)");
+    sqlite().verified_stmt("CREATE TABLE t (a INT FOO GENERATED, b INT)");
+}
+
+#[test]
+fn sqlite_type_name_untyped_null_constraint() {
+    let Statement::CreateTable(table) = sqlite().verified_stmt("CREATE TABLE t (a NULL, b INT)")
+    else {
+        unreachable!()
+    };
+    assert_eq!(table.columns[0].data_type, DataType::Unspecified);
+    assert_eq!(
+        table.columns[0].options,
+        vec![ColumnOptionDef {
+            name: None,
+            option: ColumnOption::Null,
+        }],
+    );
+    let AlterTableOperation::AddColumn { column_def, .. } =
+        alter_table_op_with_name(sqlite().verified_stmt("ALTER TABLE t ADD a NULL"), "t")
+    else {
+        unreachable!()
+    };
+    assert_eq!(column_def, table.columns[0]);
+    sqlite().verified_stmt(r#"CREATE TABLE t (a "NULL" foo)"#);
+}
+
+#[test]
+fn sqlite_type_name_rejects_words_after_null_constraint() {
+    for (sql, error) in [
+        (
+            "CREATE TABLE t (a NULL foo)",
+            "Expected: ',' or ')' after column definition, found: foo",
+        ),
+        (
+            "ALTER TABLE t ADD a NULL foo",
+            "Expected: end of statement, found: foo",
+        ),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+        );
     }
 }

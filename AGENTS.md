@@ -18,7 +18,7 @@
 ## Unit Tests Guidelines
 - New unit tests should be added to the `tests` module in the corresponding dialect file (e.g., `tests/sqlparser_redshift.rs` for Redshift), and should be placed at the end of the file.
 - If the new functionality is gated using a dialect function, and the SQL is likely relevant in most dialects, tests should be placed under `tests/sqlparser_common.rs`.
-- Cover both positive and negative cases: valid input parses and round-trips, invalid input fails with the expected error.
+- Cover both positive and negative cases: valid input parses and round-trips, invalid input fails with the expected error, asserted in full.
 - Cover every dialect the syntax is relevant to, e.g. via `all_dialects_where(...)`.
 - When adding new syntax, run the fuzzer to check for panics (see `docs/fuzzing.md`).
 - When fixing a bug, add one seed file to `fuzz/fuzz_seeds/`, as small as still triggers the original path. Name it `<dialect>_<issue>_<topic>.sql`. For a fix with no issue, use the PR number.
@@ -33,6 +33,15 @@ snowflake().one_statement_parses_to(
     "SELECT * FROM my_table t",
     "SELECT * FROM my_table AS t",
 )
+```
+For invalid input, assert the exact error:
+```rust
+assert_eq!(
+    ParserError::ParserError("Expected: (, found: FROM".to_string()),
+    sqlite()
+        .parse_sql_statements("SELECT id, name FROM orders WHERE customer_id IN FROM blocked_customers")
+        .unwrap_err()
+);
 ```
 
 ## Analyzing Parsing Issues

@@ -5776,7 +5776,7 @@ fn parse_bad_constraint() {
 fn parse_sequence_options_in_any_order() {
     // The sequence options form an unordered list, so every permutation below
     // is accepted and round-trips in the order written.
-    let dialects = all_dialects();
+    let dialects = all_dialects_where(|d| !d.supports_multiword_type_names());
     for sql in [
         "CREATE SEQUENCE sa START WITH 1 INCREMENT BY 1",
         "CREATE SEQUENCE sb INCREMENT BY 1 START WITH 1",
@@ -5890,7 +5890,7 @@ fn parse_sequence_options_in_any_order() {
 
 #[test]
 fn sequence_options_reject_non_numeric_values() {
-    let dialects = all_dialects();
+    let dialects = all_dialects_where(|d| !d.supports_multiword_type_names());
     for (sql, expected) in [
         (
             "CREATE SEQUENCE s MINVALUE x",
@@ -10009,7 +10009,8 @@ fn parse_set_role_as_variable() {
 #[test]
 fn parse_double_colon_cast_at_timezone() {
     let sql = "SELECT '2001-01-01T00:00:00.000Z'::TIMESTAMP AT TIME ZONE 'Europe/Brussels' FROM t";
-    let select = verified_only_select(sql);
+    let select =
+        all_dialects_where(|d| !d.supports_multiword_type_names()).verified_only_select(sql);
 
     assert_eq!(
         &Expr::AtTimeZone {
@@ -13332,10 +13333,10 @@ fn parse_execute_immediate() {
 fn parse_create_table_collate() {
     all_dialects().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
     // check ordering is preserved
-    all_dialects().verified_stmt(
+    all_dialects_where(|d| !d.supports_multiword_type_names()).verified_stmt(
         "CREATE TABLE tbl (foo INT, bar TEXT CHARACTER SET utf8mb4 COLLATE \"de_DE\")",
     );
-    all_dialects().verified_stmt(
+    all_dialects_where(|d| !d.supports_multiword_type_names()).verified_stmt(
         "CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\" CHARACTER SET utf8mb4)",
     );
 }
@@ -13671,7 +13672,9 @@ fn test_parse_inline_comment() {
         "CREATE TABLE t0 (id INT COMMENT 'comment without equal') COMMENT = 'comment with equal'";
     // Hive dialect doesn't support `=` in table comment, please refer:
     // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
-    match all_dialects_except(|d| d.is::<HiveDialect>()).verified_stmt(sql) {
+    match all_dialects_except(|d| d.is::<HiveDialect>() || d.supports_multiword_type_names())
+        .verified_stmt(sql)
+    {
         Statement::CreateTable(CreateTable {
             columns,
             table_options,
@@ -14166,38 +14169,39 @@ fn test_group_by_grouping_sets_bare_columns() {
 
 #[test]
 fn test_xmltable() {
-    all_dialects()
+    let dialects = all_dialects_where(|d| !d.supports_multiword_type_names());
+    dialects
         .verified_only_select("SELECT * FROM XMLTABLE('/root' PASSING data COLUMNS element TEXT)");
 
     // Minimal meaningful working example: returns a single row with a single column named y containing the value z
-    all_dialects().verified_only_select(
+    dialects.verified_only_select(
         "SELECT y FROM XMLTABLE('/X' PASSING '<X><y>z</y></X>' COLUMNS y TEXT)",
     );
 
     // Test using subqueries
-    all_dialects().verified_only_select("SELECT y FROM XMLTABLE((SELECT '/X') PASSING (SELECT CAST('<X><y>z</y></X>' AS xml)) COLUMNS y TEXT PATH (SELECT 'y'))");
+    dialects.verified_only_select("SELECT y FROM XMLTABLE((SELECT '/X') PASSING (SELECT CAST('<X><y>z</y></X>' AS xml)) COLUMNS y TEXT PATH (SELECT 'y'))");
 
     // NOT NULL
-    all_dialects().verified_only_select(
+    dialects.verified_only_select(
         "SELECT y FROM XMLTABLE('/X' PASSING '<X></X>' COLUMNS y TEXT NOT NULL)",
     );
 
-    all_dialects().verified_only_select("SELECT * FROM XMLTABLE('/root/row' PASSING xmldata COLUMNS id INT PATH '@id', name TEXT PATH 'name/text()', value FLOAT PATH 'value')");
+    dialects.verified_only_select("SELECT * FROM XMLTABLE('/root/row' PASSING xmldata COLUMNS id INT PATH '@id', name TEXT PATH 'name/text()', value FLOAT PATH 'value')");
 
-    all_dialects().verified_only_select("SELECT * FROM XMLTABLE('//ROWS/ROW' PASSING data COLUMNS row_num FOR ORDINALITY, id INT PATH '@id', name TEXT PATH 'NAME' DEFAULT 'unnamed')");
+    dialects.verified_only_select("SELECT * FROM XMLTABLE('//ROWS/ROW' PASSING data COLUMNS row_num FOR ORDINALITY, id INT PATH '@id', name TEXT PATH 'NAME' DEFAULT 'unnamed')");
 
     // Example from https://www.postgresql.org/docs/15/functions-xml.html#FUNCTIONS-XML-PROCESSING
-    all_dialects().verified_only_select(
+    dialects.verified_only_select(
         "SELECT xmltable.* FROM xmldata, XMLTABLE('//ROWS/ROW' PASSING data COLUMNS id INT PATH '@id', ordinality FOR ORDINALITY, \"COUNTRY_NAME\" TEXT, country_id TEXT PATH 'COUNTRY_ID', size_sq_km FLOAT PATH 'SIZE[@unit = \"sq_km\"]', size_other TEXT PATH 'concat(SIZE[@unit!=\"sq_km\"], \" \", SIZE[@unit!=\"sq_km\"]/@unit)', premier_name TEXT PATH 'PREMIER_NAME' DEFAULT 'not specified')"
     );
 
     // Example from DB2 docs without explicit PASSING clause: https://www.ibm.com/docs/en/db2/12.1.0?topic=xquery-simple-column-name-passing-xmlexists-xmlquery-xmltable
-    all_dialects().verified_only_select(
+    dialects.verified_only_select(
         "SELECT X.* FROM T1, XMLTABLE('$CUSTLIST/customers/customerinfo' COLUMNS \"Cid\" BIGINT PATH '@Cid', \"Info\" XML PATH 'document{.}', \"History\" XML PATH 'NULL') AS X"
     );
 
     // Example from PostgreSQL with XMLNAMESPACES
-    all_dialects().verified_only_select(
+    dialects.verified_only_select(
         "SELECT xmltable.* FROM XMLTABLE(XMLNAMESPACES('http://example.com/myns' AS x, 'http://example.com/b' AS \"B\"), '/x:example/x:item' PASSING (SELECT data FROM xmldata) COLUMNS foo INT PATH '@foo', bar INT PATH '@B:bar')"
     );
 }
@@ -19907,8 +19911,9 @@ fn parse_adjacent_string_literal_concatenation() {
 
 #[test]
 fn parse_invisible_column() {
+    let dialects = all_dialects_where(|d| !d.supports_multiword_type_names());
     let sql = r#"CREATE TABLE t (foo INT, bar INT INVISIBLE)"#;
-    let stmt = verified_stmt(sql);
+    let stmt = dialects.verified_stmt(sql);
     match stmt {
         Statement::CreateTable(CreateTable { columns, .. }) => {
             assert_eq!(
@@ -19934,7 +19939,7 @@ fn parse_invisible_column() {
     }
 
     let sql = r#"ALTER TABLE t ADD COLUMN bar INT INVISIBLE"#;
-    let stmt = verified_stmt(sql);
+    let stmt = dialects.verified_stmt(sql);
     match stmt {
         Statement::AlterTable(alter_table) => {
             assert_eq!(
@@ -20975,7 +20980,9 @@ fn parse_alter_table_column_position() {
             .unwrap_err()
     );
 
-    let dialects = all_dialects_where(|d| !d.supports_alter_column_position());
+    let dialects = all_dialects_where(|d| {
+        !d.supports_alter_column_position() && !d.supports_multiword_type_names()
+    });
     for (sql, found) in [
         ("ALTER TABLE tab ADD COLUMN c INT FIRST", "FIRST"),
         ("ALTER TABLE tab ADD COLUMN c INT AFTER b", "AFTER"),

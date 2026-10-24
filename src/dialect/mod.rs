@@ -586,6 +586,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Whether type names accept space-separated words or strings, including built-in type keywords.
+    fn supports_multiword_type_names(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports specifying null treatment
     /// as part of a window function's parameter list as opposed
     /// to after the parameter list.

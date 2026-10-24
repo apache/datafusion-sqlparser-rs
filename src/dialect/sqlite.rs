@@ -117,6 +117,7 @@ impl Dialect for SQLiteDialect {
                 Some(Ok(self.prec_value(Precedence::Ampersand)))
             }
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Some(Ok(COMPARISON_PREC)),
+            Token::Colon => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }
@@ -168,6 +169,10 @@ impl Dialect for SQLiteDialect {
     }
 
     fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
+
+    fn supports_sqlite_variable_syntax(&self) -> bool {
         true
     }
 

@@ -15441,6 +15441,90 @@ fn test_drop_policy() {
 }
 
 #[test]
+fn parse_drop_rule() {
+    let sql = "DROP RULE r ON t";
+    match all_dialects().verified_stmt(sql) {
+        Statement::DropRule(DropRule {
+            if_exists,
+            name,
+            table_name,
+            drop_behavior,
+        }) => {
+            assert!(!if_exists);
+            assert_eq!(name.to_string(), "r");
+            assert_eq!(table_name.to_string(), "t");
+            assert_eq!(drop_behavior, None);
+        }
+        _ => unreachable!("Expected DROP RULE"),
+    }
+
+    all_dialects().verified_stmt("DROP RULE IF EXISTS r ON s1.t CASCADE");
+    all_dialects().verified_stmt("DROP RULE r ON t RESTRICT");
+
+    // the table name is mandatory
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("DROP RULE r")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ON, found: EOF"
+    );
+}
+
+#[test]
+fn parse_drop_rule_rejects_missing_names() {
+    for (sql, expected) in [
+        ("DROP RULE", "Expected: identifier, found: EOF"),
+        ("DROP RULE r ON", "Expected: identifier, found: EOF"),
+        ("DROP 1", "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: 1"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn display_drop_rule_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = all_dialects().verified_stmt("DROP RULE r ON t");
+    let mut writer = RejectingWriter("DROP");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+
+    let statement = all_dialects().verified_stmt("DROP RULE r ON t CASCADE");
+    let mut writer = RejectingWriter("CASCADE");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_drop_rule_spans() {
+    let dialects = all_dialects();
+    let sql = "DROP RULE r ON t CASCADE";
+    for dialect in &dialects.dialects {
+        let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+        assert_eq!(
+            statements[0].span(),
+            Span::new(Location::new(1, 11), Location::new(1, 17)),
+            "{dialect:?} {sql}"
+        );
+    }
+}
+
+#[test]
 fn test_alter_policy() {
     match verified_stmt("ALTER POLICY old_policy ON my_table RENAME TO new_policy") {
         Statement::AlterPolicy(AlterPolicy {

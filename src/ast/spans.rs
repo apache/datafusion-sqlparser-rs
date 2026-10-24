@@ -33,21 +33,22 @@ use super::{
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
     ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement,
-    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
-    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
-    HavingBound, IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate,
-    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    LimitClause, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
-    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement,
-    Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor,
-    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values,
-    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    CreateTableOptions, Cte, Delete, DoUpdate, DropRule, ExceptSelectItem,
+    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
+    IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
+    JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge,
+    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
+    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr,
+    OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -490,6 +491,7 @@ impl Spanned for Statement {
             Statement::AlterPolicy { .. } => Span::empty(),
             Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
+            Statement::DropRule(rule) => rule.span(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowCatalogs { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
@@ -526,6 +528,12 @@ impl Spanned for Statement {
             Statement::Reset(..) => Span::empty(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
+    }
+}
+
+impl Spanned for DropRule {
+    fn span(&self) -> Span {
+        self.name.span.union(&self.table_name.span())
     }
 }
 

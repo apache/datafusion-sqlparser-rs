@@ -242,6 +242,7 @@ impl Dialect for SQLiteDialect {
     }
 }
 
+/// SQLite permits signed and decimal numeric type modifiers.
 fn parse_type_with_numeric_modifiers(parser: &mut Parser) -> Option<DataType> {
     let (data_type, token_count) = {
         let first = parser.peek_token_ref();
@@ -289,7 +290,7 @@ fn parse_type_with_numeric_modifiers(parser: &mut Parser) -> Option<DataType> {
                 let mut value = String::with_capacity(sign.len() + number.len());
                 value.push_str(sign);
                 value.push_str(number);
-                value
+                crate::ast::TypeModifier::Number(value, false)
             })
             .collect();
         (

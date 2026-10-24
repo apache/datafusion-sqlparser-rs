@@ -5554,9 +5554,7 @@ impl<'a> Parser<'a> {
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
             self.parse_create_role(RoleKeyword::Role).map(Into::into)
-        } else if self.dialect.supports_user_group_statements()
-            && self.parse_keyword(Keyword::GROUP)
-        {
+        } else if self.dialect.supports_create_group() && self.parse_keyword(Keyword::GROUP) {
             self.parse_create_role(RoleKeyword::Group).map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
@@ -8122,10 +8120,6 @@ impl<'a> Parser<'a> {
             ObjectType::Index
         } else if self.parse_keyword(Keyword::ROLE) {
             ObjectType::Role
-        } else if self.dialect.supports_user_group_statements()
-            && self.parse_keyword(Keyword::GROUP)
-        {
-            ObjectType::Group
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
         } else if self.parse_keyword(Keyword::DATABASE) {
@@ -8169,7 +8163,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
                 self.peek_token_ref(),
             );
         };
@@ -8185,11 +8179,9 @@ impl<'a> Parser<'a> {
         if cascade && restrict {
             return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP", loc);
         }
-        if matches!(object_type, ObjectType::Role | ObjectType::Group)
-            && (cascade || restrict || purge)
-        {
+        if object_type == ObjectType::Role && (cascade || restrict || purge) {
             return parser_err!(
-                format!("Cannot specify CASCADE, RESTRICT, or PURGE in DROP {object_type}"),
+                "Cannot specify CASCADE, RESTRICT, or PURGE in DROP ROLE",
                 loc
             );
         }

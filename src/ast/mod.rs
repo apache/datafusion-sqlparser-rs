@@ -8775,8 +8775,6 @@ pub enum ObjectType {
     Database,
     /// A role.
     Role,
-    /// A user group.
-    Group,
     /// A sequence.
     Sequence,
     /// A stage.
@@ -8802,7 +8800,6 @@ impl fmt::Display for ObjectType {
             ObjectType::Schema => "SCHEMA",
             ObjectType::Database => "DATABASE",
             ObjectType::Role => "ROLE",
-            ObjectType::Group => "GROUP",
             ObjectType::Sequence => "SEQUENCE",
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",

@@ -445,17 +445,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect has `CREATE GROUP` and `DROP GROUP` statements.
-    ///
-    /// PostgreSQL accepts `GROUP` as an obsolete spelling of `ROLE`, and Amazon Redshift has
-    /// user groups as objects distinct from roles. The keyword is preserved either way, as
-    /// [`RoleKeyword::Group`] and [`ObjectType::Group`].
-    ///
-    /// <https://www.postgresql.org/docs/current/sql-creategroup.html>
-    ///
-    /// [`RoleKeyword::Group`]: crate::ast::RoleKeyword::Group
-    /// [`ObjectType::Group`]: crate::ast::ObjectType::Group
-    fn supports_user_group_statements(&self) -> bool {
+    /// Returns true if the dialect supports `CREATE GROUP`.
+    fn supports_create_group(&self) -> bool {
         false
     }
 

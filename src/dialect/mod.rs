@@ -1144,6 +1144,11 @@ pub trait Dialect: Debug + Any {
         0
     }
 
+    /// Precedence used to stop parsing the low bound expression of a BETWEEN predicate.
+    fn between_low_bound_precedence(&self) -> u8 {
+        self.prec_value(Precedence::Between)
+    }
+
     /// Returns true if this dialect requires the `TABLE` keyword after `DESCRIBE`
     ///
     /// Defaults to false.

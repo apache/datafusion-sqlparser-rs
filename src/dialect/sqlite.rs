@@ -64,6 +64,11 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_cte_materialization(&self) -> bool {
+        // https://www.sqlite.org/lang_with.html
+        true
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit() || ch == '$'
     }

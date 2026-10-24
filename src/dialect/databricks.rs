@@ -16,7 +16,7 @@
 // under the License.
 
 use crate::dialect::Dialect;
-use crate::keywords::{Keyword, RESERVED_FOR_TABLE_FACTOR};
+use crate::keywords::Keyword;
 use crate::parser::Parser;
 
 /// A [`Dialect`] for [Databricks SQL](https://www.databricks.com/)
@@ -59,10 +59,9 @@ impl Dialect for DatabricksDialect {
         matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_')
     }
 
-    /// LIMIT is not a reserved word in Databricks SQL.
-    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-reserved-words>
-    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
-        kw == &Keyword::LIMIT || !RESERVED_FOR_TABLE_FACTOR.contains(kw)
+    /// Databricks permits [keywords](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-reserved-words) as table names.
+    fn is_table_factor(&self, _kw: &Keyword, _parser: &mut Parser) -> bool {
+        true
     }
 
     fn supports_numeric_prefix(&self) -> bool {

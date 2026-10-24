@@ -141,6 +141,10 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
     fn supports_array_typedef_with_brackets(&self) -> bool {
         true
     }

@@ -85,11 +85,11 @@ impl<'a> From<&'a str> for IndexColumn {
 
 impl fmt::Display for IndexColumn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.column)?;
+        write!(f, "{}", self.column.expr)?;
         if let Some(operator_class) = &self.operator_class {
             write!(f, " {operator_class}")?;
         }
-        Ok(())
+        self.column.fmt_sort_modifiers(f)
     }
 }
 

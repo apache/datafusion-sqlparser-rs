@@ -347,7 +347,7 @@ impl Spanned for Statement {
                 target: _,
                 options: _,
                 legacy_options: _,
-                values: _,
+                payload: _,
             } => source.span(),
             Statement::CopyIntoSnowflake {
                 into: _,
@@ -1993,7 +1993,7 @@ impl Spanned for TableFactor {
                 partitions: _,
                 json_path: _,
                 sample: _,
-                index_hints: _,
+                index_directives: _,
             } => union_spans(
                 name.0
                     .iter()

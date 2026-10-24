@@ -12509,7 +12509,7 @@ impl<'a> Parser<'a> {
             options,
             legacy_options,
             payload,
-        }))
+        })))
     }
 
     /// Take the raw inline payload of a `COPY ... FROM STDIN` statement, or

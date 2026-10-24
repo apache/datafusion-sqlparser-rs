@@ -55,7 +55,7 @@ use crate::{
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
-    ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo,
+    ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo, TypeModifier,
 };
 pub use self::dcl::{
     AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
@@ -107,13 +107,13 @@ pub use self::query::{
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SelectModifiers,
     SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias,
-    TableAliasColumnDef, TableFactor, TableFunctionArgs, TableIndexHintForClause,
-    TableIndexHintType, TableIndexHints, TableIndexType, TableSample, TableSampleBucket,
-    TableSampleKind, TableSampleMethod, TableSampleModifier, TableSampleQuantity, TableSampleSeed,
-    TableSampleSeedModifier, TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity,
-    UpdateTableFromKind, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
-    XmlNamespaceDefinition, XmlPassingArgument, XmlPassingClause, XmlTableColumn,
-    XmlTableColumnOption,
+    TableAliasColumnDef, TableFactor, TableFunctionArgs, TableIndexDirective,
+    TableIndexHintForClause, TableIndexHintType, TableIndexHints, TableIndexType, TableSample,
+    TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
+    TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier, TableSampleUnit, TableVersion,
+    TableWithJoins, Top, TopQuantity, UpdateTableFromKind, ValueTableMode, Values,
+    WildcardAdditionalOptions, With, WithFill, XmlNamespaceDefinition, XmlPassingArgument,
+    XmlPassingClause, XmlTableColumn, XmlTableColumnOption,
 };
 
 pub use self::trigger::{
@@ -3692,8 +3692,10 @@ pub enum Statement {
         options: Vec<CopyOption>,
         /// WITH options (before PostgreSQL version 9.0)
         legacy_options: Vec<CopyLegacyOption>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
+        /// The inline payload of `COPY ... FROM STDIN`, captured verbatim
+        /// from the source text. `None` when the statement carries no
+        /// inline data.
+        payload: Option<CopyPayload>,
     },
     /// ```sql
     /// COPY INTO <table> | <location>
@@ -5378,7 +5380,7 @@ impl fmt::Display for Statement {
                 target,
                 options,
                 legacy_options,
-                values,
+                payload,
             } => {
                 write!(f, "COPY")?;
                 match source {
@@ -5400,19 +5402,15 @@ impl fmt::Display for Statement {
                 if !legacy_options.is_empty() {
                     write!(f, " {}", display_separated(legacy_options, " "))?;
                 }
-                if !values.is_empty() {
+                if let Some(payload) = payload {
+                    // The payload starts on the line after the command and ends
+                    // at the `\.` terminator line, which is only written when
+                    // present in the source.
                     writeln!(f, ";")?;
-                    let mut delim = "";
-                    for v in values {
-                        write!(f, "{delim}")?;
-                        delim = "\t";
-                        if let Some(v) = v {
-                            write!(f, "{v}")?;
-                        } else {
-                            write!(f, "\\N")?;
-                        }
+                    write!(f, "{}", payload.data)?;
+                    if payload.terminated {
+                        write!(f, "\\.")?;
                     }
-                    write!(f, "\n\\.")?;
                 }
                 Ok(())
             }
@@ -9553,6 +9551,20 @@ impl fmt::Display for CopyTarget {
             ),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The inline payload of a `COPY ... FROM STDIN` statement, captured
+/// verbatim from the source text.
+pub struct CopyPayload {
+    /// The payload as written, starting on the line after the command and
+    /// running up to the `\.` terminator line. Field separators, escapes and
+    /// the `\N` null marker are left for the caller to interpret.
+    pub data: String,
+    /// Whether the `\.` terminator line was present.
+    pub terminated: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

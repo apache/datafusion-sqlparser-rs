@@ -21,9 +21,13 @@ use alloc::boxed::Box;
 use crate::ast::BinaryOperator;
 use crate::ast::{Expr, Statement};
 use crate::dialect::{Dialect, Precedence};
-use crate::keywords::Keyword;
+use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
+
+/// Precedence of `<`, `<=`, `>` and `>=`, between `=` and the bitwise operators, see
+/// <https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes>
+const COMPARISON_PREC: u8 = 21;
 
 /// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 ///
@@ -103,7 +107,28 @@ impl Dialect for SQLiteDialect {
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
         match parser.peek_token_ref().token {
             Token::Ampersand | Token::Pipe => Some(Ok(self.prec_value(Precedence::Ampersand))),
+            Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Some(Ok(COMPARISON_PREC)),
             _ => None,
+        }
+    }
+
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::Period => 100,
+            Precedence::DoubleColon => 50,
+            Precedence::AtTz => 41,
+            Precedence::MulDivModOp => 40,
+            Precedence::PlusMinus => 30,
+            Precedence::Xor => 25,
+            Precedence::Ampersand => 24,
+            Precedence::Caret => 23,
+            Precedence::Pipe | Precedence::Colon | Precedence::PgOther => 22,
+            Precedence::Between | Precedence::Eq => 20,
+            Precedence::Like => 19,
+            Precedence::Is => 17,
+            Precedence::UnaryNot => 15,
+            Precedence::And => 10,
+            Precedence::Or => 5,
         }
     }
 
@@ -158,6 +183,47 @@ impl Dialect for SQLiteDialect {
     }
 
     fn supports_unterminated_block_comments(&self) -> bool {
+        true
+    }
+
+    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        // https://www.sqlite.org/lang_keywords.html
+        !matches!(
+            kw,
+            Keyword::SELECT
+                | Keyword::WHERE
+                | Keyword::GROUP
+                | Keyword::HAVING
+                | Keyword::ORDER
+                | Keyword::LIMIT
+                | Keyword::UNION
+                | Keyword::EXCEPT
+                | Keyword::INTERSECT
+                | Keyword::RETURNING
+                | Keyword::VALUES
+                | Keyword::FROM
+                | Keyword::INTO
+        )
+    }
+
+    fn supports_over_keyword_as_column_alias(&self) -> bool {
+        true
+    }
+
+    fn supports_indexed_by(&self) -> bool {
+        true
+    }
+
+    /// `INDEXED BY` and `NOT INDEXED` follow the table name or alias.
+    fn is_table_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
+            Keyword::INDEXED => false,
+            Keyword::NOT => !parser.peek_keyword(Keyword::INDEXED),
+            _ => !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw),
+        }
+    }
+
+    fn supports_comma_join_constraint(&self) -> bool {
         true
     }
 }

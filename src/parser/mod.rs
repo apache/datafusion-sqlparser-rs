@@ -11641,22 +11641,12 @@ impl<'a> Parser<'a> {
             return self.parse_alter_text_search().map(Into::into);
         }
 
-        let object_type = self.expect_one_of_keywords(&[
-            Keyword::VIEW,
-            Keyword::TYPE,
-            Keyword::COLLATION,
-            Keyword::TABLE,
-            Keyword::INDEX,
-            Keyword::FUNCTION,
-            Keyword::AGGREGATE,
-            Keyword::ROLE,
-            Keyword::POLICY,
-            Keyword::CONNECTOR,
-            Keyword::ICEBERG,
-            Keyword::SCHEMA,
-            Keyword::USER,
-            Keyword::OPERATOR,
-        ])?;
+        let index = self.index;
+        self.advance_token();
+        let object_type = match &self.get_current_token().token {
+            Token::Word(word) => word.keyword,
+            _ => Keyword::NoKeyword,
+        };
         match object_type {
             Keyword::SCHEMA => {
                 self.prev_token();
@@ -11702,15 +11692,19 @@ impl<'a> Parser<'a> {
             }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
+            Keyword::TRIGGER => self.parse_alter_trigger().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER if self.dialect.supports_alter_user_as_alter_role() => {
                 self.parse_alter_role()
             }
             Keyword::USER => self.parse_alter_user().map(Into::into),
-            // unreachable because expect_one_of_keywords used above
-            unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{TEXT SEARCH, VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
-            )),
+            _ => {
+                self.index = index;
+                self.expected_ref(
+                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
+                    self.peek_token_ref(),
+                )
+            }
         }
     }
 

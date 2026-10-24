@@ -5129,13 +5129,37 @@ impl<'a> Parser<'a> {
 
     /// Parse a list of [TableWithJoins]
     fn parse_table_with_joins(&mut self) -> Result<Vec<TableWithJoins>, ParserError> {
-        let trailing_commas = self.dialect.supports_from_trailing_commas();
+        let dialect = self.dialect;
+        let trailing_commas = dialect.supports_from_trailing_commas();
+        let mut tables: Vec<TableWithJoins> = vec![];
 
         self.parse_comma_separated_with_trailing_commas(
-            Parser::parse_table_and_joins,
+            |parser| {
+                let table = parser.parse_table_and_joins()?;
+                match tables.last_mut() {
+                    Some(previous)
+                        if dialect.supports_comma_join_constraint()
+                            && table.joins.is_empty()
+                            && parser
+                                .peek_one_of_keywords(&[Keyword::ON, Keyword::USING])
+                                .is_some() =>
+                    {
+                        let constraint = parser.parse_join_constraint(false)?;
+                        previous.joins.push(Join {
+                            relation: table.relation,
+                            global: false,
+                            join_operator: JoinOperator::Join(constraint),
+                        });
+                        previous.joins.extend(parser.parse_joins()?);
+                    }
+                    _ => tables.push(table),
+                }
+                Ok(())
+            },
             trailing_commas,
-            |kw, parser| !self.dialect.is_table_factor(kw, parser),
-        )
+            |kw, parser| !dialect.is_table_factor(kw, parser),
+        )?;
+        Ok(tables)
     }
 
     /// Parse the comma of a comma-separated syntax element.

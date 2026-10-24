@@ -14419,6 +14419,8 @@ impl<'a> Parser<'a> {
     /// with a digit. Subsequent segments are either must either be valid identifiers or
     /// integers, e.g. foo-123 is allowed, but foo-123a is not.
     ///
+    /// A quoted alias may immediately follow the identifier.
+    ///
     /// [BigQuery-lexical](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical)
     ///
     /// Return a tuple of the identifier and a boolean indicating it ends with a period.
@@ -14474,10 +14476,16 @@ impl<'a> Parser<'a> {
                         }
                     }
 
-                    // A word or number butted onto a trailing number glues into it, as in `foo-123a`.
+                    // An unquoted word or number can extend a trailing number, as in `foo-123a`.
                     if requires_whitespace {
                         let token = self.peek_token_no_skip();
-                        if matches!(token.token, Token::Word(_) | Token::Number(_, false)) {
+                        if matches!(
+                            token.token,
+                            Token::Word(Word {
+                                quote_style: None,
+                                ..
+                            }) | Token::Number(_, false)
+                        ) {
                             return self
                                 .expected("whitespace following hyphenated identifier", token);
                         }

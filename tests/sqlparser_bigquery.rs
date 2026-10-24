@@ -1770,16 +1770,6 @@ fn parse_hyphenated_identifier_after_numeric_segment() {
         ),
         err
     );
-
-    let err = bigquery()
-        .parse_sql_statements("SELECT * FROM foo-1`x`")
-        .unwrap_err();
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: whitespace following hyphenated identifier, found: `x`".to_string(),
-        ),
-        err
-    );
 }
 
 #[test]
@@ -3035,4 +3025,18 @@ fn test_byte_and_raw_string_quote_escaping() {
         ),
         err
     );
+}
+
+#[test]
+fn parse_table_identifier_with_adjacent_quoted_alias() {
+    for table in ["foo", "foo-bar", "foo-1"] {
+        let sql = format!("SELECT * FROM {table}`x`");
+        let canonical = format!("SELECT * FROM {table} `x`");
+        let select = bigquery().verified_only_select_with_canonical(&sql, canonical.as_str());
+        let TableFactor::Table { name, alias, .. } = &select.from[0].relation else {
+            panic!("Expected a table");
+        };
+        assert_eq!(name, &ObjectName::from(vec![Ident::new(table)]));
+        assert_eq!(alias.as_ref().unwrap().name, Ident::with_quote('`', "x"));
+    }
 }

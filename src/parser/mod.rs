@@ -6809,7 +6809,7 @@ impl<'a> Parser<'a> {
         let table_name = self.parse_object_name(false)?;
         let (columns, constraints) = self.parse_columns()?;
 
-        let hive_distribution = self.parse_hive_distribution()?;
+        let (hive_distribution, clustered_by) = self.parse_hive_distribution_and_clustering()?;
         let hive_formats = self.parse_hive_formats()?;
 
         let file_format = if let Some(ref hf) = hive_formats {
@@ -6843,6 +6843,7 @@ impl<'a> Parser<'a> {
             .columns(columns)
             .constraints(constraints)
             .hive_distribution(hive_distribution)
+            .clustered_by(clustered_by)
             .hive_formats(hive_formats)
             .table_options(table_options)
             .with_connection(with_connection)
@@ -8934,8 +8935,6 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse Hive distribution style.
-    ///
-    /// TODO: Support parsing for `SKEWED` distribution style.
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
@@ -8943,9 +8942,101 @@ impl<'a> Parser<'a> {
                 self.parse_comma_separated(|parser| parser.parse_column_def_inner(true))?;
             self.expect_token(&Token::RParen)?;
             Ok(HiveDistributionStyle::PARTITIONED { columns })
+        } else if self.dialect.supports_create_table_skewed_by()
+            && self.parse_keywords(&[Keyword::SKEWED, Keyword::BY])
+        {
+            let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+            self.expect_keyword_is(Keyword::ON)?;
+            self.expect_token(&Token::LParen)?;
+            let tuples = self.peek_token_ref().token == Token::LParen;
+            let on = self.parse_comma_separated(|parser| {
+                if tuples {
+                    parser.expect_token(&Token::LParen)?;
+                    let values = parser.parse_comma_separated(Parser::parse_hive_skewed_value)?;
+                    parser.expect_token(&Token::RParen)?;
+                    Ok(values)
+                } else {
+                    Ok(vec![parser.parse_hive_skewed_value()?])
+                }
+            })?;
+            self.expect_token(&Token::RParen)?;
+            let stored_as_directories =
+                self.parse_keywords(&[Keyword::STORED, Keyword::AS, Keyword::DIRECTORIES]);
+            Ok(HiveDistributionStyle::SKEWED {
+                columns,
+                on,
+                stored_as_directories,
+            })
         } else {
             Ok(HiveDistributionStyle::NONE)
         }
+    }
+
+    fn parse_hive_skewed_value(&mut self) -> Result<Expr, ParserError> {
+        if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::DATE, Keyword::TIMESTAMP]) {
+            match &self.peek_token_ref().token {
+                Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => (),
+                Token::Word(word) if word.quote_style == Some('"') => (),
+                _ => return self.expected_ref("a string literal", self.peek_token_ref()),
+            }
+            return Ok(Expr::TypedString(TypedString {
+                data_type: match keyword {
+                    Keyword::DATE => DataType::Date,
+                    _ => DataType::Timestamp(None, TimezoneInfo::None),
+                },
+                value: self.parse_value()?,
+                uses_odbc_syntax: false,
+            }));
+        }
+        match &self.peek_token_ref().token {
+            Token::Number(_, _) | Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => {
+                self.parse_value().map(Expr::Value)
+            }
+            Token::Word(word)
+                if word.quote_style == Some('"')
+                    || matches!(word.keyword, Keyword::TRUE | Keyword::FALSE | Keyword::NULL) =>
+            {
+                self.parse_value().map(Expr::Value)
+            }
+            Token::Placeholder(value) if value == "?" => self.parse_value().map(Expr::Value),
+            _ => self.expected_ref("a constant value", self.peek_token_ref()),
+        }
+    }
+
+    fn parse_hive_distribution_and_clustering(
+        &mut self,
+    ) -> Result<(HiveDistributionStyle, Option<ClusteredBy>), ParserError> {
+        let distribution = self.parse_hive_distribution()?;
+        if matches!(distribution, HiveDistributionStyle::SKEWED { .. }) {
+            return Ok((distribution, None));
+        }
+        let clustered_by = self.parse_optional_clustered_by()?;
+        if self.dialect.supports_create_table_skewed_by() && self.peek_keyword(Keyword::SKEWED) {
+            if let HiveDistributionStyle::SKEWED {
+                columns,
+                on,
+                stored_as_directories,
+            } = self.parse_hive_distribution()?
+            {
+                let distribution = match distribution {
+                    HiveDistributionStyle::PARTITIONED {
+                        columns: partitioned_columns,
+                    } => HiveDistributionStyle::PartitionedAndSkewed {
+                        partitioned_columns,
+                        columns,
+                        on,
+                        stored_as_directories,
+                    },
+                    _ => HiveDistributionStyle::SKEWED {
+                        columns,
+                        on,
+                        stored_as_directories,
+                    },
+                };
+                return Ok((distribution, clustered_by));
+            }
+        }
+        Ok((distribution, clustered_by))
     }
 
     /// Parse Redshift `DISTSTYLE { AUTO | EVEN | KEY | ALL }`.
@@ -9215,8 +9306,7 @@ impl<'a> Parser<'a> {
 
         let sqlite_table_options = self.parse_sqlite_table_options()?;
 
-        let hive_distribution = self.parse_hive_distribution()?;
-        let clustered_by = self.parse_optional_clustered_by()?;
+        let (hive_distribution, clustered_by) = self.parse_hive_distribution_and_clustering()?;
         let hive_formats = self.parse_hive_formats()?;
 
         let create_table_config = self.parse_optional_create_table_config()?;

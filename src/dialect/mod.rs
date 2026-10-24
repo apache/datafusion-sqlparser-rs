@@ -1411,6 +1411,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Whether `CREATE TABLE` supports Hive's `SKEWED BY` clause.
+    fn supports_create_table_skewed_by(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `PROC` as an abbreviation for
     /// `PROCEDURE` in a `CREATE` statement.
     fn supports_create_proc_syntax(&self) -> bool {

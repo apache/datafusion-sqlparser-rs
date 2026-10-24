@@ -8822,9 +8822,20 @@ pub enum HiveDistributionStyle {
     /// Skewed distribution definition.
     SKEWED {
         /// Columns participating in the skew definition.
-        columns: Vec<ColumnDef>,
-        /// Columns listed in the `ON` clause for skewing.
-        on: Vec<ColumnDef>,
+        columns: Vec<Ident>,
+        /// Constant value tuples listed in the `ON` clause.
+        on: Vec<Vec<Expr>>,
+        /// Whether skewed data is stored as directories.
+        stored_as_directories: bool,
+    },
+    /// Partitioning and skewing used together.
+    PartitionedAndSkewed {
+        /// Columns used for partitioning.
+        partitioned_columns: Vec<ColumnDef>,
+        /// Columns participating in the skew definition.
+        columns: Vec<Ident>,
+        /// Constant value tuples listed in the `ON` clause.
+        on: Vec<Vec<Expr>>,
         /// Whether skewed data is stored as directories.
         stored_as_directories: bool,
     },

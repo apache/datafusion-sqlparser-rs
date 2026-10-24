@@ -2692,8 +2692,10 @@ fn parse_in_error() {
     // <expr> IN <expr> is no valid, except in dialects that accept an
     // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res =
-        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+    let res = all_dialects_except(|d| {
+        d.supports_in_unparenthesized_expr() || d.supports_in_table_expression()
+    })
+    .parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
@@ -2710,6 +2712,130 @@ fn parse_in_unparenthesized_expr() {
     // The branch must not fire when the next token is `(` (regressions).
     dialects.verified_expr("x IN (1, 2, 3)");
     dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
+}
+
+#[test]
+fn parse_in_table_expression() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for sql in [
+        "SELECT a IN t FROM t",
+        "SELECT a NOT IN t FROM t",
+        "SELECT a IN main.t FROM t",
+        "SELECT a IN f() FROM t",
+        "SELECT a NOT IN f(1, 2) FROM t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    match dialects.verified_expr("a IN main.f(1)") {
+        Expr::In {
+            target:
+                InTarget::Table {
+                    name,
+                    args: Some(args),
+                },
+            negated: false,
+            global: false,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "main.f");
+            assert_eq!(args.len(), 1);
+        }
+        other => panic!("expected an IN table target, got {other:?}"),
+    }
+    dialects.verified_stmt("SELECT a IN (1, 2) FROM t");
+    dialects.verified_stmt("SELECT a IN (SELECT b FROM u) FROM t");
+}
+
+/// Malformed table and table-function targets of `IN` keep their precise
+/// parse errors.
+#[test]
+fn parse_in_table_expression_malformed_targets() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for (sql, expected) in [
+        // A dangling dot leaves the qualified name without its last part.
+        ("SELECT a IN t.", "Expected: identifier, found: EOF"),
+        // A trailing comma leaves the next argument without an expression.
+        ("SELECT a IN f(x,)", "Expected: an expression, found: )"),
+        // The argument list never closes its parenthesis.
+        ("SELECT a IN f(1, 2", "Expected: ), found: EOF"),
+    ] {
+        assert_eq!(
+            ParserError::ParserError(expected.to_string()),
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            "{sql}"
+        );
+    }
+}
+
+/// Display of an `IN` table target propagates formatter errors from the
+/// name and the argument list writes.
+#[test]
+fn display_in_table_target_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let plain = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: None,
+    };
+    let mut writer = RejectingWriter('t');
+    assert_eq!(write!(writer, "{plain}"), Err(fmt::Error));
+
+    let function = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: Some(vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+            Expr::value(number("1")),
+        ))]),
+    };
+    let mut writer = RejectingWriter('1');
+    assert_eq!(write!(writer, "{function}"), Err(fmt::Error));
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let stmts = Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let mut relations = vec![];
+        let _ = sqlparser::ast::visit_relations(&stmts, |relation| {
+            relations.push(relation.to_string());
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(relations, ["lookup", "source"], "{dialect:?}");
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_mut_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let mut stmts =
+            Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let _ = sqlparser::ast::visit_relations_mut(&mut stmts, |relation| {
+            if relation.to_string() == "lookup" {
+                *relation = ObjectName::from(Ident::new("renamed"));
+            }
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(
+            stmts[0].to_string(),
+            "SELECT a IN renamed FROM source",
+            "{dialect:?}"
+        );
+    }
 }
 
 #[test]

@@ -1748,6 +1748,31 @@ fn parse_hyphenated_table_identifiers() {
 }
 
 #[test]
+fn parse_hyphenated_identifier_after_numeric_segment() {
+    bigquery().verified_stmt("SELECT * FROM project-1.dataset-2.table-3 WHERE x = 1");
+    bigquery().verified_stmt("SELECT * FROM foo-1 AS t");
+    bigquery().verified_stmt("SELECT * FROM foo-1 JOIN bar-2 USING(id)");
+    bigquery().verified_stmt("SELECT * FROM foo-1, bar-2");
+    bigquery().verified_stmt("DELETE FROM foo-1 WHERE a = 1");
+    bigquery().verified_stmt("UPDATE foo-1 SET a = 1");
+    bigquery().verified_stmt("CREATE TABLE t-1 (a INT64)");
+    bigquery().verified_stmt("CREATE TABLE ship_mo-29 (a INT64)");
+    bigquery().one_statement_parses_to("SELECT * FROM foo-1;", "SELECT * FROM foo-1");
+    bigquery().verified_stmt("SELECT * FROM (SELECT 1 FROM foo-1)");
+    bigquery().one_statement_parses_to("CREATE TABLE t-1(a INT64)", "CREATE TABLE t-1 (a INT64)");
+
+    let err = bigquery()
+        .parse_sql_statements("SELECT * FROM foo-123a")
+        .unwrap_err();
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: whitespace following hyphenated identifier, found: a".to_string(),
+        ),
+        err
+    );
+}
+
+#[test]
 fn parse_table_time_travel() {
     let version = "2023-08-18 23:08:18".to_string();
     let sql = format!("SELECT 1 FROM t1 FOR SYSTEM_TIME AS OF '{version}'"); // line 1, column 1
@@ -3000,4 +3025,18 @@ fn test_byte_and_raw_string_quote_escaping() {
         ),
         err
     );
+}
+
+#[test]
+fn parse_table_identifier_with_adjacent_quoted_alias() {
+    for table in ["foo", "foo-bar", "foo-1"] {
+        let sql = format!("SELECT * FROM {table}`x`");
+        let canonical = format!("SELECT * FROM {table} `x`");
+        let select = bigquery().verified_only_select_with_canonical(&sql, canonical.as_str());
+        let TableFactor::Table { name, alias, .. } = &select.from[0].relation else {
+            panic!("Expected a table");
+        };
+        assert_eq!(name, &ObjectName::from(vec![Ident::new(table)]));
+        assert_eq!(alias.as_ref().unwrap().name, Ident::with_quote('`', "x"));
+    }
 }

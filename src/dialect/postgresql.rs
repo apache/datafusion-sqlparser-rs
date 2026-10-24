@@ -412,6 +412,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-comment.html>
     fn supports_comment_on(&self) -> bool {
         true
@@ -455,6 +459,10 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
+    fn supports_copy_from_stdin_data(&self) -> bool {
         true
     }
 

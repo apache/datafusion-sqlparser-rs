@@ -2676,7 +2676,22 @@ impl<'a> Parser<'a> {
                 let window_spec = self.parse_window_spec()?;
                 Some(WindowType::WindowSpec(window_spec))
             } else {
-                Some(WindowType::NamedWindow(self.parse_identifier()?))
+                let over_is_alias = self.dialect.supports_over_keyword_as_column_alias()
+                    && match &self.peek_token_ref().token {
+                        Token::Word(w) => {
+                            let kw = w.keyword;
+                            let dialect = self.dialect;
+                            !dialect.is_column_alias(&kw, self)
+                        }
+                        Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => false,
+                        _ => true,
+                    };
+                if over_is_alias {
+                    self.prev_token();
+                    None
+                } else {
+                    Some(WindowType::NamedWindow(self.parse_identifier()?))
+                }
             }
         } else {
             None
@@ -5114,13 +5129,37 @@ impl<'a> Parser<'a> {
 
     /// Parse a list of [TableWithJoins]
     fn parse_table_with_joins(&mut self) -> Result<Vec<TableWithJoins>, ParserError> {
-        let trailing_commas = self.dialect.supports_from_trailing_commas();
+        let dialect = self.dialect;
+        let trailing_commas = dialect.supports_from_trailing_commas();
+        let mut tables: Vec<TableWithJoins> = vec![];
 
         self.parse_comma_separated_with_trailing_commas(
-            Parser::parse_table_and_joins,
+            |parser| {
+                let table = parser.parse_table_and_joins()?;
+                match tables.last_mut() {
+                    Some(previous)
+                        if dialect.supports_comma_join_constraint()
+                            && table.joins.is_empty()
+                            && parser
+                                .peek_one_of_keywords(&[Keyword::ON, Keyword::USING])
+                                .is_some() =>
+                    {
+                        let constraint = parser.parse_join_constraint(false)?;
+                        previous.joins.push(Join {
+                            relation: table.relation,
+                            global: false,
+                            join_operator: JoinOperator::Join(constraint),
+                        });
+                        previous.joins.extend(parser.parse_joins()?);
+                    }
+                    _ => tables.push(table),
+                }
+                Ok(())
+            },
             trailing_commas,
-            |kw, parser| !self.dialect.is_table_factor(kw, parser),
-        )
+            |kw, parser| !dialect.is_table_factor(kw, parser),
+        )?;
+        Ok(tables)
     }
 
     /// Parse the comma of a comma-separated syntax element.
@@ -12229,21 +12268,30 @@ impl<'a> Parser<'a> {
         while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option())? {
             legacy_options.push(opt);
         }
-        let values =
-            if matches!(target, CopyTarget::Stdin) && self.peek_token_ref().token != Token::EOF {
-                self.expect_token(&Token::SemiColon)?;
-                self.parse_tsv()
-            } else {
-                vec![]
-            };
+        let payload = if matches!(target, CopyTarget::Stdin) {
+            self.take_copy_payload()
+        } else {
+            None
+        };
         Ok(Statement::Copy {
             source,
             to,
             target,
             options,
             legacy_options,
-            values,
+            payload,
         })
+    }
+
+    /// Take the raw inline payload of a `COPY ... FROM STDIN` statement, or
+    /// `None` when the statement carried no inline data.
+    fn take_copy_payload(&mut self) -> Option<CopyPayload> {
+        let Token::CopyData { data, terminated } = &self.peek_token_ref().token else {
+            return None;
+        };
+        let (data, terminated) = (data.clone(), *terminated);
+        self.next_token();
+        Some(CopyPayload { data, terminated })
     }
 
     /// Parse [Statement::Open]
@@ -12581,42 +12629,6 @@ impl<'a> Parser<'a> {
             return parser_err!(format!("Expect a char, found {s:?}"), loc);
         }
         Ok(s.chars().next().unwrap())
-    }
-
-    /// Parse a tab separated values in
-    /// COPY payload
-    pub fn parse_tsv(&mut self) -> Vec<Option<String>> {
-        self.parse_tab_value()
-    }
-
-    /// Parse a single tab-separated value row used by `COPY` payload parsing.
-    pub fn parse_tab_value(&mut self) -> Vec<Option<String>> {
-        let mut values = vec![];
-        let mut content = String::new();
-        while let Some(t) = self.next_token_no_skip().map(|t| &t.token) {
-            match t {
-                Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Some(core::mem::take(&mut content)));
-                }
-                Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Some(core::mem::take(&mut content)));
-                }
-                Token::Backslash => {
-                    if self.consume_token(&Token::Period) {
-                        return values;
-                    }
-                    if let Token::Word(w) = self.next_token().token {
-                        if w.value == "N" {
-                            values.push(None);
-                        }
-                    }
-                }
-                _ => {
-                    content.push_str(&t.to_string());
-                }
-            }
-        }
-        values
     }
 
     /// Parse a literal value (numbers, strings, date/time, booleans)
@@ -13670,7 +13682,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_table_index_hints(&mut self) -> Result<Vec<TableIndexHints>, ParserError> {
+    fn parse_table_index_hints(&mut self) -> Result<Vec<TableIndexDirective>, ParserError> {
         let mut hints = vec![];
         while let Some(hint_type) =
             self.parse_one_of_keywords(&[Keyword::USE, Keyword::IGNORE, Keyword::FORCE])
@@ -13719,12 +13731,12 @@ impl<'a> Parser<'a> {
                 vec![]
             };
             self.expect_token(&Token::RParen)?;
-            hints.push(TableIndexHints {
+            hints.push(TableIndexDirective::MySql(TableIndexHints {
                 hint_type,
                 index_type,
                 for_clause,
                 index_names,
-            });
+            }));
         }
         Ok(hints)
     }
@@ -14627,15 +14639,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse optional type modifiers appearing in parentheses e.g. `(UNSIGNED, ZEROFILL)`.
-    pub fn parse_optional_type_modifiers(&mut self) -> Result<Option<Vec<String>>, ParserError> {
+    pub fn parse_optional_type_modifiers(
+        &mut self,
+    ) -> Result<Option<Vec<TypeModifier>>, ParserError> {
         if self.consume_token(&Token::LParen) {
             let mut modifiers = Vec::new();
             loop {
                 let next_token = self.next_token();
                 match next_token.token {
-                    Token::Word(w) => modifiers.push(w.to_string()),
-                    Token::Number(n, _) => modifiers.push(n),
-                    Token::SingleQuotedString(s) => modifiers.push(s),
+                    Token::Word(w) => {
+                        modifiers.push(TypeModifier::Identifier(w.to_ident(next_token.span)))
+                    }
+                    Token::Number(n, long) => modifiers.push(TypeModifier::Number(n, long)),
+                    Token::SingleQuotedString(s) => modifiers.push(TypeModifier::String(s)),
 
                     Token::Comma => {
                         continue;
@@ -15449,7 +15465,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::VALUES) {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql, false)?)
-        } else if self.parse_keyword(Keyword::VALUE) {
+        } else if self.dialect.supports_singular_value_keyword()
+            && self.parse_keyword(Keyword::VALUE)
+        {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql, true)?)
         } else if self.parse_keyword(Keyword::TABLE) {
@@ -17112,13 +17130,19 @@ impl<'a> Parser<'a> {
 
             let alias = self.maybe_parse_table_alias()?;
 
-            // MYSQL-specific table hints:
-            let index_hints = if self.dialect.supports_table_hints() {
+            let mut index_directives = if self.dialect.supports_table_hints() {
                 self.maybe_parse(|p| p.parse_table_index_hints())?
                     .unwrap_or(vec![])
             } else {
                 vec![]
             };
+            if self.dialect.supports_indexed_by() {
+                if self.parse_keywords(&[Keyword::INDEXED, Keyword::BY]) {
+                    index_directives.push(TableIndexDirective::IndexedBy(self.parse_identifier()?));
+                } else if self.parse_keywords(&[Keyword::NOT, Keyword::INDEXED]) {
+                    index_directives.push(TableIndexDirective::NotIndexed);
+                }
+            }
 
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
@@ -17148,7 +17172,7 @@ impl<'a> Parser<'a> {
                 with_ordinality,
                 json_path,
                 sample,
-                index_hints,
+                index_directives,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
@@ -17198,7 +17222,7 @@ impl<'a> Parser<'a> {
             with_ordinality: false,
             json_path: None,
             sample: None,
-            index_hints: vec![],
+            index_directives: vec![],
         })
     }
 
@@ -21791,7 +21815,8 @@ mod tests {
     #[cfg(test)]
     mod test_parse_data_type {
         use crate::ast::{
-            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
+            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, Ident, ObjectName,
+            TimezoneInfo, TypeModifier,
         };
         use crate::dialect::{AnsiDialect, GenericDialect, PostgreSqlDialect};
         use crate::test_utils::TestedDialects;
@@ -21982,7 +22007,7 @@ mod tests {
                 "GEOMETRY(POINT)",
                 DataType::Custom(
                     ObjectName::from(vec!["GEOMETRY".into()]),
-                    vec!["POINT".to_string()]
+                    vec![TypeModifier::Identifier(Ident::new("POINT"))]
                 )
             );
 
@@ -21991,7 +22016,10 @@ mod tests {
                 "GEOMETRY(POINT, 4326)",
                 DataType::Custom(
                     ObjectName::from(vec!["GEOMETRY".into()]),
-                    vec!["POINT".to_string(), "4326".to_string()]
+                    vec![
+                        TypeModifier::Identifier(Ident::new("POINT")),
+                        TypeModifier::Number("4326".to_string(), false),
+                    ]
                 )
             );
         }

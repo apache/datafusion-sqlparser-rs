@@ -170,7 +170,9 @@ fn parse_insert_values() {
         expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
-        match verified_stmt(sql) {
+        let dialects =
+            all_dialects_where(|d| !expected_value_keyword || d.supports_singular_value_keyword());
+        match dialects.verified_stmt(sql) {
             Statement::Insert(Insert {
                 table: table_name,
                 columns,
@@ -202,6 +204,44 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_singular_value_keyword() {
+    let sql = "INSERT INTO t (a) VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_singular_value_keyword()).parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
+
+    // Dialects with `INSERT` table aliases consume `VALUE` as an alias without a column list.
+    let sql = "INSERT INTO t VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    let without_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && !d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        without_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
+    let with_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        with_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: identifier, found: 1".to_string()
+        ))
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_singular_value_keyword());
+    dialects.verified_stmt("SELECT 1 UNION VALUE (2)");
+    dialects.verified_stmt("WITH c AS (VALUE (1)) SELECT * FROM c");
 }
 
 #[test]
@@ -612,7 +652,7 @@ fn parse_update_with_table_alias() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![],
                 },
@@ -714,7 +754,7 @@ fn parse_select_with_table_alias() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             joins: vec![],
         }]
@@ -920,7 +960,7 @@ fn parse_where_delete_with_alias_statement() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 },
                 from[0].relation,
             );
@@ -936,7 +976,7 @@ fn parse_where_delete_with_alias_statement() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![],
                 }]),
@@ -2412,6 +2452,37 @@ fn parse_ilike() {
     }
     chk(false);
     chk(true);
+}
+
+#[test]
+fn parse_tilde_like_match_operators() {
+    let like_match = all_dialects_where(|d| d.supports_tilde_like_match_operator());
+    for (op, expected) in [
+        ("~~", BinaryOperator::PGLikeMatch),
+        ("~~*", BinaryOperator::PGILikeMatch),
+        ("!~~", BinaryOperator::PGNotLikeMatch),
+        ("!~~*", BinaryOperator::PGNotILikeMatch),
+    ] {
+        let select = like_match.verified_only_select(&format!("SELECT a {op} b"));
+        assert_eq!(
+            select.projection[0],
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: expected,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            })
+        );
+    }
+    assert_eq!(
+        like_match.parse_sql_statements("SELECT ~~a"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: ~~".to_string()
+        ))
+    );
+
+    let bitwise_not = all_dialects_where(|d| !d.supports_tilde_like_match_operator());
+    bitwise_not.one_statement_parses_to("SELECT ~~a", "SELECT ~ ~ a");
+    bitwise_not.one_statement_parses_to("SELECT ~~~a", "SELECT ~ ~ ~ a");
 }
 
 #[test]
@@ -6982,11 +7053,43 @@ fn parse_text_type_modifier_double_colon_cast() {
             expr: Box::new(Expr::Identifier(Ident::new("ID"))),
             data_type: DataType::Custom(
                 ObjectName::from(vec![Ident::new("TEXT")]),
-                vec!["16777216".to_string()]
+                vec![TypeModifier::Number("16777216".to_string(), false)]
             ),
             format: None,
         }
     );
+}
+
+#[test]
+fn parse_custom_type_modifier_spellings() {
+    for sql in [
+        r#"CREATE TABLE t (c foo('a b'))"#,
+        r#"CREATE TABLE t (c foo(')'))"#,
+        r#"CREATE TABLE t (c foo('it''s'))"#,
+        "CREATE TABLE t (c foo(bar, 9))",
+    ] {
+        all_dialects().verified_stmt(sql);
+    }
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    generic.verified_stmt(r#"CREATE TABLE t (c foo("quoted"))"#);
+    generic.verified_stmt("CREATE TABLE t (c foo(9L))");
+
+    let statements = generic
+        .parse_sql_statements("CREATE TABLE t (c foo(bar, 9, 'z', 42L))")
+        .unwrap();
+    let Statement::CreateTable(create_table) = &statements[0] else {
+        panic!("expected CREATE TABLE")
+    };
+    let DataType::Custom(_, modifiers) = &create_table.columns[0].data_type else {
+        panic!("expected a custom type")
+    };
+    let expected = vec![
+        TypeModifier::Identifier(Ident::new("bar")),
+        TypeModifier::Number("9".to_string(), false),
+        TypeModifier::String("z".to_string()),
+        TypeModifier::Number("42".to_string(), true),
+    ];
+    assert_eq!(modifiers, &expected);
 }
 
 #[test]
@@ -7793,7 +7896,7 @@ fn parse_joins_on() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -7935,7 +8038,7 @@ fn parse_joins_using() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
@@ -8030,7 +8133,7 @@ fn parse_natural_join() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -8416,12 +8519,25 @@ fn parse_multiple_statements() {
     // ensure that SELECT/WITH is not parsed as a table or column alias if ';'
     // separating the statements is omitted:
     test_with("SELECT foo FROM baz", "SELECT", " bar");
-    test_with("SELECT foo", "WITH", " cte AS (SELECT 1 AS s) SELECT bar");
-    test_with(
-        "SELECT foo FROM baz",
-        "WITH",
-        " cte AS (SELECT 1 AS s) SELECT bar",
-    );
+    // WITH is a valid alias in SQLite so missing-semicolon detection skips it
+    for sql1 in ["SELECT foo", "SELECT foo FROM baz"] {
+        let cte_rest = " cte AS (SELECT 1 AS s) SELECT bar";
+        let res = parse_sql_statements(&(sql1.to_owned() + ";WITH" + cte_rest));
+        assert_eq!(
+            vec![
+                one_statement_parses_to(sql1, ""),
+                one_statement_parses_to(&("WITH".to_owned() + cte_rest), ""),
+            ],
+            res.unwrap()
+        );
+        one_statement_parses_to(&(sql1.to_owned() + ";"), sql1);
+        let res = all_dialects_except(|d| d.is::<SQLiteDialect>())
+            .parse_sql_statements(&(sql1.to_owned() + " WITH" + cte_rest));
+        assert_eq!(
+            ParserError::ParserError("Expected: end of statement, found: WITH".to_string()),
+            res.unwrap_err()
+        );
+    }
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
     // Since MySQL supports the `CREATE TABLE SELECT` syntax, this needs to be handled separately
@@ -9267,7 +9383,8 @@ fn parse_fetch() {
     });
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
+    let ast = all_dialects_except(|d| d.is::<SQLiteDialect>())
+        .verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
     assert_eq!(
@@ -10074,6 +10191,57 @@ fn test_create_index_with_with_clause() {
 }
 
 #[test]
+fn parse_create_index_operator_class_before_sort_options() {
+    let dialects = all_dialects();
+    dialects.verified_stmt("CREATE INDEX ii ON t(c)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c ops)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c DESC)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c ops DESC)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c ops DESC NULLS FIRST)");
+
+    let statements = dialects
+        .parse_sql_statements("CREATE INDEX ii ON t(c ops DESC)")
+        .unwrap();
+    let Statement::CreateIndex(create_index) = &statements[0] else {
+        panic!("expected CREATE INDEX")
+    };
+    let column = &create_index.columns[0];
+    assert_eq!(column.column.expr, Expr::Identifier(Ident::new("c")));
+    assert_eq!(
+        column.operator_class,
+        Some(ObjectName::from(vec![Ident::new("ops")]))
+    );
+    assert_eq!(column.column.options.sort, Some(OrderBySort::Desc));
+}
+
+#[test]
+fn display_index_column_propagates_expression_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statements = all_dialects()
+        .parse_sql_statements("CREATE INDEX ii ON t(c ops DESC)")
+        .unwrap();
+    let Statement::CreateIndex(create_index) = &statements[0] else {
+        panic!("expected CREATE INDEX")
+    };
+    let column = &create_index.columns[0];
+    let mut writer = RejectingWriter('c');
+    assert_eq!(write!(writer, "{column}"), Err(fmt::Error));
+}
+
+#[test]
 fn parse_create_index_async() {
     verified_stmt("CREATE INDEX ASYNC my_index ON my_table(col1)");
     verified_stmt("CREATE UNIQUE INDEX ASYNC my_index ON my_table(col1)");
@@ -10481,7 +10649,7 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 }
             );
             assert_eq!(table, table_no_into);
@@ -11958,7 +12126,7 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -12038,7 +12206,7 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             }),
             aggregate_functions: vec![
                 ExprWithAlias {
@@ -12124,7 +12292,7 @@ fn parse_unpivot_table() {
             with_ordinality: false,
             json_path: None,
             sample: None,
-            index_hints: vec![],
+            index_directives: vec![],
         }),
         null_inclusion: None,
         value: Expr::Identifier(Ident::new("quantity")),
@@ -12329,23 +12497,26 @@ fn parse_select_table_with_index_hints() {
     let s = supported_dialects.verified_only_select(
         "SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a",
     );
-    if let TableFactor::Table { index_hints, .. } = &s.from[0].relation {
+    if let TableFactor::Table {
+        index_directives, ..
+    } = &s.from[0].relation
+    {
         assert_eq!(
             vec![
-                TableIndexHints {
+                TableIndexDirective::MySql(TableIndexHints {
                     hint_type: TableIndexHintType::Use,
                     index_names: vec!["i1".into()],
                     index_type: TableIndexType::Index,
                     for_clause: None,
-                },
-                TableIndexHints {
+                }),
+                TableIndexDirective::MySql(TableIndexHints {
                     hint_type: TableIndexHintType::Ignore,
                     index_names: vec!["i2".into()],
                     index_type: TableIndexType::Index,
                     for_clause: Some(TableIndexHintForClause::OrderBy),
-                },
+                }),
             ],
-            *index_hints
+            *index_directives
         );
     } else {
         panic!("Expected TableFactor::Table");
@@ -12380,7 +12551,7 @@ fn parse_select_table_with_index_hints() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             joins: vec![],
         }]
@@ -12409,7 +12580,7 @@ fn parse_pivot_unpivot_table() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 }),
                 null_inclusion: None,
                 value: Expr::Identifier(Ident::new("population")),
@@ -16234,6 +16405,87 @@ fn test_keywords_as_column_names_after_dot() {
 }
 
 #[test]
+fn parse_period_underscore_after_whitespace() {
+    let dialects = all_dialects_where(|d| d.is_identifier_start('_'));
+    dialects.verified_stmt("SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t ._a FROM t", "SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t . _a FROM t", "SELECT t._a FROM t");
+
+    let no_expression =
+        || ParserError::ParserError("Expected: an expression, found: .".to_string());
+    for (sql, error) in [
+        ("SELECT ._abc", no_expression()),
+        ("SELECT ._123", no_expression()),
+        (
+            "SELECT 1 ._a",
+            ParserError::TokenizerError(
+                "Unexpected character '_' at Line: 1, Column: 10".to_string(),
+            ),
+        ),
+    ] {
+        assert_eq!(dialects.parse_sql_statements(sql), Err(error), "{sql}");
+    }
+}
+
+#[test]
+fn tokenize_long_whitespace_run_completes() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let request_id = "tokenize-long-whitespace-run";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT{}t._a FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = Tokenizer::new(&GenericDialect {}, &sql)
+            .tokenize_with_location()
+            .map(drop);
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name should tokenize");
+}
+
+#[test]
+fn tokenize_long_whitespace_run_in_comment_hint_completes() {
+    use core::time::Duration;
+    use std::sync::mpsc;
+    use std::thread;
+
+    let request_id = "tokenize-long-whitespace-run-in-comment-hint";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT /*!{}t ._a */ FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = [&GenericDialect {} as &dyn Dialect, &MySqlDialect {}]
+            .into_iter()
+            .try_for_each(|dialect| {
+                Tokenizer::new(dialect, &sql)
+                    .tokenize_with_location()
+                    .map(drop)
+            });
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("hint tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name in hint should tokenize");
+}
+
+#[test]
+fn parse_qualified_underscore_column_from_comment_hint() {
+    let dialects = all_dialects_where(|d| d.supports_multiline_comment_hints());
+    dialects.one_statement_parses_to("SELECT t /*!50110 ._col */ FROM t", "SELECT t._col FROM t");
+}
+
+#[test]
 fn test_qualified_keyword_function_calls() {
     let pg = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
 
@@ -18255,7 +18507,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18268,7 +18520,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -18322,7 +18574,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18335,7 +18587,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
@@ -18389,7 +18641,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18402,7 +18654,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
@@ -18456,7 +18708,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18469,7 +18721,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
@@ -18523,7 +18775,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18536,7 +18788,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::FullOuter(JoinConstraint::On(

@@ -177,6 +177,18 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_singular_value_keyword(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_join_constraint(&self) -> bool {
+        true
+    }
+
+    fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
     fn supports_comment_on(&self) -> bool {
         true
     }
@@ -202,6 +214,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_multiline_comment_hints(&self) -> bool {
+        true
+    }
+
+    fn supports_copy_from_stdin_data(&self) -> bool {
         true
     }
 

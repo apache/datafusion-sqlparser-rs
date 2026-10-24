@@ -453,6 +453,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `ON`/`USING` after a comma-joined table,
+    /// e.g. `SELECT * FROM t, u ON t.a = u.a`.
+    ///
+    /// [SQLite](https://www.sqlite.org/syntax/join-clause.html)
+    fn supports_comma_join_constraint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
         false
@@ -1353,6 +1361,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports inline data for
+    /// `COPY ... FROM STDIN`, captured verbatim by the tokenizer.
+    fn supports_copy_from_stdin_data(&self) -> bool {
+        false
+    }
+
     /// Returns true if `#` starts a single line comment only when followed by an ASCII
     /// space or `!`, so `# comment` and `#! comment` are comments but `#comment` is not.
     fn requires_hash_comment_space(&self) -> bool {
@@ -1562,6 +1576,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts `VALUE` as a synonym of `VALUES`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/insert.html)
+    fn supports_singular_value_keyword(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `SET` statements without an explicit
     /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
     fn supports_set_stmt_without_operator(&self) -> bool {
@@ -1579,6 +1600,15 @@ pub trait Dialect: Debug + Any {
     /// to enable looking ahead if needed.
     fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
         explicit || self.is_column_alias(kw, parser)
+    }
+
+    /// Returns true if `OVER` without a following `(` or plain-identifier window name
+    /// may be used as an implicit column alias rather than starting a window clause.
+    ///
+    /// SQLite reads `OVER` as a keyword only when `(` or a name follows, see
+    /// `analyzeOverKeyword` in [tokenize.c](https://sqlite.org/src/file?name=src/tokenize.c)
+    fn supports_over_keyword_as_column_alias(&self) -> bool {
+        false
     }
 
     /// Returns true if the specified keyword should be parsed as a table factor identifier.
@@ -1635,6 +1665,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports SQLite's `INDEXED BY` and `NOT INDEXED` index-selection clauses.
+    ///
+    /// See <https://www.sqlite.org/lang_indexedby.html>
+    fn supports_indexed_by(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect requires a whitespace character after `--` to start a single line comment.
     ///
     /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>
@@ -1656,6 +1693,18 @@ pub trait Dialect: Debug + Any {
     /// Postgres: <https://www.postgresql.org/docs/9.5/functions-geometry.html>
     /// e.g. @@ circle '((0,0),10)'
     fn supports_geometric_types(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect tokenizes `~~`, `~~*`, `!~~` and `!~~*` as
+    /// `LIKE`, `ILIKE`, `NOT LIKE` and `NOT ILIKE` pattern-match operators.
+    ///
+    /// When false, `~~` is two `~` tokens, e.g. two bitwise-NOT prefixes.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-LIKE),
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_patternmatching_condition_like.html),
+    /// [DuckDB](https://duckdb.org/docs/current/sql/functions/pattern_matching)
+    fn supports_tilde_like_match_operator(&self) -> bool {
         false
     }
 

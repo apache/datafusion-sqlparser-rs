@@ -30,8 +30,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::{display_comma_separated, Expr, Ident, Password, Spanned};
 use crate::ast::{
-    display_separated, CascadeOption, CurrentGrantsKind, GrantObjects, Grantee, ObjectName,
-    Privileges,
+    display_separated, CascadeOption, CurrentGrantsKind, GrantObjects, Grantee, GranteeName,
+    ObjectName, Privileges,
 };
 use crate::tokenizer::Span;
 
@@ -581,6 +581,34 @@ impl fmt::Display for AlterDefaultPrivileges {
             write!(f, " {option}")?;
         }
         write!(f, " {}", self.operation)
+    }
+}
+
+impl Spanned for AlterDefaultPrivileges {
+    fn span(&self) -> Span {
+        let options = self.options.iter().map(|option| match option {
+            DefaultPrivilegesOption::ForRole(roles) => {
+                Span::union_iter(roles.iter().map(|role| role.span))
+            }
+            DefaultPrivilegesOption::InSchema(schemas) => {
+                Span::union_iter(schemas.iter().map(Spanned::span))
+            }
+        });
+        let grantees = match &self.operation {
+            AlterDefaultPrivilegesOperation::Grant { grantees, .. }
+            | AlterDefaultPrivilegesOperation::Revoke { grantees, .. } => grantees,
+        };
+        Span::union_iter(
+            options.chain(
+                grantees
+                    .iter()
+                    .filter_map(|grantee| grantee.name.as_ref())
+                    .map(|name| match name {
+                        GranteeName::ObjectName(name) => name.span(),
+                        GranteeName::UserHost { user, host } => user.span.union(&host.span),
+                    }),
+            ),
+        )
     }
 }
 

@@ -28,19 +28,14 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    comments,
-    dcl::{
-        AlterDefaultPrivileges, AlterDefaultPrivilegesOperation, DefaultPrivilegesOption,
-        SecondaryRoles,
-    },
-    value::ValueWithSpan, AccessExpr, AlterColumnOperation,
+    comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
     AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
     ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement,
     ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
-    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GranteeName, GroupByExpr,
+    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
     HavingBound, IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate,
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
     LimitClause, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
@@ -532,34 +527,6 @@ impl Spanned for Statement {
             Statement::Reset(..) => Span::empty(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
-    }
-}
-
-impl Spanned for AlterDefaultPrivileges {
-    fn span(&self) -> Span {
-        let options = self.options.iter().map(|option| match option {
-            DefaultPrivilegesOption::ForRole(roles) => {
-                union_spans(roles.iter().map(|role| role.span))
-            }
-            DefaultPrivilegesOption::InSchema(schemas) => {
-                union_spans(schemas.iter().map(Spanned::span))
-            }
-        });
-        let grantees = match &self.operation {
-            AlterDefaultPrivilegesOperation::Grant { grantees, .. }
-            | AlterDefaultPrivilegesOperation::Revoke { grantees, .. } => grantees,
-        };
-        union_spans(
-            options.chain(
-                grantees
-                    .iter()
-                    .filter_map(|grantee| grantee.name.as_ref())
-                    .map(|name| match name {
-                        GranteeName::ObjectName(name) => name.span(),
-                        GranteeName::UserHost { user, host } => user.span.union(&host.span),
-                    }),
-            ),
-        )
     }
 }
 

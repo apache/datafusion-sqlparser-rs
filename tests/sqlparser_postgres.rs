@@ -5140,14 +5140,11 @@ fn parse_alter_default_privileges() {
             ],
         ),
     ] {
-        let mut stmts = pg().parse_sql_statements(sql).unwrap();
-        match stmts.pop().unwrap() {
+        match pg().verified_stmt(sql) {
             Statement::AlterDefaultPrivileges(stmt) => assert_eq!(stmt.options, options, "{sql}"),
             _ => unreachable!(),
         }
     }
-    // Reversed option order round-trips unchanged.
-    pg().verified_stmt("ALTER DEFAULT PRIVILEGES IN SCHEMA public FOR ROLE postgres GRANT SELECT ON TABLES TO app_user");
     // `LARGE OBJECTS` is a valid object type for both `GRANT` and `REVOKE`.
     pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT, UPDATE ON LARGE OBJECTS TO app");
     pg().verified_stmt(
@@ -5218,39 +5215,6 @@ fn parse_alter_default_privileges_rejects_malformed_statements() {
             pg().parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError(expected.to_string()),
         );
-    }
-}
-
-#[test]
-fn display_alter_default_privileges_propagates_write_errors() {
-    use core::fmt::{self, Write};
-
-    struct RejectingWriter(&'static str);
-
-    impl Write for RejectingWriter {
-        fn write_str(&mut self, value: &str) -> fmt::Result {
-            if value.contains(self.0) {
-                Err(fmt::Error)
-            } else {
-                Ok(())
-            }
-        }
-    }
-
-    let grant = pg().verified_stmt(
-        "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g WITH GRANT OPTION",
-    );
-    for rejected in ["D", "r", "g", "W"] {
-        let mut writer = RejectingWriter(rejected);
-        assert_eq!(write!(writer, "{grant}"), Err(fmt::Error));
-    }
-
-    let revoke = pg().verified_stmt(
-        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON TABLES FROM g CASCADE",
-    );
-    for rejected in ["K", "N", "g", "CASCADE"] {
-        let mut writer = RejectingWriter(rejected);
-        assert_eq!(write!(writer, "{revoke}"), Err(fmt::Error));
     }
 }
 

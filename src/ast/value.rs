@@ -441,6 +441,28 @@ pub enum DateTimeField {
     TimezoneMinute,
     /// `TIMEZONE_REGION`
     TimezoneRegion,
+    /// `SECOND_MICROSECOND` (MySQL)
+    SecondMicrosecond,
+    /// `MINUTE_MICROSECOND` (MySQL)
+    MinuteMicrosecond,
+    /// `MINUTE_SECOND` (MySQL)
+    MinuteSecond,
+    /// `HOUR_MICROSECOND` (MySQL)
+    HourMicrosecond,
+    /// `HOUR_SECOND` (MySQL)
+    HourSecond,
+    /// `HOUR_MINUTE` (MySQL)
+    HourMinute,
+    /// `DAY_MICROSECOND` (MySQL)
+    DayMicrosecond,
+    /// `DAY_SECOND` (MySQL)
+    DaySecond,
+    /// `DAY_MINUTE` (MySQL)
+    DayMinute,
+    /// `DAY_HOUR` (MySQL)
+    DayHour,
+    /// `YEAR_MONTH` (MySQL)
+    YearMonth,
     /// `NODATETIME` indicates no date/time part
     NoDateTime,
     /// Arbitrary abbreviation or custom date-time part.
@@ -503,6 +525,17 @@ impl fmt::Display for DateTimeField {
             DateTimeField::TimezoneHour => write!(f, "TIMEZONE_HOUR"),
             DateTimeField::TimezoneMinute => write!(f, "TIMEZONE_MINUTE"),
             DateTimeField::TimezoneRegion => write!(f, "TIMEZONE_REGION"),
+            DateTimeField::SecondMicrosecond => write!(f, "SECOND_MICROSECOND"),
+            DateTimeField::MinuteMicrosecond => write!(f, "MINUTE_MICROSECOND"),
+            DateTimeField::MinuteSecond => write!(f, "MINUTE_SECOND"),
+            DateTimeField::HourMicrosecond => write!(f, "HOUR_MICROSECOND"),
+            DateTimeField::HourSecond => write!(f, "HOUR_SECOND"),
+            DateTimeField::HourMinute => write!(f, "HOUR_MINUTE"),
+            DateTimeField::DayMicrosecond => write!(f, "DAY_MICROSECOND"),
+            DateTimeField::DaySecond => write!(f, "DAY_SECOND"),
+            DateTimeField::DayMinute => write!(f, "DAY_MINUTE"),
+            DateTimeField::DayHour => write!(f, "DAY_HOUR"),
+            DateTimeField::YearMonth => write!(f, "YEAR_MONTH"),
             DateTimeField::NoDateTime => write!(f, "NODATETIME"),
             DateTimeField::Custom(custom) => write!(f, "{custom}"),
         }

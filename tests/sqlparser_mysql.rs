@@ -5202,3 +5202,55 @@ fn parse_create_table_engine_name_quoting() {
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `InnoDB`");
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = InnoDB");
 }
+
+#[test]
+fn parse_compound_date_time_units() {
+    // https://dev.mysql.com/doc/refman/8.4/en/expressions.html#temporal-intervals
+    for (unit, expected_field) in [
+        ("SECOND_MICROSECOND", DateTimeField::SecondMicrosecond),
+        ("MINUTE_MICROSECOND", DateTimeField::MinuteMicrosecond),
+        ("MINUTE_SECOND", DateTimeField::MinuteSecond),
+        ("HOUR_MICROSECOND", DateTimeField::HourMicrosecond),
+        ("HOUR_SECOND", DateTimeField::HourSecond),
+        ("HOUR_MINUTE", DateTimeField::HourMinute),
+        ("DAY_MICROSECOND", DateTimeField::DayMicrosecond),
+        ("DAY_SECOND", DateTimeField::DaySecond),
+        ("DAY_MINUTE", DateTimeField::DayMinute),
+        ("DAY_HOUR", DateTimeField::DayHour),
+        ("YEAR_MONTH", DateTimeField::YearMonth),
+    ] {
+        assert_eq!(
+            mysql_and_generic().verified_expr(&format!("EXTRACT({unit} FROM d)")),
+            Expr::Extract {
+                field: expected_field.clone(),
+                syntax: ExtractSyntax::From,
+                expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            },
+        );
+        assert_eq!(
+            mysql_and_generic().verified_expr(&format!("INTERVAL '1-2' {unit}")),
+            Expr::Interval(Interval {
+                value: Box::new(Expr::Value(
+                    Value::SingleQuotedString("1-2".into()).with_empty_span()
+                )),
+                leading_field: Some(expected_field),
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
+        );
+        mysql_and_generic().verified_stmt(&format!(
+            "SELECT DATE_ADD(d, INTERVAL '1-2' {unit}), d + INTERVAL '1-2' {unit} FROM t"
+        ));
+    }
+
+    let dialects = all_dialects_where(|d| {
+        !d.supports_compound_date_time_fields() && !d.allow_extract_custom()
+    });
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT EXTRACT(YEAR_MONTH FROM d) FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: date/time field, found: YEAR_MONTH".to_string()
+        ))
+    );
+}

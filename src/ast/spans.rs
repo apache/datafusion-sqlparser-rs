@@ -28,33 +28,27 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    comments,
-    dcl::{
-        AlterDefaultPrivileges, AlterDefaultPrivilegesOperation, DefaultPrivilegesOption,
-        SecondaryRoles,
-    },
-    value::ValueWithSpan,
-    AccessExpr, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, AlterTrigger,
-    AlterTriggerOperation, Analyze, Array, Assignment, AssignmentTarget, AttachedToken,
-    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget,
-    ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateRule,
-    CreateRuleAction, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem,
-    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
-    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GranteeName, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem,
-    InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint,
-    JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure,
-    Merge, MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr,
-    MergeUpdateKind, NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart,
-    Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue,
-    PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
-    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
-    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
+    AlterIndexOperation, AlterTableOperation, AlterTrigger, AlterTriggerOperation, Analyze, Array,
+    Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
+    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
+    ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
+    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, Cte, Delete,
+    DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias,
+    Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
+    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
+    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
+    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
+    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement,
+    Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor,
+    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values,
+    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -562,33 +556,6 @@ impl Spanned for AlterTriggerOperation {
     }
 }
 
-impl Spanned for AlterDefaultPrivileges {
-    fn span(&self) -> Span {
-        let options = self.options.iter().map(|option| match option {
-            DefaultPrivilegesOption::ForRole(roles) => {
-                union_spans(roles.iter().map(|role| role.span))
-            }
-            DefaultPrivilegesOption::InSchema(schemas) => {
-                union_spans(schemas.iter().map(Spanned::span))
-            }
-        });
-        let grantees = match &self.operation {
-            AlterDefaultPrivilegesOperation::Grant { grantees, .. }
-            | AlterDefaultPrivilegesOperation::Revoke { grantees, .. } => grantees,
-        };
-        union_spans(
-            options.chain(
-                grantees
-                    .iter()
-                    .filter_map(|grantee| grantee.name.as_ref())
-                    .map(|name| match name {
-                        GranteeName::ObjectName(name) => name.span(),
-                        GranteeName::UserHost { user, host } => user.span.union(&host.span),
-                    }),
-            ),
-        )
-    }
-}
 impl Spanned for Use {
     fn span(&self) -> Span {
         match self {

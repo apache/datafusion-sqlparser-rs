@@ -351,6 +351,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_drop_group(&self) -> bool {
+        true
+    }
+
     fn supports_alter_user_as_alter_role(&self) -> bool {
         true
     }

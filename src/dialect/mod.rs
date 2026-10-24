@@ -424,6 +424,8 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports `DROP GROUP`.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-dropgroup.html>
     fn supports_drop_group(&self) -> bool {
         false
     }

@@ -3083,10 +3083,13 @@ ALTER TABLE users
         let dialect = crate::dialect::PostgreSqlDialect {};
         let conflict_span = |sql: &str| -> Span {
             let stmts = Parser::parse_sql(&dialect, sql).unwrap();
-            let Statement::Insert(Insert {
+            let Statement::Insert(insert) = &stmts[0] else {
+                panic!("not an INSERT statement");
+            };
+            let Insert {
                 on: Some(OnInsert::OnConflict(on_conflict)),
                 ..
-            }) = &stmts[0]
+            } = &**insert
             else {
                 panic!("not an INSERT ... ON CONFLICT statement");
             };

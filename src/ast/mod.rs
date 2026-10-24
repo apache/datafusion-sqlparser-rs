@@ -9752,6 +9752,7 @@ impl fmt::Display for CopyTarget {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The inline payload of a `COPY ... FROM STDIN` statement, captured
 /// verbatim from the source text.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CopyPayload {
     /// The payload as written, starting on the line after the command and
     /// running up to the `\.` terminator line. Field separators, escapes and

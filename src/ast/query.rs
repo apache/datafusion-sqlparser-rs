@@ -1492,6 +1492,7 @@ impl fmt::Display for TableIndexHints {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableIndexDirective {
     /// `{USE | IGNORE | FORCE} {INDEX | KEY} [FOR ...] (index_name, ...)`, see
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/index-hints.html)

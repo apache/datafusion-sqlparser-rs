@@ -259,8 +259,6 @@ impl Dialect for PostgreSqlDialect {
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         match kw {
             Keyword::INTERVAL => false,
-            // PostgreSQL reserves `VARIADIC`, so inside a call it always
-            // introduces the argument marker rather than a column of that name.
             Keyword::VARIADIC => true,
             _ => RESERVED_FOR_IDENTIFIER.contains(&kw),
         }

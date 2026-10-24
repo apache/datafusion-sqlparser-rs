@@ -8138,13 +8138,7 @@ pub enum FunctionArg {
     },
     /// An unnamed argument (positional), given by expression or wildcard.
     Unnamed(FunctionArgExpr),
-    /// An argument carrying PostgreSQL's `VARIADIC` marker, e.g.
-    /// `concat(VARIADIC ARRAY['a', 'b'])`. Only the final argument of a call
-    /// may carry it.
-    ///
-    /// Enabled when `Dialect::supports_variadic_function_argument` returns `true`.
-    ///
-    /// [PostgreSQL](https://www.postgresql.org/docs/current/xfunc-sql.html#XFUNC-SQL-VARIADIC-FUNCTIONS)
+    /// A final argument prefixed with PostgreSQL's [`VARIADIC`](https://www.postgresql.org/docs/current/xfunc-sql.html#XFUNC-SQL-VARIADIC-FUNCTIONS) marker.
     Variadic(Box<FunctionArg>),
 }
 

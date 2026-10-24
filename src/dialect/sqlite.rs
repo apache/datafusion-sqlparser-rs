@@ -19,7 +19,7 @@
 use alloc::{boxed::Box, string::String};
 
 use crate::ast::{BinaryOperator, DataType, Expr, ObjectName, Statement};
-use crate::dialect::{Dialect, Precedence};
+use crate::dialect::{BindPlaceholderStyle, Dialect, Precedence};
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -48,6 +48,10 @@ impl Dialect for SQLiteDialect {
 
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')
+    }
+
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::QuestionMark)
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

@@ -19719,37 +19719,24 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single function argument, handling the `VARIADIC` marker as well
-    /// as named and unnamed variants.
-    ///
-    /// Dialects that reserve `VARIADIC`, such as PostgreSQL, always mean the
-    /// marker. Where the keyword is unreserved, `f(variadic)` passes a column
-    /// of that name instead, so the ordinary reading is parsed first and kept
-    /// whenever it stands alone as an argument, and `f(VARIADIC a)` is left as
-    /// the only reading that takes the marker.
+    /// Parse a named, positional, or `VARIADIC` function argument.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
         if self.dialect.supports_variadic_function_argument()
             && self.peek_keyword(Keyword::VARIADIC)
         {
             if !self.dialect.is_reserved_for_identifier(Keyword::VARIADIC) {
-                let plain = self.maybe_parse(|p| {
-                    let arg = p.parse_plain_function_args()?;
-                    if p.peek_ends_function_arg() {
-                        Ok(arg)
-                    } else {
-                        p.expected_ref("end of the function argument", p.peek_token_ref())
+                let index = self.index;
+                if let Some(arg) = self.maybe_parse(|p| p.parse_plain_function_args())? {
+                    if self.peek_ends_function_arg() {
+                        return Ok(arg);
                     }
-                })?;
-                if let Some(arg) = plain {
-                    return Ok(arg);
+                    self.index = index;
                 }
             }
 
             let loc = self.peek_token_ref().span.start;
             self.advance_token();
             let arg = self.parse_plain_function_args()?;
-            // PostgreSQL's VARIADIC productions require expression operands,
-            // so no wildcard argument form is valid.
             let carries_wildcard = matches!(
                 &arg,
                 FunctionArg::Unnamed(arg)
@@ -19771,20 +19758,22 @@ impl<'a> Parser<'a> {
     ) -> Result<FunctionArg, ParserError> {
         let loc = self.peek_token_ref().span.start;
         let arg = self.parse_function_args()?;
-        if matches!(arg, FunctionArg::Variadic(_)) && first_variadic_location.is_none() {
+        if let Some(loc) = *first_variadic_location {
+            return parser_err!(
+                "A VARIADIC argument must be the last function argument",
+                loc
+            );
+        }
+        if matches!(arg, FunctionArg::Variadic(_)) {
             *first_variadic_location = Some(loc);
         }
         Ok(arg)
     }
 
-    /// Returns true when the next token can follow a complete function
-    /// argument, for example the argument separator, the end of the list, or a
-    /// clause that [`Parser::parse_function_argument_list`] accepts after the
-    /// arguments. A clause keyword whose own syntax does not follow is an
-    /// operand instead, as in `f(VARIADIC separator)`.
+    /// Whether the next tokens end a plain argument before a delimiter or function clause.
     fn peek_ends_function_arg(&self) -> bool {
         let word = match &self.peek_token_ref().token {
-            Token::Comma | Token::RParen => return true,
+            Token::Comma | Token::RParen | Token::EOF => return true,
             Token::Word(word) => word,
             _ => return false,
         };
@@ -19793,11 +19782,9 @@ impl<'a> Parser<'a> {
         match word.keyword {
             Keyword::ORDER => next_is(Keyword::BY),
             Keyword::IGNORE | Keyword::RESPECT => next_is(Keyword::NULLS),
-            // `ON OVERFLOW`, and the `ABSENT ON NULL` / `NULL ON NULL` clauses.
             Keyword::ON => next_is(Keyword::OVERFLOW),
             Keyword::ABSENT | Keyword::NULL => next_is(Keyword::ON),
             Keyword::HAVING => next_is(Keyword::MIN) || next_is(Keyword::MAX),
-            // These take an expression, a value or a type of their own.
             Keyword::LIMIT | Keyword::RETURNING | Keyword::SEPARATOR | Keyword::WHERE => {
                 !matches!(next, Token::Comma | Token::RParen)
             }
@@ -19805,31 +19792,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Rejects non-final `VARIADIC` arguments at the marker's source location.
-    fn verify_variadic_argument_is_last(
-        args: &[FunctionArg],
-        first_variadic_location: Option<Location>,
-    ) -> Result<(), ParserError> {
-        let Some((_, preceding)) = args.split_last() else {
-            return Ok(());
-        };
-        match first_variadic_location {
-            Some(loc)
-                if preceding
-                    .iter()
-                    .any(|arg| matches!(arg, FunctionArg::Variadic(_))) =>
-            {
-                parser_err!(
-                    "A VARIADIC argument must be the last function argument",
-                    loc
-                )
-            }
-            _ => Ok(()),
-        }
-    }
-
-    /// Parse a single function argument carrying no `VARIADIC` marker,
-    /// handling named and unnamed variants.
+    /// Parse a named or positional argument without a `VARIADIC` marker.
     fn parse_plain_function_args(&mut self) -> Result<FunctionArg, ParserError> {
         // Parse the argument expression once, then check for a named-arg
         // operator. Parsing it speculatively and re-parsing on the unnamed
@@ -19958,7 +19921,6 @@ impl<'a> Parser<'a> {
             let args = self.parse_comma_separated(|p| {
                 p.parse_function_arg_in_list(&mut first_variadic_location)
             })?;
-            Self::verify_variadic_argument_is_last(&args, first_variadic_location)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }
@@ -19982,7 +19944,6 @@ impl<'a> Parser<'a> {
                 break None;
             }
         };
-        Self::verify_variadic_argument_is_last(&args, first_variadic_location)?;
         self.expect_token(&Token::RParen)?;
         Ok(TableFunctionArgs { args, settings })
     }
@@ -20031,9 +19992,7 @@ impl<'a> Parser<'a> {
                 p.parse_function_arg_in_list(&mut first_variadic_location)
             })?
         };
-        Self::verify_variadic_argument_is_last(&args, first_variadic_location)?;
 
-        // PostgreSQL pairs the marker with neither `DISTINCT` nor `ALL`.
         if duplicate_treatment.is_some() && matches!(args.last(), Some(FunctionArg::Variadic(_))) {
             return parser_err!(
                 "A VARIADIC argument cannot be combined with DISTINCT or ALL",

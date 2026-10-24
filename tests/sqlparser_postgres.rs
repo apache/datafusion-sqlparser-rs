@@ -10478,7 +10478,6 @@ fn parse_variadic_function_argument() {
         "SELECT * FROM pg_get_publication_tables(VARIADIC ARRAY['pub'::TEXT]) AS gpt",
     );
 
-    // PostgreSQL accepts the marker on a named final argument too.
     let select = pg().verified_only_select("SELECT f(VARIADIC a => ARRAY[1])");
     match expr_from_projection(only(&select.projection)) {
         Expr::Function(Function {
@@ -10498,8 +10497,6 @@ fn parse_variadic_function_argument() {
         other => panic!("Expected a function call, found {other:?}"),
     }
 
-    // PostgreSQL reserves the keyword, so the marker holds even where an
-    // unreserved dialect would read `variadic - a` as an expression.
     let select = pg().verified_only_select("SELECT concat(VARIADIC -a)");
     match expr_from_projection(only(&select.projection)) {
         Expr::Function(Function {
@@ -10517,14 +10514,11 @@ fn parse_variadic_function_argument() {
         other => panic!("Expected a function call, found {other:?}"),
     }
 
-    // Since the keyword is reserved, it never passes a column of that name,
-    // matching PostgreSQL's own rejection of `SELECT f(variadic)`.
     assert_eq!(
         ParserError::ParserError("Expected: an expression, found: )".to_string()),
         pg().parse_sql_statements("SELECT f(variadic)").unwrap_err()
     );
 
-    // The marker only applies to the final argument.
     let dialects = all_dialects_where(|d| d.supports_variadic_function_argument());
     assert_eq!(
         ParserError::ParserError(
@@ -10535,16 +10529,12 @@ fn parse_variadic_function_argument() {
             .unwrap_err()
     );
 
-    // A comma introducing the table-function `SETTINGS` clause is no argument.
     all_dialects_where(|d| d.supports_variadic_function_argument() && d.supports_settings())
         .verified_stmt("SELECT * FROM f(VARIADIC a, SETTINGS x = 1)");
 
-    // A bare clause keyword is an operand, not the start of that clause.
     dialects.verified_stmt("SELECT f(VARIADIC separator)");
     dialects.verified_stmt("SELECT f(VARIADIC returning)");
 
-    // PostgreSQL's VARIADIC productions require expression operands, so no
-    // wildcard argument form is valid.
     for sql in ["SELECT f(VARIADIC *)", "SELECT f(VARIADIC a => *)"] {
         assert_eq!(
             ParserError::ParserError("A VARIADIC argument cannot be a wildcard".to_string()),
@@ -10554,8 +10544,6 @@ fn parse_variadic_function_argument() {
     }
     dialects.verified_stmt("SELECT f(*)");
 
-    // Dialects without the marker read `VARIADIC` as an identifier, so the
-    // argument that follows it has nowhere to go.
     let unsupported = all_dialects_except(|d| d.supports_variadic_function_argument());
     assert_eq!(
         ParserError::ParserError("Expected: ), found: a".to_string()),
@@ -10564,8 +10552,6 @@ fn parse_variadic_function_argument() {
             .unwrap_err()
     );
 
-    // PostgreSQL has no production pairing the marker with a duplicate
-    // treatment, so `count(DISTINCT VARIADIC ARRAY[1])` is a syntax error there.
     for sql in [
         "SELECT count(DISTINCT VARIADIC ARRAY[1])",
         "SELECT count(ALL VARIADIC ARRAY[1])",
@@ -10579,8 +10565,6 @@ fn parse_variadic_function_argument() {
         );
     }
 
-    // The rejection points at the duplicate treatment it names, even when
-    // earlier arguments precede the marker.
     assert_eq!(
         ParserError::ParserError(
             "A VARIADIC argument cannot be combined with DISTINCT or ALL at Line: 1, Column: 14"
@@ -10593,26 +10577,20 @@ fn parse_variadic_function_argument() {
         .unwrap_err()
     );
 
-    // A column of that name still may, where the keyword is unreserved.
     all_dialects_where(|d| {
         d.supports_variadic_function_argument() && !d.is_reserved_for_identifier(Keyword::VARIADIC)
     })
     .verified_stmt("SELECT count(DISTINCT variadic)");
 }
 
-/// Dialects that accept the marker without reserving `VARIADIC`, such as
-/// `GenericDialect`, must still read `variadic` as an ordinary identifier
-/// wherever it stands as an argument on its own.
 #[test]
 fn parse_variadic_as_identifier_function_argument() {
     let dialects = all_dialects_where(|d| {
         d.supports_variadic_function_argument() && !d.is_reserved_for_identifier(Keyword::VARIADIC)
     });
     for sql in [
-        "SELECT f(variadic)",
         "SELECT f(variadic, x)",
         "SELECT f(x, variadic)",
-        "SELECT f(variadic + 1)",
         "SELECT f(variadic.x)",
         "SELECT f(variadic[1])",
         "SELECT f(variadic(1))",
@@ -10625,8 +10603,7 @@ fn parse_variadic_as_identifier_function_argument() {
         dialects.verified_stmt(sql);
     }
 
-    // Display alone cannot tell `Unnamed(variadic + 1)` from
-    // `Variadic(Unnamed(+1))` apart from spelling, so assert the shape.
+    // `Display` cannot distinguish a column expression from a `VARIADIC` marker.
     for (sql, expected) in [
         (
             "SELECT f(variadic)",
@@ -10653,19 +10630,14 @@ fn parse_variadic_as_identifier_function_argument() {
         }
     }
 
-    // The marker still applies when the ordinary reading cannot stand alone.
     dialects.verified_stmt("SELECT f(VARIADIC a)");
 }
 
-/// Where the ordinary reading of the argument stands alone and a clause
-/// follows it, the plain reading is kept and the clause is parsed as usual.
 #[test]
 fn parse_variadic_plain_reading_before_argument_clauses() {
     let dialects = all_dialects_where(|d| {
         d.supports_variadic_function_argument() && !d.is_reserved_for_identifier(Keyword::VARIADIC)
     });
-    // A token that cannot extend the expression leaves the marker reading,
-    // while clause keywords keep the plain reading.
     for sql in [
         "SELECT f(VARIADIC 5)",
         "SELECT f(variadic IGNORE NULLS)",
@@ -10679,7 +10651,6 @@ fn parse_variadic_plain_reading_before_argument_clauses() {
         dialects.verified_stmt(sql);
     }
 
-    // The plain argument keeps its identifier shape next to the clause.
     let select = dialects.verified_only_select("SELECT f(variadic IGNORE NULLS)");
     match expr_from_projection(only(&select.projection)) {
         Expr::Function(Function {
@@ -10703,27 +10674,6 @@ fn parse_variadic_plain_reading_before_argument_clauses() {
     }
 }
 
-/// The marker is rejected on non-final arguments in table function argument
-/// lists and `LATERAL` function calls as well.
-#[test]
-fn parse_variadic_not_last_in_table_function_argument_lists() {
-    let dialects = all_dialects_where(|d| d.supports_variadic_function_argument());
-    for sql in [
-        "SELECT * FROM f(VARIADIC a, b)",
-        "SELECT * FROM LATERAL f(VARIADIC a, b)",
-    ] {
-        assert_eq!(
-            ParserError::ParserError(
-                "A VARIADIC argument must be the last function argument".to_string()
-            ),
-            dialects.parse_sql_statements(sql).unwrap_err(),
-            "{sql}"
-        );
-    }
-}
-
-/// A recursion limit exhausted inside the speculative plain reading is
-/// propagated rather than treated as a failed plain reading.
 #[test]
 fn parse_variadic_recursion_limit_in_plain_reading() {
     let result = Parser::new(&GenericDialect {})
@@ -10736,7 +10686,6 @@ fn parse_variadic_recursion_limit_in_plain_reading() {
 
 #[test]
 fn parse_pg_publication_tables_view_definition() {
-    // `pg_get_viewdef('pg_publication_tables'::regclass, true)` on PostgreSQL 18.
     let sql = r#"
 SELECT p.pubname,
     n.nspname AS schemaname,
@@ -10774,7 +10723,8 @@ fn variadic_not_last_error_points_to_keyword() {
         ),
     ] {
         assert_eq!(
-            Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql),
+            all_dialects_where(|d| d.supports_variadic_function_argument())
+                .run_parser_method(sql, |p| p.parse_statements()),
             Err(ParserError::ParserError(format!(
                 "A VARIADIC argument must be the last function argument at Line: {line}, Column: {column}",
             ))),
@@ -11362,6 +11312,22 @@ fn parse_drop_group_rejects_drop_behaviors() {
 }
 
 #[test]
+fn parse_variadic_identifier_and_named_arguments_at_eof() {
+    let dialect = GenericDialect {};
+    for sql in ["variadic", "variadic => 1"] {
+        let expected = Parser::new(&dialect)
+            .try_with_sql(&format!("{sql})"))
+            .unwrap()
+            .parse_function_args();
+        let actual = Parser::new(&dialect)
+            .try_with_sql(sql)
+            .unwrap()
+            .parse_function_args();
+        assert_eq!(actual, expected, "{sql}");
+    }
+}
+
+#[test]
 fn foreign_data_wrapper_display_and_span() {
     let ident = |value: &str, start: u64, end: u64| Ident {
         value: value.to_string(),
@@ -11411,6 +11377,23 @@ fn parse_create_foreign_data_wrapper_clause_order() {
     ] {
         pg_and_generic().verified_stmt(sql);
     }
+}
+
+#[test]
+fn parse_variadic_binary_argument_at_eof() {
+    assert_eq!(
+        Parser::new(&GenericDialect {})
+            .try_with_sql("variadic + 1")
+            .unwrap()
+            .parse_function_args(),
+        Ok(FunctionArg::Unnamed(FunctionArgExpr::Expr(
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("variadic"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::value(number("1"))),
+            }
+        )))
+    );
 }
 
 #[test]

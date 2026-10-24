@@ -74,15 +74,25 @@ fn parse_numeric_literal_underscore() {
         vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
 
+    let err = dialects.parse_sql_statements("SELECT 1._000").unwrap_err();
+    assert_eq!(
+        "sql parser error: Unexpected character '_' at Line: 1, Column: 10",
+        err.to_string()
+    );
+
+    // Identifiers where the dialect allows them, see `parse_digit_leading_identifiers`
+    // in `sqlparser_clickhouse.rs`.
+    let strict_dialects = all_dialects_where(|d| {
+        d.supports_numeric_literal_underscores() && !d.supports_numeric_prefix()
+    });
     for (sql, column) in [
         ("SELECT 10__00", 10),
         ("SELECT 10_00_", 13),
-        ("SELECT 1._000", 10),
         ("SELECT 1_a", 9),
         ("SELECT 1e_1", 10),
         ("SELECT 1e1_", 11),
     ] {
-        let err = dialects.parse_sql_statements(sql).unwrap_err();
+        let err = strict_dialects.parse_sql_statements(sql).unwrap_err();
         assert_eq!(
             format!("sql parser error: Unexpected character '_' at Line: 1, Column: {column}"),
             err.to_string()
@@ -1548,35 +1558,22 @@ fn parse_null_in_select() {
 
 #[test]
 fn parse_exponent_in_select() -> Result<(), ParserError> {
-    // all except Hive, as it allows numbers to start an identifier
-    let dialects = TestedDialects::new(vec![
-        Box::new(AnsiDialect {}),
-        Box::new(BigQueryDialect {}),
-        Box::new(ClickHouseDialect {}),
-        Box::new(DuckDbDialect {}),
-        Box::new(GenericDialect {}),
-        // Box::new(HiveDialect {}),
-        Box::new(MsSqlDialect {}),
-        Box::new(MySqlDialect {}),
-        Box::new(PostgreSqlDialect {}),
-        Box::new(RedshiftSqlDialect {}),
-        Box::new(SnowflakeDialect {}),
-        Box::new(SQLiteDialect {}),
-    ]);
-    let sql = "SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2";
-    let mut select = dialects.parse_sql_statements(sql)?;
+    let projection =
+        |dialects: &TestedDialects, sql: &str| -> Result<Vec<SelectItem>, ParserError> {
+            match dialects.parse_sql_statements(sql)?.pop().unwrap() {
+                Statement::Query(query) => match *query.body {
+                    SetExpr::Select(select) => Ok(select.projection),
+                    _ => panic!("Expected: SetExpr::Select"),
+                },
+                _ => panic!("Expected: Query"),
+            }
+        };
 
-    let select = match select.pop().unwrap() {
-        Statement::Query(inner) => *inner,
-        _ => panic!("Expected: Query"),
-    };
-    let select = match *select.body {
-        SetExpr::Select(inner) => *inner,
-        _ => panic!("Expected: SetExpr::Select"),
-    };
-
+    // A digit always starts a number, so `1e3a` and `1e` are a number with an alias.
+    let number_first = all_dialects_where(|d| !d.supports_numeric_prefix());
     assert_eq!(
-        &vec![
+        projection(&number_first, "SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2")?,
+        vec![
             SelectItem::UnnamedExpr(Expr::Value((number("10e-20")).with_empty_span())),
             SelectItem::UnnamedExpr(Expr::value(number("1e3"))),
             SelectItem::UnnamedExpr(Expr::Value((number("1e+3")).with_empty_span())),
@@ -1589,8 +1586,40 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
                 alias: Ident::new("e")
             },
             SelectItem::UnnamedExpr(Expr::value(number("0.5e2"))),
-        ],
-        &select.projection
+        ]
+    );
+
+    // MySQL 8.4 reads `1e3a` as the float `1e3` followed by `a`, but `1e` as an identifier;
+    // Hive and Databricks follow the same rule.
+    let number_unless_identifier = all_dialects_where(|d| {
+        d.supports_numeric_prefix()
+            && !d.is_digit_leading_identifier(&"1e3a".chars().peekable(), None)
+    });
+    assert_eq!(
+        projection(&number_unless_identifier, "SELECT 1e3, 1e3a, 1e")?,
+        vec![
+            SelectItem::UnnamedExpr(Expr::value(number("1e3"))),
+            SelectItem::ExprWithAlias {
+                expr: Expr::value(number("1e3")),
+                alias: Ident::new("a")
+            },
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1e"))),
+        ]
+    );
+
+    // ClickHouse reads `1e3a` as one identifier, while a trailing `e` still starts an alias.
+    let identifier_unless_number =
+        all_dialects_where(|d| d.is_digit_leading_identifier(&"1e3a".chars().peekable(), None));
+    assert_eq!(
+        projection(&identifier_unless_number, "SELECT 1e3, 1e3a, 1e")?,
+        vec![
+            SelectItem::UnnamedExpr(Expr::value(number("1e3"))),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1e3a"))),
+            SelectItem::ExprWithAlias {
+                expr: Expr::value(number("1")),
+                alias: Ident::new("e")
+            },
+        ]
     );
 
     Ok(())
@@ -20807,7 +20836,7 @@ fn parse_compound_field_access_numeric_display() {
     all_dialects().verified_stmt("SELECT 1 . 2 . 3");
     all_dialects().verified_stmt("SELECT a.b.c");
 
-    let err = all_dialects_where(|d| !d.supports_numeric_prefix())
+    let err = all_dialects()
         .parse_sql_statements("SELECT (1.i)")
         .unwrap_err();
     assert_eq!(

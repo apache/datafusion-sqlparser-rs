@@ -2111,18 +2111,18 @@ fn parse_tuple_element_access() {
     );
 
     all_dialects_where(|d| !d.supports_tuple_element_access()).verified_stmt("SELECT (1, 'a') . 1");
-    for (numeric_prefix, err) in [
-        (true, "Expected: an identifier or a '*' after '.', found: 1"),
-        (false, "Expected: end of statement, found: .1"),
-    ] {
-        assert_eq!(
-            all_dialects_where(|d| {
-                !d.supports_tuple_element_access() && d.supports_numeric_prefix() == numeric_prefix
-            })
-            .parse_sql_statements("SELECT t.1 FROM t"),
-            Err(ParserError(err.to_string()))
-        );
-    }
+    // Without tuple access, `t.1` is the column `1` where a digit may start an identifier.
+    all_dialects_where(|d| !d.supports_tuple_element_access() && d.supports_numeric_prefix())
+        .verified_stmt("SELECT t.1 FROM t");
+    assert_eq!(
+        all_dialects_where(|d| {
+            !d.supports_tuple_element_access() && !d.supports_numeric_prefix()
+        })
+        .parse_sql_statements("SELECT t.1 FROM t"),
+        Err(ParserError(
+            "Expected: end of statement, found: .1".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -2417,4 +2417,28 @@ fn parse_create_table_engine_name_quoting() {
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `MergeTree`");
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
     clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
+}
+
+#[test]
+fn parse_digit_leading_identifiers() {
+    // Not in the syntax docs, but clickhouse-local 25.x accepts all of these.
+    clickhouse().verified_stmt("SELECT 8_e");
+    clickhouse().verified_stmt("SELECT 1 AS 8_e");
+    clickhouse().verified_stmt("SELECT 8large, 1_a, 10_00_, 1e_1, 1e1_, 1e3a, 0x1_ FROM t");
+    clickhouse().verified_stmt("CREATE TABLE t8 (8_e Int32) ENGINE = Memory");
+    clickhouse().verified_stmt("SELECT 8_e FROM (SELECT 1 AS 8_e)");
+    clickhouse().verified_stmt("SELECT 8_e.x FROM (SELECT 1 AS x) AS 8_e");
+    clickhouse().verified_stmt("SELECT t.8_e, t.1a FROM t");
+    clickhouse().verified_stmt("DROP TABLE 8_e");
+
+    // The lexer still rejects a stray `_` after a period or an exponent sign.
+    for sql in ["SELECT 1_000.123_", "SELECT 1._000", "SELECT 1e+_1"] {
+        clickhouse().parse_sql_statements(sql).unwrap_err();
+    }
+
+    all_dialects_where(|d| {
+        d.supports_numeric_literal_underscores() && !d.supports_numeric_prefix()
+    })
+    .parse_sql_statements("SELECT 8_e")
+    .unwrap_err();
 }

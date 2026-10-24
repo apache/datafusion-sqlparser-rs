@@ -2028,7 +2028,10 @@ fn assert_copy_stdin_payload(stmt: &Statement, data: &str, terminated: bool, lab
                 target: CopyTarget::Stdin,
                 payload: Some(payload),
                 ..
-            } = &**copy;
+            } = &**copy
+            else {
+                panic!("expected a COPY t FROM STDIN payload for {label}, got {copy:?}");
+            };
             assert_eq!(payload.data, data, "{label}");
             assert_eq!(payload.terminated, terminated, "{label}");
         }

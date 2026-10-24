@@ -1059,6 +1059,108 @@ fn test_cast_empty_type() {
 }
 
 #[test]
+fn test_signed_type_modifiers() {
+    // signed and decimal modifiers round-trip verbatim for any type name
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(+10))");
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(-1))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT(-1))");
+    sqlite().verified_stmt("CREATE TABLE t (a NUMERIC(10.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a FLOAT(2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a NVARCHAR(+5))");
+    sqlite().verified_stmt("CREATE TABLE t (a TIMESTAMP(-1))");
+    sqlite().verified_stmt("SELECT CAST(x AS REAL(1.5))");
+    // a non-standard modifier anywhere in the list selects the custom path
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(1, 1.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT(1, -2))");
+    sqlite().verified_stmt("CREATE TABLE t (a DECIMAL(1, 2.5))");
+    // signed decimals and oversized values select the custom path in either slot
+    sqlite().verified_stmt("CREATE TABLE t (a REAL(-1.5, +2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a DECIMAL(10, 99999999999999999999999))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(1, .5))");
+    for sql in [
+        "CREATE TABLE t (a CHAR(0.0))",
+        "CREATE TABLE t (a CHAR(-0))",
+        "CREATE TABLE t (a CHAR(1.))",
+        "CREATE TABLE t (a CHAR(1e3))",
+        "CREATE TABLE t (a CHAR(+1.5e-3))",
+        "CREATE TABLE t (a CHAR(+1, +2))",
+        "CREATE TABLE t (a CHAR(-1) NOT NULL DEFAULT NULL)",
+        "CREATE TABLE t (a CHAR(1.5), b CHAR(10))",
+        "CREATE TABLE t (a char(-1))",
+        r#"CREATE TABLE t (a "CHAR"(-1))"#,
+        "CREATE TABLE t (a [CHAR](-1))",
+        "SELECT 1::CHAR(-1)",
+    ] {
+        sqlite().verified_stmt(sql);
+    }
+    sqlite().one_statement_parses_to(
+        "CREATE TABLE t (a CHAR ( - 1 ))",
+        "CREATE TABLE t (a CHAR(-1))",
+    );
+    sqlite().one_statement_parses_to(
+        "CREATE TABLE t (a CHAR(-1,-2))",
+        "CREATE TABLE t (a CHAR(-1, -2))",
+    );
+    sqlite().verified_stmt("SELECT abs(-1), round(1, 1.5), char(+1, -2)");
+    // plain unsigned integer keeps the normal AST
+    let Statement::CreateTable(CreateTable { columns, .. }) =
+        sqlite().verified_stmt("CREATE TABLE t (a CHAR(10))")
+    else {
+        panic!("expected a CREATE TABLE statement");
+    };
+    assert_eq!(
+        columns[0].data_type,
+        DataType::Char(Some(CharacterLength::IntegerLength {
+            length: 10,
+            unit: None,
+        }))
+    );
+    sqlite().verified_stmt("CREATE TABLE t (a INT(10))");
+    // Oversized precision renders with a space after the comma
+    sqlite().one_statement_parses_to(
+        "SELECT CAST(a AS DECIMAL(99999999999999999999999,2))",
+        "SELECT CAST(a AS DECIMAL(99999999999999999999999, 2))",
+    );
+    // SQLite's typetoken grammar allows at most two modifiers
+    assert_eq!(
+        sqlite().parse_sql_statements("CREATE TABLE t (a CHAR(1.5, 2, 3))"),
+        Err(ParserError::ParserError(
+            "Could not parse '1.5' as u64: invalid digit found in string".to_string()
+        ))
+    );
+    for (sql, error) in [
+        (
+            "CREATE TABLE t (a CHAR(1.5,))",
+            "Could not parse '1.5' as u64: invalid digit found in string",
+        ),
+        (
+            "CREATE TABLE t (a CHAR(+-1))",
+            "Expected: literal int, found: +",
+        ),
+        (
+            "CREATE TABLE t (a CHAR(NULL))",
+            "Expected: literal int, found: NULL",
+        ),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}",
+        );
+    }
+    // other dialects must still reject these
+    assert_eq!(
+        all_dialects_except(|d| d.is::<SQLiteDialect>())
+            .parse_sql_statements("CREATE TABLE t (a CHAR(+10))"),
+        Err(ParserError::ParserError(
+            "Expected: literal int, found: +".to_string()
+        ))
+    );
+}
+
+#[test]
 fn parse_keyword_column_aliases() {
     for kw in [
         "analyze",

@@ -13229,6 +13229,9 @@ impl<'a> Parser<'a> {
         let _guard = self.recursion_counter.try_decrease()?;
 
         let dialect = self.dialect;
+        if let Some(data_type) = dialect.parse_data_type(self) {
+            return data_type.map(|data_type| (data_type, false.into()));
+        }
         self.advance_token();
         let next_token = self.get_current_token();
         let next_token_index = self.get_current_index();

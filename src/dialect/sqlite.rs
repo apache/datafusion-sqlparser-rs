@@ -16,10 +16,9 @@
 // under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
+use alloc::{boxed::Box, string::String};
 
-use crate::ast::BinaryOperator;
-use crate::ast::{Expr, Statement};
+use crate::ast::{BinaryOperator, DataType, Expr, ObjectName, Statement};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
@@ -75,6 +74,10 @@ impl Dialect for SQLiteDialect {
         } else {
             None
         }
+    }
+
+    fn parse_data_type(&self, parser: &mut Parser) -> Option<Result<DataType, ParserError>> {
+        parse_type_with_numeric_modifiers(parser).map(Ok)
     }
 
     fn parse_infix(
@@ -237,4 +240,69 @@ impl Dialect for SQLiteDialect {
     fn supports_bitwise_shift_operators(&self) -> bool {
         true
     }
+}
+
+/// SQLite permits signed and decimal numeric type modifiers.
+fn parse_type_with_numeric_modifiers(parser: &mut Parser) -> Option<DataType> {
+    let (data_type, token_count) = {
+        let first = parser.peek_token_ref();
+        let Token::Word(word) = &first.token else {
+            return None;
+        };
+        if parser.peek_nth_token_ref(1).token != Token::LParen {
+            return None;
+        }
+        let mut modifiers = [None; 2];
+        let mut nth = 2;
+        let mut is_nonstandard = false;
+        let mut closed = false;
+        for modifier in &mut modifiers {
+            let sign = match parser.peek_nth_token_ref(nth).token {
+                Token::Minus => "-",
+                Token::Plus => "+",
+                _ => "",
+            };
+            if !sign.is_empty() {
+                is_nonstandard = true;
+                nth += 1;
+            }
+            let Token::Number(number, _) = &parser.peek_nth_token_ref(nth).token else {
+                return None;
+            };
+            is_nonstandard |= number.parse::<u64>().is_err();
+            *modifier = Some((sign, number));
+            match parser.peek_nth_token_ref(nth + 1).token {
+                Token::RParen => {
+                    closed = true;
+                    break;
+                }
+                Token::Comma => nth += 2,
+                _ => return None,
+            }
+        }
+        if !closed || !is_nonstandard {
+            return None;
+        }
+        let modifiers = modifiers
+            .into_iter()
+            .flatten()
+            .map(|(sign, number)| {
+                let mut value = String::with_capacity(sign.len() + number.len());
+                value.push_str(sign);
+                value.push_str(number);
+                crate::ast::TypeModifier::Number(value, false)
+            })
+            .collect();
+        (
+            DataType::Custom(
+                ObjectName::from(word.clone().into_ident(first.span)),
+                modifiers,
+            ),
+            nth + 2,
+        )
+    };
+    for _ in 0..token_count {
+        parser.advance_token();
+    }
+    Some(data_type)
 }

@@ -2127,6 +2127,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Whether the dialect supports `VARIADIC` on the final function-call argument.
+    fn supports_variadic_function_argument(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `USING <format>` in `CREATE TABLE`.
     ///
     /// Example:

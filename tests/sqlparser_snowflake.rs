@@ -5101,3 +5101,34 @@ fn test_stage_name_delimiters() {
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
 }
+
+#[test]
+fn test_show_external_volumes() {
+    let stmt = snowflake().verified_stmt("SHOW EXTERNAL VOLUMES");
+    assert_eq!(Span::empty(), stmt.span());
+    match stmt {
+        Statement::ShowExternalVolumes(ShowExternalVolumes { filter }) => {
+            assert!(filter.is_none());
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SHOW EXTERNAL VOLUMES LIKE")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: literal string, found: EOF".to_string())
+    );
+}
+
+#[test]
+fn test_show_external_volumes_like() {
+    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES LIKE 'my_%'") {
+        Statement::ShowExternalVolumes(ShowExternalVolumes {
+            filter: Some(ShowStatementFilter::Like(pattern)),
+        }) => {
+            assert_eq!("my_%", pattern);
+        }
+        _ => unreachable!(),
+    }
+}

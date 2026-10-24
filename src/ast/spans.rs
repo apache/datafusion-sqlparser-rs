@@ -524,6 +524,7 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::ShowExternalVolumes(..) => Span::empty(),
         }
     }
 }

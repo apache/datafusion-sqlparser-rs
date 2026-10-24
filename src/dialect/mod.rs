@@ -446,6 +446,8 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports `CREATE GROUP`.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-creategroup.html>
     fn supports_create_group(&self) -> bool {
         false
     }

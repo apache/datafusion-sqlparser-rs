@@ -6090,6 +6090,62 @@ impl fmt::Display for CreateForeignTable {
     }
 }
 
+/// A handler or validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ForeignDataWrapperRoutineClause {
+    /// `HANDLER handler_function`
+    Handler(ObjectName),
+    /// `NO HANDLER`
+    NoHandler,
+    /// `VALIDATOR validator_function`
+    Validator(ObjectName),
+    /// `NO VALIDATOR`
+    NoValidator,
+}
+
+impl fmt::Display for ForeignDataWrapperRoutineClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ForeignDataWrapperRoutineClause::Handler(name) => write!(f, "HANDLER {name}"),
+            ForeignDataWrapperRoutineClause::NoHandler => f.write_str("NO HANDLER"),
+            ForeignDataWrapperRoutineClause::Validator(name) => write!(f, "VALIDATOR {name}"),
+            ForeignDataWrapperRoutineClause::NoValidator => f.write_str("NO VALIDATOR"),
+        }
+    }
+}
+
+/// A `CREATE FOREIGN DATA WRAPPER` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateForeignDataWrapper {
+    /// The name of the foreign-data wrapper. Per PostgreSQL this is a bare
+    /// identifier and cannot be schema-qualified.
+    pub name: Ident,
+    /// `HANDLER` and `VALIDATOR` clauses in source order. PostgreSQL's grammar
+    /// accepts repeated clauses and rejects them only when executing the statement.
+    pub routines: Vec<ForeignDataWrapperRoutineClause>,
+    /// Optional `OPTIONS (key 'value', ...)` clause.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateForeignDataWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CREATE FOREIGN DATA WRAPPER {}", self.name)?;
+        for routine in &self.routines {
+            write!(f, " {routine}")?;
+        }
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
 impl From<CreateForeignTable> for crate::ast::Statement {
     fn from(v: CreateForeignTable) -> Self {
         crate::ast::Statement::CreateForeignTable(v)
@@ -6103,6 +6159,31 @@ impl Spanned for CreateForeignTable {
                 .chain(self.columns.iter().map(|column| column.span()))
                 .chain(self.constraints.iter().map(|constraint| constraint.span()))
                 .chain(core::iter::once(self.server_name.span))
+                .chain(
+                    self.options
+                        .iter()
+                        .flatten()
+                        .flat_map(|option| [option.key.span, option.value.span]),
+                ),
+        )
+    }
+}
+
+impl From<CreateForeignDataWrapper> for crate::ast::Statement {
+    fn from(v: CreateForeignDataWrapper) -> Self {
+        crate::ast::Statement::CreateForeignDataWrapper(v)
+    }
+}
+
+impl Spanned for CreateForeignDataWrapper {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            core::iter::once(self.name.span)
+                .chain(self.routines.iter().filter_map(|routine| match routine {
+                    ForeignDataWrapperRoutineClause::Handler(name)
+                    | ForeignDataWrapperRoutineClause::Validator(name) => Some(name.span()),
+                    _ => None,
+                }))
                 .chain(
                     self.options
                         .iter()

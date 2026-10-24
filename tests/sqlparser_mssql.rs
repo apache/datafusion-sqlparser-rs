@@ -2671,6 +2671,12 @@ fn test_sql_keywords_as_table_aliases() {
 }
 
 #[test]
+fn parse_non_reserved_keyword_table_names() {
+    ms().verified_stmt("SELECT * FROM limit");
+    ms().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}
+
+#[test]
 fn test_sql_keywords_as_column_aliases() {
     // Some keywords that should not be parsed as an alias implicitly or explicitly
     for (sql, err) in [

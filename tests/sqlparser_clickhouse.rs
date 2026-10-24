@@ -221,6 +221,14 @@ fn parse_delimited_identifiers() {
 }
 
 #[test]
+fn parse_non_reserved_keyword_table_names() {
+    for table_name in ["into", "limit", "having", "where", "on"] {
+        clickhouse().verified_stmt(&format!("SELECT * FROM {table_name}"));
+        clickhouse().verified_stmt(&format!("SELECT * FROM t JOIN {table_name} ON true"));
+    }
+}
+
+#[test]
 fn parse_create_table() {
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY ("x")"#);
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY "x""#);

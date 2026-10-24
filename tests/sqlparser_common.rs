@@ -2273,6 +2273,7 @@ fn parse_not_precedence() {
                 expr: Box::new(Expr::value(number("1"))),
                 low: Box::new(Expr::value(number("1"))),
                 high: Box::new(Expr::value(number("2"))),
+                symmetric: false,
                 negated: true,
             }),
         },
@@ -2822,6 +2823,7 @@ fn parse_between() {
                 expr: Box::new(Expr::Identifier(Ident::new("age"))),
                 low: Box::new(Expr::value(number("25"))),
                 high: Box::new(Expr::value(number("32"))),
+                symmetric: false,
                 negated,
             },
             select.selection.unwrap()
@@ -2849,6 +2851,7 @@ fn parse_between_with_expr() {
                 op: Plus,
                 right: Box::new(Expr::value(number("4"))),
             }),
+            symmetric: false,
             negated: false,
         })),
         select.selection.unwrap()
@@ -2872,6 +2875,7 @@ fn parse_between_with_expr() {
                 }),
                 low: Box::new(Expr::value(number("1"))),
                 high: Box::new(Expr::value(number("2"))),
+                symmetric: false,
                 negated: false,
             }),
         },
@@ -20839,6 +20843,26 @@ fn parse_insert_by_name() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_between_symmetric() {
+    // See https://www.postgresql.org/docs/current/functions-comparison.html
+    match verified_expr("1 BETWEEN SYMMETRIC 2 AND 3") {
+        Expr::Between {
+            symmetric, negated, ..
+        } => {
+            assert!(symmetric);
+            assert!(!negated);
+        }
+        _ => unreachable!(),
+    }
+
+    // ASYMMETRIC is the default behavior and is not preserved as SQL text.
+    one_statement_parses_to(
+        "SELECT * FROM t WHERE 1 NOT BETWEEN ASYMMETRIC 2 AND 3",
+        "SELECT * FROM t WHERE 1 NOT BETWEEN 2 AND 3",
+    );
 }
 
 #[test]

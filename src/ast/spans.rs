@@ -1546,6 +1546,7 @@ impl Spanned for Expr {
             Expr::Between {
                 expr,
                 negated: _,
+                symmetric: _,
                 low,
                 high,
             } => expr.span().union(&low.span()).union(&high.span()),

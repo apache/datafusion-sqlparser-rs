@@ -76,12 +76,16 @@ impl Parse for DeriveDialectInput {
                         while !content.is_empty() {
                             let key: Ident = content.parse()?;
                             content.parse::<Token![=]>()?;
-                            let value = if content.peek(LitBool) {
-                                Override::Bool(content.parse()?)
-                            } else if content.peek(LitChar) {
-                                Override::Char(content.parse()?)
-                            } else {
-                                Override::Expr(content.parse()?)
+                            let value = match content.parse::<Expr>()? {
+                                Expr::Lit(syn::ExprLit {
+                                    lit: syn::Lit::Bool(value),
+                                    ..
+                                }) => Override::Bool(value),
+                                Expr::Lit(syn::ExprLit {
+                                    lit: syn::Lit::Char(value),
+                                    ..
+                                }) => Override::Char(value),
+                                expr => Override::Expr(expr),
                             };
                             overrides.push((key, value));
                             if content.peek(Token![,]) {

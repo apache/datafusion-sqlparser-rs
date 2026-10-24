@@ -117,7 +117,9 @@ pub use self::teradata::TeradataDialect;
 /// use sqlparser::dialect::{BindPlaceholderStyle, Dialect, GenericDialect};
 ///
 /// derive_dialect!(DollarBindDialect, GenericDialect,
-///     overrides = { ordered_bind_placeholder_style = Some(BindPlaceholderStyle::DollarNumbered) }
+///     overrides = {
+///         ordered_bind_placeholder_style = true.then_some(BindPlaceholderStyle::DollarNumbered)
+///     }
 /// );
 /// let d: &dyn Dialect = &DollarBindDialect::new();
 /// assert_eq!(

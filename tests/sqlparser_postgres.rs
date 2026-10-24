@@ -4871,59 +4871,18 @@ fn parse_create_group() {
 }
 
 #[test]
-fn parse_drop_group() {
-    pg().verified_stmt("DROP GROUP IF EXISTS staff, workers");
-
-    assert_eq!(
-        pg().verified_stmt("DROP GROUP staff"),
-        Statement::Drop {
-            object_type: ObjectType::Group,
-            if_exists: false,
-            names: vec![ObjectName::from(vec![Ident::new("staff")])],
-            cascade: false,
-            restrict: false,
-            purge: false,
-            temporary: false,
-            table: None,
-        }
-    );
-
-    // PostgreSQL rejects a drop behavior after `DROP GROUP`, exactly as after `DROP ROLE`.
-    assert_eq!(
-        pg().parse_sql_statements("DROP GROUP staff CASCADE")
-            .unwrap_err()
-            .to_string(),
-        "sql parser error: Cannot specify CASCADE, RESTRICT, or PURGE in DROP GROUP"
-    );
-
-    pg().verified_stmt("DROP ROLE staff");
-}
-
-#[test]
-fn parse_user_group_statements_is_dialect_gated() {
-    // Only PostgreSQL opts in. Redshift documents the same statements and can turn the hook
-    // on, but its narrower `CREATE GROUP` option list is a separate question.
+fn parse_create_group_is_dialect_gated() {
     let others = TestedDialects::new(vec![
         Box::new(GenericDialect {}),
         Box::new(MySqlDialect {}),
         Box::new(MsSqlDialect {}),
     ]);
-    for (sql, err) in [
-        (
-            "CREATE GROUP staff",
-            "Expected: an object type after CREATE, found: GROUP",
-        ),
-        (
-            "DROP GROUP staff",
-            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP",
-        ),
-    ] {
-        assert_eq!(
-            others.parse_sql_statements(sql),
-            Err(ParserError::ParserError(err.to_string())),
-            "{sql}"
-        );
-    }
+    assert_eq!(
+        others.parse_sql_statements("CREATE GROUP staff"),
+        Err(ParserError::ParserError(
+            "Expected: an object type after CREATE, found: GROUP".to_string()
+        ))
+    );
 }
 
 #[test]

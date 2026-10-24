@@ -35,12 +35,7 @@ use crate::ast::{
 };
 use crate::tokenizer::Span;
 
-/// The keyword naming the object in a `CREATE`, `ALTER` or `DROP` role statement.
-///
-/// PostgreSQL accepts `GROUP` as an obsolete spelling of `ROLE`, and Amazon Redshift has user
-/// groups as objects distinct from roles. The keyword is preserved either way.
-///
-/// <https://www.postgresql.org/docs/current/sql-creategroup.html>
+/// The object keyword in a `CREATE ROLE` or `CREATE GROUP` statement.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

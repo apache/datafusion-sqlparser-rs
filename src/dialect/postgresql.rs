@@ -355,7 +355,7 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    fn supports_user_group_statements(&self) -> bool {
+    fn supports_create_group(&self) -> bool {
         true
     }
 

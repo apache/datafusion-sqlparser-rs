@@ -1953,8 +1953,10 @@ fn parse_zerofill() {
         ))
     );
     assert_eq!(
-        all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
-            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)"),
+        all_dialects_except(|d| {
+            d.supports_data_type_zerofill_suffix() || d.supports_multiword_type_names()
+        })
+        .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)"),
         Err(ParserError::ParserError(
             "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
         ))

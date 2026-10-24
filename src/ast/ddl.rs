@@ -6123,7 +6123,7 @@ pub struct CreateAggregate {
     pub or_replace: bool,
     /// The aggregate name (can be schema-qualified).
     pub name: ObjectName,
-    /// The argument list preceding the options list.
+    /// The input arguments, without output modes or defaults.
     pub args: CreateAggregateArgs,
     /// The options listed inside the required parentheses after the argument
     /// list (e.g. `SFUNC`, `STYPE`, `FINALFUNC`, `PARALLEL`, …).

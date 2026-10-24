@@ -7669,15 +7669,26 @@ impl<'a> Parser<'a> {
         let args = if self.consume_token(&Token::Mul) {
             CreateAggregateArgs::Star
         } else {
+            let parse_arg = |parser: &mut Parser| {
+                let location = parser.peek_token_ref().span.start;
+                let arg = parser.parse_function_arg()?;
+                if matches!(arg.mode, Some(ArgMode::Out | ArgMode::InOut)) {
+                    return parser_err!("Aggregates cannot have output arguments", location);
+                }
+                if arg.default_expr.is_some() {
+                    return parser_err!("Aggregate arguments cannot have defaults", location);
+                }
+                Ok(arg)
+            };
             let direct = if self.peek_keyword(Keyword::ORDER) {
                 vec![]
             } else {
-                self.parse_comma_separated(Parser::parse_function_arg)?
+                self.parse_comma_separated(parse_arg)?
             };
             if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 CreateAggregateArgs::OrderedSet {
                     direct,
-                    aggregated: self.parse_comma_separated(Parser::parse_function_arg)?,
+                    aggregated: self.parse_comma_separated(parse_arg)?,
                 }
             } else {
                 CreateAggregateArgs::List(direct)

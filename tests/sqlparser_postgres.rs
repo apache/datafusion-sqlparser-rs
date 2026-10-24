@@ -10847,3 +10847,31 @@ fn parse_geometric_typed_literal_error_propagates() {
         ParserError::ParserError("Expected: a value, found: (".to_string())
     );
 }
+
+#[test]
+fn parse_create_aggregate_rejects_output_arguments_and_defaults() {
+    for (args, expected) in [
+        ("OUT x INT", "Aggregates cannot have output arguments"),
+        ("INOUT x INT", "Aggregates cannot have output arguments"),
+        (
+            "x INT DEFAULT 1",
+            "Aggregate arguments cannot have defaults",
+        ),
+        ("x INT = 1", "Aggregate arguments cannot have defaults"),
+        (
+            "ORDER BY OUT x INT",
+            "Aggregates cannot have output arguments",
+        ),
+        (
+            "INT ORDER BY x INT DEFAULT 1",
+            "Aggregate arguments cannot have defaults",
+        ),
+    ] {
+        let sql = format!("CREATE AGGREGATE a ({args}) (SFUNC = f, STYPE = INT)");
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(&sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

@@ -10979,6 +10979,45 @@ fn parse_create_foreign_data_wrapper() {
 }
 
 #[test]
+fn parse_drop_group() {
+    for (sql, expected_names, expected_if_exists) in [
+        ("DROP GROUP staff", vec!["staff"], false),
+        (
+            "DROP GROUP IF EXISTS staff, workers",
+            vec!["staff", "workers"],
+            true,
+        ),
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::Drop {
+                object_type,
+                if_exists,
+                names,
+                ..
+            } => {
+                assert_eq!(object_type, ObjectType::Group);
+                assert_eq_vec(&expected_names, &names);
+                assert_eq!(if_exists, expected_if_exists);
+            }
+            other => panic!("expected DROP statement, got {other:?}"),
+        }
+    }
+    pg().verified_stmt(r#"DROP GROUP "Mixed Name", "GROUP""#);
+}
+
+#[test]
+fn parse_drop_group_rejects_drop_behaviors() {
+    for behavior in ["CASCADE", "RESTRICT", "PURGE"] {
+        assert_eq!(
+            pg().parse_sql_statements(&format!("DROP GROUP staff {behavior}")),
+            Err(ParserError::ParserError(
+                "Cannot specify CASCADE, RESTRICT, or PURGE in DROP GROUP".to_string()
+            ))
+        );
+    }
+}
+
+#[test]
 fn foreign_data_wrapper_display_and_span() {
     let ident = |value: &str, start: u64, end: u64| Ident {
         value: value.to_string(),
@@ -11262,7 +11301,7 @@ fn parse_drop_foreign_table() {
             .parse_sql_statements("DROP FOREIGN ft")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
+        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
     );
     for (sql, expected) in [
         ("DROP FOREIGN TABLE", "Expected: identifier, found: EOF"),
@@ -11620,4 +11659,15 @@ fn display_create_foreign_table_inherits_propagates_formatter_errors() {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
+}
+
+#[test]
+fn parse_drop_group_is_dialect_gated() {
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_drop_group())
+            .parse_sql_statements("DROP GROUP staff"),
+        Err(ParserError::ParserError(
+            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
+        ))
+    );
 }

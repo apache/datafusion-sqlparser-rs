@@ -423,6 +423,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `DROP GROUP`.
+    fn supports_drop_group(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect treats `ALTER USER` as a synonym for `ALTER ROLE`.
     ///
     /// In PostgreSQL, `ALTER USER` and `ALTER ROLE` are synonyms that accept the same

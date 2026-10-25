@@ -442,6 +442,7 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
         uses_odbc_syntax: false,
         parameters: FunctionArguments::None,
         args: FunctionArguments::List(FunctionArgumentList {
+            closing_token: crate::ast::helpers::attached_token::AttachedToken::empty(),
             duplicate_treatment: None,
             args: args
                 .into_iter()

@@ -443,6 +443,7 @@ fn parse_window_function_with_filter() {
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                         Expr::Identifier(Ident::new("x"))

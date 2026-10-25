@@ -2583,8 +2583,9 @@ impl<'a> Parser<'a> {
             arg: FunctionArgExpr::Expr(self.parse_expr()?),
             operator: FunctionArgOperator::Space,
         };
-        self.expect_token(&Token::RParen)?;
+        let closing_token = self.expect_token(&Token::RParen)?.into();
         Ok(FunctionArgumentList {
+            closing_token,
             duplicate_treatment: None,
             args: vec![arg],
             clauses: vec![],
@@ -19792,8 +19793,10 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        if self.consume_token(&Token::RParen) {
+        if self.peek_token_ref().token == Token::RParen {
+            let closing_token = self.next_token().into();
             return Ok(FunctionArgumentList {
+                closing_token,
                 duplicate_treatment: None,
                 args: vec![],
                 clauses,
@@ -19866,8 +19869,9 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        self.expect_token(&Token::RParen)?;
+        let closing_token = self.expect_token(&Token::RParen)?.into();
         Ok(FunctionArgumentList {
+            closing_token,
             duplicate_treatment,
             args,
             clauses,

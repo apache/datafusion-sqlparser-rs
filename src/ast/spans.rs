@@ -1864,6 +1864,7 @@ impl Spanned for FunctionArguments {
 impl Spanned for FunctionArgumentList {
     fn span(&self) -> Span {
         let FunctionArgumentList {
+            closing_token,
             duplicate_treatment: _, // enum
             args,
             clauses,
@@ -1873,7 +1874,8 @@ impl Spanned for FunctionArgumentList {
             // # todo: duplicate-treatment span
             args.iter()
                 .map(|i| i.span())
-                .chain(clauses.iter().map(|i| i.span())),
+                .chain(clauses.iter().map(|i| i.span()))
+                .chain(iter::once(closing_token.0.span)),
         )
     }
 }

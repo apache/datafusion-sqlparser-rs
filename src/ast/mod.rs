@@ -8418,6 +8418,9 @@ impl fmt::Display for FunctionArguments {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FunctionArgumentList {
+    /// The closing parenthesis token.
+    #[cfg_attr(feature = "serde", serde(default = "AttachedToken::empty"))]
+    pub closing_token: AttachedToken,
     /// `[ ALL | DISTINCT ]`
     pub duplicate_treatment: Option<DuplicateTreatment>,
     /// The function arguments.

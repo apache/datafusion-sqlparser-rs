@@ -3019,3 +3019,10 @@ fn parse_mssql_declare_comma_list_display() {
     ms().verified_stmt("DECLARE @a INT = 1, @b TEXT = 'x'");
     ms().verified_stmt("DECLARE @foo CURSOR, @bar INT");
 }
+
+#[test]
+fn parse_quoted_statement_keyword_aliases() {
+    ms().one_statement_parses_to("SELECT 1 [PRINT]", "SELECT 1 AS [PRINT]");
+    ms().verified_stmt("SELECT * FROM t [PRINT]");
+    ms().verified_stmt("SELECT * FROM t AS [PRINT]");
+}

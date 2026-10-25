@@ -22210,3 +22210,23 @@ fn parse_reference_clauses_leave_duplicates_unconsumed() {
         }
     }
 }
+
+#[test]
+fn parse_div_with_nested_divisor() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(sqlparser::dialect::SparkSqlDialect),
+    ]);
+    assert_eq!(
+        dialects.verified_expr("10 DIV (5 DIV 2)"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::value(number("10"))),
+            op: BinaryOperator::MyIntegerDivide,
+            right: Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("5"))),
+                op: BinaryOperator::MyIntegerDivide,
+                right: Box::new(Expr::value(number("2"))),
+            }))),
+        }
+    );
+}

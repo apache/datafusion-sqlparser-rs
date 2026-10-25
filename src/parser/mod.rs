@@ -1074,22 +1074,17 @@ impl<'a> Parser<'a> {
             loop {
                 let next_token = self.next_token();
                 match &next_token.token {
-                    Token::Word(w) => match w.keyword {
-                        Keyword::WITH => {
-                            read_lock = self.parse_keywords(&[Keyword::READ, Keyword::LOCK]);
-                        }
-                        Keyword::FOR => {
-                            export = self.parse_keyword(Keyword::EXPORT);
-                        }
-                        Keyword::NoKeyword => {
-                            self.prev_token();
-                            tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
-                        }
-                        _ => {}
-                    },
-                    _ => {
-                        break;
+                    Token::Word(w) if w.keyword == Keyword::WITH => {
+                        read_lock = self.parse_keywords(&[Keyword::READ, Keyword::LOCK]);
                     }
+                    Token::Word(w) if w.keyword == Keyword::FOR => {
+                        export = self.parse_keyword(Keyword::EXPORT);
+                    }
+                    Token::Word(_) => {
+                        self.prev_token();
+                        tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+                    }
+                    _ => break,
                 }
             }
 
@@ -5466,6 +5461,16 @@ impl<'a> Parser<'a> {
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
+        // `or_replace` is caught by an earlier arm. It stays so that reordering cannot bypass it.
+        let has_modifier = or_replace
+            || or_alter
+            || temporary
+            || global.is_some()
+            || transient
+            || volatile
+            || multiset.is_some()
+            || persistent
+            || create_view_params.is_some();
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
@@ -5551,24 +5556,21 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
-            // `or_replace` cannot reach here today, since the arm above catches it.
-            // It stays so that reordering the arms cannot make it fall through.
-            if or_replace
-                || or_alter
-                || temporary
-                || global.is_some()
-                || transient
-                || volatile
-                || multiset.is_some()
-                || persistent
-                || create_view_params.is_some()
-            {
+            if has_modifier {
                 return parser_err!(
                     "CREATE FOREIGN TABLE does not accept this modifier",
                     modifier_loc
                 );
             }
             self.parse_create_foreign_table().map(Into::into)
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
+            if has_modifier {
+                return parser_err!(
+                    "CREATE FOREIGN DATA WRAPPER does not accept this modifier",
+                    modifier_loc
+                );
+            }
+            self.parse_create_foreign_data_wrapper().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -21265,6 +21267,39 @@ impl<'a> Parser<'a> {
             columns,
             constraints,
             server_name,
+            options,
+        })
+    }
+
+    /// Parse a `CREATE FOREIGN DATA WRAPPER` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html>
+    pub fn parse_create_foreign_data_wrapper(
+        &mut self,
+    ) -> Result<CreateForeignDataWrapper, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let mut routines = Vec::new();
+        loop {
+            let routine = if self.parse_keyword(Keyword::HANDLER) {
+                ForeignDataWrapperRoutineClause::Handler(self.parse_object_name(false)?)
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::HANDLER]) {
+                ForeignDataWrapperRoutineClause::NoHandler
+            } else if self.parse_keyword(Keyword::VALIDATOR) {
+                ForeignDataWrapperRoutineClause::Validator(self.parse_object_name(false)?)
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::VALIDATOR]) {
+                ForeignDataWrapperRoutineClause::NoValidator
+            } else {
+                break;
+            };
+            routines.push(routine);
+        }
+
+        let options = self.parse_pg_options_clause()?;
+
+        Ok(CreateForeignDataWrapper {
+            name,
+            routines,
             options,
         })
     }

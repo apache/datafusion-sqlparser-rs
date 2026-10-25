@@ -10886,3 +10886,143 @@ fn parse_create_aggregate_rejects_output_arguments_and_defaults() {
         );
     }
 }
+
+#[test]
+fn parse_create_foreign_data_wrapper() {
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "myfdw");
+    assert!(stmt.routines.is_empty());
+    assert!(stmt.options.is_none());
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.routines,
+        vec![ForeignDataWrapperRoutineClause::Handler(ObjectName::from(
+            vec!["myhandler".into()]
+        ))]
+    );
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.routines,
+        vec![ForeignDataWrapperRoutineClause::NoHandler]
+    );
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.routines,
+        vec![ForeignDataWrapperRoutineClause::NoValidator]
+    );
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator OPTIONS (debug 'true')";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.options,
+        Some(vec![CreateServerOption {
+            key: "debug".into(),
+            value: Ident {
+                value: "true".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            },
+        }])
+    );
+
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.routines,
+        vec![
+            ForeignDataWrapperRoutineClause::NoHandler,
+            ForeignDataWrapperRoutineClause::NoValidator
+        ]
+    );
+
+    assert_eq!(
+        pg_and_generic().parse_sql_statements("CREATE FOREIGN DATA WRAPPER myschema.myfdw"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: .".to_string()
+        ))
+    );
+
+    for sql in [
+        "CREATE TEMPORARY FOREIGN DATA WRAPPER myfdw",
+        "CREATE OR ALTER FOREIGN DATA WRAPPER myfdw",
+        "CREATE GLOBAL TEMPORARY FOREIGN DATA WRAPPER myfdw",
+    ] {
+        let err = pg_and_generic().parse_sql_statements(sql).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("CREATE FOREIGN DATA WRAPPER does not accept this modifier"),
+            "unexpected error for {sql}: {err}"
+        );
+    }
+}
+
+#[test]
+fn foreign_data_wrapper_display_and_span() {
+    let ident = |value: &str, start: u64, end: u64| Ident {
+        value: value.to_string(),
+        quote_style: None,
+        span: Span::new(Location::new(1, start), Location::new(1, end)),
+    };
+    let stmt = Statement::CreateForeignDataWrapper(CreateForeignDataWrapper {
+        name: ident("myfdw", 29, 34),
+        routines: vec![
+            ForeignDataWrapperRoutineClause::Handler(ObjectName::from(ident("myhandler", 43, 52))),
+            ForeignDataWrapperRoutineClause::NoHandler,
+            ForeignDataWrapperRoutineClause::Validator(ObjectName::from(ident(
+                "myvalidator",
+                74,
+                85,
+            ))),
+            ForeignDataWrapperRoutineClause::NoValidator,
+        ],
+        options: Some(vec![CreateServerOption {
+            key: ident("debug", 108, 113),
+            value: Ident {
+                value: "true".to_string(),
+                quote_style: Some('\''),
+                span: Span::new(Location::new(1, 114), Location::new(1, 120)),
+            },
+        }]),
+    });
+
+    assert_eq!(
+        stmt.to_string(),
+        "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler NO HANDLER VALIDATOR myvalidator NO VALIDATOR OPTIONS (debug 'true')"
+    );
+    assert_eq!(
+        stmt.span(),
+        Span::new(Location::new(1, 29), Location::new(1, 120))
+    );
+}
+
+#[test]
+fn parse_create_foreign_data_wrapper_clause_order() {
+    for sql in [
+        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR myvalidator HANDLER myhandler",
+        "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR NO HANDLER",
+        "CREATE FOREIGN DATA WRAPPER myfdw HANDLER h1 HANDLER h2",
+        "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER HANDLER h",
+        "CREATE FOREIGN DATA WRAPPER myfdw VALIDATOR v NO VALIDATOR",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+}

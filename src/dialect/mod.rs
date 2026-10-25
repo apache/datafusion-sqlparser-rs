@@ -1157,6 +1157,17 @@ pub trait Dialect: Debug + Any {
         self.prec_value(Precedence::Between)
     }
 
+    /// Returns true if the low bound of a `BETWEEN` predicate may end with one comparison,
+    /// as in `a BETWEEN b > 1 AND c`, while `IS`, `LIKE` and `BETWEEN` still end the bound.
+    ///
+    /// The low bound is a `b_expr` in the
+    /// [PostgreSQL grammar](https://github.com/postgres/postgres/blob/master/src/backend/parser/gram.y)
+    /// and a `valueExpression` in the
+    /// [Spark grammar](https://github.com/apache/spark/blob/master/sql/api/src/main/antlr4/org/apache/spark/sql/catalyst/parser/SqlBaseParser.g4).
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect requires the `TABLE` keyword after `DESCRIBE`
     ///
     /// Defaults to false.

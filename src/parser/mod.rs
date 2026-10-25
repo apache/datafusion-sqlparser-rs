@@ -1720,17 +1720,6 @@ impl<'a> Parser<'a> {
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
-            // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
-            Token::SingleQuotedString(_)
-            | Token::DoubleQuotedString(_)
-            | Token::HexStringLiteral(_)
-                if w.value.starts_with('_') =>
-            {
-                Ok(Expr::Prefixed {
-                    prefix: w.to_ident(w_span),
-                    value: self.parse_introduced_string_expr()?.into(),
-                })
-            }
             // An unreserved word (likely an identifier) is followed by an arrow,
             // which indicates a lambda function with a single, untyped parameter.
             // For example: `a -> a * 2`.

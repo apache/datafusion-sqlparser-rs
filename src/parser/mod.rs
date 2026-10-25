@@ -4531,6 +4531,19 @@ impl<'a> Parser<'a> {
             let array_expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             InTarget::Unnest(Box::new(array_expr))
+        } else if !global
+            && self.dialect.supports_in_table_expression()
+            && self.next_word_is_table_name()
+        {
+            let name = self.parse_object_name(false)?;
+            let args = if self.consume_token(&Token::LParen) {
+                let args = self.parse_comma_separated0(Self::parse_function_args, Token::RParen)?;
+                self.expect_token(&Token::RParen)?;
+                Some(args)
+            } else {
+                None
+            };
+            InTarget::Table { name, args }
         } else if self.dialect.supports_in_unparenthesized_expr()
             && self.peek_token_ref().token != Token::LParen
         {
@@ -4546,6 +4559,20 @@ impl<'a> Parser<'a> {
             negated,
             global,
         })
+    }
+
+    /// Returns true if the next token is a word the dialect accepts as a table
+    /// name. The word is consumed while asking, so `is_table_factor` peeks past
+    /// it as it does at the trailing comma check.
+    fn next_word_is_table_name(&mut self) -> bool {
+        let Token::Word(word) = &self.peek_token_ref().token else {
+            return false;
+        };
+        let keyword = word.keyword;
+        self.advance_token();
+        let is_name = self.dialect.is_table_factor(&keyword, self);
+        self.prev_token();
+        is_name
     }
 
     /// Parses the parenthesized subquery or value list of an `IN` predicate.

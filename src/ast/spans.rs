@@ -1542,6 +1542,11 @@ impl Spanned for Expr {
                 ),
                 InTarget::Subquery(subquery) => expr.span().union(&subquery.span()),
                 InTarget::Unnest(array_expr) => expr.span().union(&array_expr.span()),
+                InTarget::Table { name, args } => union_spans(
+                    [expr.span(), name.span()]
+                        .into_iter()
+                        .chain(args.iter().flatten().map(|arg| arg.span())),
+                ),
             },
             Expr::Between {
                 expr,
@@ -3347,6 +3352,22 @@ SETTINGS update_parallel_mode = 'auto'"#;
             ("  needle IN UNNEST(items)", "needle IN UNNEST(items"),
         ] {
             let mut test = SpanTest::new(&GenericDialect, sql);
+            let expr = test.0.parse_expr().unwrap();
+            assert_eq!(test.get_source(expr.span()), expected, "{sql}");
+        }
+    }
+
+    #[test]
+    fn test_in_table_expression_spans() {
+        let dialect = &crate::dialect::SQLiteDialect {};
+        for (sql, expected) in [
+            ("  needle IN main.items", "needle IN main.items"),
+            (
+                "  needle IN main.f(first, last)",
+                "needle IN main.f(first, last",
+            ),
+        ] {
+            let mut test = SpanTest::new(dialect, sql);
             let expr = test.0.parse_expr().unwrap();
             assert_eq!(test.get_source(expr.span()), expected, "{sql}");
         }

@@ -531,6 +531,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports a table name or table-valued function
+    /// as the right-hand side of `IN`, e.g. `x IN t`, `x IN schema.t`, or `x IN f(args)`.
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html#in_op)
+    fn supports_in_table_expression(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE | TRY | CATCH} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
         false

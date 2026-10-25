@@ -22230,3 +22230,46 @@ fn parse_div_with_nested_divisor() {
         }
     );
 }
+
+#[test]
+fn column_key_shorthand_preserves_characteristics_and_unique() {
+    let dialects = all_dialects_where(|d| d.supports_key_column_option());
+    let Statement::CreateTable(table) = dialects.one_statement_parses_to(
+        "CREATE TABLE t (id INT KEY DEFERRABLE INITIALLY DEFERRED UNIQUE KEY)",
+        "CREATE TABLE t (id INT PRIMARY KEY DEFERRABLE INITIALLY DEFERRED UNIQUE KEY)",
+    ) else {
+        panic!("Expected CREATE TABLE");
+    };
+    let [ColumnOptionDef {
+        option: ColumnOption::PrimaryKey(primary),
+        ..
+    }, ColumnOptionDef {
+        option: ColumnOption::Unique(unique),
+        ..
+    }] = table.columns[0].options.as_slice()
+    else {
+        panic!("Expected primary and unique column options");
+    };
+    assert_eq!(
+        primary.characteristics,
+        Some(ConstraintCharacteristics {
+            deferrable: Some(true),
+            initially: Some(DeferrableInitial::Deferred),
+            enforced: None,
+        })
+    );
+    assert_eq!(unique.index_type_display, KeyOrIndexDisplay::Key);
+}
+
+#[test]
+fn unsupported_key_column_option_preserves_keyword() {
+    for dialect in all_dialects_where(|d| !d.supports_key_column_option()).dialects {
+        let mut parser = Parser::new(dialect.as_ref()).try_with_sql("KEY").unwrap();
+        assert_eq!(
+            parser.parse_optional_column_option(),
+            Ok(None),
+            "{dialect:?}"
+        );
+        assert!(parser.parse_keyword(Keyword::KEY), "{dialect:?}");
+    }
+}

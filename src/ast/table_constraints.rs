@@ -20,7 +20,7 @@
 use crate::ast::{
     display_comma_separated, display_separated, ConstraintCharacteristics,
     ConstraintReferenceMatchKind, Expr, Ident, IndexColumn, IndexOption, IndexType,
-    KeyOrIndexDisplay, NullsDistinctOption, ObjectName, ReferentialAction,
+    KeyOrIndexDisplay, NullsDistinctOption, ObjectName, ReferentialAction, Spanned,
 };
 use crate::tokenizer::Span;
 use core::fmt;
@@ -496,18 +496,12 @@ impl fmt::Display for PrimaryKeyConstraint {
 
 impl crate::ast::Spanned for PrimaryKeyConstraint {
     fn span(&self) -> Span {
-        fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
-            Span::union_iter(iter)
-        }
-
-        union_spans(
-            self.name
-                .iter()
-                .map(|i| i.span)
-                .chain(self.index_name.iter().map(|i| i.span))
-                .chain(self.columns.iter().map(|i| i.span()))
-                .chain(self.include.iter().map(|i| i.span))
-                .chain(self.characteristics.iter().map(|i| i.span())),
+        key_constraint_span(
+            self.name.as_ref(),
+            self.index_name.as_ref(),
+            &self.columns,
+            &self.include,
+            self.characteristics.as_ref(),
         )
     }
 }
@@ -570,20 +564,31 @@ impl fmt::Display for UniqueConstraint {
 
 impl crate::ast::Spanned for UniqueConstraint {
     fn span(&self) -> Span {
-        fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
-            Span::union_iter(iter)
-        }
-
-        union_spans(
-            self.name
-                .iter()
-                .map(|i| i.span)
-                .chain(self.index_name.iter().map(|i| i.span))
-                .chain(self.columns.iter().map(|i| i.span()))
-                .chain(self.include.iter().map(|i| i.span))
-                .chain(self.characteristics.iter().map(|i| i.span())),
+        key_constraint_span(
+            self.name.as_ref(),
+            self.index_name.as_ref(),
+            &self.columns,
+            &self.include,
+            self.characteristics.as_ref(),
         )
     }
+}
+
+fn key_constraint_span(
+    name: Option<&Ident>,
+    index_name: Option<&Ident>,
+    columns: &[IndexColumn],
+    include: &[Ident],
+    characteristics: Option<&ConstraintCharacteristics>,
+) -> Span {
+    Span::union_iter(
+        name.into_iter()
+            .map(|i| i.span)
+            .chain(index_name.map(|i| i.span))
+            .chain(columns.iter().map(Spanned::span))
+            .chain(include.iter().map(|i| i.span))
+            .chain(characteristics.map(Spanned::span)),
+    )
 }
 
 /// PostgreSQL constraint that promotes an existing unique index to a table constraint.

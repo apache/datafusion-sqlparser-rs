@@ -22099,3 +22099,30 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
         dialects.tokenizes_to(sql, vec![token]);
     }
 }
+
+#[test]
+fn key_constraint_span_covers_name_and_include() {
+    for keyword in ["PRIMARY KEY", "UNIQUE"] {
+        let sql = format!(
+            r#"CREATE TABLE t (
+    id INT, extra INT,
+    CONSTRAINT c
+    {keyword}
+    (id)
+    INCLUDE (extra)
+)"#
+        );
+        let statements = Parser::parse_sql(&PostgreSqlDialect {}, &sql).unwrap();
+        let Statement::CreateTable(table) = &statements[0] else {
+            panic!("{sql}");
+        };
+        assert_eq!(
+            table.constraints[0].span(),
+            Span {
+                start: Location::new(3, 16),
+                end: Location::new(6, 19),
+            },
+            "{sql}"
+        );
+    }
+}

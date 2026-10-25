@@ -22273,3 +22273,71 @@ fn unsupported_key_column_option_preserves_keyword() {
         assert!(parser.parse_keyword(Keyword::KEY), "{dialect:?}");
     }
 }
+
+#[test]
+fn parse_delimited_identifiers() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(ClickHouseDialect {}),
+        Box::new(MsSqlDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(SnowflakeDialect {}),
+    ]);
+    let select = dialects.verified_only_select(
+        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
+    );
+    match only(select.from).relation {
+        TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+            version,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
+            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert!(args.is_none());
+            assert!(with_hints.is_empty());
+            assert!(version.is_none());
+        }
+        _ => panic!("Expecting TableFactor::Table"),
+    }
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_quote('"', "alias"),
+            Ident::with_quote('"', "bar baz"),
+        ]),
+        expr_from_projection(&select.projection[0]),
+    );
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
+            parameters: FunctionArguments::None,
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
+            null_treatment: None,
+            filter: None,
+            over: None,
+            within_group: vec![],
+        }),
+        expr_from_projection(&select.projection[1]),
+    );
+    match &select.projection[2] {
+        SelectItem::ExprWithAlias { expr, alias } => {
+            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+        }
+        _ => panic!("Expected ExprWithAlias"),
+    }
+}

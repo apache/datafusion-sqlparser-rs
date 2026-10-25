@@ -204,6 +204,12 @@ const EOF_TOKEN: TokenWithSpan = TokenWithSpan {
     },
 };
 
+struct ReferenceClauses {
+    match_kind: Option<ConstraintReferenceMatchKind>,
+    on_delete: Option<ReferentialAction>,
+    on_update: Option<ReferentialAction>,
+}
+
 /// Composite types declarations using angle brackets syntax can be arbitrary
 /// nested such that the following declaration is possible:
 ///      `ARRAY<ARRAY<INT>>`
@@ -10182,24 +10188,11 @@ impl<'a> Parser<'a> {
             // PostgreSQL allows omitting the column list and
             // uses the primary key column of the foreign table by default
             let referred_columns = self.parse_parenthesized_column_list(Optional, false)?;
-            let mut match_kind = None;
-            let mut on_delete = None;
-            let mut on_update = None;
-            loop {
-                if match_kind.is_none() && self.parse_keyword(Keyword::MATCH) {
-                    match_kind = Some(self.parse_match_kind()?);
-                } else if on_delete.is_none()
-                    && self.parse_keywords(&[Keyword::ON, Keyword::DELETE])
-                {
-                    on_delete = Some(self.parse_referential_action()?);
-                } else if on_update.is_none()
-                    && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
-                {
-                    on_update = Some(self.parse_referential_action()?);
-                } else {
-                    break;
-                }
-            }
+            let ReferenceClauses {
+                match_kind,
+                on_delete,
+                on_update,
+            } = self.parse_reference_clauses()?;
             let characteristics = self.parse_constraint_characteristics()?;
 
             Ok(Some(
@@ -10462,6 +10455,29 @@ impl<'a> Parser<'a> {
         Ok(clustered_by)
     }
 
+    /// Parse optional `MATCH`, `ON DELETE`, and `ON UPDATE` reference clauses.
+    fn parse_reference_clauses(&mut self) -> Result<ReferenceClauses, ParserError> {
+        let mut match_kind = None;
+        let mut on_delete = None;
+        let mut on_update = None;
+        loop {
+            if match_kind.is_none() && self.parse_keyword(Keyword::MATCH) {
+                match_kind = Some(self.parse_match_kind()?);
+            } else if on_delete.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::DELETE]) {
+                on_delete = Some(self.parse_referential_action()?);
+            } else if on_update.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE]) {
+                on_update = Some(self.parse_referential_action()?);
+            } else {
+                break;
+            }
+        }
+        Ok(ReferenceClauses {
+            match_kind,
+            on_delete,
+            on_update,
+        })
+    }
+
     /// Parse a referential action used in foreign key clauses.
     ///
     /// Recognized forms: `RESTRICT`, `CASCADE`, `SET NULL`, `NO ACTION`, `SET DEFAULT`.
@@ -10659,24 +10675,11 @@ impl<'a> Parser<'a> {
                 self.expect_keyword_is(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name(false)?;
                 let referred_columns = self.parse_parenthesized_column_list(Optional, false)?;
-                let mut match_kind = None;
-                let mut on_delete = None;
-                let mut on_update = None;
-                loop {
-                    if match_kind.is_none() && self.parse_keyword(Keyword::MATCH) {
-                        match_kind = Some(self.parse_match_kind()?);
-                    } else if on_delete.is_none()
-                        && self.parse_keywords(&[Keyword::ON, Keyword::DELETE])
-                    {
-                        on_delete = Some(self.parse_referential_action()?);
-                    } else if on_update.is_none()
-                        && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
-                    {
-                        on_update = Some(self.parse_referential_action()?);
-                    } else {
-                        break;
-                    }
-                }
+                let ReferenceClauses {
+                    match_kind,
+                    on_delete,
+                    on_update,
+                } = self.parse_reference_clauses()?;
 
                 let characteristics = self.parse_constraint_characteristics()?;
 

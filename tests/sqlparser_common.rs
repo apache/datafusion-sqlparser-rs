@@ -22039,3 +22039,28 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
         dialects.tokenizes_to(sql, vec![token]);
     }
 }
+
+#[test]
+fn parse_cache_table_options_without_flag() {
+    let dialects = all_dialects();
+    for (suffix, has_as) in [("", false), (" SELECT 1", false), (" AS SELECT 1", true)] {
+        let query = if suffix.is_empty() {
+            None
+        } else {
+            Some(dialects.verified_query("SELECT 1").into())
+        };
+        assert_eq!(
+            dialects.verified_stmt(&format!("CACHE TABLE t OPTIONS('k' = 'v'){suffix}")),
+            Statement::Cache {
+                table_flag: None,
+                table_name: ObjectName::from(vec![Ident::new("t")]),
+                has_as,
+                options: vec![SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "k"),
+                    value: Expr::Value(Value::SingleQuotedString("v".into()).with_empty_span()),
+                }],
+                query,
+            }
+        );
+    }
+}

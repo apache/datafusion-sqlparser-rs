@@ -5755,78 +5755,35 @@ impl<'a> Parser<'a> {
 
     /// Parse a CACHE TABLE statement
     pub fn parse_cache_table(&mut self) -> Result<Statement, ParserError> {
-        let (mut table_flag, mut options, mut has_as, mut query) = (None, vec![], false, None);
-        if self.parse_keyword(Keyword::TABLE) {
-            let table_name = self.parse_object_name(false)?;
-            if self.peek_token_ref().token != Token::EOF {
-                if let Token::Word(word) = &self.peek_token_ref().token {
-                    if word.keyword == Keyword::OPTIONS {
-                        options = self.parse_options(Keyword::OPTIONS)?
-                    }
-                };
-
-                if self.peek_token_ref().token != Token::EOF {
-                    let (a, q) = self.parse_as_query()?;
-                    has_as = a;
-                    query = Some(q);
-                }
-
-                Ok(Statement::Cache {
-                    table_flag,
-                    table_name,
-                    has_as,
-                    options,
-                    query,
-                })
-            } else {
-                Ok(Statement::Cache {
-                    table_flag,
-                    table_name,
-                    has_as,
-                    options,
-                    query,
-                })
-            }
+        let table_flag = if self.parse_keyword(Keyword::TABLE) {
+            None
         } else {
-            table_flag = Some(self.parse_object_name(false)?);
-            if self.parse_keyword(Keyword::TABLE) {
-                let table_name = self.parse_object_name(false)?;
-                if self.peek_token_ref().token != Token::EOF {
-                    if let Token::Word(word) = &self.peek_token_ref().token {
-                        if word.keyword == Keyword::OPTIONS {
-                            options = self.parse_options(Keyword::OPTIONS)?
-                        }
-                    };
-
-                    if self.peek_token_ref().token != Token::EOF {
-                        let (a, q) = self.parse_as_query()?;
-                        has_as = a;
-                        query = Some(q);
-                    }
-
-                    Ok(Statement::Cache {
-                        table_flag,
-                        table_name,
-                        has_as,
-                        options,
-                        query,
-                    })
-                } else {
-                    Ok(Statement::Cache {
-                        table_flag,
-                        table_name,
-                        has_as,
-                        options,
-                        query,
-                    })
-                }
-            } else {
+            let flag = self.parse_object_name(false)?;
+            if !self.parse_keyword(Keyword::TABLE) {
                 if self.peek_token_ref().token == Token::EOF {
                     self.prev_token();
                 }
-                self.expected_ref("a `TABLE` keyword", self.peek_token_ref())
+                return self.expected_ref("a `TABLE` keyword", self.peek_token_ref());
             }
-        }
+            Some(flag)
+        };
+
+        let table_name = self.parse_object_name(false)?;
+        let options = self.parse_options(Keyword::OPTIONS)?;
+        let (has_as, query) = if self.peek_token_ref().token == Token::EOF {
+            (false, None)
+        } else {
+            let (has_as, query) = self.parse_as_query()?;
+            (has_as, Some(query))
+        };
+
+        Ok(Statement::Cache {
+            table_flag,
+            table_name,
+            has_as,
+            options,
+            query,
+        })
     }
 
     /// Parse 'AS' before as query,such as `WITH XXX AS SELECT XXX` oer `CACHE TABLE AS SELECT XXX`

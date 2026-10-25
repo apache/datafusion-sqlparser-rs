@@ -7992,20 +7992,7 @@ impl<'a> Parser<'a> {
                     None
                 };
 
-                // Optional purpose
-                let purpose = if self.parse_keyword(Keyword::FOR) {
-                    if self.parse_keyword(Keyword::SEARCH) {
-                        Some(OperatorPurpose::ForSearch)
-                    } else if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                        let sort_family = self.parse_object_name(false)?;
-                        Some(OperatorPurpose::ForOrderBy { sort_family })
-                    } else {
-                        return self
-                            .expected_ref("SEARCH or ORDER BY after FOR", self.peek_token_ref());
-                    }
-                } else {
-                    None
-                };
+                let purpose = self.parse_operator_purpose()?;
 
                 items.push(OperatorClassItem::Operator {
                     strategy_number,
@@ -12247,6 +12234,21 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_operator_purpose(&mut self) -> Result<Option<OperatorPurpose>, ParserError> {
+        if !self.parse_keyword(Keyword::FOR) {
+            return Ok(None);
+        }
+
+        if self.parse_keyword(Keyword::SEARCH) {
+            Ok(Some(OperatorPurpose::ForSearch))
+        } else if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            let sort_family = self.parse_object_name(false)?;
+            Ok(Some(OperatorPurpose::ForOrderBy { sort_family }))
+        } else {
+            self.expected_ref("SEARCH or ORDER BY after FOR", self.peek_token_ref())
+        }
+    }
+
     /// Parse an operator item for ALTER OPERATOR FAMILY ADD operations
     fn parse_operator_family_add_operator(&mut self) -> Result<OperatorFamilyItem, ParserError> {
         let strategy_number = self.parse_literal_uint()?;
@@ -12257,19 +12259,7 @@ impl<'a> Parser<'a> {
         let op_types = self.parse_comma_separated(Parser::parse_data_type)?;
         self.expect_token(&Token::RParen)?;
 
-        // Optional purpose
-        let purpose = if self.parse_keyword(Keyword::FOR) {
-            if self.parse_keyword(Keyword::SEARCH) {
-                Some(OperatorPurpose::ForSearch)
-            } else if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                let sort_family = self.parse_object_name(false)?;
-                Some(OperatorPurpose::ForOrderBy { sort_family })
-            } else {
-                return self.expected_ref("SEARCH or ORDER BY after FOR", self.peek_token_ref());
-            }
-        } else {
-            None
-        };
+        let purpose = self.parse_operator_purpose()?;
 
         Ok(OperatorFamilyItem::Operator {
             strategy_number,

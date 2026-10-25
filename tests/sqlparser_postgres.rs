@@ -11039,3 +11039,37 @@ fn operator_function_display_preserves_empty_operator_types() {
         assert_eq!(item.to_string(), expected);
     }
 }
+
+#[test]
+fn parse_alter_operator_family_order_by_followed_by_search() {
+    let sql = r#"ALTER OPERATOR FAMILY my_ops USING gist ADD OPERATOR 1 < (INT4, INT4) FOR ORDER BY sort_schema."sort family", OPERATOR 2 > (INT4, INT4) FOR SEARCH"#;
+    let Statement::AlterOperatorFamily(AlterOperatorFamily {
+        operation: AlterOperatorFamilyOperation::Add { items },
+        ..
+    }) = pg_and_generic().verified_stmt(sql)
+    else {
+        panic!("Expected ALTER OPERATOR FAMILY");
+    };
+    assert_eq!(
+        items,
+        vec![
+            OperatorFamilyItem::Operator {
+                strategy_number: 1,
+                operator_name: ObjectName::from(vec![Ident::new("<")]),
+                op_types: vec![DataType::Int4(None), DataType::Int4(None)],
+                purpose: Some(OperatorPurpose::ForOrderBy {
+                    sort_family: ObjectName::from(vec![
+                        Ident::new("sort_schema"),
+                        Ident::with_quote('"', "sort family"),
+                    ]),
+                }),
+            },
+            OperatorFamilyItem::Operator {
+                strategy_number: 2,
+                operator_name: ObjectName::from(vec![Ident::new(">")]),
+                op_types: vec![DataType::Int4(None), DataType::Int4(None)],
+                purpose: Some(OperatorPurpose::ForSearch),
+            },
+        ]
+    );
+}

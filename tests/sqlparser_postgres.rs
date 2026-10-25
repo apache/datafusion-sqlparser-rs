@@ -11026,3 +11026,16 @@ fn parse_create_foreign_data_wrapper_clause_order() {
         pg_and_generic().verified_stmt(sql);
     }
 }
+
+#[test]
+fn operator_function_display_preserves_empty_operator_types() {
+    for (op_types, expected) in [(None, "FUNCTION 1 f"), (Some(vec![]), "FUNCTION 1 () f")] {
+        let item = OperatorFamilyItem::Function {
+            support_number: 1,
+            op_types,
+            function_name: ObjectName::from(vec![Ident::new("f")]),
+            argument_types: vec![],
+        };
+        assert_eq!(item.to_string(), expected);
+    }
+}

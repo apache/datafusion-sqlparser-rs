@@ -15648,6 +15648,168 @@ fn test_alter_policy() {
 }
 
 #[test]
+fn test_alter_trigger() {
+    match verified_stmt("ALTER TRIGGER old_trigger ON my_table RENAME TO new_trigger") {
+        Statement::AlterTrigger(AlterTrigger {
+            name,
+            table_name,
+            operation,
+        }) => {
+            assert_eq!(name.to_string(), "old_trigger");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::Rename {
+                    new_name: Ident::new("new_trigger")
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ALTER TRIGGER my_trigger ON my_table DEPENDS ON EXTENSION my_extension") {
+        Statement::AlterTrigger(AlterTrigger { operation, .. }) => {
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::DependsOnExtension {
+                    no: false,
+                    extension_name: ObjectName::from(Ident::new("my_extension"))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ALTER TRIGGER my_trigger ON my_table NO DEPENDS ON EXTENSION my_extension")
+    {
+        Statement::AlterTrigger(AlterTrigger { operation, .. }) => {
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::DependsOnExtension {
+                    no: true,
+                    extension_name: ObjectName::from(Ident::new("my_extension"))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // a qualified table name is preserved
+    verified_stmt("ALTER TRIGGER my_trigger ON my_schema.my_table RENAME TO new_trigger");
+
+    // an operation is required
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: RENAME, DEPENDS or NO DEPENDS after ALTER TRIGGER, found: EOF"
+    );
+    // missing TO in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table RENAME")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: EOF"
+    );
+    // missing new name in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table RENAME TO")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+    // NO must be followed by DEPENDS
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table NO EXTENSION my_extension")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: DEPENDS after NO, found: EXTENSION"
+    );
+    // missing the extension name
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table DEPENDS ON EXTENSION")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_alter_trigger_rejects_malformed_statements() {
+    for (sql, expected) in [
+        ("ALTER TRIGGER", "Expected: identifier, found: EOF"),
+        ("ALTER TRIGGER t", "Expected: ON, found: EOF"),
+        ("ALTER TRIGGER t ON", "Expected: identifier, found: EOF"),
+        ("ALTER TRIGGER t ON tbl DEPENDS", "Expected: ON, found: EOF"),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+        );
+    }
+}
+
+#[test]
+fn display_alter_trigger_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = verified_stmt("ALTER TRIGGER t ON tbl NO DEPENDS ON EXTENSION ext");
+    let mut writer = RejectingWriter("NO ");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_alter_trigger_spans() {
+    let dialects = all_dialects();
+    for (sql, end) in [
+        (
+            "ALTER TRIGGER trg ON t RENAME TO trg2",
+            Location::new(1, 38),
+        ),
+        (
+            "ALTER TRIGGER trg ON t DEPENDS ON EXTENSION ext",
+            Location::new(1, 48),
+        ),
+    ] {
+        for dialect in &dialects.dialects {
+            let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+            assert_eq!(
+                statements[0].span(),
+                Span::new(Location::new(1, 15), end),
+                "{dialect:?} {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn parse_alter_rejects_missing_or_unknown_object_type() {
+    let objects = "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
+    for (sql, found) in [
+        ("ALTER", "EOF"),
+        ("ALTER 1", "1"),
+        ("ALTER unknown", "unknown"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("Expected: {objects}, found: {found}")),
+        );
+    }
+}
+
+#[test]
 fn test_create_connector() {
     let sql = "CREATE CONNECTOR my_connector \
                TYPE 'jdbc' \

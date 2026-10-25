@@ -241,6 +241,16 @@ fn parse_flush() {
 }
 
 #[test]
+fn parse_flush_preserves_keyword_table_names() {
+    for sql in [
+        "FLUSH TABLES handler WITH READ LOCK",
+        "FLUSH TABLES validator WITH READ LOCK",
+    ] {
+        mysql_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_show_columns() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),

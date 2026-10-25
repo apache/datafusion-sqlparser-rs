@@ -1074,22 +1074,17 @@ impl<'a> Parser<'a> {
             loop {
                 let next_token = self.next_token();
                 match &next_token.token {
-                    Token::Word(w) => match w.keyword {
-                        Keyword::WITH => {
-                            read_lock = self.parse_keywords(&[Keyword::READ, Keyword::LOCK]);
-                        }
-                        Keyword::FOR => {
-                            export = self.parse_keyword(Keyword::EXPORT);
-                        }
-                        Keyword::NoKeyword => {
-                            self.prev_token();
-                            tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
-                        }
-                        _ => {}
-                    },
-                    _ => {
-                        break;
+                    Token::Word(w) if w.keyword == Keyword::WITH => {
+                        read_lock = self.parse_keywords(&[Keyword::READ, Keyword::LOCK]);
                     }
+                    Token::Word(w) if w.keyword == Keyword::FOR => {
+                        export = self.parse_keyword(Keyword::EXPORT);
+                    }
+                    Token::Word(_) => {
+                        self.prev_token();
+                        tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+                    }
+                    _ => break,
                 }
             }
 

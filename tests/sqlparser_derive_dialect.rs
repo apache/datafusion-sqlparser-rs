@@ -220,3 +220,23 @@ fn test_literal_leading_bool_expression_override() {
         Some(sqlparser::dialect::BindPlaceholderStyle::DollarNumbered)
     );
 }
+
+#[test]
+fn test_direct_and_module_macro_paths() {
+    sqlparser_derive::derive_dialect!(
+        DirectDialect,
+        MySqlDialect,
+        overrides = { is_identifier_start = '_' == ch || ch.is_ascii_alphabetic() }
+    );
+    sqlparser::dialect::derive_dialect!(
+        ModuleDialect,
+        MySqlDialect,
+        overrides = { supports_string_literal_backslash_escape = false }
+    );
+
+    let direct = DirectDialect::new();
+    assert!(direct.is_identifier_start('_'));
+    assert!(!direct.is_identifier_start('1'));
+    assert!(direct.supports_string_literal_backslash_escape());
+    assert!(!ModuleDialect::new().supports_string_literal_backslash_escape());
+}

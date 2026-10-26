@@ -90,9 +90,6 @@ jobs:
     - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
     - name: Test
       run: cargo test --locked --all-features
-    - name: Derive dialect without dependency sources
-      if: matrix.rust == 'stable'
-      run: python3 dev/test_derive_dialect.py
 
   coverage:
     runs-on: ubuntu-latest

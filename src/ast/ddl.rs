@@ -621,6 +621,7 @@ impl fmt::Display for AlterPolicyOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTriggerOperation {
     /// `RENAME TO new_name`
     Rename {
@@ -6232,6 +6233,7 @@ impl From<AlterPolicy> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterTrigger {
     /// Trigger name to alter.
     pub name: Ident,
@@ -6272,6 +6274,7 @@ impl From<AlterTrigger> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateRule {
     /// `true` when `OR REPLACE` was present.
     pub or_replace: bool,
@@ -6319,6 +6322,7 @@ impl fmt::Display for CreateRule {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateRuleEvent {
     /// Fires on SELECT.
     Select,
@@ -6349,6 +6353,7 @@ impl fmt::Display for CreateRuleEvent {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateRuleDoKind {
     /// The action runs in addition to the original statement.
     Also,
@@ -6373,6 +6378,7 @@ impl fmt::Display for CreateRuleDoKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateRuleAction {
     /// `NOTHING`
     Nothing,
@@ -6454,6 +6460,7 @@ impl fmt::Display for CreateForeignTable {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ForeignDataWrapperRoutineClause {
     /// `HANDLER handler_function`
     Handler(ObjectName),
@@ -6482,6 +6489,7 @@ impl fmt::Display for ForeignDataWrapperRoutineClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateForeignDataWrapper {
     /// The name of the foreign-data wrapper. Per PostgreSQL this is a bare
     /// identifier and cannot be schema-qualified.

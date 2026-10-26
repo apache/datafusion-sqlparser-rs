@@ -22124,3 +22124,89 @@ fn parse_cache_table_options_without_flag() {
         );
     }
 }
+
+#[test]
+fn parse_reference_clauses_in_any_order() {
+    let dialects = all_dialects();
+    for clauses in [
+        "MATCH FULL ON DELETE CASCADE ON UPDATE SET NULL",
+        "MATCH FULL ON UPDATE SET NULL ON DELETE CASCADE",
+        "ON DELETE CASCADE MATCH FULL ON UPDATE SET NULL",
+        "ON DELETE CASCADE ON UPDATE SET NULL MATCH FULL",
+        "ON UPDATE SET NULL MATCH FULL ON DELETE CASCADE",
+        "ON UPDATE SET NULL ON DELETE CASCADE MATCH FULL",
+    ] {
+        for prefix in [
+            "a INT REFERENCES r (id)",
+            "a INT, FOREIGN KEY (a) REFERENCES r(id)",
+        ] {
+            let sql = format!("CREATE TABLE t ({prefix} {clauses} DEFERRABLE INITIALLY DEFERRED)");
+            let canonical = format!(
+                "CREATE TABLE t ({prefix} MATCH FULL ON DELETE CASCADE ON UPDATE SET NULL DEFERRABLE INITIALLY DEFERRED)"
+            );
+            dialects.one_statement_parses_to(&sql, &canonical);
+        }
+    }
+}
+
+#[test]
+fn parse_reference_clauses_leave_duplicates_unconsumed() {
+    for (clauses, keyword, match_kind, on_delete, on_update) in [
+        (
+            "MATCH FULL MATCH SIMPLE",
+            Keyword::MATCH,
+            Some(ConstraintReferenceMatchKind::Full),
+            None,
+            None,
+        ),
+        (
+            "ON DELETE CASCADE ON DELETE SET NULL",
+            Keyword::ON,
+            None,
+            Some(ReferentialAction::Cascade),
+            None,
+        ),
+        (
+            "ON UPDATE RESTRICT ON UPDATE NO ACTION",
+            Keyword::ON,
+            None,
+            None,
+            Some(ReferentialAction::Restrict),
+        ),
+    ] {
+        for table_level in [false, true] {
+            let prefix = if table_level {
+                "FOREIGN KEY (a) REFERENCES r(id)"
+            } else {
+                "REFERENCES r(id)"
+            };
+            let sql = format!("{prefix} {clauses}");
+            let mut parser = Parser::new(&GenericDialect {}).try_with_sql(&sql).unwrap();
+            let constraint = if table_level {
+                let Some(TableConstraint::ForeignKey(constraint)) =
+                    parser.parse_optional_table_constraint().unwrap()
+                else {
+                    panic!("{sql}");
+                };
+                constraint
+            } else {
+                let Some(ColumnOption::ForeignKey(constraint)) =
+                    parser.parse_optional_column_option().unwrap()
+                else {
+                    panic!("{sql}");
+                };
+                constraint
+            };
+            assert_eq!(
+                (
+                    constraint.match_kind,
+                    constraint.on_delete,
+                    constraint.on_update
+                ),
+                (match_kind, on_delete, on_update),
+                "{sql}"
+            );
+            assert!(parser.peek_keyword(keyword), "{sql}");
+        }
+    }
+}

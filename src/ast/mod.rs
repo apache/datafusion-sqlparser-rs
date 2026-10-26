@@ -4974,6 +4974,12 @@ pub enum Statement {
         channel: Ident,
     },
     /// ```sql
+    /// DO { code | LANGUAGE lang_name } [ ... ]
+    /// ```
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-do.html>
+    Do(DoStatement),
+    /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
     /// send a notification event together with an optional "payload" string to channel
@@ -6543,6 +6549,7 @@ impl fmt::Display for Statement {
                 write!(f, "UNLISTEN {channel}")?;
                 Ok(())
             }
+            Statement::Do(s) => write!(f, "{s}"),
             Statement::NOTIFY { channel, payload } => {
                 write!(f, "NOTIFY {channel}")?;
                 if let Some(payload) = payload {
@@ -11665,6 +11672,50 @@ impl fmt::Display for WaitForStatement {
     }
 }
 
+/// PostgreSQL `DO` statement, executing an anonymous code block.
+///
+/// ```sql
+/// DO { code | LANGUAGE lang_name } [ ... ]
+/// ```
+///
+/// See <https://www.postgresql.org/docs/current/sql-do.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DoStatement {
+    /// The code blocks and `LANGUAGE` options, in source order.
+    pub options: Vec<DoOption>,
+}
+
+impl fmt::Display for DoStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DO {}", display_separated(&self.options, " "))
+    }
+}
+
+/// An item of a [`DoStatement`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DoOption {
+    /// `LANGUAGE lang_name`
+    Language(Ident),
+    /// `LANGUAGE` followed by the name as a string literal.
+    LanguageLiteral(ValueWithSpan),
+    /// The anonymous code block, a string literal.
+    Code(ValueWithSpan),
+}
+
+impl fmt::Display for DoOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DoOption::Language(language) => write!(f, "LANGUAGE {language}"),
+            DoOption::LanguageLiteral(language) => write!(f, "LANGUAGE {language}"),
+            DoOption::Code(code) => write!(f, "{code}"),
+        }
+    }
+}
+
 /// Represents a `Return` statement.
 ///
 /// [MsSql triggers](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql)
@@ -12514,6 +12565,12 @@ impl From<RaiseStatement> for Statement {
 impl From<ThrowStatement> for Statement {
     fn from(t: ThrowStatement) -> Self {
         Self::Throw(t)
+    }
+}
+
+impl From<DoStatement> for Statement {
+    fn from(d: DoStatement) -> Self {
+        Self::Do(d)
     }
 }
 

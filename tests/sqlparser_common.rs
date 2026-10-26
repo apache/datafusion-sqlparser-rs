@@ -6517,9 +6517,9 @@ fn parse_window_functions() {
         expr_from_projection(&select.projection[0])
     );
 
-    for i in 0..EXPECTED_PROJ_QTY {
+    for proj in select.projection.iter().take(EXPECTED_PROJ_QTY) {
         assert!(matches!(
-            expr_from_projection(&select.projection[i]),
+            expr_from_projection(proj),
             Expr::Function(Function {
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     window_name: None,
@@ -22098,4 +22098,57 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
+}
+
+#[test]
+fn parse_do_statement() {
+    let dialects = all_dialects_where(|d| d.supports_do_statement());
+
+    match dialects.verified_stmt("DO $$BEGIN RAISE NOTICE 'hi'; END$$") {
+        Statement::Do(DoStatement { options }) => assert_eq!(
+            options,
+            vec![DoOption::Code(
+                Value::DollarQuotedString(DollarQuotedString {
+                    value: "BEGIN RAISE NOTICE 'hi'; END".to_string(),
+                    tag: None,
+                })
+                .with_empty_span()
+            )]
+        ),
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("DO LANGUAGE plpgsql $body$BEGIN NULL; END$body$") {
+        Statement::Do(DoStatement { options }) => {
+            assert_eq!(options[0], DoOption::Language(Ident::new("plpgsql")));
+        }
+        _ => unreachable!(),
+    }
+
+    dialects.verified_stmt("DO 'BEGIN NULL; END'");
+    dialects.verified_stmt("DO U&'BEGIN NULL; END'");
+    dialects.verified_stmt("DO $$BEGIN NULL; END$$ LANGUAGE plpgsql");
+    dialects.verified_stmt("DO LANGUAGE 'plpgsql' $$BEGIN NULL; END$$");
+    dialects.verified_stmt("DO LANGUAGE $$plpgsql$$ $$BEGIN NULL; END$$");
+    dialects.verified_stmt("DO $$BEGIN NULL; END$$ LANGUAGE E'plpgsql'");
+    dialects.verified_stmt("DO LANGUAGE plpgsql");
+    dialects.verified_stmt("DO $$BEGIN NULL; END$$ $$BEGIN NULL; END$$");
+    dialects.verified_stmt("DO LANGUAGE plpgsql LANGUAGE sql $$BEGIN NULL; END$$");
+
+    assert_eq!(
+        dialects.parse_sql_statements("DO 1").unwrap_err(),
+        ParserError::ParserError("Expected: string literal, found: 1".to_string())
+    );
+    assert_eq!(
+        dialects.parse_sql_statements("DO LANGUAGE").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_do_statement());
+    assert_eq!(
+        dialects
+            .parse_sql_statements("DO $$BEGIN NULL; END$$")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: DO".to_string())
+    );
 }

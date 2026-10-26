@@ -10118,20 +10118,6 @@ impl<'a> Parser<'a> {
             } else {
                 Ok(Some(ColumnOption::Ephemeral(Some(self.parse_expr()?))))
             }
-        } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
-            let characteristics = self.parse_constraint_characteristics()?;
-            Ok(Some(
-                PrimaryKeyConstraint {
-                    name: None,
-                    index_name: None,
-                    index_type: None,
-                    columns: vec![],
-                    include: vec![],
-                    index_options: vec![],
-                    characteristics,
-                }
-                .into(),
-            ))
         } else if self.parse_keyword(Keyword::UNIQUE) {
             let index_type_display =
                 if self.dialect.supports_key_column_option() && self.parse_keyword(Keyword::KEY) {
@@ -10154,9 +10140,9 @@ impl<'a> Parser<'a> {
                 }
                 .into(),
             ))
-        } else if self.dialect.supports_key_column_option() && self.parse_keyword(Keyword::KEY) {
-            // In MySQL, `KEY` in a column definition is shorthand for `PRIMARY KEY`.
-            // See: https://dev.mysql.com/doc/refman/8.4/en/create-table.html
+        } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
+            || (self.dialect.supports_key_column_option() && self.parse_keyword(Keyword::KEY))
+        {
             let characteristics = self.parse_constraint_characteristics()?;
             Ok(Some(
                 PrimaryKeyConstraint {

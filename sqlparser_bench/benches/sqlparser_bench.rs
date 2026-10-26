@@ -15,11 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use sqlparser::dialect::{GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
-use sqlparser::tokenizer::{Span, Word};
+use sqlparser::tokenizer::{Span, Tokenizer, Word};
 
 fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");
@@ -297,9 +297,96 @@ fn parse_function_arg_call_chain(c: &mut Criterion) {
     group.finish();
 }
 
+fn tokenize_identifiers(c: &mut Criterion) {
+    let mut group = c.benchmark_group("tokenize_identifiers");
+    let dialect = MySqlDialect {};
+    for len in [1, 2, 4, 8, 16, 32, 64, 128] {
+        let word = "a".repeat(len);
+        let sql = format!("SELECT {word}, {word} FROM {word} WHERE {word} = 42");
+        group.bench_function(format!("length_{len}"), |b| {
+            b.iter(|| {
+                std::hint::black_box(
+                    Tokenizer::new(&dialect, std::hint::black_box(&sql))
+                        .tokenize_with_location()
+                        .unwrap(),
+                );
+            });
+        });
+    }
+    group.finish();
+}
+
+fn mixed_queries() -> Vec<&'static str> {
+    vec![
+        include_str!("../../tests/queries/tpch/1.sql"),
+        include_str!("../../tests/queries/tpch/2.sql"),
+        include_str!("../../tests/queries/tpch/3.sql"),
+        include_str!("../../tests/queries/tpch/4.sql"),
+        include_str!("../../tests/queries/tpch/5.sql"),
+        include_str!("../../tests/queries/tpch/6.sql"),
+        include_str!("../../tests/queries/tpch/7.sql"),
+        include_str!("../../tests/queries/tpch/8.sql"),
+        include_str!("../../tests/queries/tpch/9.sql"),
+        include_str!("../../tests/queries/tpch/10.sql"),
+        include_str!("../../tests/queries/tpch/11.sql"),
+        include_str!("../../tests/queries/tpch/12.sql"),
+        include_str!("../../tests/queries/tpch/13.sql"),
+        include_str!("../../tests/queries/tpch/14.sql"),
+        include_str!("../../tests/queries/tpch/15.sql"),
+        include_str!("../../tests/queries/tpch/16.sql"),
+        include_str!("../../tests/queries/tpch/17.sql"),
+        include_str!("../../tests/queries/tpch/18.sql"),
+        include_str!("../../tests/queries/tpch/19.sql"),
+        include_str!("../../tests/queries/tpch/20.sql"),
+        include_str!("../../tests/queries/tpch/21.sql"),
+        include_str!("../../tests/queries/tpch/22.sql"),
+        "SELECT name, email FROM customers WHERE id = ?",
+        "INSERT INTO events (id, message) VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')",
+        "UPDATE accounts SET balance = balance + 10.25 WHERE id = 42",
+        "DELETE FROM sessions WHERE expires_at < '2026-01-01'",
+        "CREATE TABLE items (id BIGINT PRIMARY KEY, name VARCHAR(100), price DECIMAL(10, 2))",
+        "-- lookup\nSELECT \"display name\", 'literal' FROM customers WHERE active = TRUE /* end */",
+        "VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')",
+        "SELECT value FROM settings WHERE name IN ('first', 'second') ORDER BY value LIMIT 10",
+    ]
+}
+
+fn mixed_sql(c: &mut Criterion) {
+    let mut group = c.benchmark_group("mixed_sql");
+    let dialect = GenericDialect {};
+    let queries = mixed_queries();
+    for sql in &queries {
+        Parser::parse_sql(&dialect, sql).expect(sql);
+    }
+    group.throughput(Throughput::Elements(queries.len() as u64));
+    group.bench_function("tokenize", |b| {
+        b.iter(|| {
+            for sql in &queries {
+                std::hint::black_box(
+                    Tokenizer::new(&dialect, std::hint::black_box(sql))
+                        .tokenize_with_location()
+                        .unwrap(),
+                );
+            }
+        });
+    });
+    group.bench_function("parse", |b| {
+        b.iter(|| {
+            for sql in &queries {
+                std::hint::black_box(
+                    Parser::parse_sql(&dialect, std::hint::black_box(sql)).unwrap(),
+                );
+            }
+        });
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     basic_queries,
+    tokenize_identifiers,
+    mixed_sql,
     word_to_ident,
     parse_many_identifiers,
     parse_compound_chain,

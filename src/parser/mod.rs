@@ -18650,6 +18650,14 @@ impl<'a> Parser<'a> {
                 Some(GrantObjects::ExternalVolumes(
                     self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 ))
+            } else if self.parse_keyword(Keyword::FUNCTION) {
+                Some(GrantObjects::Functions(
+                    self.parse_comma_separated(Parser::parse_function_desc)?,
+                ))
+            } else if self.parse_keyword(Keyword::PROCEDURE) {
+                Some(GrantObjects::Procedures(
+                    self.parse_comma_separated(Parser::parse_function_desc)?,
+                ))
             } else {
                 let object_type = self.parse_one_of_keywords(&[
                     Keyword::SEQUENCE,
@@ -18664,8 +18672,6 @@ impl<'a> Parser<'a> {
                     Keyword::INTEGRATION,
                     Keyword::USER,
                     Keyword::CONNECTION,
-                    Keyword::PROCEDURE,
-                    Keyword::FUNCTION,
                 ]);
                 let objects =
                     self.parse_comma_separated(|p| p.parse_object_name_inner(false, true));
@@ -18678,13 +18684,6 @@ impl<'a> Parser<'a> {
                     Some(Keyword::VIEW) => Some(GrantObjects::Views(objects?)),
                     Some(Keyword::USER) => Some(GrantObjects::Users(objects?)),
                     Some(Keyword::CONNECTION) => Some(GrantObjects::Connections(objects?)),
-                    kw @ (Some(Keyword::PROCEDURE) | Some(Keyword::FUNCTION)) => {
-                        if let Some(name) = objects?.first() {
-                            self.parse_grant_procedure_or_function(name, &kw)?
-                        } else {
-                            self.expected_ref("procedure or function name", self.peek_token_ref())?
-                        }
-                    }
                     Some(Keyword::TABLE) | None => Some(GrantObjects::Tables(objects?)),
                     Some(unexpected_keyword) => return Err(ParserError::ParserError(
                         format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in grant objects"),
@@ -18696,31 +18695,6 @@ impl<'a> Parser<'a> {
         };
 
         Ok((privileges, objects))
-    }
-
-    fn parse_grant_procedure_or_function(
-        &mut self,
-        name: &ObjectName,
-        kw: &Option<Keyword>,
-    ) -> Result<Option<GrantObjects>, ParserError> {
-        let arg_types = if self.consume_token(&Token::LParen) {
-            let list = self.parse_comma_separated0(Self::parse_data_type, Token::RParen)?;
-            self.expect_token(&Token::RParen)?;
-            list
-        } else {
-            vec![]
-        };
-        match kw {
-            Some(Keyword::PROCEDURE) => Ok(Some(GrantObjects::Procedure {
-                name: name.clone(),
-                arg_types,
-            })),
-            Some(Keyword::FUNCTION) => Ok(Some(GrantObjects::Function {
-                name: name.clone(),
-                arg_types,
-            })),
-            _ => self.expected_ref("procedure or function keywords", self.peek_token_ref())?,
-        }
     }
 
     /// Parse a single grantable permission/action (used within GRANT statements).

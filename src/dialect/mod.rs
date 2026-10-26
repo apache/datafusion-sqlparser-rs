@@ -151,6 +151,10 @@ pub use self::teradata::TeradataDialect;
 #[cfg(feature = "derive-dialect")]
 pub use sqlparser_derive::derive_dialect;
 
+#[cfg(feature = "sqlparser_derive")]
+#[doc(hidden)]
+pub use sqlparser_derive::__derive_dialect;
+
 use crate::ast::{ColumnOption, DataType, Expr, GranteesType, Ident, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
@@ -231,6 +235,7 @@ pub enum BindPlaceholderStyle {
 /// ```
 ///
 /// [module level documentation]: crate
+#[cfg_attr(feature = "sqlparser_derive", sqlparser_derive::dialect_methods)]
 pub trait Dialect: Debug + Any {
     /// Determine the [`TypeId`] of this dialect.
     ///

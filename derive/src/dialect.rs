@@ -23,7 +23,7 @@ use std::collections::HashSet;
 use syn::{
     braced,
     parse::{Parse, ParseStream},
-    Error, Expr, File, FnArg, Ident, Item, LitBool, LitChar, Pat, ReceiverKind, ReturnType,
+    Error, Expr, FnArg, Ident, ItemTrait, LitBool, LitChar, Pat, ReceiverKind, ReturnType,
     Signature, Token, TraitItem, Type,
 };
 
@@ -110,22 +110,56 @@ impl Parse for DeriveDialectInput {
     }
 }
 
-/// Entry point for the `derive_dialect!` macro
-pub(crate) fn derive_dialect(input: DeriveDialectInput) -> proc_macro::TokenStream {
+/// Pass the trait's signatures to each derived dialect without reading source files.
+pub(crate) fn dialect_methods(item: ItemTrait) -> TokenStream {
+    let signatures = item.items.iter().filter_map(|item| match item {
+        TraitItem::Fn(method) => Some(&method.sig),
+        _ => None,
+    });
+    quote! {
+        #item
+
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! __sqlparser_derive_dialect {
+            ($($args:tt)*) => {
+                $crate::dialect::__derive_dialect! {
+                    trait Dialect { #(#signatures;)* }
+                    $($args)*
+                }
+            };
+        }
+
+        #[doc(hidden)]
+        pub use __sqlparser_derive_dialect as __derive_dialect_with_methods;
+    }
+}
+
+pub(crate) struct DeriveDialectWithMethods {
+    dialect: ItemTrait,
+    input: DeriveDialectInput,
+}
+
+impl Parse for DeriveDialectWithMethods {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            dialect: input.parse()?,
+            input: input.parse()?,
+        })
+    }
+}
+
+/// Entry point after the trait has supplied its method signatures.
+pub(crate) fn derive_dialect(input: DeriveDialectWithMethods) -> proc_macro::TokenStream {
     match derive_dialect_inner(input) {
         Ok(tokens) => tokens.into(),
         Err(e) => e.to_compile_error().into(),
     }
 }
 
-fn derive_dialect_inner(input: DeriveDialectInput) -> syn::Result<TokenStream> {
-    let call_site = proc_macro2::Span::call_site();
-
-    let source = read_dialect_mod_file()
-        .map_err(|e| Error::new(call_site, format!("Failed to read dialect/mod.rs: {e}")))?;
-    let file: File = syn::parse_str::<File>(&source)
-        .map_err(|e| Error::new(call_site, format!("Failed to parse source: {e}")))?;
-    let methods = extract_dialect_methods(&file)?;
+fn derive_dialect_inner(input: DeriveDialectWithMethods) -> syn::Result<TokenStream> {
+    let methods = extract_dialect_methods(&input.dialect, input.input.name.span());
+    let input = input.input;
 
     // Validate overrides
     let method_names: HashSet<_> = methods.iter().map(|m| m.name.to_string()).collect();
@@ -254,86 +288,35 @@ fn extract_param_names(sig: &Signature) -> Vec<&Ident> {
         .collect()
 }
 
-/// Read the `dialect/mod.rs` file that contains the Dialect trait.
-///
-/// Searches for the file in the following order:
-/// 1. `$CARGO_MANIFEST_DIR/src/dialect/mod.rs` - works when the macro is
-///    invoked from within the `sqlparser` crate itself (e.g. in tests).
-/// 2. `<sqlparser_derive dir>/../src/dialect/mod.rs` - works when
-///    `sqlparser_derive` lives in a workspace alongside the main crate
-///    (the standard `derive/` layout).
-/// 3. Sibling directories of the compiled `sqlparser_derive` crate in the
-///    Cargo registry - works when an external crate uses `derive_dialect!`
-///    via a registry dependency.
-fn read_dialect_mod_file() -> Result<String, String> {
-    use std::path::{Path, PathBuf};
-
-    const DERIVE_CRATE_DIR: &str = env!("CARGO_MANIFEST_DIR");
-    let derive_dir = Path::new(DERIVE_CRATE_DIR);
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    // The crate being compiled (eg: within sqlparser).
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        candidates.push(Path::new(&manifest_dir).join("src/dialect/mod.rs"));
-    }
-    // Workspace layout: the main crate is the parent of `derive/`.
-    candidates.push(derive_dir.join("../src/dialect/mod.rs"));
-
-    // Cargo registry: look for sibling `sqlparser-*` directories (prefer newest).
-    if let Some(parent) = derive_dir.parent() {
-        if let Ok(entries) = std::fs::read_dir(parent) {
-            let mut siblings: Vec<_> = entries
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    let name = e.file_name();
-                    let name = name.to_string_lossy();
-                    name.starts_with("sqlparser-") && !name.starts_with("sqlparser-derive")
-                })
-                .collect();
-            siblings.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
-            candidates.extend(
-                siblings
-                    .into_iter()
-                    .map(|e| e.path().join("src/dialect/mod.rs")),
-            );
-        }
-    }
-    for path in &candidates {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            return Ok(content);
-        }
-    }
-    Err(format!(
-        "Could not find `sqlparser` dialect/mod.rs file. \
-         Searched in $CARGO_MANIFEST_DIR/src/dialect/mod.rs and \
-         the `sqlparser_derive` crate at {DERIVE_CRATE_DIR}"
-    ))
-}
-
-/// Extract all methods from the `Dialect` trait (excluding `dialect` for TypeId)
-fn extract_dialect_methods(file: &File) -> Result<Vec<DialectMethod>, Error> {
-    let dialect_trait = file
-        .items
-        .iter()
-        .find_map(|item| match item {
-            Item::Trait(t) if t.ident == "Dialect" => Some(t),
-            _ => None,
-        })
-        .ok_or_else(|| Error::new(proc_macro2::Span::call_site(), "Dialect trait not found"))?;
-
+/// Extract all methods from the supplied trait (excluding `dialect` for TypeId).
+fn extract_dialect_methods(
+    dialect_trait: &ItemTrait,
+    call_site: proc_macro2::Span,
+) -> Vec<DialectMethod> {
     let mut methods: Vec<_> = dialect_trait
         .items
         .iter()
         .filter_map(|item| match item {
-            TraitItem::Fn(m) if m.sig.ident != "dialect" => Some(DialectMethod {
-                name: m.sig.ident.clone(),
-                signature: m.sig.clone(),
-            }),
+            TraitItem::Fn(m) if m.sig.ident != "dialect" => {
+                let mut signature = m.sig.clone();
+                // Override expressions refer to parameters at the invocation site.
+                for arg in &mut signature.inputs {
+                    if let FnArg::Typed(arg) = arg {
+                        if let Pat::Ident(pat) = arg.pat.as_mut() {
+                            pat.ident.set_span(call_site);
+                        }
+                    }
+                }
+                Some(DialectMethod {
+                    name: m.sig.ident.clone(),
+                    signature,
+                })
+            }
             _ => None,
         })
         .collect();
     methods.sort_by_key(|m| m.name.to_string());
-    Ok(methods)
+    methods
 }
 
 /// Check if a method signature is `fn name(&self) -> bool`

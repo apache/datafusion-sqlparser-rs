@@ -603,7 +603,7 @@ impl fmt::Display for RevokeRole {
 
 impl From<RevokeRole> for crate::ast::Statement {
     fn from(v: RevokeRole) -> Self {
-        crate::ast::Statement::RevokeRole(v)
+        crate::ast::Statement::RevokeRole(Box::new(v))
     }
 }
 
@@ -644,7 +644,7 @@ impl fmt::Display for GrantRole {
 
 impl From<GrantRole> for crate::ast::Statement {
     fn from(v: GrantRole) -> Self {
-        crate::ast::Statement::GrantRole(v)
+        crate::ast::Statement::GrantRole(Box::new(v))
     }
 }
 

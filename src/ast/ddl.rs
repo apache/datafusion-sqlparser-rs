@@ -6303,7 +6303,7 @@ impl fmt::Display for AlterTrigger {
 
 impl From<AlterTrigger> for crate::ast::Statement {
     fn from(v: AlterTrigger) -> Self {
-        crate::ast::Statement::AlterTrigger(v)
+        crate::ast::Statement::AlterTrigger(Box::new(v))
     }
 }
 
@@ -6443,7 +6443,7 @@ impl fmt::Display for CreateRuleAction {
 
 impl From<CreateRule> for crate::ast::Statement {
     fn from(v: CreateRule) -> Self {
-        crate::ast::Statement::CreateRule(v)
+        crate::ast::Statement::CreateRule(Box::new(v))
     }
 }
 
@@ -6600,7 +6600,7 @@ impl fmt::Display for CreateForeignDataWrapper {
 
 impl From<DropRule> for crate::ast::Statement {
     fn from(v: DropRule) -> Self {
-        crate::ast::Statement::DropRule(v)
+        crate::ast::Statement::DropRule(Box::new(v))
     }
 }
 
@@ -6809,7 +6809,7 @@ impl fmt::Display for AggregateModifyKind {
 
 impl From<CreateForeignDataWrapper> for crate::ast::Statement {
     fn from(v: CreateForeignDataWrapper) -> Self {
-        crate::ast::Statement::CreateForeignDataWrapper(v)
+        crate::ast::Statement::CreateForeignDataWrapper(Box::new(v))
     }
 }
 
@@ -6903,6 +6903,6 @@ impl fmt::Display for CreateUserMapping {
 
 impl From<CreateUserMapping> for crate::ast::Statement {
     fn from(v: CreateUserMapping) -> Self {
-        crate::ast::Statement::CreateUserMapping(v)
+        crate::ast::Statement::CreateUserMapping(Box::new(v))
     }
 }

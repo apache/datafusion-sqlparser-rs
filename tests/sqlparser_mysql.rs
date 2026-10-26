@@ -5281,12 +5281,10 @@ fn parse_create_table_engine_name_quoting() {
 fn parse_key_constraint_index_type_before_columns() {
     for key in ["PRIMARY KEY", "UNIQUE", "UNIQUE KEY"] {
         let sql = format!("CREATE TABLE t (id INT, {key} USING BTREE (id))");
-        let Statement::CreateTable(CreateTable { constraints, .. }) =
-            mysql_and_generic().verified_stmt(&sql)
-        else {
+        let Statement::CreateTable(create_table) = mysql_and_generic().verified_stmt(&sql) else {
             unreachable!()
         };
-        let (index_name, index_type) = match &constraints[..] {
+        let (index_name, index_type) = match &create_table.constraints[..] {
             [TableConstraint::PrimaryKey(c)] => (&c.index_name, &c.index_type),
             [TableConstraint::Unique(c)] => (&c.index_name, &c.index_type),
             _ => unreachable!(),

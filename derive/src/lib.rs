@@ -56,8 +56,29 @@ pub fn derive_visit_immutable(input: proc_macro::TokenStream) -> proc_macro::Tok
 }
 
 /// Procedural macro for deriving new SQL dialects.
+///
+/// Enable the `derive-dialect` feature on the `sqlparser` dependency.
 #[proc_macro]
 pub fn derive_dialect(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as dialect::DeriveDialectInput);
+    let input = proc_macro2::TokenStream::from(input);
+    quote!(::sqlparser::dialect::__derive_dialect_with_methods!(#input);).into()
+}
+
+/// Capture method signatures from the Dialect trait definition.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn dialect_methods(
+    _args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let item = parse_macro_input!(item as syn::ItemTrait);
+    dialect::dialect_methods(item).into()
+}
+
+/// Expand a dialect using the method signatures supplied by sqlparser.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __derive_dialect(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as dialect::DeriveDialectWithMethods);
     dialect::derive_dialect(input)
 }

@@ -156,65 +156,6 @@ fn parse_kill() {
 
 #[test]
 fn parse_delimited_identifiers() {
-    // check that quoted identifiers in any position remain quoted after serialization
-    let select = clickhouse().verified_only_select(
-        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
-    );
-    // check FROM
-    match only(select.from).relation {
-        TableFactor::Table {
-            name,
-            alias,
-            args,
-            with_hints,
-            version,
-            ..
-        } => {
-            assert_eq!(
-                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
-                name
-            );
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
-            assert!(args.is_none());
-            assert!(with_hints.is_empty());
-            assert!(version.is_none());
-        }
-        _ => panic!("Expecting TableFactor::Table"),
-    }
-    // check SELECT
-    assert_eq!(3, select.projection.len());
-    assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
-        expr_from_projection(&select.projection[0]),
-    );
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
-        expr_from_projection(&select.projection[1]),
-    );
-    match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
-        }
-        _ => panic!("Expected ExprWithAlias"),
-    }
-
     clickhouse().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     clickhouse().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
     //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);

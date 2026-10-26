@@ -65,6 +65,18 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_aggregate_order_by_with_empty_args(&self) -> bool {
+        true
+    }
+
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
         true
     }

@@ -48,6 +48,10 @@ impl Dialect for SparkSqlDialect {
         false
     }
 
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     /// See <https://spark.apache.org/docs/latest/sql-ref-identifier.html>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')

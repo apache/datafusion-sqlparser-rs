@@ -16,14 +16,17 @@
 // under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
+use alloc::{boxed::Box, string::String};
 
-use crate::ast::BinaryOperator;
-use crate::ast::{Expr, Statement};
-use crate::dialect::{Dialect, Precedence};
-use crate::keywords::Keyword;
+use crate::ast::{BinaryOperator, DataType, Expr, ObjectName, Statement};
+use crate::dialect::{BindPlaceholderStyle, Dialect, Precedence};
+use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
+
+/// Precedence of `<`, `<=`, `>` and `>=`, between `=` and the bitwise operators, see
+/// <https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes>
+const COMPARISON_PREC: u8 = 21;
 
 /// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 ///
@@ -45,6 +48,10 @@ impl Dialect for SQLiteDialect {
 
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')
+    }
+
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::QuestionMark)
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
@@ -73,6 +80,10 @@ impl Dialect for SQLiteDialect {
         }
     }
 
+    fn parse_data_type(&self, parser: &mut Parser) -> Option<Result<DataType, ParserError>> {
+        parse_type_with_numeric_modifiers(parser).map(Ok)
+    }
+
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,
@@ -98,12 +109,35 @@ impl Dialect for SQLiteDialect {
         None
     }
 
-    /// `&` and `|` share one left-associative precedence level.
+    /// `&`, `|`, `<<`, and `>>` share one left-associative precedence level.
     /// See <https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes>
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
         match parser.peek_token_ref().token {
-            Token::Ampersand | Token::Pipe => Some(Ok(self.prec_value(Precedence::Ampersand))),
+            Token::Ampersand | Token::Pipe | Token::ShiftLeft | Token::ShiftRight => {
+                Some(Ok(self.prec_value(Precedence::Ampersand)))
+            }
+            Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Some(Ok(COMPARISON_PREC)),
             _ => None,
+        }
+    }
+
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::Period => 100,
+            Precedence::DoubleColon => 50,
+            Precedence::AtTz => 41,
+            Precedence::MulDivModOp => 40,
+            Precedence::PlusMinus => 30,
+            Precedence::Xor => 25,
+            Precedence::Ampersand => 24,
+            Precedence::Caret => 23,
+            Precedence::Pipe | Precedence::Colon | Precedence::PgOther => 22,
+            Precedence::Between | Precedence::Eq => 20,
+            Precedence::Like => 19,
+            Precedence::Is => 17,
+            Precedence::UnaryNot => 15,
+            Precedence::And => 10,
+            Precedence::Or => 5,
         }
     }
 
@@ -160,4 +194,195 @@ impl Dialect for SQLiteDialect {
     fn supports_unterminated_block_comments(&self) -> bool {
         true
     }
+
+    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        // https://www.sqlite.org/lang_keywords.html
+        !matches!(
+            kw,
+            Keyword::SELECT
+                | Keyword::WHERE
+                | Keyword::GROUP
+                | Keyword::HAVING
+                | Keyword::ORDER
+                | Keyword::LIMIT
+                | Keyword::UNION
+                | Keyword::EXCEPT
+                | Keyword::INTERSECT
+                | Keyword::RETURNING
+                | Keyword::VALUES
+                | Keyword::FROM
+                | Keyword::INTO
+        )
+    }
+
+    fn supports_over_keyword_as_column_alias(&self) -> bool {
+        true
+    }
+
+    fn supports_indexed_by(&self) -> bool {
+        true
+    }
+
+    /// `INDEXED BY` and `NOT INDEXED` follow the table name or alias.
+    fn is_table_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
+            Keyword::INDEXED => false,
+            Keyword::NOT => !parser.peek_keyword(Keyword::INDEXED),
+            _ => !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw),
+        }
+    }
+
+    fn supports_comma_join_constraint(&self) -> bool {
+        true
+    }
+
+    fn supports_aggregate_order_by_with_empty_args(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.sqlite.org/lang_expr.html#binaryops>
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
+    fn supports_in_table_expression(&self) -> bool {
+        true
+    }
+
+    /// The keywords SQLite does not accept as a name, as opposed to the
+    /// keywords its grammar lets fall back to an identifier.
+    /// See <https://www.sqlite.org/lang_keywords.html> and the `%fallback ID`
+    /// list in [parse.y](https://sqlite.org/src/file?name=src/parse.y)
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !matches!(
+            kw,
+            Keyword::ADD
+                | Keyword::ALL
+                | Keyword::ALTER
+                | Keyword::AND
+                | Keyword::AS
+                | Keyword::AUTOINCREMENT
+                | Keyword::BETWEEN
+                | Keyword::CASE
+                | Keyword::CHECK
+                | Keyword::COLLATE
+                | Keyword::COMMIT
+                | Keyword::CONSTRAINT
+                | Keyword::CREATE
+                | Keyword::DEFAULT
+                | Keyword::DEFERRABLE
+                | Keyword::DELETE
+                | Keyword::DISTINCT
+                | Keyword::DROP
+                | Keyword::ELSE
+                | Keyword::ESCAPE
+                | Keyword::EXCEPT
+                | Keyword::EXISTS
+                | Keyword::FOREIGN
+                | Keyword::FROM
+                | Keyword::GROUP
+                | Keyword::HAVING
+                | Keyword::IN
+                | Keyword::INDEX
+                | Keyword::INSERT
+                | Keyword::INTERSECT
+                | Keyword::INTO
+                | Keyword::IS
+                | Keyword::JOIN
+                | Keyword::LIMIT
+                | Keyword::NOT
+                | Keyword::NOTHING
+                | Keyword::NOTNULL
+                | Keyword::NULL
+                | Keyword::ON
+                | Keyword::OR
+                | Keyword::ORDER
+                | Keyword::PRIMARY
+                | Keyword::REFERENCES
+                | Keyword::RETURNING
+                | Keyword::SELECT
+                | Keyword::SET
+                | Keyword::TABLE
+                | Keyword::THEN
+                | Keyword::TO
+                | Keyword::TRANSACTION
+                | Keyword::UNION
+                | Keyword::UNIQUE
+                | Keyword::UPDATE
+                | Keyword::USING
+                | Keyword::VALUES
+                | Keyword::WHEN
+                | Keyword::WHERE
+        )
+    }
+
+    /// Comparison and postfix operators bind within the BETWEEN low bound in SQLite (<https://www.sqlite.org/lang_expr.html>).
+    fn between_low_bound_precedence(&self) -> u8 {
+        self.prec_value(Precedence::And)
+    }
+}
+
+/// SQLite permits signed and decimal numeric type modifiers.
+fn parse_type_with_numeric_modifiers(parser: &mut Parser) -> Option<DataType> {
+    let (data_type, token_count) = {
+        let first = parser.peek_token_ref();
+        let Token::Word(word) = &first.token else {
+            return None;
+        };
+        if parser.peek_nth_token_ref(1).token != Token::LParen {
+            return None;
+        }
+        let mut modifiers = [None; 2];
+        let mut nth = 2;
+        let mut is_nonstandard = false;
+        let mut closed = false;
+        for modifier in &mut modifiers {
+            let sign = match parser.peek_nth_token_ref(nth).token {
+                Token::Minus => "-",
+                Token::Plus => "+",
+                _ => "",
+            };
+            if !sign.is_empty() {
+                is_nonstandard = true;
+                nth += 1;
+            }
+            let Token::Number(number, _) = &parser.peek_nth_token_ref(nth).token else {
+                return None;
+            };
+            is_nonstandard |= number.parse::<u64>().is_err();
+            *modifier = Some((sign, number));
+            match parser.peek_nth_token_ref(nth + 1).token {
+                Token::RParen => {
+                    closed = true;
+                    break;
+                }
+                Token::Comma => nth += 2,
+                _ => return None,
+            }
+        }
+        if !closed || !is_nonstandard {
+            return None;
+        }
+        let modifiers = modifiers
+            .into_iter()
+            .flatten()
+            .map(|(sign, number)| {
+                let mut value = String::with_capacity(sign.len() + number.len());
+                value.push_str(sign);
+                value.push_str(number);
+                crate::ast::TypeModifier::Number(value, false)
+            })
+            .collect();
+        (
+            DataType::Custom(
+                ObjectName::from(word.clone().into_ident(first.span)),
+                modifiers,
+            ),
+            nth + 2,
+        )
+    };
+    for _ in 0..token_count {
+        parser.advance_token();
+    }
+    Some(data_type)
 }

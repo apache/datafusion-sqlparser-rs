@@ -234,6 +234,12 @@ fn test_identifier() {
 }
 
 #[test]
+fn parse_non_reserved_keyword_table_names() {
+    hive().verified_stmt("SELECT * FROM limit");
+    hive().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}
+
+#[test]
 fn test_alter_partition() {
     let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1)";
     hive().verified_stmt(alter);
@@ -471,7 +477,7 @@ fn parse_delimited_identifiers() {
             partitions: _,
             json_path: _,
             sample: _,
-            index_hints: _,
+            index_directives: _,
         } => {
             assert_eq!(
                 ObjectName::from(vec![Ident::with_quote('"', "a table")]),

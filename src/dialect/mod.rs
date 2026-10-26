@@ -109,6 +109,25 @@ pub use self::teradata::TeradataDialect;
 /// assert_eq!(d.identifier_quote_style("foo"), None);
 /// ```
 ///
+/// # Overriding other methods
+///
+/// Any other method can be overridden with an expression of the method's return type:
+/// ```
+/// use sqlparser::derive_dialect;
+/// use sqlparser::dialect::{BindPlaceholderStyle, Dialect, GenericDialect};
+///
+/// derive_dialect!(DollarBindDialect, GenericDialect,
+///     overrides = {
+///         ordered_bind_placeholder_style = true.then_some(BindPlaceholderStyle::DollarNumbered)
+///     }
+/// );
+/// let d: &dyn Dialect = &DollarBindDialect::new();
+/// assert_eq!(
+///     d.ordered_bind_placeholder_style(),
+///     Some(BindPlaceholderStyle::DollarNumbered)
+/// );
+/// ```
+///
 /// # Type Identity
 ///
 /// By default, derived dialects have their own `TypeId`. Set `preserve_type_id = true` to
@@ -132,7 +151,7 @@ pub use self::teradata::TeradataDialect;
 #[cfg(feature = "derive-dialect")]
 pub use sqlparser_derive::derive_dialect;
 
-use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
+use crate::ast::{ColumnOption, DataType, Expr, GranteesType, Ident, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -165,6 +184,17 @@ macro_rules! dialect_is {
     ($dialect:ident is $($dialect_type:ty)|+) => {
         ($($dialect.is::<$dialect_type>())||+)
     }
+}
+
+/// Placeholder spelling for ordered unnamed bind parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum BindPlaceholderStyle {
+    /// `?`
+    QuestionMark,
+    /// `$1`, `$2`, ...
+    DollarNumbered,
 }
 
 /// Encapsulates the differences between SQL implementations.
@@ -251,6 +281,15 @@ pub trait Dialect: Debug + Any {
 
     /// Return the character used to quote identifiers.
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
+    }
+
+    /// Return the placeholder syntax this server accepts for ordered unnamed bind parameters.
+    ///
+    /// This describes the server contract rather than every placeholder the parser can tokenize.
+    /// `None` means this dialect does not specify an ordered bind syntax.
+    /// Dollar-quoted strings are controlled by [`Dialect::supports_dollar_placeholder`].
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
         None
     }
 
@@ -453,6 +492,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `ON`/`USING` after a comma-joined table,
+    /// e.g. `SELECT * FROM t, u ON t.a = u.a`.
+    ///
+    /// [SQLite](https://www.sqlite.org/syntax/join-clause.html)
+    fn supports_comma_join_constraint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
         false
@@ -481,6 +528,14 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports `GLOBAL IN` and `GLOBAL NOT IN`.
     fn supports_global_in(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports a table name or table-valued function
+    /// as the right-hand side of `IN`, e.g. `x IN t`, `x IN schema.t`, or `x IN f(args)`.
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_expr.html#in_op)
+    fn supports_in_table_expression(&self) -> bool {
         false
     }
 
@@ -1043,6 +1098,11 @@ pub trait Dialect: Debug + Any {
         None
     }
 
+    /// Parses a dialect-specific type, leaving the cursor unchanged on `None` to use standard parsing.
+    fn parse_data_type(&self, _parser: &mut Parser) -> Option<Result<DataType, ParserError>> {
+        None
+    }
+
     /// Dialect-specific column option parser override
     ///
     /// This method is called to parse the next column option.
@@ -1090,6 +1150,22 @@ pub trait Dialect: Debug + Any {
     /// Returns the precedence when the precedence is otherwise unknown
     fn prec_unknown(&self) -> u8 {
         0
+    }
+
+    /// Precedence used to stop parsing the low bound expression of a BETWEEN predicate.
+    fn between_low_bound_precedence(&self) -> u8 {
+        self.prec_value(Precedence::Between)
+    }
+
+    /// Returns true if the low bound of a `BETWEEN` predicate may end with one comparison,
+    /// as in `a BETWEEN b > 1 AND c`, while `IS`, `LIKE` and `BETWEEN` still end the bound.
+    ///
+    /// The low bound is a `b_expr` in the
+    /// [PostgreSQL grammar](https://github.com/postgres/postgres/blob/master/src/backend/parser/gram.y)
+    /// and a `valueExpression` in the
+    /// [Spark grammar](https://github.com/apache/spark/blob/master/sql/api/src/main/antlr4/org/apache/spark/sql/catalyst/parser/SqlBaseParser.g4).
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        false
     }
 
     /// Returns true if this dialect requires the `TABLE` keyword after `DESCRIBE`
@@ -1227,8 +1303,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect allows dollar placeholders
-    /// e.g. `SELECT $var` (SQLite)
+    /// Enables SQLite `$` placeholders containing `$` characters and disables dollar-quoted strings.
     fn supports_dollar_placeholder(&self) -> bool {
         false
     }
@@ -1303,6 +1378,12 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports `#` as the start of a single line comment,
     /// e.g. `SELECT 1 # comment`
     fn supports_hash_comment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports inline data for
+    /// `COPY ... FROM STDIN`, captured verbatim by the tokenizer.
+    fn supports_copy_from_stdin_data(&self) -> bool {
         false
     }
 
@@ -1515,6 +1596,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts `VALUE` as a synonym of `VALUES`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/insert.html)
+    fn supports_singular_value_keyword(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `SET` statements without an explicit
     /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
     fn supports_set_stmt_without_operator(&self) -> bool {
@@ -1532,6 +1620,15 @@ pub trait Dialect: Debug + Any {
     /// to enable looking ahead if needed.
     fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
         explicit || self.is_column_alias(kw, parser)
+    }
+
+    /// Returns true if `OVER` without a following `(` or plain-identifier window name
+    /// may be used as an implicit column alias rather than starting a window clause.
+    ///
+    /// SQLite reads `OVER` as a keyword only when `(` or a name follows, see
+    /// `analyzeOverKeyword` in [tokenize.c](https://sqlite.org/src/file?name=src/tokenize.c)
+    fn supports_over_keyword_as_column_alias(&self) -> bool {
+        false
     }
 
     /// Returns true if the specified keyword should be parsed as a table factor identifier.
@@ -1588,6 +1685,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports SQLite's `INDEXED BY` and `NOT INDEXED` index-selection clauses.
+    ///
+    /// See <https://www.sqlite.org/lang_indexedby.html>
+    fn supports_indexed_by(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect requires a whitespace character after `--` to start a single line comment.
     ///
     /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>
@@ -1609,6 +1713,18 @@ pub trait Dialect: Debug + Any {
     /// Postgres: <https://www.postgresql.org/docs/9.5/functions-geometry.html>
     /// e.g. @@ circle '((0,0),10)'
     fn supports_geometric_types(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect tokenizes `~~`, `~~*`, `!~~` and `!~~*` as
+    /// `LIKE`, `ILIKE`, `NOT LIKE` and `NOT ILIKE` pattern-match operators.
+    ///
+    /// When false, `~~` is two `~` tokens, e.g. two bitwise-NOT prefixes.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-LIKE),
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_patternmatching_condition_like.html),
+    /// [DuckDB](https://duckdb.org/docs/current/sql/functions/pattern_matching)
+    fn supports_tilde_like_match_operator(&self) -> bool {
         false
     }
 
@@ -2113,6 +2229,15 @@ pub trait Dialect: Debug + Any {
     fn supports_cast_empty_data_type_to_unspecified(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect allows an `ORDER BY` clause inside an aggregate function
+    /// call with no preceding arguments, e.g. `count(ORDER BY a)`.
+    ///
+    /// [SQLite](https://www.sqlite.org/lang_aggfunc.html#aggorderby),
+    /// [DuckDB](https://duckdb.org/docs/current/sql/functions/aggregates#order-by-clause-in-aggregate-functions)
+    fn supports_aggregate_order_by_with_empty_args(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.
@@ -2264,6 +2389,7 @@ mod tests {
                 supports_order_by_all = true,
                 supports_nested_comments = true,
                 supports_triple_quoted_string = true,
+                ordered_bind_placeholder_style = Some(BindPlaceholderStyle::DollarNumbered),
             },
         );
         let dialect = EnhancedGenericDialect::new();
@@ -2271,6 +2397,10 @@ mod tests {
         assert!(dialect.supports_order_by_all());
         assert!(dialect.supports_nested_comments());
         assert!(dialect.supports_triple_quoted_string());
+        assert_eq!(
+            dialect.ordered_bind_placeholder_style(),
+            Some(BindPlaceholderStyle::DollarNumbered)
+        );
 
         let d: &dyn Dialect = &dialect;
         assert!(d.is::<GenericDialect>());
@@ -2301,6 +2431,27 @@ mod tests {
             let actual = dialect.identifier_quote_style(ident);
 
             assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn ordered_bind_placeholder_style() {
+        let tests: Vec<(&dyn Dialect, Option<BindPlaceholderStyle>)> = vec![
+            (&GenericDialect {}, None),
+            (&MySqlDialect {}, Some(BindPlaceholderStyle::QuestionMark)),
+            (
+                &PostgreSqlDialect {},
+                Some(BindPlaceholderStyle::DollarNumbered),
+            ),
+            (
+                &RedshiftSqlDialect {},
+                Some(BindPlaceholderStyle::DollarNumbered),
+            ),
+            (&SQLiteDialect {}, Some(BindPlaceholderStyle::QuestionMark)),
+        ];
+
+        for (dialect, expected) in tests {
+            assert_eq!(dialect.ordered_bind_placeholder_style(), expected);
         }
     }
 
@@ -2338,6 +2489,10 @@ mod tests {
 
             fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
                 self.0.identifier_quote_style(identifier)
+            }
+
+            fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+                self.0.ordered_bind_placeholder_style()
             }
 
             fn supports_string_literal_backslash_escape(&self) -> bool {
@@ -2406,6 +2561,10 @@ mod tests {
         let statement = r"SELECT 'Wayne\'s World'";
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
+        assert_eq!(
+            WrappedDialect(MySqlDialect {}).ordered_bind_placeholder_style(),
+            Some(BindPlaceholderStyle::QuestionMark)
+        );
         assert_eq!(res1.unwrap(), res2.unwrap());
     }
 }

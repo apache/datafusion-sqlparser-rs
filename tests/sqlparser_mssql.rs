@@ -75,7 +75,7 @@ fn parse_table_time_travel() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![]
+                index_directives: vec![]
             },
             joins: vec![]
         },]
@@ -495,7 +495,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_hints: vec![]
+                index_directives: vec![]
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -549,7 +549,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_hints: vec![]
+                index_directives: vec![]
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -603,7 +603,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_hints: vec![]
+                index_directives: vec![]
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -657,7 +657,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -691,7 +691,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -2668,6 +2668,12 @@ fn test_sql_keywords_as_table_aliases() {
             Err(ParserError::ParserError(err.to_owned()))
         );
     }
+}
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    ms().verified_stmt("SELECT * FROM limit");
+    ms().verified_stmt("SELECT * FROM t JOIN limit ON true");
 }
 
 #[test]

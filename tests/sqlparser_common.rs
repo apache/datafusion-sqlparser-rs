@@ -160,7 +160,9 @@ fn parse_insert_values() {
         expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
-        match verified_stmt(sql) {
+        let dialects =
+            all_dialects_where(|d| !expected_value_keyword || d.supports_singular_value_keyword());
+        match dialects.verified_stmt(sql) {
             Statement::Insert(Insert {
                 table: table_name,
                 columns,
@@ -192,6 +194,44 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_singular_value_keyword() {
+    let sql = "INSERT INTO t (a) VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_singular_value_keyword()).parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
+
+    // Dialects with `INSERT` table aliases consume `VALUE` as an alias without a column list.
+    let sql = "INSERT INTO t VALUE (1)";
+    all_dialects_where(|d| d.supports_singular_value_keyword()).verified_stmt(sql);
+    let without_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && !d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        without_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: VALUE".to_string()
+        ))
+    );
+    let with_table_alias = all_dialects_where(|d| {
+        !d.supports_singular_value_keyword() && d.supports_insert_table_alias()
+    });
+    assert_eq!(
+        with_table_alias.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: identifier, found: 1".to_string()
+        ))
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_singular_value_keyword());
+    dialects.verified_stmt("SELECT 1 UNION VALUE (2)");
+    dialects.verified_stmt("WITH c AS (VALUE (1)) SELECT * FROM c");
 }
 
 #[test]
@@ -602,7 +642,7 @@ fn parse_update_with_table_alias() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![],
                 },
@@ -704,7 +744,7 @@ fn parse_select_with_table_alias() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             joins: vec![],
         }]
@@ -910,7 +950,7 @@ fn parse_where_delete_with_alias_statement() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 },
                 from[0].relation,
             );
@@ -926,7 +966,7 @@ fn parse_where_delete_with_alias_statement() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![],
                 }]),
@@ -1218,10 +1258,10 @@ fn parse_select_wildcard() {
 
 #[test]
 fn parse_count_wildcard() {
-    verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
+    verified_only_select("SELECT COUNT(*) FROM orders WHERE id = 10");
 
     verified_only_select(
-        "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
+        "SELECT COUNT(Employee.*) FROM orders JOIN Employee ON orders.employee = Employee.id",
     );
 }
 
@@ -2386,6 +2426,37 @@ fn parse_ilike() {
 }
 
 #[test]
+fn parse_tilde_like_match_operators() {
+    let like_match = all_dialects_where(|d| d.supports_tilde_like_match_operator());
+    for (op, expected) in [
+        ("~~", BinaryOperator::PGLikeMatch),
+        ("~~*", BinaryOperator::PGILikeMatch),
+        ("!~~", BinaryOperator::PGNotLikeMatch),
+        ("!~~*", BinaryOperator::PGNotILikeMatch),
+    ] {
+        let select = like_match.verified_only_select(&format!("SELECT a {op} b"));
+        assert_eq!(
+            select.projection[0],
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: expected,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            })
+        );
+    }
+    assert_eq!(
+        like_match.parse_sql_statements("SELECT ~~a"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: ~~".to_string()
+        ))
+    );
+
+    let bitwise_not = all_dialects_where(|d| !d.supports_tilde_like_match_operator());
+    bitwise_not.one_statement_parses_to("SELECT ~~a", "SELECT ~ ~ a");
+    bitwise_not.one_statement_parses_to("SELECT ~~~a", "SELECT ~ ~ ~ a");
+}
+
+#[test]
 fn parse_like() {
     fn chk(negated: bool) {
         let sql = &format!(
@@ -2621,8 +2692,10 @@ fn parse_in_error() {
     // <expr> IN <expr> is no valid, except in dialects that accept an
     // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res =
-        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+    let res = all_dialects_except(|d| {
+        d.supports_in_unparenthesized_expr() || d.supports_in_table_expression()
+    })
+    .parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
@@ -2639,6 +2712,130 @@ fn parse_in_unparenthesized_expr() {
     // The branch must not fire when the next token is `(` (regressions).
     dialects.verified_expr("x IN (1, 2, 3)");
     dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
+}
+
+#[test]
+fn parse_in_table_expression() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for sql in [
+        "SELECT a IN t FROM t",
+        "SELECT a NOT IN t FROM t",
+        "SELECT a IN main.t FROM t",
+        "SELECT a IN f() FROM t",
+        "SELECT a NOT IN f(1, 2) FROM t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    match dialects.verified_expr("a IN main.f(1)") {
+        Expr::In {
+            target:
+                InTarget::Table {
+                    name,
+                    args: Some(args),
+                },
+            negated: false,
+            global: false,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "main.f");
+            assert_eq!(args.len(), 1);
+        }
+        other => panic!("expected an IN table target, got {other:?}"),
+    }
+    dialects.verified_stmt("SELECT a IN (1, 2) FROM t");
+    dialects.verified_stmt("SELECT a IN (SELECT b FROM u) FROM t");
+}
+
+/// Malformed table and table-function targets of `IN` keep their precise
+/// parse errors.
+#[test]
+fn parse_in_table_expression_malformed_targets() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for (sql, expected) in [
+        // A dangling dot leaves the qualified name without its last part.
+        ("SELECT a IN t.", "Expected: identifier, found: EOF"),
+        // A trailing comma leaves the next argument without an expression.
+        ("SELECT a IN f(x,)", "Expected: an expression, found: )"),
+        // The argument list never closes its parenthesis.
+        ("SELECT a IN f(1, 2", "Expected: ), found: EOF"),
+    ] {
+        assert_eq!(
+            ParserError::ParserError(expected.to_string()),
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            "{sql}"
+        );
+    }
+}
+
+/// Display of an `IN` table target propagates formatter errors from the
+/// name and the argument list writes.
+#[test]
+fn display_in_table_target_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let plain = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: None,
+    };
+    let mut writer = RejectingWriter('t');
+    assert_eq!(write!(writer, "{plain}"), Err(fmt::Error));
+
+    let function = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: Some(vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+            Expr::value(number("1")),
+        ))]),
+    };
+    let mut writer = RejectingWriter('1');
+    assert_eq!(write!(writer, "{function}"), Err(fmt::Error));
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let stmts = Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let mut relations = vec![];
+        let _ = sqlparser::ast::visit_relations(&stmts, |relation| {
+            relations.push(relation.to_string());
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(relations, ["lookup", "source"], "{dialect:?}");
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_mut_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let mut stmts =
+            Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let _ = sqlparser::ast::visit_relations_mut(&mut stmts, |relation| {
+            if relation.to_string() == "lookup" {
+                *relation = ObjectName::from(Ident::new("renamed"));
+            }
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(
+            stmts[0].to_string(),
+            "SELECT a IN renamed FROM source",
+            "{dialect:?}"
+        );
+    }
 }
 
 #[test]
@@ -2806,6 +3003,66 @@ fn parse_between_with_expr() {
         },
         select.selection.unwrap(),
     )
+}
+
+#[test]
+fn parse_comparison_in_between_low_bound() {
+    let dialects = all_dialects_where(|d| d.supports_comparison_in_between_low_bound());
+    for (sql, expected) in [
+        ("a BETWEEN b > 1 AND c", BinaryOperator::Gt),
+        ("a BETWEEN b <> 1 AND c", BinaryOperator::NotEq),
+        ("a BETWEEN b + 1 >= 2 AND c", BinaryOperator::GtEq),
+    ] {
+        match dialects.verified_expr(sql) {
+            Expr::Between { low, .. } => assert!(
+                matches!(&*low, Expr::BinaryOp { op, .. } if *op == expected),
+                "{sql}: {low:?}"
+            ),
+            other => panic!("{sql}: expected BETWEEN, got {other:?}"),
+        }
+    }
+    for (sql, error) in [
+        (
+            "SELECT a BETWEEN b = 1 = true AND c",
+            "Expected: AND, found: =",
+        ),
+        (
+            "SELECT a BETWEEN b LIKE 'x' AND c",
+            "Expected: AND, found: LIKE",
+        ),
+        (
+            "SELECT a BETWEEN b IS NULL AND c",
+            "Expected: AND, found: IS",
+        ),
+        (
+            "SELECT a BETWEEN b BETWEEN 1 AND 2 AND c",
+            "Expected: AND, found: BETWEEN",
+        ),
+        (
+            "SELECT a BETWEEN (1 AND 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
+        (
+            "SELECT a BETWEEN b = (1, 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_except(|d| {
+            d.supports_comparison_in_between_low_bound() || d.is::<SQLiteDialect>()
+        })
+        .parse_sql_statements("SELECT a BETWEEN b > 1 AND c"),
+        Err(ParserError::ParserError(
+            "Expected: AND, found: >".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -3864,6 +4121,28 @@ fn parse_agg_with_order_by() {
     ] {
         supported_dialects.verified_stmt(sql);
     }
+}
+
+#[test]
+fn parse_aggregate_order_by_with_empty_args() {
+    let dialects = all_dialects_where(|d| d.supports_aggregate_order_by_with_empty_args());
+    dialects.verified_stmt("SELECT count(ORDER BY a) FROM t");
+    dialects.verified_stmt("SELECT count(ORDER BY a ASC, b DESC) FROM t");
+    dialects.verified_stmt("SELECT count(ALL ORDER BY a) FROM t");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT count(DISTINCT ORDER BY a) FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: BY".to_string()
+        ))
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_aggregate_order_by_with_empty_args())
+            .parse_sql_statements("SELECT count(ORDER BY a) FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: BY".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -5680,6 +5959,154 @@ fn parse_bad_constraint() {
 }
 
 #[test]
+fn parse_sequence_options_in_any_order() {
+    // The sequence options form an unordered list, so every permutation below
+    // is accepted and round-trips in the order written.
+    let dialects = all_dialects();
+    for sql in [
+        "CREATE SEQUENCE sa START WITH 1 INCREMENT BY 1",
+        "CREATE SEQUENCE sb INCREMENT BY 1 START WITH 1",
+        "CREATE SEQUENCE sc CACHE 1 START WITH 1",
+        "CREATE SEQUENCE sd CYCLE INCREMENT BY 2",
+        "CREATE SEQUENCE se NO MAXVALUE NO MINVALUE NO CYCLE INCREMENT 1",
+        "CREATE SEQUENCE sf AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+        "CREATE SEQUENCE sg START WITH 1 AS BIGINT",
+        "CREATE SEQUENCE sh OWNED BY t.c START WITH 5",
+        "CREATE SEQUENCE si OWNED BY NONE INCREMENT BY 2",
+        "CREATE SEQUENCE sj CACHE 1 AS BIGINT OWNED BY a.b START WITH 3",
+        "CREATE SEQUENCE sk OWNED BY none.c",
+        "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY ( START WITH 10 INCREMENT BY 1 CYCLE ))",
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( CACHE 2 INCREMENT 1 )",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    // This is what `pg_dump -s` emits for a table with a SERIAL column.
+    dialects.one_statement_parses_to(
+        r#"CREATE SEQUENCE public.accounts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1"#,
+        "CREATE SEQUENCE public.accounts_id_seq AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+    );
+
+    // The parsed options keep the order they were written in, and `OWNED BY NONE`
+    // is distinct from being owned by something called `NONE`.
+    let Statement::CreateSequence {
+        sequence_options, ..
+    } = dialects.verified_stmt("CREATE SEQUENCE sk CACHE 1 OWNED BY NONE AS BIGINT INCREMENT BY 3")
+    else {
+        panic!("expected a CREATE SEQUENCE statement");
+    };
+    assert!(matches!(
+        sequence_options.as_slice(),
+        [
+            SequenceOptions::Cache(_),
+            SequenceOptions::OwnedBy(None),
+            SequenceOptions::DataType(DataType::BigInt(None)),
+            SequenceOptions::IncrementBy(_, true),
+        ]
+    ));
+
+    for (sql, expected) in [
+        // Each option may appear only once.
+        (
+            "CREATE SEQUENCE s START WITH 1 START 2",
+            "START specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s INCREMENT 1 INCREMENT BY 2",
+            "INCREMENT specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s MINVALUE 1 NO MINVALUE",
+            "MINVALUE | NO MINVALUE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s MAXVALUE 1 NO MAXVALUE",
+            "MAXVALUE | NO MAXVALUE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s CACHE 1 CACHE 2",
+            "CACHE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s CYCLE NO CYCLE",
+            "CYCLE | NO CYCLE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s AS INT AS BIGINT",
+            "AS specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s OWNED BY a.b OWNED BY NONE",
+            "OWNED BY specified more than once",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (START 1 START 2))",
+            "START specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s AS",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "CREATE SEQUENCE s OWNED BY",
+            "Expected: identifier, found: EOF",
+        ),
+        // Identity columns take the shared list without `AS` and `OWNED BY`.
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (AS BIGINT))",
+            "Expected: ), found: AS",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (OWNED BY t.id))",
+            "Expected: ), found: OWNED",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn sequence_options_reject_non_numeric_values() {
+    let dialects = all_dialects();
+    for (sql, expected) in [
+        (
+            "CREATE SEQUENCE s MINVALUE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s MAXVALUE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s START WITH x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s CACHE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED BY DEFAULT AS IDENTITY (MINVALUE x))",
+            "Expected: a concrete value, found: x",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
 fn parse_scalar_function_in_projection() {
     let names = vec!["sqrt", "foo"];
 
@@ -6953,11 +7380,43 @@ fn parse_text_type_modifier_double_colon_cast() {
             expr: Box::new(Expr::Identifier(Ident::new("ID"))),
             data_type: DataType::Custom(
                 ObjectName::from(vec![Ident::new("TEXT")]),
-                vec!["16777216".to_string()]
+                vec![TypeModifier::Number("16777216".to_string(), false)]
             ),
             format: None,
         }
     );
+}
+
+#[test]
+fn parse_custom_type_modifier_spellings() {
+    for sql in [
+        r#"CREATE TABLE t (c foo('a b'))"#,
+        r#"CREATE TABLE t (c foo(')'))"#,
+        r#"CREATE TABLE t (c foo('it''s'))"#,
+        "CREATE TABLE t (c foo(bar, 9))",
+    ] {
+        all_dialects().verified_stmt(sql);
+    }
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    generic.verified_stmt(r#"CREATE TABLE t (c foo("quoted"))"#);
+    generic.verified_stmt("CREATE TABLE t (c foo(9L))");
+
+    let statements = generic
+        .parse_sql_statements("CREATE TABLE t (c foo(bar, 9, 'z', 42L))")
+        .unwrap();
+    let Statement::CreateTable(create_table) = &statements[0] else {
+        panic!("expected CREATE TABLE")
+    };
+    let DataType::Custom(_, modifiers) = &create_table.columns[0].data_type else {
+        panic!("expected a custom type")
+    };
+    let expected = vec![
+        TypeModifier::Identifier(Ident::new("bar")),
+        TypeModifier::Number("9".to_string(), false),
+        TypeModifier::String("z".to_string()),
+        TypeModifier::Number("42".to_string(), true),
+    ];
+    assert_eq!(modifiers, &expected);
 }
 
 #[test]
@@ -7764,7 +8223,7 @@ fn parse_joins_on() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -7906,7 +8365,7 @@ fn parse_joins_using() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
@@ -8001,7 +8460,7 @@ fn parse_natural_join() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -8393,12 +8852,25 @@ fn parse_multiple_statements() {
     // ensure that SELECT/WITH is not parsed as a table or column alias if ';'
     // separating the statements is omitted:
     test_with("SELECT foo FROM baz", "SELECT", " bar");
-    test_with("SELECT foo", "WITH", " cte AS (SELECT 1 AS s) SELECT bar");
-    test_with(
-        "SELECT foo FROM baz",
-        "WITH",
-        " cte AS (SELECT 1 AS s) SELECT bar",
-    );
+    // WITH is a valid alias in SQLite so missing-semicolon detection skips it
+    for sql1 in ["SELECT foo", "SELECT foo FROM baz"] {
+        let cte_rest = " cte AS (SELECT 1 AS s) SELECT bar";
+        let res = parse_sql_statements(&(sql1.to_owned() + ";WITH" + cte_rest));
+        assert_eq!(
+            vec![
+                one_statement_parses_to(sql1, ""),
+                one_statement_parses_to(&("WITH".to_owned() + cte_rest), ""),
+            ],
+            res.unwrap()
+        );
+        one_statement_parses_to(&(sql1.to_owned() + ";"), sql1);
+        let res = all_dialects_except(|d| d.is::<SQLiteDialect>())
+            .parse_sql_statements(&(sql1.to_owned() + " WITH" + cte_rest));
+        assert_eq!(
+            ParserError::ParserError("Expected: end of statement, found: WITH".to_string()),
+            res.unwrap_err()
+        );
+    }
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
     // Since MySQL supports the `CREATE TABLE SELECT` syntax, this needs to be handled separately
@@ -9244,7 +9716,8 @@ fn parse_fetch() {
     });
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
+    let ast = all_dialects_except(|d| d.is::<SQLiteDialect>())
+        .verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
     assert_eq!(
@@ -10051,6 +10524,57 @@ fn test_create_index_with_with_clause() {
 }
 
 #[test]
+fn parse_create_index_operator_class_before_sort_options() {
+    let dialects = all_dialects();
+    dialects.verified_stmt("CREATE INDEX ii ON t(c)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c ops)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c DESC)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c ops DESC)");
+    dialects.verified_stmt("CREATE INDEX ii ON t(c ops DESC NULLS FIRST)");
+
+    let statements = dialects
+        .parse_sql_statements("CREATE INDEX ii ON t(c ops DESC)")
+        .unwrap();
+    let Statement::CreateIndex(create_index) = &statements[0] else {
+        panic!("expected CREATE INDEX")
+    };
+    let column = &create_index.columns[0];
+    assert_eq!(column.column.expr, Expr::Identifier(Ident::new("c")));
+    assert_eq!(
+        column.operator_class,
+        Some(ObjectName::from(vec![Ident::new("ops")]))
+    );
+    assert_eq!(column.column.options.sort, Some(OrderBySort::Desc));
+}
+
+#[test]
+fn display_index_column_propagates_expression_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statements = all_dialects()
+        .parse_sql_statements("CREATE INDEX ii ON t(c ops DESC)")
+        .unwrap();
+    let Statement::CreateIndex(create_index) = &statements[0] else {
+        panic!("expected CREATE INDEX")
+    };
+    let column = &create_index.columns[0];
+    let mut writer = RejectingWriter('c');
+    assert_eq!(write!(writer, "{column}"), Err(fmt::Error));
+}
+
+#[test]
 fn parse_create_index_async() {
     verified_stmt("CREATE INDEX ASYNC my_index ON my_table(col1)");
     verified_stmt("CREATE UNIQUE INDEX ASYNC my_index ON my_table(col1)");
@@ -10458,7 +10982,7 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 }
             );
             assert_eq!(table, table_no_into);
@@ -11935,7 +12459,7 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -12015,7 +12539,7 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             }),
             aggregate_functions: vec![
                 ExprWithAlias {
@@ -12101,7 +12625,7 @@ fn parse_unpivot_table() {
             with_ordinality: false,
             json_path: None,
             sample: None,
-            index_hints: vec![],
+            index_directives: vec![],
         }),
         null_inclusion: None,
         value: Expr::Identifier(Ident::new("quantity")),
@@ -12306,23 +12830,26 @@ fn parse_select_table_with_index_hints() {
     let s = supported_dialects.verified_only_select(
         "SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a",
     );
-    if let TableFactor::Table { index_hints, .. } = &s.from[0].relation {
+    if let TableFactor::Table {
+        index_directives, ..
+    } = &s.from[0].relation
+    {
         assert_eq!(
             vec![
-                TableIndexHints {
+                TableIndexDirective::MySql(TableIndexHints {
                     hint_type: TableIndexHintType::Use,
                     index_names: vec!["i1".into()],
                     index_type: TableIndexType::Index,
                     for_clause: None,
-                },
-                TableIndexHints {
+                }),
+                TableIndexDirective::MySql(TableIndexHints {
                     hint_type: TableIndexHintType::Ignore,
                     index_names: vec!["i2".into()],
                     index_type: TableIndexType::Index,
                     for_clause: Some(TableIndexHintForClause::OrderBy),
-                },
+                }),
             ],
-            *index_hints
+            *index_directives
         );
     } else {
         panic!("Expected TableFactor::Table");
@@ -12357,7 +12884,7 @@ fn parse_select_table_with_index_hints() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             joins: vec![],
         }]
@@ -12386,7 +12913,7 @@ fn parse_pivot_unpivot_table() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 }),
                 null_inclusion: None,
                 value: Expr::Identifier(Ident::new("population")),
@@ -15187,6 +15714,168 @@ fn test_alter_policy() {
 }
 
 #[test]
+fn test_alter_trigger() {
+    match verified_stmt("ALTER TRIGGER old_trigger ON my_table RENAME TO new_trigger") {
+        Statement::AlterTrigger(AlterTrigger {
+            name,
+            table_name,
+            operation,
+        }) => {
+            assert_eq!(name.to_string(), "old_trigger");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::Rename {
+                    new_name: Ident::new("new_trigger")
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ALTER TRIGGER my_trigger ON my_table DEPENDS ON EXTENSION my_extension") {
+        Statement::AlterTrigger(AlterTrigger { operation, .. }) => {
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::DependsOnExtension {
+                    no: false,
+                    extension_name: ObjectName::from(Ident::new("my_extension"))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ALTER TRIGGER my_trigger ON my_table NO DEPENDS ON EXTENSION my_extension")
+    {
+        Statement::AlterTrigger(AlterTrigger { operation, .. }) => {
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::DependsOnExtension {
+                    no: true,
+                    extension_name: ObjectName::from(Ident::new("my_extension"))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // a qualified table name is preserved
+    verified_stmt("ALTER TRIGGER my_trigger ON my_schema.my_table RENAME TO new_trigger");
+
+    // an operation is required
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: RENAME, DEPENDS or NO DEPENDS after ALTER TRIGGER, found: EOF"
+    );
+    // missing TO in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table RENAME")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: EOF"
+    );
+    // missing new name in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table RENAME TO")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+    // NO must be followed by DEPENDS
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table NO EXTENSION my_extension")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: DEPENDS after NO, found: EXTENSION"
+    );
+    // missing the extension name
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table DEPENDS ON EXTENSION")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_alter_trigger_rejects_malformed_statements() {
+    for (sql, expected) in [
+        ("ALTER TRIGGER", "Expected: identifier, found: EOF"),
+        ("ALTER TRIGGER t", "Expected: ON, found: EOF"),
+        ("ALTER TRIGGER t ON", "Expected: identifier, found: EOF"),
+        ("ALTER TRIGGER t ON tbl DEPENDS", "Expected: ON, found: EOF"),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+        );
+    }
+}
+
+#[test]
+fn display_alter_trigger_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = verified_stmt("ALTER TRIGGER t ON tbl NO DEPENDS ON EXTENSION ext");
+    let mut writer = RejectingWriter("NO ");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_alter_trigger_spans() {
+    let dialects = all_dialects();
+    for (sql, end) in [
+        (
+            "ALTER TRIGGER trg ON t RENAME TO trg2",
+            Location::new(1, 38),
+        ),
+        (
+            "ALTER TRIGGER trg ON t DEPENDS ON EXTENSION ext",
+            Location::new(1, 48),
+        ),
+    ] {
+        for dialect in &dialects.dialects {
+            let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+            assert_eq!(
+                statements[0].span(),
+                Span::new(Location::new(1, 15), end),
+                "{dialect:?} {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn parse_alter_rejects_missing_or_unknown_object_type() {
+    let objects = "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
+    for (sql, found) in [
+        ("ALTER", "EOF"),
+        ("ALTER 1", "1"),
+        ("ALTER unknown", "unknown"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("Expected: {objects}, found: {found}")),
+        );
+    }
+}
+
+#[test]
 fn test_create_connector() {
     let sql = "CREATE CONNECTOR my_connector \
                TYPE 'jdbc' \
@@ -16208,6 +16897,87 @@ fn test_keywords_as_column_names_after_dot() {
         }
         _ => panic!("Expected CompoundIdentifier for T.case"),
     }
+}
+
+#[test]
+fn parse_period_underscore_after_whitespace() {
+    let dialects = all_dialects_where(|d| d.is_identifier_start('_'));
+    dialects.verified_stmt("SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t ._a FROM t", "SELECT t._a FROM t");
+    dialects.one_statement_parses_to("SELECT t . _a FROM t", "SELECT t._a FROM t");
+
+    let no_expression =
+        || ParserError::ParserError("Expected: an expression, found: .".to_string());
+    for (sql, error) in [
+        ("SELECT ._abc", no_expression()),
+        ("SELECT ._123", no_expression()),
+        (
+            "SELECT 1 ._a",
+            ParserError::TokenizerError(
+                "Unexpected character '_' at Line: 1, Column: 10".to_string(),
+            ),
+        ),
+    ] {
+        assert_eq!(dialects.parse_sql_statements(sql), Err(error), "{sql}");
+    }
+}
+
+#[test]
+fn tokenize_long_whitespace_run_completes() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let request_id = "tokenize-long-whitespace-run";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT{}t._a FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = Tokenizer::new(&GenericDialect {}, &sql)
+            .tokenize_with_location()
+            .map(drop);
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name should tokenize");
+}
+
+#[test]
+fn tokenize_long_whitespace_run_in_comment_hint_completes() {
+    use core::time::Duration;
+    use std::sync::mpsc;
+    use std::thread;
+
+    let request_id = "tokenize-long-whitespace-run-in-comment-hint";
+    let timeout = Duration::from_secs(5);
+    let sql = format!("SELECT /*!{}t ._a */ FROM t", " ".repeat(1024 * 1024));
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = [&GenericDialect {} as &dyn Dialect, &MySqlDialect {}]
+            .into_iter()
+            .try_for_each(|dialect| {
+                Tokenizer::new(dialect, &sql)
+                    .tokenize_with_location()
+                    .map(drop)
+            });
+        let _ = tx.send((request_id, result));
+    });
+
+    let (response_id, result) = rx
+        .recv_timeout(timeout)
+        .expect("hint tokenizer exceeded the whitespace-run deadline");
+    assert_eq!(response_id, request_id);
+    result.expect("whitespace-separated qualified name in hint should tokenize");
+}
+
+#[test]
+fn parse_qualified_underscore_column_from_comment_hint() {
+    let dialects = all_dialects_where(|d| d.supports_multiline_comment_hints());
+    dialects.one_statement_parses_to("SELECT t /*!50110 ._col */ FROM t", "SELECT t._col FROM t");
 }
 
 #[test]
@@ -17998,8 +18768,8 @@ fn parse_pipeline_operator_negative_tests() {
         ),
         // Test that JOIN without table name fails
         (
-            "SELECT * FROM users |> JOIN ON users.id = orders.user_id",
-            "Expected: end of statement, found: .",
+            "SELECT * FROM users |> JOIN",
+            "Expected: identifier, found: EOF",
         ),
         // Test that CROSS JOIN with ON condition fails
         (
@@ -18232,7 +19002,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18245,7 +19015,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -18299,7 +19069,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18312,7 +19082,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
@@ -18366,7 +19136,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18379,7 +19149,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
@@ -18433,7 +19203,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18446,7 +19216,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
@@ -18500,7 +19270,7 @@ fn test_nested_join_without_parentheses() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18513,7 +19283,7 @@ fn test_nested_join_without_parentheses() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::FullOuter(JoinConstraint::On(
@@ -20488,6 +21258,29 @@ fn parse_hex_string_literal_display_escaping() {
 }
 
 #[test]
+fn on_keyword_rejected_as_table_name() {
+    let dialects = all_dialects_where(|d| !d.is_table_factor(&Keyword::ON, &mut Parser::new(d)));
+    for sql in [
+        "SELECT * FROM ON",
+        "SELECT * FROM t JOIN ON",
+        "SELECT * FROM t JOIN ON u ON TRUE",
+    ] {
+        assert_eq!(
+            ParserError::ParserError("Expected: table name, found: ON".to_string()),
+            dialects.parse_sql_statements(sql).unwrap_err()
+        );
+    }
+}
+
+#[test]
+fn quoted_on_allowed_as_table_name() {
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('"'));
+    dialects.verified_stmt(r#"SELECT * FROM "ON""#);
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('`'));
+    dialects.verified_stmt("SELECT * FROM `ON`");
+}
+
+#[test]
 fn parse_stage_table_factor() {
     let supported = all_dialects_where(|d| d.supports_stages());
     supported.verified_stmt("SELECT * FROM @stage");
@@ -20500,6 +21293,228 @@ fn parse_stage_table_factor() {
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
+}
+
+#[test]
+fn parse_create_rule() {
+    let sql = "CREATE RULE r AS ON DELETE TO docs DO INSTEAD NOTHING";
+    match all_dialects().verified_stmt(sql) {
+        Statement::CreateRule(CreateRule {
+            or_replace,
+            name,
+            event,
+            table_name,
+            condition,
+            do_kind,
+            action,
+        }) => {
+            assert!(!or_replace);
+            assert_eq!(name.to_string(), "r");
+            assert_eq!(event, CreateRuleEvent::Delete);
+            assert_eq!(table_name.to_string(), "docs");
+            assert!(condition.is_none());
+            assert_eq!(do_kind, Some(CreateRuleDoKind::Instead));
+            assert_eq!(action, CreateRuleAction::Nothing);
+        }
+        _ => unreachable!("Expected CREATE RULE"),
+    }
+
+    all_dialects().verified_stmt("CREATE OR REPLACE RULE r AS ON SELECT TO t DO ALSO NOTHING");
+    all_dialects().verified_stmt("CREATE RULE r AS ON INSERT TO s1.t DO NOTHING");
+    all_dialects().verified_stmt(
+        "CREATE RULE r AS ON UPDATE TO t WHERE quantity > 100 DO ALSO INSERT INTO audit (id) VALUES (1)",
+    );
+    all_dialects().verified_stmt(
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (UPDATE t2 SET deleted = 1 WHERE id = 1; DELETE FROM t3)",
+    );
+
+    // A trailing semicolon inside a parenthesized action list is accepted and
+    // normalized away.
+    all_dialects().one_statement_parses_to(
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (DELETE FROM t2;)",
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (DELETE FROM t2)",
+    );
+
+    // invalid event
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON TRUNCATE TO t DO NOTHING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: one of SELECT or INSERT or UPDATE or DELETE, found: TRUNCATE"
+    );
+
+    // missing DO clause
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON DELETE TO t")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: DO, found: EOF"
+    );
+
+    // missing table name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON DELETE DO NOTHING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: DO"
+    );
+}
+
+#[test]
+fn parse_create_rule_action_boundaries() {
+    let dialects = all_dialects();
+    let Statement::CreateRule(CreateRule {
+        action: CreateRuleAction::Statements(commands),
+        ..
+    }) = dialects.verified_stmt("CREATE RULE r AS ON INSERT TO t DO ()")
+    else {
+        panic!("expected a rule with a command list");
+    };
+    assert!(commands.is_empty());
+
+    let statements = dialects
+        .parse_sql_statements(
+            "CREATE RULE r AS ON INSERT TO t DO (;; INSERT INTO audit VALUES (1);; DELETE FROM pending;;); SELECT 9",
+        )
+        .unwrap();
+    assert_eq!(
+        statements.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        [
+            "CREATE RULE r AS ON INSERT TO t DO (INSERT INTO audit VALUES (1); DELETE FROM pending)",
+            "SELECT 9",
+        ]
+    );
+}
+
+#[test]
+fn parse_create_rule_invalid_components() {
+    let dialects = all_dialects();
+    for (sql, expected) in [
+        ("CREATE RULE", "Expected: identifier, found: EOF"),
+        (
+            "CREATE RULE r ON UPDATE TO t DO NOTHING",
+            "Expected: AS, found: ON",
+        ),
+        (
+            "CREATE RULE r AS UPDATE TO t DO NOTHING",
+            "Expected: ON, found: UPDATE",
+        ),
+        (
+            "CREATE RULE r AS ON 1 TO t DO NOTHING",
+            "Expected: one of SELECT or INSERT or UPDATE or DELETE, found: 1",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t WHERE (",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO",
+            "Expected: an SQL statement, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (BOGUS)",
+            "Expected: an SQL statement, found: BOGUS",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (SELECT 1 SELECT 2)",
+            "Expected: ), found: SELECT",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (SELECT 1",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(expected.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_rule_spans() {
+    let dialects = all_dialects();
+    for (sql, end) in [
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO NOTHING",
+            Location::new(1, 34),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t WHERE new.id > 0 DO NOTHING",
+            Location::new(1, 51),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO SELECT 1",
+            Location::new(1, 46),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO ()",
+            Location::new(1, 34),
+        ),
+        (
+            r#"CREATE RULE r AS ON UPDATE TO s.t
+WHERE old.id = new.id
+DO ALSO (
+  UPDATE audit SET id = new.id;
+  DELETE FROM archive WHERE id = old.id
+)"#,
+            Location::new(5, 40),
+        ),
+    ] {
+        for dialect in &dialects.dialects {
+            let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+            assert_eq!(
+                statements[0].span(),
+                Span::new(Location::new(1, 13), end),
+                "{dialect:?} {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn display_create_rule_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let dialects = all_dialects();
+    let statement = dialects.verified_stmt(
+        "CREATE OR REPLACE RULE r AS ON UPDATE TO t WHERE id > 0 DO ALSO (DELETE FROM audit)",
+    );
+    for rejected in ["CREATE ", "r", "UPDATE", "t", ">", " DO", "ALSO", "(", ")"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+    for (sql, rejected) in [
+        ("CREATE RULE r AS ON INSERT TO t DO NOTHING", "NOTHING"),
+        (
+            "CREATE RULE r AS ON DELETE TO t DO DELETE FROM audit",
+            "audit",
+        ),
+    ] {
+        let statement = dialects.verified_stmt(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
 }
 
 #[test]

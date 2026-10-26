@@ -221,6 +221,14 @@ fn parse_delimited_identifiers() {
 }
 
 #[test]
+fn parse_non_reserved_keyword_table_names() {
+    for table_name in ["into", "limit", "having", "where", "on"] {
+        clickhouse().verified_stmt(&format!("SELECT * FROM {table_name}"));
+        clickhouse().verified_stmt(&format!("SELECT * FROM t JOIN {table_name} ON true"));
+    }
+}
+
+#[test]
 fn parse_create_table() {
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY ("x")"#);
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY "x""#);
@@ -1990,7 +1998,7 @@ fn parse_object_type_parameter() {
             columns[0].data_type,
             DataType::Custom(
                 ObjectName::from(vec![Ident::new("Object")]),
-                vec!["json".to_string()]
+                vec![TypeModifier::String("json".to_string())]
             )
         );
 
@@ -2001,13 +2009,26 @@ fn parse_object_type_parameter() {
         );
     }
 
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o Object('json'))");
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT(city VARCHAR NOT NULL))");
 
     for (sql, modifiers) in [
-        ("CREATE TABLE t (o OBJECT(10))", vec!["10"]),
-        ("CREATE TABLE t (o OBJECT(foo))", vec!["foo"]),
-        ("CREATE TABLE t (o OBJECT(foo, bar))", vec!["foo", "bar"]),
+        (
+            "CREATE TABLE t (o OBJECT(10))",
+            vec![TypeModifier::Number("10".to_string(), false)],
+        ),
+        (
+            "CREATE TABLE t (o OBJECT(foo))",
+            vec![TypeModifier::Identifier(Ident::new("foo"))],
+        ),
+        (
+            "CREATE TABLE t (o OBJECT(foo, bar))",
+            vec![
+                TypeModifier::Identifier(Ident::new("foo")),
+                TypeModifier::Identifier(Ident::new("bar")),
+            ],
+        ),
     ] {
         for dialects in [
             clickhouse(),
@@ -2023,10 +2044,7 @@ fn parse_object_type_parameter() {
                 columns[0].data_type,
                 DataType::Custom(
                     ObjectName::from(vec![Ident::new("OBJECT")]),
-                    modifiers
-                        .iter()
-                        .map(|modifier| (*modifier).to_owned())
-                        .collect(),
+                    modifiers.clone()
                 )
             );
 

@@ -20,7 +20,7 @@ use alloc::boxed::Box;
 
 use crate::{
     ast::{BinaryOperator, Expr, LockTable, LockTableType, Statement},
-    dialect::{Dialect, Precedence},
+    dialect::{BindPlaceholderStyle, Dialect, Precedence},
     keywords::Keyword,
     parser::{Parser, ParserError},
     tokenizer::Token,
@@ -74,6 +74,10 @@ impl Dialect for MySqlDialect {
         Some('`')
     }
 
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::QuestionMark)
+    }
+
     // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
@@ -97,6 +101,10 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
+    fn supports_singular_value_keyword(&self) -> bool {
         true
     }
 

@@ -241,6 +241,16 @@ fn parse_flush() {
 }
 
 #[test]
+fn parse_flush_preserves_keyword_table_names() {
+    for sql in [
+        "FLUSH TABLES handler WITH READ LOCK",
+        "FLUSH TABLES validator WITH READ LOCK",
+    ] {
+        mysql_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_show_columns() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
@@ -2794,7 +2804,7 @@ fn parse_update_with_joins() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2807,7 +2817,7 @@ fn parse_update_with_joins() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {

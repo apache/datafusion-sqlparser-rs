@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::dialect::{Dialect, Precedence};
+use crate::dialect::{BindPlaceholderStyle, Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -232,6 +232,10 @@ impl Dialect for PostgreSqlDialect {
         Some('"')
     }
 
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::DollarNumbered)
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' // Postgres does not support backticks to quote identifiers
     }
@@ -412,6 +416,14 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-comment.html>
     fn supports_comment_on(&self) -> bool {
         true
@@ -455,6 +467,10 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
+    fn supports_copy_from_stdin_data(&self) -> bool {
         true
     }
 

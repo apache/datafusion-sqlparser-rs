@@ -11405,3 +11405,60 @@ fn parse_non_decimal_integer_token_with_invalid_digits() {
         ParserError::ParserError("Could not parse '0xZZ' as an integer".to_string())
     );
 }
+
+#[test]
+fn parse_create_function_begin_atomic() {
+    let sql = "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateFunction(CreateFunction {
+            function_body:
+                Some(CreateFunctionBody::BeginAtomic(BeginEndStatements { statements, .. })),
+            ..
+        }) => assert_eq!(statements, vec![pg_and_generic().verified_stmt("SELECT 1")]),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for sql in [
+        "CREATE FUNCTION f(a INT) RETURNS INT LANGUAGE sql IMMUTABLE BEGIN ATOMIC SELECT a; RETURN a + 1; END",
+        "CREATE OR REPLACE FUNCTION f(a INT) RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT CASE WHEN a > 0 THEN 1 END; END",
+        "CREATE FUNCTION f() RETURNS VOID LANGUAGE sql BEGIN ATOMIC END",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE OR REPLACE FUNCTION public.f(a integer)
+ RETURNS integer
+ LANGUAGE sql
+BEGIN ATOMIC
+ INSERT INTO t VALUES (a);
+ RETURN a;
+END"#,
+        "CREATE OR REPLACE FUNCTION public.f(a INTEGER) RETURNS INTEGER LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (a); RETURN a; END",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1 END",
+            "Expected: ;, found: END",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql RETURN 1 BEGIN ATOMIC SELECT 1; END",
+            "BEGIN ATOMIC specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN SELECT 1; END",
+            "Expected: end of statement, found: BEGIN",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}

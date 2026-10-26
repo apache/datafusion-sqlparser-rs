@@ -15,6 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
 use crate::{
     ast::{Expr, LockTable, LockTableType, LockTables, Statement},
     dialect::{BindPlaceholderStyle, Dialect, Precedence},

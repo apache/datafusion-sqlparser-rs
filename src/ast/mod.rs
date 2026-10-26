@@ -3758,12 +3758,12 @@ pub enum Statement {
     /// CREATE FOREIGN DATA WRAPPER
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
-    CreateForeignDataWrapper(CreateForeignDataWrapper),
+    CreateForeignDataWrapper(Box<CreateForeignDataWrapper>),
     /// ```sql
     /// CREATE USER MAPPING
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createusermapping.html)
-    CreateUserMapping(CreateUserMapping),
+    CreateUserMapping(Box<CreateUserMapping>),
     /// ```sql
     /// CREATE POLICY
     /// ```
@@ -3773,7 +3773,7 @@ pub enum Statement {
     /// CREATE RULE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrule.html)
-    CreateRule(CreateRule),
+    CreateRule(Box<CreateRule>),
     /// ```sql
     /// CREATE CONNECTOR
     /// ```
@@ -3869,7 +3869,7 @@ pub enum Statement {
     /// ALTER TRIGGER <NAME> ON <TABLE NAME> <OPERATION>
     /// ```
     /// (Postgresql-specific)
-    AlterTrigger(AlterTrigger),
+    AlterTrigger(Box<AlterTrigger>),
     /// ```sql
     /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
     /// or
@@ -4182,7 +4182,7 @@ pub enum Statement {
     /// ```sql
     /// GRANT roles TO grantees
     /// ```
-    GrantRole(GrantRole),
+    GrantRole(Box<GrantRole>),
     /// ```sql
     /// DENY privileges ON object TO grantees
     /// ```
@@ -4194,7 +4194,7 @@ pub enum Statement {
     /// ```sql
     /// REVOKE roles FROM grantees
     /// ```
-    RevokeRole(RevokeRole),
+    RevokeRole(Box<RevokeRole>),
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
     /// ```
@@ -4432,7 +4432,7 @@ pub enum Statement {
     /// REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] name [ WITH [ NO ] DATA ]
     /// ```
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html)
-    RefreshMaterializedView(RefreshMaterializedView),
+    RefreshMaterializedView(Box<RefreshMaterializedView>),
 }
 
 /// Payload of [`Statement::Install`].
@@ -13329,7 +13329,7 @@ impl From<ResetStatement> for Statement {
 
 impl From<RefreshMaterializedView> for Statement {
     fn from(r: RefreshMaterializedView) -> Self {
-        Self::RefreshMaterializedView(r)
+        Self::RefreshMaterializedView(Box::new(r))
     }
 }
 

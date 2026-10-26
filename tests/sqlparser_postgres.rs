@@ -914,8 +914,8 @@ fn parse_create_extension() {
         "CREATE EXTENSION extension_name SCHEMA schema_name",
     ] {
         match pg_and_generic().verified_stmt(sql) {
-            Statement::CreateExtension(CreateExtension { schema, .. }) => {
-                assert_eq!(schema, Some(Ident::new("schema_name")));
+            Statement::CreateExtension(create_extension) => {
+                assert_eq!(create_extension.schema, Some(Ident::new("schema_name")));
             }
             other => panic!("unexpected statement: {other:?}"),
         }
@@ -11246,12 +11246,13 @@ fn parse_drop_group() {
         ),
     ] {
         match pg().verified_stmt(sql) {
-            Statement::Drop {
-                object_type,
-                if_exists,
-                names,
-                ..
-            } => {
+            Statement::Drop(drop) => {
+                let DropStatement {
+                    object_type,
+                    if_exists,
+                    names,
+                    ..
+                } = *drop;
                 assert_eq!(object_type, ObjectType::Group);
                 assert_eq_vec(&expected_names, &names);
                 assert_eq!(if_exists, expected_if_exists);
@@ -11281,7 +11282,7 @@ fn foreign_data_wrapper_display_and_span() {
         quote_style: None,
         span: Span::new(Location::new(1, start), Location::new(1, end)),
     };
-    let stmt = Statement::CreateForeignDataWrapper(CreateForeignDataWrapper {
+    let stmt = Statement::CreateForeignDataWrapper(Box::new(CreateForeignDataWrapper {
         name: ident("myfdw", 29, 34),
         routines: vec![
             ForeignDataWrapperRoutineClause::Handler(ObjectName::from(ident("myhandler", 43, 52))),
@@ -11301,7 +11302,7 @@ fn foreign_data_wrapper_display_and_span() {
                 span: Span::new(Location::new(1, 114), Location::new(1, 120)),
             },
         }]),
-    });
+    }));
 
     assert_eq!(
         stmt.to_string(),
@@ -11342,12 +11343,11 @@ fn operator_function_display_preserves_empty_operator_types() {
 #[test]
 fn parse_alter_operator_family_order_by_followed_by_search() {
     let sql = r#"ALTER OPERATOR FAMILY my_ops USING gist ADD OPERATOR 1 < (INT4, INT4) FOR ORDER BY sort_schema."sort family", OPERATOR 2 > (INT4, INT4) FOR SEARCH"#;
-    let Statement::AlterOperatorFamily(AlterOperatorFamily {
-        operation: AlterOperatorFamilyOperation::Add { items },
-        ..
-    }) = pg_and_generic().verified_stmt(sql)
-    else {
+    let Statement::AlterOperatorFamily(alter) = pg_and_generic().verified_stmt(sql) else {
         panic!("Expected ALTER OPERATOR FAMILY");
+    };
+    let AlterOperatorFamilyOperation::Add { items } = alter.operation else {
+        panic!("Expected ADD items");
     };
     assert_eq!(
         items,
@@ -11393,12 +11393,12 @@ fn parse_role_signed_connection_limit() {
             "ALTER ROLE a CONNECTION LIMIT -1",
             "ALTER ROLE a WITH CONNECTION LIMIT -1",
         ),
-        Statement::AlterRole {
+        Statement::AlterRole(Box::new(AlterRole {
             name: Ident::new("a"),
             operation: AlterRoleOperation::WithOptions {
                 options: vec![RoleOption::ConnectionLimit(minus_one)],
             },
-        }
+        }))
     );
     pg().verified_stmt("ALTER ROLE a WITH CONNECTION LIMIT +5");
 
@@ -11418,12 +11418,13 @@ fn parse_role_signed_connection_limit() {
 
 #[test]
 fn parse_create_table_column_unique_nulls_distinct() {
-    let Statement::CreateTable(CreateTable { columns, .. }) = pg_and_generic().verified_stmt(
+    let Statement::CreateTable(create_table) = pg_and_generic().verified_stmt(
         "CREATE TABLE t (u INT UNIQUE NULLS NOT DISTINCT, v INT UNIQUE NULLS DISTINCT, w INT UNIQUE)",
     ) else {
         panic!("Expected CREATE TABLE");
     };
-    let nulls_distinct: Vec<_> = columns
+    let nulls_distinct: Vec<_> = create_table
+        .columns
         .iter()
         .map(|column| match &column.options[..] {
             [ColumnOptionDef {
@@ -11529,14 +11530,15 @@ fn parse_alter_table_attach_partition_of() {
 #[test]
 fn parse_drop_foreign_table() {
     match pg_and_generic().verified_stmt("DROP FOREIGN TABLE IF EXISTS ft, public.other CASCADE") {
-        Statement::Drop {
-            object_type,
-            if_exists,
-            names,
-            cascade,
-            restrict,
-            ..
-        } => {
+        Statement::Drop(drop) => {
+            let DropStatement {
+                object_type,
+                if_exists,
+                names,
+                cascade,
+                restrict,
+                ..
+            } = *drop;
             assert_eq!(object_type, ObjectType::ForeignTable);
             assert!(if_exists);
             assert_eq!(
@@ -11581,12 +11583,13 @@ fn parse_drop_foreign_table() {
 #[test]
 fn parse_comment_on_foreign_table() {
     match pg_and_generic().verified_stmt("COMMENT ON FOREIGN TABLE public.ft IS 'remote orders'") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment,
-            if_exists,
-        } => {
+        Statement::Comment(comment) => {
+            let CommentStatement {
+                object_type,
+                object_name,
+                comment,
+                if_exists,
+            } = *comment;
             assert_eq!(object_type, CommentObject::ForeignTable);
             assert_eq!(
                 object_name,
@@ -11707,10 +11710,10 @@ fn parse_create_function_begin_atomic() {
     let sql = "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END";
     pg_and_generic().verified_stmt(sql);
     match pg_and_generic().run_parser_method(sql, |parser| parser.parse_statement().unwrap()) {
-        Statement::CreateFunction(CreateFunction {
-            function_body: Some(CreateFunctionBody::BeginAtomic(body)),
-            ..
-        }) => {
+        Statement::CreateFunction(create_function) => {
+            let Some(CreateFunctionBody::BeginAtomic(body)) = &create_function.function_body else {
+                unreachable!()
+            };
             assert_eq!(
                 body.statements,
                 vec![pg_and_generic().verified_stmt("SELECT 1")]
@@ -11978,21 +11981,24 @@ fn parse_storage_parameters_without_value() {
     match dialects
         .verified_stmt("CREATE VIEW v WITH (security_invoker = true, security_barrier) AS SELECT 1")
     {
-        Statement::CreateView(CreateView { options, .. }) => assert_eq!(
-            options,
+        Statement::CreateView(create_view) => assert_eq!(
+            create_view.options,
             CreateTableOptions::With(vec![key_value.clone(), bare.clone()])
         ),
         _ => unreachable!(),
     }
     match dialects.verified_stmt("CREATE TABLE t (a INT) WITH (security_barrier)") {
-        Statement::CreateTable(CreateTable { table_options, .. }) => {
-            assert_eq!(table_options, CreateTableOptions::With(vec![bare.clone()]))
+        Statement::CreateTable(create_table) => {
+            assert_eq!(
+                create_table.table_options,
+                CreateTableOptions::With(vec![bare.clone()])
+            )
         }
         _ => unreachable!(),
     }
     match dialects.verified_stmt("ALTER TABLE t SET (security_barrier, security_invoker = true)") {
-        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
-            operations,
+        Statement::AlterTable(alter_table) => assert_eq!(
+            alter_table.operations,
             [AlterTableOperation::SetOptionsParens {
                 options: vec![bare, key_value],
             }]
@@ -12035,10 +12041,16 @@ fn parse_namespaced_storage_parameters() {
     }];
 
     match pg().verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)") {
-        Statement::CreateTable(CreateTable {
-            table_options: CreateTableOptions::With(options),
-            ..
-        }) => assert_eq!(options, expected),
+        Statement::CreateTable(create_table) => {
+            let CreateTable {
+                table_options: CreateTableOptions::With(options),
+                ..
+            } = *create_table
+            else {
+                panic!("expected CREATE TABLE WITH options")
+            };
+            assert_eq!(options, expected)
+        }
         _ => unreachable!(),
     }
 
@@ -12134,8 +12146,8 @@ fn parse_table_inheritance_markers() {
         ("UPDATE t * SET id = 1", descendants),
     ] {
         match pg_and_generic().verified_stmt(sql) {
-            Statement::Update(Update { table, .. }) => {
-                assert_relation(&table.relation, "t", None, inheritance)
+            Statement::Update(update) => {
+                assert_relation(&update.table.relation, "t", None, inheritance)
             }
             other => panic!("expected an update, got {other:?}"),
         }
@@ -12147,10 +12159,13 @@ fn parse_table_inheritance_markers() {
         ("DELETE FROM t *", descendants),
     ] {
         match pg_and_generic().verified_stmt(sql) {
-            Statement::Delete(Delete {
-                from: FromTable::WithFromKeyword(from),
-                ..
-            }) => assert_relation(&from[0].relation, "t", None, inheritance),
+            Statement::Delete(delete) => {
+                let Delete { from, .. } = *delete;
+                let FromTable::WithFromKeyword(from) = from else {
+                    unreachable!()
+                };
+                assert_relation(&from[0].relation, "t", None, inheritance)
+            }
             other => panic!("expected a delete, got {other:?}"),
         }
     }
@@ -12222,7 +12237,7 @@ fn parse_create_user_mapping() {
     };
     assert_eq!(
         stmt,
-        CreateUserMapping {
+        Box::new(CreateUserMapping {
             if_not_exists: false,
             user: UserMappingUser::Name(Ident::new("app")),
             server_name: Ident::new("s"),
@@ -12236,7 +12251,7 @@ fn parse_create_user_mapping() {
                     value: Ident::with_quote('\'', "secret"),
                 },
             ]),
-        }
+        })
     );
 
     for (sql, user) in [
@@ -12348,15 +12363,18 @@ fn parse_namespaced_storage_parameters_without_value() {
     ]));
 
     match dialects.verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled)") {
-        Statement::CreateTable(CreateTable { table_options, .. }) => {
-            assert_eq!(table_options, CreateTableOptions::With(vec![bare.clone()]))
+        Statement::CreateTable(create_table) => {
+            assert_eq!(
+                create_table.table_options,
+                CreateTableOptions::With(vec![bare.clone()])
+            )
         }
         _ => unreachable!(),
     }
 
     match dialects.verified_stmt("ALTER TABLE t SET (toast.autovacuum_enabled, fillfactor = 70)") {
-        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
-            operations,
+        Statement::AlterTable(alter_table) => assert_eq!(
+            alter_table.operations,
             [AlterTableOperation::SetOptionsParens {
                 options: vec![
                     bare,

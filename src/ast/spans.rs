@@ -3514,10 +3514,16 @@ SETTINGS update_parallel_mode = 'auto'"#;
         let sql = "CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)";
         let mut test = SpanTest::new(dialect, sql);
         let options = match test.0.parse_statement().unwrap() {
-            Statement::CreateTable(crate::ast::CreateTable {
-                table_options: crate::ast::CreateTableOptions::With(options),
-                ..
-            }) => options,
+            Statement::CreateTable(create_table) => {
+                let crate::ast::CreateTable {
+                    table_options: crate::ast::CreateTableOptions::With(options),
+                    ..
+                } = *create_table
+                else {
+                    panic!("expected CREATE TABLE WITH options")
+                };
+                options
+            }
             stmt => panic!("expected CREATE TABLE WITH, got {stmt:?}"),
         };
         assert_eq!(

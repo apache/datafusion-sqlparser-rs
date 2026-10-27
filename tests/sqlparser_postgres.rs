@@ -11014,3 +11014,46 @@ fn parse_alter_operator_family_order_by_followed_by_search() {
         ]
     );
 }
+
+#[test]
+fn parse_role_signed_connection_limit() {
+    let minus_one = Expr::UnaryOp {
+        op: UnaryOperator::Minus,
+        expr: Box::new(Expr::value(number("1"))),
+    };
+
+    match pg().verified_stmt("CREATE ROLE a CONNECTION LIMIT -1") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.connection_limit.as_ref(), Some(&minus_one));
+        }
+        _ => unreachable!(),
+    }
+    pg().verified_stmt("CREATE ROLE a CONNECTION LIMIT +5");
+
+    assert_eq!(
+        pg().one_statement_parses_to(
+            "ALTER ROLE a CONNECTION LIMIT -1",
+            "ALTER ROLE a WITH CONNECTION LIMIT -1",
+        ),
+        Statement::AlterRole {
+            name: Ident::new("a"),
+            operation: AlterRoleOperation::WithOptions {
+                options: vec![RoleOption::ConnectionLimit(minus_one)],
+            },
+        }
+    );
+    pg().verified_stmt("ALTER ROLE a WITH CONNECTION LIMIT +5");
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE ROLE a CONNECTION LIMIT -'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: literal number, found: 'x'"
+    );
+    assert_eq!(
+        pg().parse_sql_statements("ALTER ROLE a CONNECTION LIMIT -'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: option, found: CONNECTION"
+    );
+}

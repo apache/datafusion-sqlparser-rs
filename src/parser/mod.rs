@@ -7227,7 +7227,7 @@ impl<'a> Parser<'a> {
                     if connection_limit.is_some() {
                         parser_err!("Found multiple CONNECTION LIMIT", loc)
                     } else {
-                        connection_limit = Some(Expr::Value(self.parse_number_value()?));
+                        connection_limit = Some(self.parse_number()?);
                         Ok(())
                     }
                 }

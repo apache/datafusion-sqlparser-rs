@@ -8946,7 +8946,7 @@ impl<'a> Parser<'a> {
             let already_set = match keyword {
                 Keyword::SCHEMA => schema.replace(self.parse_identifier()?).is_some(),
                 Keyword::VERSION => version.replace(self.parse_identifier()?).is_some(),
-                _ => std::mem::replace(&mut cascade, true),
+                _ => core::mem::replace(&mut cascade, true),
             };
             if already_set {
                 return parser_err!(format!("{keyword:?} specified more than once"), loc);

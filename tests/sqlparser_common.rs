@@ -22851,3 +22851,30 @@ fn parse_grant_on_tables_named_after_object_types() {
         verified_stmt(&format!("GRANT SELECT ON {name}.t TO r"));
     }
 }
+
+#[test]
+fn parse_alter_table_reset_options() {
+    match alter_table_op(verified_stmt(
+        "ALTER TABLE tab RESET (fillfactor, autovacuum_enabled)",
+    )) {
+        AlterTableOperation::ResetOptions { options } => {
+            assert_eq!(
+                options,
+                [Ident::new("fillfactor"), Ident::new("autovacuum_enabled")]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, expected) in [
+        ("ALTER TABLE tab RESET ()", "Expected: identifier, found: )"),
+        ("ALTER TABLE tab RESET (a = 1)", "Expected: ), found: ="),
+        ("ALTER TABLE tab RESET a", "Expected: (, found: a"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

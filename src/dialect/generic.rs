@@ -141,6 +141,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_sql_option_without_value(&self) -> bool {
+        true
+    }
+
     fn supports_explain_with_utility_options(&self) -> bool {
         true
     }

@@ -535,3 +535,39 @@ impl From<Revoke> for crate::ast::Statement {
         crate::ast::Statement::Revoke(v)
     }
 }
+
+/// `GRANT role [, ...] TO grantee [, ...] [GRANTED BY grantor]`
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-grant.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct GrantRole {
+    /// Roles whose membership is granted.
+    pub roles: Vec<Ident>,
+    /// Roles receiving the membership.
+    pub grantees: Vec<Grantee>,
+    /// Optional `GRANTED BY` identifier.
+    pub granted_by: Option<Ident>,
+}
+
+impl fmt::Display for GrantRole {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "GRANT {} TO {}",
+            display_comma_separated(&self.roles),
+            display_comma_separated(&self.grantees)
+        )?;
+        if let Some(granted_by) = &self.granted_by {
+            write!(f, " GRANTED BY {granted_by}")?;
+        }
+        Ok(())
+    }
+}
+
+impl From<GrantRole> for crate::ast::Statement {
+    fn from(v: GrantRole) -> Self {
+        crate::ast::Statement::GrantRole(v)
+    }
+}

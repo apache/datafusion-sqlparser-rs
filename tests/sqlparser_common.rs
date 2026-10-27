@@ -22386,3 +22386,31 @@ fn parse_grant_function_signature() {
         ParserError::ParserError("Expected: ), found: EOF".to_string())
     );
 }
+
+#[test]
+fn parse_grant_role() {
+    let role_grantee = |name: &str| Grantee {
+        grantee_type: GranteesType::None,
+        name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+            name,
+        )]))),
+    };
+
+    let sql = "GRANT bypasser, auditor TO anon, authenticated GRANTED BY admin";
+    assert_eq!(
+        all_dialects().verified_stmt(sql),
+        Statement::GrantRole(GrantRole {
+            roles: vec![Ident::new("bypasser"), Ident::new("auditor")],
+            grantees: vec![role_grantee("anon"), role_grantee("authenticated")],
+            granted_by: Some(Ident::new("admin")),
+        })
+    );
+
+    all_dialects().verified_stmt("GRANT bypasser TO anon");
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT bypasser ON t TO anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a privilege keyword, found: bypasser".to_string())
+    );
+}

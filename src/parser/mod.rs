@@ -712,7 +712,11 @@ impl<'a> Parser<'a> {
                 Keyword::SET => self.parse_set(),
                 Keyword::SHOW => self.parse_show(),
                 Keyword::USE => self.parse_use(),
-                Keyword::GRANT => self.parse_grant().map(Into::into),
+                Keyword::GRANT => self.parse_privileges_or_roles(
+                    Keyword::TO,
+                    Parser::parse_grant,
+                    Parser::parse_grant_role,
+                ),
                 Keyword::DENY => {
                     self.prev_token();
                     self.parse_deny()
@@ -18439,6 +18443,47 @@ impl<'a> Parser<'a> {
             granted_by,
             current_grants,
         })
+    }
+
+    /// Parse a `GRANT` of role membership, after the `GRANT` keyword.
+    pub fn parse_grant_role(&mut self) -> Result<GrantRole, ParserError> {
+        let roles = self.parse_comma_separated(Parser::parse_identifier)?;
+        self.expect_keyword_is(Keyword::TO)?;
+        let grantees = self.parse_grantees()?;
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        Ok(GrantRole {
+            roles,
+            grantees,
+            granted_by,
+        })
+    }
+
+    /// Parses a statement body with `privileges`, and with `roles` instead when that fails and
+    /// the body opens with a role list followed by `keyword`.
+    fn parse_privileges_or_roles<P: Into<Statement>, R: Into<Statement>>(
+        &mut self,
+        keyword: Keyword,
+        privileges: fn(&mut Self) -> Result<P, ParserError>,
+        roles: fn(&mut Self) -> Result<R, ParserError>,
+    ) -> Result<Statement, ParserError> {
+        let index = self.index;
+        let privileges_err = match privileges(self) {
+            Ok(statement) => return Ok(statement.into()),
+            Err(err) => err,
+        };
+        self.index = index;
+        let is_role_list = self.parse_comma_separated(Parser::parse_identifier).is_ok()
+            && self.parse_keyword(keyword);
+        self.index = index;
+        if is_role_list {
+            roles(self).map(Into::into)
+        } else {
+            Err(privileges_err)
+        }
     }
 
     fn parse_grantees(&mut self) -> Result<Vec<Grantee>, ParserError> {

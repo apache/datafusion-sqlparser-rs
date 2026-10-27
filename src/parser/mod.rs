@@ -12129,20 +12129,80 @@ impl<'a> Parser<'a> {
 
     /// Parse an `ALTER VIEW` statement.
     pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
 
-        let with_options = self.parse_options(Keyword::WITH)?;
+        let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterViewOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterViewOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(|parser| {
+                let key = ObjectName::from(parser.parse_identifier()?);
+                Ok(if parser.consume_token(&Token::Eq) {
+                    SqlOption::KeyValue {
+                        key,
+                        value: parser.parse_expr()?,
+                    }
+                } else {
+                    SqlOption::Ident(key)
+                })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            AlterViewOperation::SetOptions { options }
+        } else if self.parse_keyword(Keyword::RESET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_identifier)?;
+            self.expect_token(&Token::RParen)?;
+            AlterViewOperation::ResetOptions { options }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterViewOperation::RenameTo {
+                new_name: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keyword(Keyword::RENAME) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let old_column_name = self.parse_identifier()?;
+            self.expect_keyword_is(Keyword::TO)?;
+            AlterViewOperation::RenameColumn {
+                old_column_name,
+                new_column_name: self.parse_identifier()?,
+            }
+        } else if self.parse_keyword(Keyword::ALTER) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let column_name = self.parse_identifier()?;
+            let op = if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
+                AlterColumnOperation::SetDefault {
+                    value: self.parse_expr()?,
+                }
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
+                AlterColumnOperation::DropDefault
+            } else {
+                return self.expected_ref(
+                    "SET DEFAULT or DROP DEFAULT after ALTER COLUMN",
+                    self.peek_token_ref(),
+                );
+            };
+            AlterViewOperation::AlterColumn { column_name, op }
+        } else {
+            let columns = self.parse_parenthesized_column_list(Optional, false)?;
+            let with_options = self.parse_options(Keyword::WITH)?;
+            self.expect_keyword_is(Keyword::AS)?;
+            AlterViewOperation::As {
+                columns,
+                query: self.parse_query()?,
+                with_options,
+            }
+        };
 
-        self.expect_keyword_is(Keyword::AS)?;
-        let query = self.parse_query()?;
-
-        Ok(Statement::AlterView {
+        Ok(AlterView {
             name,
-            columns,
-            query,
-            with_options,
-        })
+            if_exists,
+            operation,
+        }
+        .into())
     }
 
     /// Parse a [Statement::AlterType]

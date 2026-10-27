@@ -5668,13 +5668,18 @@ fn parse_alter_index() {
 fn parse_alter_view() {
     let sql = "ALTER VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterView {
             name,
-            columns,
-            query,
-            with_options,
-        } => {
+            if_exists,
+            operation:
+                AlterViewOperation::As {
+                    columns,
+                    query,
+                    with_options,
+                },
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
+            assert!(!if_exists);
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert_eq!(with_options, vec![]);
@@ -5687,7 +5692,10 @@ fn parse_alter_view() {
 fn parse_alter_view_with_options() {
     let sql = "ALTER VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::AlterView { with_options, .. } => {
+        Statement::AlterView(AlterView {
+            operation: AlterViewOperation::As { with_options, .. },
+            ..
+        }) => {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
@@ -5712,13 +5720,18 @@ fn parse_alter_view_with_options() {
 fn parse_alter_view_with_columns() {
     let sql = "ALTER VIEW v (has, cols) AS SELECT 1, 2";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterView {
             name,
-            columns,
-            query,
-            with_options,
-        } => {
+            if_exists,
+            operation:
+                AlterViewOperation::As {
+                    columns,
+                    query,
+                    with_options,
+                },
+        }) => {
             assert_eq!("v", name.to_string());
+            assert!(!if_exists);
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert_eq!(with_options, vec![]);

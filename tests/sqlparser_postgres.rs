@@ -12147,6 +12147,105 @@ fn parse_create_user_mapping() {
 }
 
 #[test]
+fn parse_alter_view_postgres() {
+    let operation = |sql: &str| match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterView(AlterView { operation, .. }) => operation,
+        stmt => panic!("Expected ALTER VIEW, got {stmt:?}"),
+    };
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER VIEW IF EXISTS s.v OWNER TO o"),
+        Statement::AlterView(AlterView {
+            name: ObjectName::from(vec![Ident::new("s"), Ident::new("v")]),
+            if_exists: true,
+            operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("o"))),
+        })
+    );
+    assert_eq!(
+        operation("ALTER VIEW v OWNER TO CURRENT_USER"),
+        AlterViewOperation::OwnerTo(Owner::CurrentUser)
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET (security_invoker = true, security_barrier)"),
+        AlterViewOperation::SetOptions {
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("security_invoker"),
+                    value: Expr::Value(Value::Boolean(true).with_empty_span()),
+                },
+                SqlOption::Ident(Ident::new("security_barrier")),
+            ],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RESET (security_invoker, check_option)"),
+        AlterViewOperation::ResetOptions {
+            options: vec![Ident::new("security_invoker"), Ident::new("check_option")],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c SET DEFAULT 1"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::SetDefault {
+                value: Expr::value(number("1")),
+            },
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c DROP DEFAULT"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::DropDefault,
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME COLUMN a TO b"),
+        AlterViewOperation::RenameColumn {
+            old_column_name: Ident::new("a"),
+            new_column_name: Ident::new("b"),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME TO w"),
+        AlterViewOperation::RenameTo {
+            new_name: ObjectName::from(vec![Ident::new("w")]),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET SCHEMA s"),
+        AlterViewOperation::SetSchema {
+            schema_name: ObjectName::from(vec![Ident::new("s")]),
+        }
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "ALTER VIEW v ALTER c DROP DEFAULT",
+        "ALTER VIEW v ALTER COLUMN c DROP DEFAULT",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "ALTER VIEW v RENAME a TO b",
+        "ALTER VIEW v RENAME COLUMN a TO b",
+    );
+
+    for (sql, expected) in [
+        ("ALTER VIEW v SET ()", "Expected: identifier, found: )"),
+        ("ALTER VIEW v RESET (a = 1)", "Expected: ), found: ="),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET NOT NULL",
+            "Expected: SET DEFAULT or DROP DEFAULT after ALTER COLUMN, found: SET",
+        ),
+        ("ALTER VIEW v RENAME COLUMN a", "Expected: TO, found: EOF"),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn display_create_user_mapping_propagates_formatter_errors() {
     use core::fmt::{self, Write};
 

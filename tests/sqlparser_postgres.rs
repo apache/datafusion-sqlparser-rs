@@ -11057,3 +11057,41 @@ fn parse_role_signed_connection_limit() {
         "sql parser error: Expected: option, found: CONNECTION"
     );
 }
+
+#[test]
+fn parse_create_table_column_unique_nulls_distinct() {
+    let Statement::CreateTable(CreateTable { columns, .. }) = pg_and_generic().verified_stmt(
+        "CREATE TABLE t (u INT UNIQUE NULLS NOT DISTINCT, v INT UNIQUE NULLS DISTINCT, w INT UNIQUE)",
+    ) else {
+        panic!("Expected CREATE TABLE");
+    };
+    let nulls_distinct: Vec<_> = columns
+        .iter()
+        .map(|column| match &column.options[..] {
+            [ColumnOptionDef {
+                option: ColumnOption::Unique(constraint),
+                ..
+            }] => &constraint.nulls_distinct,
+            options => panic!("Expected one UNIQUE option, got {options:?}"),
+        })
+        .collect();
+    assert_eq!(
+        nulls_distinct,
+        vec![
+            &NullsDistinctOption::NotDistinct,
+            &NullsDistinctOption::Distinct,
+            &NullsDistinctOption::None,
+        ]
+    );
+
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (u INT CONSTRAINT k UNIQUE NULLS NOT DISTINCT DEFERRABLE NOT NULL)",
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("CREATE TABLE t (u INT UNIQUE NULLS NOT)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: DISTINCT, found: )".to_string())
+    );
+}

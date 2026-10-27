@@ -22341,3 +22341,48 @@ fn parse_delimited_identifiers() {
         _ => panic!("Expected ExprWithAlias"),
     }
 }
+
+#[test]
+fn parse_grant_function_signature() {
+    let objects = |sql: &str| match verified_stmt(sql) {
+        Statement::Grant(grant) => grant.objects,
+        Statement::Revoke(revoke) => revoke.objects,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+    let function = |args| FunctionDesc {
+        name: ObjectName::from(vec![Ident::new("f")]),
+        args,
+    };
+
+    assert_eq!(
+        objects("GRANT EXECUTE ON FUNCTION f() TO bob"),
+        Some(GrantObjects::Functions(vec![function(Some(vec![]))]))
+    );
+    assert_eq!(
+        objects("GRANT EXECUTE ON FUNCTION f TO bob"),
+        Some(GrantObjects::Functions(vec![function(None)]))
+    );
+    assert_eq!(
+        objects("REVOKE ALL ON PROCEDURE f(IN p_id UUID, INT) FROM bob"),
+        Some(GrantObjects::Procedures(vec![function(Some(vec![
+            OperateFunctionArg {
+                mode: Some(ArgMode::In),
+                name: Some(Ident::new("p_id")),
+                data_type: DataType::Uuid,
+                default_expr: None,
+            },
+            OperateFunctionArg::unnamed(DataType::Int(None)),
+        ]))]))
+    );
+
+    verified_stmt("REVOKE ALL ON FUNCTION public.f(p_id UUID) FROM bob");
+    verified_stmt("GRANT EXECUTE ON FUNCTION f(INOUT x TEXT), s.g, h() TO bob");
+    verified_stmt("GRANT USAGE ON PROCEDURE p(OUT INT), q TO ROLE role1");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT EXECUTE ON FUNCTION f(INT")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: EOF".to_string())
+    );
+}

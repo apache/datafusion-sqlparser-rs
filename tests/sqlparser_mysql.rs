@@ -1028,7 +1028,7 @@ fn parse_create_table_auto_increment_offset() {
             };
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("AUTO_INCREMENT"),
+                key: Ident::new("AUTO_INCREMENT").into(),
                 value: Expr::Value(test_utils::number("123").with_empty_span())
             }));
         }
@@ -1065,7 +1065,7 @@ fn parse_create_table_multiple_options_order_independent() {
                 )));
 
                 assert!(plain_options.contains(&SqlOption::KeyValue {
-                    key: Ident::new("KEY_BLOCK_SIZE"),
+                    key: Ident::new("KEY_BLOCK_SIZE").into(),
                     value: Expr::Value(test_utils::number("8").with_empty_span())
                 }));
 
@@ -1073,7 +1073,7 @@ fn parse_create_table_multiple_options_order_independent() {
                     .contains(&SqlOption::Comment(CommentDef::WithEq("abc".to_owned()))));
 
                 assert!(plain_options.contains(&SqlOption::KeyValue {
-                    key: Ident::new("ROW_FORMAT"),
+                    key: Ident::new("ROW_FORMAT").into(),
                     value: Expr::Identifier(Ident::new("DYNAMIC".to_owned()))
                 }));
             }
@@ -1109,91 +1109,91 @@ fn parse_create_table_with_all_table_options() {
             )));
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("COLLATE"),
+                key: Ident::new("COLLATE").into(),
                 value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("DEFAULT CHARSET"),
+                key: Ident::new("DEFAULT CHARSET").into(),
                 value: Expr::Identifier(Ident::new("utf8mb4".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("AUTO_INCREMENT"),
+                key: Ident::new("AUTO_INCREMENT").into(),
                 value: Expr::value(test_utils::number("123"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("KEY_BLOCK_SIZE"),
+                key: Ident::new("KEY_BLOCK_SIZE").into(),
                 value: Expr::value(test_utils::number("8"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("ROW_FORMAT"),
+                key: Ident::new("ROW_FORMAT").into(),
                 value: Expr::Identifier(Ident::new("DYNAMIC".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("PACK_KEYS"),
+                key: Ident::new("PACK_KEYS").into(),
                 value: Expr::value(test_utils::number("1"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("STATS_AUTO_RECALC"),
+                key: Ident::new("STATS_AUTO_RECALC").into(),
                 value: Expr::value(test_utils::number("1"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("STATS_PERSISTENT"),
+                key: Ident::new("STATS_PERSISTENT").into(),
                 value: Expr::value(test_utils::number("0"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("STATS_SAMPLE_PAGES"),
+                key: Ident::new("STATS_SAMPLE_PAGES").into(),
                 value: Expr::value(test_utils::number("128"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("STATS_SAMPLE_PAGES"),
+                key: Ident::new("STATS_SAMPLE_PAGES").into(),
                 value: Expr::value(test_utils::number("128"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("INSERT_METHOD"),
+                key: Ident::new("INSERT_METHOD").into(),
                 value: Expr::Identifier(Ident::new("FIRST".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("COMPRESSION"),
+                key: Ident::new("COMPRESSION").into(),
                 value: Expr::value(Value::SingleQuotedString("ZLIB".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("ENCRYPTION"),
+                key: Ident::new("ENCRYPTION").into(),
                 value: Expr::value(Value::SingleQuotedString("Y".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("MAX_ROWS"),
+                key: Ident::new("MAX_ROWS").into(),
                 value: Expr::value(test_utils::number("10000"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("MIN_ROWS"),
+                key: Ident::new("MIN_ROWS").into(),
                 value: Expr::value(test_utils::number("10"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("AUTOEXTEND_SIZE"),
+                key: Ident::new("AUTOEXTEND_SIZE").into(),
                 value: Expr::value(test_utils::number("64"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("AVG_ROW_LENGTH"),
+                key: Ident::new("AVG_ROW_LENGTH").into(),
                 value: Expr::value(test_utils::number("128"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("CHECKSUM"),
+                key: Ident::new("CHECKSUM").into(),
                 value: Expr::value(test_utils::number("1"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("CONNECTION"),
+                key: Ident::new("CONNECTION").into(),
                 value: Expr::value(Value::SingleQuotedString("mysql://localhost".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("ENGINE_ATTRIBUTE"),
+                key: Ident::new("ENGINE_ATTRIBUTE").into(),
                 value: Expr::value(Value::SingleQuotedString("primary".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("PASSWORD"),
+                key: Ident::new("PASSWORD").into(),
                 value: Expr::value(Value::SingleQuotedString("secure_password".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("SECONDARY_ENGINE_ATTRIBUTE"),
+                key: Ident::new("SECONDARY_ENGINE_ATTRIBUTE").into(),
                 value: Expr::value(Value::SingleQuotedString("secondary_attr".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::Ident(Ident::new(
@@ -1219,11 +1219,11 @@ fn parse_create_table_with_all_table_options() {
             )));
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("DATA DIRECTORY"),
+                key: Ident::new("DATA DIRECTORY").into(),
                 value: Expr::value(Value::SingleQuotedString("/var/lib/mysql/data".to_owned()))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("INDEX DIRECTORY"),
+                key: Ident::new("INDEX DIRECTORY").into(),
                 value: Expr::value(Value::SingleQuotedString("/var/lib/mysql/index".to_owned()))
             }));
         }
@@ -1289,7 +1289,7 @@ fn parse_create_table_engine_default_charset() {
             };
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("DEFAULT CHARSET"),
+                key: Ident::new("DEFAULT CHARSET").into(),
                 value: Expr::Identifier(Ident::new("utf8mb3".to_owned()))
             }));
 
@@ -1331,7 +1331,7 @@ fn parse_create_table_collate() {
             };
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("COLLATE"),
+                key: Ident::new("COLLATE").into(),
                 value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
             }));
         }
@@ -1357,7 +1357,7 @@ fn parse_create_table_both_options_and_as_query() {
             };
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
-                key: Ident::new("COLLATE"),
+                key: Ident::new("COLLATE").into(),
                 value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
             }));
 

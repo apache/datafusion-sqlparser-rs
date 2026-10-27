@@ -9926,7 +9926,10 @@ impl<'a> Parser<'a> {
             None => Expr::Identifier(self.parse_identifier()?),
         };
 
-        Ok(Some(SqlOption::KeyValue { key, value }))
+        Ok(Some(SqlOption::KeyValue {
+            key: key.into(),
+            value,
+        }))
     }
 
     /// Parse plain options.
@@ -11116,10 +11119,14 @@ impl<'a> Parser<'a> {
                 {
                     return Ok(SqlOption::Ident(name));
                 }
+                let mut key = vec![name];
+                while self.consume_token(&Token::Period) {
+                    key.push(self.parse_identifier()?);
+                }
                 self.expect_token(&Token::Eq)?;
                 let value = self.parse_expr()?;
 
-                Ok(SqlOption::KeyValue { key: name, value })
+                Ok(SqlOption::KeyValue { key: key.into(), value })
             }
         }
     }

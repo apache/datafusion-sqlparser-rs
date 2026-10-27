@@ -9156,9 +9156,10 @@ pub enum SqlOption {
     /// Any option that consists of a key value pair where the value is an expression. e.g.
     ///
     ///   WITH(DISTRIBUTION = ROUND_ROBIN)
+    ///   WITH (toast.autovacuum_enabled = false)
     KeyValue {
-        /// The option key identifier.
-        key: Ident,
+        /// The option key.
+        key: ObjectName,
         /// The expression value for the option.
         value: Expr,
     },

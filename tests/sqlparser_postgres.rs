@@ -497,15 +497,15 @@ fn parse_create_table_with_defaults() {
                 with_options,
                 vec![
                     SqlOption::KeyValue {
-                        key: "fillfactor".into(),
+                        key: Ident::new("fillfactor").into(),
                         value: Expr::value(number("20"))
                     },
                     SqlOption::KeyValue {
-                        key: "user_catalog_table".into(),
+                        key: Ident::new("user_catalog_table").into(),
                         value: Expr::Value((Value::Boolean(true)).with_empty_span())
                     },
                     SqlOption::KeyValue {
-                        key: "autovacuum_vacuum_threshold".into(),
+                        key: Ident::new("autovacuum_vacuum_threshold").into(),
                         value: Expr::value(number("100"))
                     },
                 ]
@@ -1080,11 +1080,11 @@ fn parse_create_collation() {
             name: ObjectName::from(vec![Ident::new("test3")]),
             definition: CreateCollationDefinition::Options(vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("provider"),
+                    key: Ident::new("provider").into(),
                     value: Expr::Identifier(Ident::new("icu")),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("lc_collate"),
+                    key: Ident::new("lc_collate").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("en_US.utf8".to_string()).with_empty_span(),
                     ),
@@ -1112,11 +1112,11 @@ fn parse_create_collation() {
             name: ObjectName::from(vec![Ident::new("testx")]),
             definition: CreateCollationDefinition::Options(vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("provider"),
+                    key: Ident::new("provider").into(),
                     value: Expr::Identifier(Ident::new("icu")),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("locale"),
+                    key: Ident::new("locale").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("nonsense-nowhere".to_string()).with_empty_span(),
                     ),
@@ -6868,13 +6868,13 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ],
@@ -11855,6 +11855,41 @@ fn parse_storage_parameters_without_value() {
             .parse_sql_statements("ALTER TABLE t SET TBLPROPERTIES (fillfactor 70)")
             .unwrap_err(),
         ParserError::ParserError("Expected: =, found: 70".to_string())
+fn parse_namespaced_storage_parameters() {
+    let expected = vec![SqlOption::KeyValue {
+        key: ObjectName::from(vec![Ident::new("toast"), Ident::new("autovacuum_enabled")]),
+        value: Expr::Value(Value::Boolean(false).with_empty_span()),
+    }];
+
+    match pg().verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)") {
+        Statement::CreateTable(CreateTable {
+            table_options: CreateTableOptions::With(options),
+            ..
+        }) => assert_eq!(options, expected),
+        _ => unreachable!(),
+    }
+
+    match alter_table_op(
+        pg().verified_stmt("ALTER TABLE tab SET (toast.autovacuum_enabled = false)"),
+    ) {
+        AlterTableOperation::SetOptionsParens { options } => assert_eq!(options, expected),
+        _ => unreachable!(),
+    }
+
+    match pg().verified_stmt(
+        "CREATE MATERIALIZED VIEW m WITH (toast.autovacuum_enabled = false) AS SELECT 1",
+    ) {
+        Statement::CreateView(create_view) => {
+            assert_eq!(create_view.options, CreateTableOptions::With(expected))
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE t (a INT) WITH (toast. = false)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: ="
     );
 }
 

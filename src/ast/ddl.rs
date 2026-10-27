@@ -4849,11 +4849,16 @@ impl Spanned for AlterCollation {
     }
 }
 
-/// `ALTER VIEW` statement.
+/// `ALTER [ MATERIALIZED ] VIEW` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altermaterializedview.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterView {
+    /// Whether `MATERIALIZED` was specified. A materialized view's operation is never
+    /// [`AlterViewOperation::As`] or [`AlterViewOperation::AlterColumn`].
+    pub materialized: bool,
     /// View name being altered.
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -4977,7 +4982,11 @@ impl fmt::Display for AlterViewOperation {
 
 impl fmt::Display for AlterView {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ALTER VIEW ")?;
+        write!(f, "ALTER ")?;
+        if self.materialized {
+            write!(f, "MATERIALIZED ")?;
+        }
+        write!(f, "VIEW ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }

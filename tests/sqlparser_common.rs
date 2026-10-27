@@ -5669,6 +5669,7 @@ fn parse_alter_view() {
     let sql = "ALTER VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
         Statement::AlterView(AlterView {
+            materialized: false,
             name,
             if_exists,
             operation:
@@ -5723,6 +5724,7 @@ fn parse_alter_view_with_columns() {
     let sql = "ALTER VIEW v (has, cols) AS SELECT 1, 2";
     match verified_stmt(sql) {
         Statement::AlterView(AlterView {
+            materialized: false,
             name,
             if_exists,
             operation:
@@ -5752,6 +5754,7 @@ fn parse_alter_view_operations() {
     assert_eq!(
         verified_stmt("ALTER VIEW IF EXISTS s.v OWNER TO o"),
         Statement::AlterView(AlterView {
+            materialized: false,
             name: ObjectName::from(vec![Ident::new("s"), Ident::new("v")]),
             if_exists: true,
             operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("o"))),
@@ -5902,7 +5905,7 @@ fn display_alter_view_propagates_write_errors() {
     }
 
     let with_options = verified_stmt("ALTER VIEW IF EXISTS v WITH (x = 1) AS SELECT 1");
-    for rejected in ["ALTER VIEW ", "IF EXISTS ", "WITH ("] {
+    for rejected in ["ALTER ", "VIEW ", "IF EXISTS ", "WITH ("] {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(
             write!(writer, "{with_options}"),
@@ -5912,7 +5915,7 @@ fn display_alter_view_propagates_write_errors() {
     }
 
     let columns = verified_stmt("ALTER VIEW IF EXISTS v (zeta) AS SELECT 1");
-    for rejected in ["ALTER VIEW ", "IF EXISTS ", "("] {
+    for rejected in ["ALTER ", "VIEW ", "IF EXISTS ", "("] {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{columns}"), Err(fmt::Error), "{rejected:?}");
     }
@@ -16070,7 +16073,7 @@ fn parse_alter_trigger_spans() {
 
 #[test]
 fn parse_alter_rejects_missing_or_unknown_object_type() {
-    let objects = "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
+    let objects = "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
     for (sql, found) in [
         ("ALTER", "EOF"),
         ("ALTER 1", "1"),

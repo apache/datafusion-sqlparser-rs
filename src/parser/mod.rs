@@ -11847,7 +11847,11 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 self.parse_alter_schema()
             }
-            Keyword::VIEW => self.parse_alter_view(),
+            Keyword::VIEW => self.parse_alter_view(false),
+            Keyword::MATERIALIZED => {
+                self.expect_keyword_is(Keyword::VIEW)?;
+                self.parse_alter_view(true)
+            }
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
             Keyword::TABLE => self.parse_alter_table(false),
@@ -11895,7 +11899,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
                     self.peek_token_ref(),
                 )
             }
@@ -12159,8 +12163,8 @@ impl<'a> Parser<'a> {
         .into())
     }
 
-    /// Parse an `ALTER VIEW` statement.
-    pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {
+    /// Parse an `ALTER [ MATERIALIZED ] VIEW` statement.
+    pub fn parse_alter_view(&mut self, materialized: bool) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
 
@@ -12202,6 +12206,11 @@ impl<'a> Parser<'a> {
                 old_column_name,
                 new_column_name: self.parse_identifier()?,
             }
+        } else if materialized {
+            return self.expected_ref(
+                "OWNER TO, RENAME, SET or RESET after ALTER MATERIALIZED VIEW",
+                self.peek_token_ref(),
+            );
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN);
             let column_name = self.parse_identifier()?;
@@ -12230,6 +12239,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterView {
+            materialized,
             name,
             if_exists,
             operation,

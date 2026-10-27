@@ -58,8 +58,8 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo, TypeModifier,
 };
 pub use self::dcl::{
-    AlterRoleOperation, CreateRole, Grant, GrantRole, ResetConfig, Revoke, RoleOption,
-    SecondaryRoles, SetConfigValue, Use,
+    AlterRoleOperation, CreateRole, Grant, GrantRole, ResetConfig, Revoke, RoleGrantOption,
+    RoleGrantOptionValue, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
     AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,

@@ -22402,6 +22402,7 @@ fn parse_grant_role() {
         Statement::GrantRole(GrantRole {
             roles: vec![Ident::new("bypasser"), Ident::new("auditor")],
             grantees: vec![role_grantee("anon"), role_grantee("authenticated")],
+            options: vec![],
             granted_by: Some(Ident::new("admin")),
         })
     );
@@ -22459,4 +22460,44 @@ fn display_grant_role_propagates_formatter_errors() {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{grant}"), Err(fmt::Error), "{rejected}");
     }
+}
+
+#[test]
+fn parse_grant_role_options() {
+    let sql = "GRANT bypasser TO anon WITH ADMIN OPTION, INHERIT FALSE, SET TRUE GRANTED BY admin";
+    let Statement::GrantRole(GrantRole { options, .. }) = all_dialects().verified_stmt(sql) else {
+        panic!("Expected GRANT role");
+    };
+    assert_eq!(
+        options,
+        vec![
+            RoleGrantOption {
+                name: Ident::new("ADMIN"),
+                value: RoleGrantOptionValue::Option,
+            },
+            RoleGrantOption {
+                name: Ident::new("INHERIT"),
+                value: RoleGrantOptionValue::False,
+            },
+            RoleGrantOption {
+                name: Ident::new("SET"),
+                value: RoleGrantOptionValue::True,
+            },
+        ]
+    );
+
+    all_dialects().verified_stmt("GRANT bypasser TO anon WITH SET FALSE");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT bypasser TO anon WITH ADMIN")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: OPTION, TRUE or FALSE, found: EOF".to_string())
+    );
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT bypasser TO anon WITH 1 OPTION")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: 1".to_string())
+    );
 }

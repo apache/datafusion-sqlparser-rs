@@ -3499,4 +3499,32 @@ SETTINGS update_parallel_mode = 'auto'"#;
             "toast.autovacuum_enabled = false"
         );
     }
+
+    #[test]
+    fn test_alter_view_spans() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            (
+                "ALTER VIEW v (a) WITH (k = 1) AS SELECT 1",
+                "v (a) WITH (k = 1) AS SELECT 1",
+            ),
+            (
+                "ALTER VIEW v ALTER COLUMN c SET DEFAULT 1",
+                "v ALTER COLUMN c SET DEFAULT 1",
+            ),
+            ("ALTER VIEW IF EXISTS s.v OWNER TO o", "s.v"),
+            (
+                "ALTER VIEW v RENAME COLUMN a TO b",
+                "v RENAME COLUMN a TO b",
+            ),
+            ("ALTER VIEW v RENAME TO w", "v RENAME TO w"),
+            ("ALTER VIEW v SET SCHEMA s", "v SET SCHEMA s"),
+            ("ALTER VIEW v SET (a = 1, b)", "v SET (a = 1, b"),
+            ("ALTER VIEW v RESET (a, b)", "v RESET (a, b"),
+        ] {
+            let test = SpanTest::new(dialect, sql);
+            let stmt = &Parser::parse_sql(dialect, sql).unwrap()[0];
+            assert_eq!(test.get_source(stmt.span()), expected, "{sql}");
+        }
+    }
 }

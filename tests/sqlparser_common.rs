@@ -22146,3 +22146,291 @@ fn function_spans_include_closing_parentheses() {
         );
     }
 }
+
+#[test]
+fn parse_cache_table_options_without_flag() {
+    let dialects = all_dialects();
+    for (suffix, has_as) in [("", false), (" SELECT 1", false), (" AS SELECT 1", true)] {
+        let query = if suffix.is_empty() {
+            None
+        } else {
+            Some(dialects.verified_query("SELECT 1").into())
+        };
+        assert_eq!(
+            dialects.verified_stmt(&format!("CACHE TABLE t OPTIONS('k' = 'v'){suffix}")),
+            Statement::Cache {
+                table_flag: None,
+                table_name: ObjectName::from(vec![Ident::new("t")]),
+                has_as,
+                options: vec![SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "k"),
+                    value: Expr::Value(Value::SingleQuotedString("v".into()).with_empty_span()),
+                }],
+                query,
+            }
+        );
+    }
+}
+
+#[test]
+fn parse_reference_clauses_in_any_order() {
+    let dialects = all_dialects();
+    for clauses in [
+        "MATCH FULL ON DELETE CASCADE ON UPDATE SET NULL",
+        "MATCH FULL ON UPDATE SET NULL ON DELETE CASCADE",
+        "ON DELETE CASCADE MATCH FULL ON UPDATE SET NULL",
+        "ON DELETE CASCADE ON UPDATE SET NULL MATCH FULL",
+        "ON UPDATE SET NULL MATCH FULL ON DELETE CASCADE",
+        "ON UPDATE SET NULL ON DELETE CASCADE MATCH FULL",
+    ] {
+        for prefix in [
+            "a INT REFERENCES r (id)",
+            "a INT, FOREIGN KEY (a) REFERENCES r(id)",
+        ] {
+            let sql = format!("CREATE TABLE t ({prefix} {clauses} DEFERRABLE INITIALLY DEFERRED)");
+            let canonical = format!(
+                "CREATE TABLE t ({prefix} MATCH FULL ON DELETE CASCADE ON UPDATE SET NULL DEFERRABLE INITIALLY DEFERRED)"
+            );
+            dialects.one_statement_parses_to(&sql, &canonical);
+        }
+    }
+}
+
+#[test]
+fn parse_reference_clauses_leave_duplicates_unconsumed() {
+    for (clauses, keyword, match_kind, on_delete, on_update) in [
+        (
+            "MATCH FULL MATCH SIMPLE",
+            Keyword::MATCH,
+            Some(ConstraintReferenceMatchKind::Full),
+            None,
+            None,
+        ),
+        (
+            "ON DELETE CASCADE ON DELETE SET NULL",
+            Keyword::ON,
+            None,
+            Some(ReferentialAction::Cascade),
+            None,
+        ),
+        (
+            "ON UPDATE RESTRICT ON UPDATE NO ACTION",
+            Keyword::ON,
+            None,
+            None,
+            Some(ReferentialAction::Restrict),
+        ),
+    ] {
+        for table_level in [false, true] {
+            let prefix = if table_level {
+                "FOREIGN KEY (a) REFERENCES r(id)"
+            } else {
+                "REFERENCES r(id)"
+            };
+            let sql = format!("{prefix} {clauses}");
+            let mut parser = Parser::new(&GenericDialect {}).try_with_sql(&sql).unwrap();
+            let constraint = if table_level {
+                let Some(TableConstraint::ForeignKey(constraint)) =
+                    parser.parse_optional_table_constraint().unwrap()
+                else {
+                    panic!("{sql}");
+                };
+                constraint
+            } else {
+                let Some(ColumnOption::ForeignKey(constraint)) =
+                    parser.parse_optional_column_option().unwrap()
+                else {
+                    panic!("{sql}");
+                };
+                constraint
+            };
+            assert_eq!(
+                (
+                    constraint.match_kind,
+                    constraint.on_delete,
+                    constraint.on_update
+                ),
+                (match_kind, on_delete, on_update),
+                "{sql}"
+            );
+            assert!(parser.peek_keyword(keyword), "{sql}");
+        }
+    }
+}
+
+#[test]
+fn parse_div_with_nested_divisor() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(sqlparser::dialect::SparkSqlDialect),
+    ]);
+    assert_eq!(
+        dialects.verified_expr("10 DIV (5 DIV 2)"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::value(number("10"))),
+            op: BinaryOperator::MyIntegerDivide,
+            right: Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("5"))),
+                op: BinaryOperator::MyIntegerDivide,
+                right: Box::new(Expr::value(number("2"))),
+            }))),
+        }
+    );
+}
+
+#[test]
+fn column_key_shorthand_preserves_characteristics_and_unique() {
+    let dialects = all_dialects_where(|d| d.supports_key_column_option());
+    let Statement::CreateTable(table) = dialects.one_statement_parses_to(
+        "CREATE TABLE t (id INT KEY DEFERRABLE INITIALLY DEFERRED UNIQUE KEY)",
+        "CREATE TABLE t (id INT PRIMARY KEY DEFERRABLE INITIALLY DEFERRED UNIQUE KEY)",
+    ) else {
+        panic!("Expected CREATE TABLE");
+    };
+    let [ColumnOptionDef {
+        option: ColumnOption::PrimaryKey(primary),
+        ..
+    }, ColumnOptionDef {
+        option: ColumnOption::Unique(unique),
+        ..
+    }] = table.columns[0].options.as_slice()
+    else {
+        panic!("Expected primary and unique column options");
+    };
+    assert_eq!(
+        primary.characteristics,
+        Some(ConstraintCharacteristics {
+            deferrable: Some(true),
+            initially: Some(DeferrableInitial::Deferred),
+            enforced: None,
+        })
+    );
+    assert_eq!(unique.index_type_display, KeyOrIndexDisplay::Key);
+}
+
+#[test]
+fn unsupported_key_column_option_preserves_keyword() {
+    for dialect in all_dialects_where(|d| !d.supports_key_column_option()).dialects {
+        let mut parser = Parser::new(dialect.as_ref()).try_with_sql("KEY").unwrap();
+        assert_eq!(
+            parser.parse_optional_column_option(),
+            Ok(None),
+            "{dialect:?}"
+        );
+        assert!(parser.parse_keyword(Keyword::KEY), "{dialect:?}");
+    }
+}
+
+#[test]
+fn parse_delimited_identifiers() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(ClickHouseDialect {}),
+        Box::new(MsSqlDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(SnowflakeDialect {}),
+    ]);
+    let select = dialects.verified_only_select(
+        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
+    );
+    match only(select.from).relation {
+        TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+            version,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
+            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert!(args.is_none());
+            assert!(with_hints.is_empty());
+            assert!(version.is_none());
+        }
+        _ => panic!("Expecting TableFactor::Table"),
+    }
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_quote('"', "alias"),
+            Ident::with_quote('"', "bar baz"),
+        ]),
+        expr_from_projection(&select.projection[0]),
+    );
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
+            parameters: FunctionArguments::None,
+            args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
+            null_treatment: None,
+            filter: None,
+            over: None,
+            within_group: vec![],
+        }),
+        expr_from_projection(&select.projection[1]),
+    );
+    match &select.projection[2] {
+        SelectItem::ExprWithAlias { expr, alias } => {
+            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+        }
+        _ => panic!("Expected ExprWithAlias"),
+    }
+}
+
+#[test]
+fn parse_grant_function_signature() {
+    let objects = |sql: &str| match verified_stmt(sql) {
+        Statement::Grant(grant) => grant.objects,
+        Statement::Revoke(revoke) => revoke.objects,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+    let function = |args| FunctionDesc {
+        name: ObjectName::from(vec![Ident::new("f")]),
+        args,
+    };
+
+    assert_eq!(
+        objects("GRANT EXECUTE ON FUNCTION f() TO bob"),
+        Some(GrantObjects::Functions(vec![function(Some(vec![]))]))
+    );
+    assert_eq!(
+        objects("GRANT EXECUTE ON FUNCTION f TO bob"),
+        Some(GrantObjects::Functions(vec![function(None)]))
+    );
+    assert_eq!(
+        objects("REVOKE ALL ON PROCEDURE f(IN p_id UUID, INT) FROM bob"),
+        Some(GrantObjects::Procedures(vec![function(Some(vec![
+            OperateFunctionArg {
+                mode: Some(ArgMode::In),
+                name: Some(Ident::new("p_id")),
+                data_type: DataType::Uuid,
+                default_expr: None,
+            },
+            OperateFunctionArg::unnamed(DataType::Int(None)),
+        ]))]))
+    );
+
+    verified_stmt("REVOKE ALL ON FUNCTION public.f(p_id UUID) FROM bob");
+    verified_stmt("GRANT EXECUTE ON FUNCTION f(INOUT x TEXT), s.g, h() TO bob");
+    verified_stmt("GRANT USAGE ON PROCEDURE p(OUT INT), q TO ROLE role1");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT EXECUTE ON FUNCTION f(INT")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: EOF".to_string())
+    );
+}

@@ -7825,29 +7825,16 @@ pub enum GrantObjects {
     ReplicationGroup(Vec<ObjectName>),
     /// Grant privileges on external volumes
     ExternalVolumes(Vec<ObjectName>),
-    /// Grant privileges on a procedure. In dialects that
-    /// support overloading, the argument types must be specified.
+    /// Grant privileges on procedures, each with an optional argument list.
     ///
     /// For example:
     /// `GRANT USAGE ON PROCEDURE foo(varchar) TO ROLE role1`
-    Procedure {
-        /// The procedure name.
-        name: ObjectName,
-        /// Optional argument types for overloaded procedures.
-        arg_types: Vec<DataType>,
-    },
-
-    /// Grant privileges on a function. In dialects that
-    /// support overloading, the argument types must be specified.
+    Procedures(Vec<FunctionDesc>),
+    /// Grant privileges on functions, each with an optional argument list.
     ///
     /// For example:
-    /// `GRANT USAGE ON FUNCTION foo(varchar) TO ROLE role1`
-    Function {
-        /// The function name.
-        name: ObjectName,
-        /// Optional argument types for overloaded functions.
-        arg_types: Vec<DataType>,
-    },
+    /// `GRANT EXECUTE ON FUNCTION foo(p_id uuid), bar() TO role1`
+    Functions(Vec<FunctionDesc>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -7979,19 +7966,11 @@ impl fmt::Display for GrantObjects {
             GrantObjects::ExternalVolumes(objects) => {
                 write!(f, "EXTERNAL VOLUME {}", display_comma_separated(objects))
             }
-            GrantObjects::Procedure { name, arg_types } => {
-                write!(f, "PROCEDURE {name}")?;
-                if !arg_types.is_empty() {
-                    write!(f, "({})", display_comma_separated(arg_types))?;
-                }
-                Ok(())
+            GrantObjects::Procedures(procedures) => {
+                write!(f, "PROCEDURE {}", display_comma_separated(procedures))
             }
-            GrantObjects::Function { name, arg_types } => {
-                write!(f, "FUNCTION {name}")?;
-                if !arg_types.is_empty() {
-                    write!(f, "({})", display_comma_separated(arg_types))?;
-                }
-                Ok(())
+            GrantObjects::Functions(functions) => {
+                write!(f, "FUNCTION {}", display_comma_separated(functions))
             }
         }
     }

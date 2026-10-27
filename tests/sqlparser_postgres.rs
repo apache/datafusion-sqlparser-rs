@@ -5107,66 +5107,6 @@ fn parse_alter_user() {
 
 #[test]
 fn parse_delimited_identifiers() {
-    // check that quoted identifiers in any position remain quoted after serialization
-    let select = pg().verified_only_select(
-        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
-    );
-    // check FROM
-    match only(select.from).relation {
-        TableFactor::Table {
-            name,
-            alias,
-            args,
-            with_hints,
-            version,
-            ..
-        } => {
-            assert_eq!(
-                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
-                name
-            );
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
-            assert!(args.is_none());
-            assert!(with_hints.is_empty());
-            assert!(version.is_none());
-        }
-        _ => panic!("Expecting TableFactor::Table"),
-    }
-    // check SELECT
-    assert_eq!(3, select.projection.len());
-    assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
-        expr_from_projection(&select.projection[0]),
-    );
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
-        expr_from_projection(&select.projection[1]),
-    );
-    match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
-        }
-        _ => panic!("Expected: ExprWithAlias"),
-    }
-
     pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     pg().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
     pg().verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
@@ -11031,4 +10971,94 @@ fn parse_create_foreign_data_wrapper_clause_order() {
     ] {
         pg_and_generic().verified_stmt(sql);
     }
+}
+
+#[test]
+fn operator_function_display_preserves_empty_operator_types() {
+    for (op_types, expected) in [(None, "FUNCTION 1 f"), (Some(vec![]), "FUNCTION 1 () f")] {
+        let item = OperatorFamilyItem::Function {
+            support_number: 1,
+            op_types,
+            function_name: ObjectName::from(vec![Ident::new("f")]),
+            argument_types: vec![],
+        };
+        assert_eq!(item.to_string(), expected);
+    }
+}
+
+#[test]
+fn parse_alter_operator_family_order_by_followed_by_search() {
+    let sql = r#"ALTER OPERATOR FAMILY my_ops USING gist ADD OPERATOR 1 < (INT4, INT4) FOR ORDER BY sort_schema."sort family", OPERATOR 2 > (INT4, INT4) FOR SEARCH"#;
+    let Statement::AlterOperatorFamily(AlterOperatorFamily {
+        operation: AlterOperatorFamilyOperation::Add { items },
+        ..
+    }) = pg_and_generic().verified_stmt(sql)
+    else {
+        panic!("Expected ALTER OPERATOR FAMILY");
+    };
+    assert_eq!(
+        items,
+        vec![
+            OperatorFamilyItem::Operator {
+                strategy_number: 1,
+                operator_name: ObjectName::from(vec![Ident::new("<")]),
+                op_types: vec![DataType::Int4(None), DataType::Int4(None)],
+                purpose: Some(OperatorPurpose::ForOrderBy {
+                    sort_family: ObjectName::from(vec![
+                        Ident::new("sort_schema"),
+                        Ident::with_quote('"', "sort family"),
+                    ]),
+                }),
+            },
+            OperatorFamilyItem::Operator {
+                strategy_number: 2,
+                operator_name: ObjectName::from(vec![Ident::new(">")]),
+                op_types: vec![DataType::Int4(None), DataType::Int4(None)],
+                purpose: Some(OperatorPurpose::ForSearch),
+            },
+        ]
+    );
+}
+
+#[test]
+fn parse_role_signed_connection_limit() {
+    let minus_one = Expr::UnaryOp {
+        op: UnaryOperator::Minus,
+        expr: Box::new(Expr::value(number("1"))),
+    };
+
+    match pg().verified_stmt("CREATE ROLE a CONNECTION LIMIT -1") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.connection_limit.as_ref(), Some(&minus_one));
+        }
+        _ => unreachable!(),
+    }
+    pg().verified_stmt("CREATE ROLE a CONNECTION LIMIT +5");
+
+    assert_eq!(
+        pg().one_statement_parses_to(
+            "ALTER ROLE a CONNECTION LIMIT -1",
+            "ALTER ROLE a WITH CONNECTION LIMIT -1",
+        ),
+        Statement::AlterRole {
+            name: Ident::new("a"),
+            operation: AlterRoleOperation::WithOptions {
+                options: vec![RoleOption::ConnectionLimit(minus_one)],
+            },
+        }
+    );
+    pg().verified_stmt("ALTER ROLE a WITH CONNECTION LIMIT +5");
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE ROLE a CONNECTION LIMIT -'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: literal number, found: 'x'"
+    );
+    assert_eq!(
+        pg().parse_sql_statements("ALTER ROLE a CONNECTION LIMIT -'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: option, found: CONNECTION"
+    );
 }

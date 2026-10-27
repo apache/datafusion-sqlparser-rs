@@ -22524,3 +22524,31 @@ fn display_grant_role_options_propagates_write_errors() {
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
     }
 }
+
+#[test]
+fn parse_revoke_role() {
+    let sql = "REVOKE bypasser, auditor FROM anon GRANTED BY admin CASCADE";
+    assert_eq!(
+        all_dialects().verified_stmt(sql),
+        Statement::RevokeRole(RevokeRole {
+            roles: vec![Ident::new("bypasser"), Ident::new("auditor")],
+            grantees: vec![Grantee {
+                grantee_type: GranteesType::None,
+                name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+                    "anon"
+                )]))),
+            }],
+            granted_by: Some(Ident::new("admin")),
+            cascade: Some(CascadeOption::Cascade),
+        })
+    );
+
+    all_dialects().verified_stmt("REVOKE bypasser FROM anon RESTRICT");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE bypasser ON t FROM anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a privilege keyword, found: bypasser".to_string())
+    );
+}

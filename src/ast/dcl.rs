@@ -536,6 +536,47 @@ impl From<Revoke> for crate::ast::Statement {
     }
 }
 
+/// `REVOKE role [, ...] FROM grantee [, ...] [GRANTED BY grantor] [CASCADE | RESTRICT]`
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-revoke.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RevokeRole {
+    /// Roles whose membership is revoked.
+    pub roles: Vec<Ident>,
+    /// Roles losing the membership.
+    pub grantees: Vec<Grantee>,
+    /// Optional `GRANTED BY` identifier.
+    pub granted_by: Option<Ident>,
+    /// Optional `CASCADE`/`RESTRICT` behavior.
+    pub cascade: Option<CascadeOption>,
+}
+
+impl fmt::Display for RevokeRole {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "REVOKE {} FROM {}",
+            display_comma_separated(&self.roles),
+            display_comma_separated(&self.grantees)
+        )?;
+        if let Some(granted_by) = &self.granted_by {
+            write!(f, " GRANTED BY {granted_by}")?;
+        }
+        if let Some(cascade) = &self.cascade {
+            write!(f, " {cascade}")?;
+        }
+        Ok(())
+    }
+}
+
+impl From<RevokeRole> for crate::ast::Statement {
+    fn from(v: RevokeRole) -> Self {
+        crate::ast::Statement::RevokeRole(v)
+    }
+}
+
 /// `GRANT role [, ...] TO grantee [, ...] [WITH option [, ...]] [GRANTED BY grantor]`
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-grant.html)

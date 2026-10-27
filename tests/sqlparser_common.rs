@@ -22531,6 +22531,7 @@ fn parse_revoke_role() {
     assert_eq!(
         all_dialects().verified_stmt(sql),
         Statement::RevokeRole(RevokeRole {
+            option_for: None,
             roles: vec![Ident::new("bypasser"), Ident::new("auditor")],
             grantees: vec![Grantee {
                 grantee_type: GranteesType::None,
@@ -22614,4 +22615,25 @@ fn display_revoke_role_propagates_write_errors() {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
     }
+}
+
+#[test]
+fn parse_revoke_role_option_for() {
+    let Statement::RevokeRole(RevokeRole { option_for, .. }) =
+        all_dialects().verified_stmt("REVOKE SET OPTION FOR bypasser FROM anon")
+    else {
+        panic!("Expected REVOKE role");
+    };
+    assert_eq!(option_for, Some(Ident::new("SET")));
+
+    all_dialects()
+        .verified_stmt("REVOKE ADMIN OPTION FOR bypasser FROM anon GRANTED BY admin RESTRICT");
+    all_dialects().verified_stmt("REVOKE INHERIT OPTION FOR bypasser, auditor FROM anon");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE ADMIN OPTION FOR bypasser TO anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: FROM, found: TO".to_string())
+    );
 }

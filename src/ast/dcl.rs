@@ -536,13 +536,15 @@ impl From<Revoke> for crate::ast::Statement {
     }
 }
 
-/// `REVOKE role [, ...] FROM grantee [, ...] [GRANTED BY grantor] [CASCADE | RESTRICT]`
+/// `REVOKE [option OPTION FOR] role [, ...] FROM grantee [, ...] [GRANTED BY grantor] [CASCADE | RESTRICT]`
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-revoke.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct RevokeRole {
+    /// The option named in `OPTION FOR`, such as `ADMIN`, withdrawn while the membership stays.
+    pub option_for: Option<Ident>,
     /// Roles whose membership is revoked.
     pub roles: Vec<Ident>,
     /// Roles losing the membership.
@@ -555,9 +557,13 @@ pub struct RevokeRole {
 
 impl fmt::Display for RevokeRole {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "REVOKE ")?;
+        if let Some(option_for) = &self.option_for {
+            write!(f, "{option_for} OPTION FOR ")?;
+        }
         write!(
             f,
-            "REVOKE {} FROM {}",
+            "{} FROM {}",
             display_comma_separated(&self.roles),
             display_comma_separated(&self.grantees)
         )?;

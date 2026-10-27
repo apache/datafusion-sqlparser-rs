@@ -18548,6 +18548,9 @@ impl<'a> Parser<'a> {
                 GranteesType::ApplicationRole
             } else if self.parse_keyword(Keyword::APPLICATION) {
                 GranteesType::Application
+            } else if grantee_type == GranteesType::Public {
+                // PUBLIC does not carry over to the next grantee.
+                GranteesType::None
             } else {
                 grantee_type.clone() // keep from previous iteraton, if not specified
             };

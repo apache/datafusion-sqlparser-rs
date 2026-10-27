@@ -4616,6 +4616,8 @@ pub struct CreateExtension {
     pub name: Ident,
     /// Whether `IF NOT EXISTS` was specified for the CREATE EXTENSION.
     pub if_not_exists: bool,
+    /// Whether the optional `WITH` keyword preceded the options.
+    pub with_keyword: bool,
     /// Whether `CASCADE` was specified for the CREATE EXTENSION.
     pub cascade: bool,
     /// Optional schema name for the extension.
@@ -4636,18 +4638,17 @@ impl fmt::Display for CreateExtension {
             },
             name = self.name
         )?;
-        if self.cascade || self.schema.is_some() || self.version.is_some() {
+        if self.with_keyword {
             write!(f, " WITH")?;
-
-            if let Some(name) = &self.schema {
-                write!(f, " SCHEMA {name}")?;
-            }
-            if let Some(version) = &self.version {
-                write!(f, " VERSION {version}")?;
-            }
-            if self.cascade {
-                write!(f, " CASCADE")?;
-            }
+        }
+        if let Some(name) = &self.schema {
+            write!(f, " SCHEMA {name}")?;
+        }
+        if let Some(version) = &self.version {
+            write!(f, " VERSION {version}")?;
+        }
+        if self.cascade {
+            write!(f, " CASCADE")?;
         }
 
         Ok(())

@@ -3446,4 +3446,22 @@ SETTINGS update_parallel_mode = 'auto'"#;
             assert_eq!(test.get_source(expr.span()), expected, "{sql}");
         }
     }
+
+    #[test]
+    fn test_namespaced_storage_parameter_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)";
+        let mut test = SpanTest::new(dialect, sql);
+        let options = match test.0.parse_statement().unwrap() {
+            Statement::CreateTable(crate::ast::CreateTable {
+                table_options: crate::ast::CreateTableOptions::With(options),
+                ..
+            }) => options,
+            stmt => panic!("expected CREATE TABLE WITH, got {stmt:?}"),
+        };
+        assert_eq!(
+            test.get_source(options[0].span()),
+            "toast.autovacuum_enabled = false"
+        );
+    }
 }

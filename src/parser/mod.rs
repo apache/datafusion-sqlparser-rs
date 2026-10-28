@@ -8169,6 +8169,12 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        if object_type == ObjectType::ForeignTable && (temporary || purge || table.is_some()) {
+            return parser_err!(
+                "Cannot specify TEMPORARY, PURGE, or ON in DROP FOREIGN TABLE",
+                loc
+            );
+        }
         Ok(Statement::Drop {
             object_type,
             if_exists,

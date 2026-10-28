@@ -11263,3 +11263,29 @@ fn parse_comment_on_foreign_table() {
         "sql parser error: Expected: identifier, found: EOF"
     );
 }
+
+#[test]
+fn parse_drop_foreign_table_rejects_modifiers() {
+    for sql in [
+        "DROP TEMPORARY FOREIGN TABLE ft",
+        "DROP FOREIGN TABLE ft PURGE",
+        "DROP FOREIGN TABLE ft ON t",
+    ] {
+        for dialect in all_dialects().dialects {
+            assert!(
+                Parser::parse_sql(dialect.as_ref(), sql).is_err(),
+                "{sql} with {dialect:?}"
+            );
+        }
+    }
+    for sql in ["DROP FOREIGN TABLE ft PURGE", "DROP FOREIGN TABLE ft ON t"] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            "sql parser error: Cannot specify TEMPORARY, PURGE, or ON in DROP FOREIGN TABLE",
+            "{sql}"
+        );
+    }
+}

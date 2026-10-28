@@ -11600,7 +11600,7 @@ END"#,
 }
 
 #[test]
-fn display_create_function_begin_atomic_propagates_write_errors() {
+fn display_begin_atomic_propagates_write_errors() {
     use core::fmt::{self, Write};
 
     struct RejectingWriter(&'static str);
@@ -11615,11 +11615,84 @@ fn display_create_function_begin_atomic_propagates_write_errors() {
         }
     }
 
-    let stmt = pg_and_generic()
-        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
-    for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
-        let mut writer = RejectingWriter(rejected);
-        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    for sql in [
+        "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END",
+        "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1; END",
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
+            let mut writer = RejectingWriter(rejected);
+            assert_eq!(
+                write!(writer, "{stmt}"),
+                Err(fmt::Error),
+                "{sql}: {rejected:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn parse_create_procedure_begin_atomic() {
+    let sql = "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (1); END";
+    pg_and_generic().verified_stmt(sql);
+    match pg_and_generic().run_parser_method(sql, |parser| parser.parse_statement().unwrap()) {
+        Statement::CreateProcedure {
+            body: CreateProcedureBody::BeginAtomic(body),
+            ..
+        } => {
+            assert_eq!(
+                body.statements,
+                vec![pg_and_generic().verified_stmt("INSERT INTO t VALUES (1)")]
+            );
+            assert_eq!(
+                body.span(),
+                Span::new(Location::new(1, 36), Location::new(1, 78))
+            );
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for sql in [
+        "CREATE PROCEDURE p (a INT) LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (a); UPDATE t SET b = a; END",
+        "CREATE PROCEDURE p () BEGIN ATOMIC SELECT 1; END",
+        "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC END",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE PROCEDURE public.p(a integer)
+    LANGUAGE sql
+    BEGIN ATOMIC
+ INSERT INTO public.t (a)
+   VALUES (p.a);
+END"#,
+        "CREATE PROCEDURE public.p (a INTEGER) LANGUAGE sql BEGIN ATOMIC INSERT INTO public.t (a) VALUES (p.a); END",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1 END",
+            "Expected: ;, found: END",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN SELECT 1; END",
+            "Expected: AS, found: BEGIN",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql AS BEGIN SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
     }
 }
 

@@ -36,7 +36,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, format_statement_list,
+    display_comma_separated, display_separated, format_begin_atomic,
     table_constraints::{
         CheckConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint,
         UniqueConstraint,
@@ -3898,12 +3898,7 @@ impl fmt::Display for CreateFunction {
         if let Some(CreateFunctionBody::BeginAtomic(BeginEndStatements { statements, .. })) =
             &self.function_body
         {
-            write!(f, " BEGIN ATOMIC")?;
-            if !statements.is_empty() {
-                write!(f, " ")?;
-                format_statement_list(f, statements)?;
-            }
-            write!(f, " END")?;
+            format_begin_atomic(f, statements)?;
         }
         if let Some(CreateFunctionBody::AsReturnExpr(function_body)) = &self.function_body {
             write!(f, " AS RETURN {function_body}")?;

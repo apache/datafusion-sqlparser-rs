@@ -11148,6 +11148,14 @@ fn parse_alter_table_attach_partition_of() {
             "Expected: FOR, found: EOF",
         ),
         (
+            "ALTER TABLE root ATTACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE root ATTACH PARTITION part FOR VALUES IN ()",
+            "Expected: at least one value, found: )",
+        ),
+        (
             "ALTER TABLE root ATTACH PARTITION part FOR VALUES",
             "Expected: IN, FROM, or WITH after FOR VALUES, found: EOF",
         ),

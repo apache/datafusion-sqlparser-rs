@@ -29,17 +29,17 @@ use crate::tokenizer::Span;
 
 use super::{
     comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, AlterTrigger, AlterTriggerOperation, AlterView,
-    AlterViewOperation, Analyze, Array, Assignment, AssignmentTarget, AttachedToken,
-    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget,
-    ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateRule,
-    CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping, Cte, Delete, DoUpdate,
-    ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch,
-    ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
-    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
-    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    AlterGenericOption, AlterIndexOperation, AlterTableOperation, AlterTrigger,
+    AlterTriggerOperation, AlterView, AlterViewOperation, Analyze, Array, Assignment,
+    AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
+    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
+    ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
+    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
+    Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr,
+    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
+    IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
@@ -966,6 +966,20 @@ impl Spanned for AlterColumnOperation {
                 had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
+            AlterColumnOperation::GenericOptions { options } => {
+                union_spans(options.iter().map(|option| option.span()))
+            }
+        }
+    }
+}
+
+impl Spanned for AlterGenericOption {
+    fn span(&self) -> Span {
+        match self {
+            AlterGenericOption::Add { option, .. } | AlterGenericOption::Set(option) => {
+                option.key.span.union(&option.value.span)
+            }
+            AlterGenericOption::Drop(key) => key.span,
         }
     }
 }
@@ -1358,6 +1372,9 @@ impl Spanned for AlterTableOperation {
             }
             AlterTableOperation::ResetOptions { options } => {
                 union_spans(options.iter().map(|i| i.span()))
+            }
+            AlterTableOperation::GenericOptions { options } => {
+                union_spans(options.iter().map(|option| option.span()))
             }
         }
     }
@@ -3440,6 +3457,23 @@ SETTINGS update_parallel_mode = 'auto'"#;
         };
         assert_eq!(test.get_source(options[0].key.span), r#""schema_name""#);
         assert_eq!(test.get_source(options[0].value.span), "'public'");
+    }
+
+    #[test]
+    fn test_alter_foreign_table_option_spans() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "ALTER FOREIGN TABLE ft OPTIONS (ADD a '1', DROP b), ALTER COLUMN c OPTIONS (SET d '2')";
+        let mut test = SpanTest::new(dialect, sql);
+
+        let operations = match test.0.parse_statement().unwrap() {
+            Statement::AlterTable(alter) => alter.operations,
+            stmt => panic!("expected ALTER FOREIGN TABLE, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(operations[0].span()), "a '1', DROP b");
+        assert_eq!(
+            test.get_source(operations[1].span()),
+            "c OPTIONS (SET d '2'"
+        );
     }
 
     #[test]

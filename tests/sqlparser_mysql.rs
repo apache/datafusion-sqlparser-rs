@@ -241,6 +241,16 @@ fn parse_flush() {
 }
 
 #[test]
+fn parse_flush_preserves_keyword_table_names() {
+    for sql in [
+        "FLUSH TABLES handler WITH READ LOCK",
+        "FLUSH TABLES validator WITH READ LOCK",
+    ] {
+        mysql_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_show_columns() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
@@ -2794,7 +2804,7 @@ fn parse_update_with_joins() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2807,7 +2817,7 @@ fn parse_update_with_joins() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
@@ -3795,6 +3805,7 @@ fn parse_string_introducers() {
     mysql().verified_stmt("SELECT _binary 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
+    mysql().one_statement_parses_to("SELECT _utf8mb4\"abc\"", "SELECT _utf8mb4 \"abc\"");
     mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
 }
 

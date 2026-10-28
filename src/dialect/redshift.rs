@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{BindPlaceholderStyle, Dialect};
 use crate::keywords::Keyword;
 use core::iter::Peekable;
 use core::str::Chars;
@@ -35,6 +35,10 @@ pub struct RedshiftSqlDialect {}
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::DollarNumbered)
+    }
+
     /// Determine if a character starts a potential nested quoted identifier.
     /// Example: RedShift supports the following quote styles to all mean the same thing:
     /// ```sql
@@ -138,6 +142,10 @@ impl Dialect for RedshiftSqlDialect {
     }
 
     fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
+    fn supports_tilde_like_match_operator(&self) -> bool {
         true
     }
 

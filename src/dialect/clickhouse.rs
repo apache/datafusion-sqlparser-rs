@@ -16,6 +16,8 @@
 // under the License.
 
 use crate::dialect::Dialect;
+use crate::keywords::Keyword;
+use crate::parser::Parser;
 
 /// A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -28,10 +30,27 @@ impl Dialect for ClickHouseDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    /// Aliases are identifiers, quoted with `"` or a backtick, see
+    /// <https://clickhouse.com/docs/reference/syntax#identifiers>
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// See <https://clickhouse.com/docs/reference/syntax#identifiers>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
         // Undocumented, but the server accepts `$` in identifiers for MySQL compatibility
         // since https://github.com/ClickHouse/ClickHouse/pull/14232
         self.is_identifier_start(ch) || ch.is_ascii_digit() || ch == '$'
+    }
+
+    /// ClickHouse keywords are not reserved, so any of them can be a table name.
+    /// See <https://clickhouse.com/docs/en/sql-reference/syntax>
+    fn is_table_factor(&self, _kw: &Keyword, _parser: &mut Parser) -> bool {
+        true
     }
 
     /// ClickHouse accepts both backticks and double quotes, but its own

@@ -209,6 +209,16 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
     write!(f, ";")
 }
 
+/// Writes ` BEGIN ATOMIC <statements> END`.
+fn format_begin_atomic(f: &mut fmt::Formatter, statements: &[Statement]) -> fmt::Result {
+    write!(f, " BEGIN ATOMIC")?;
+    if !statements.is_empty() {
+        write!(f, " ")?;
+        format_statement_list(f, statements)?;
+    }
+    write!(f, " END")
+}
+
 /// A item `T` enclosed in a pair of parentheses
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4584,8 +4594,8 @@ pub enum Statement {
         params: Option<Vec<ProcedureParam>>,
         /// Optional language identifier.
         language: Option<Ident>,
-        /// Procedure body statements.
-        body: ConditionalStatements,
+        /// Procedure body.
+        body: CreateProcedureBody,
     },
     /// ```sql
     /// CREATE MACRO
@@ -5601,7 +5611,12 @@ impl fmt::Display for Statement {
                     write!(f, " LANGUAGE {language}")?;
                 }
 
-                write!(f, " AS {body}")
+                match body {
+                    CreateProcedureBody::As(body) => write!(f, " AS {body}"),
+                    CreateProcedureBody::BeginAtomic(BeginEndStatements { statements, .. }) => {
+                        format_begin_atomic(f, statements)
+                    }
+                }
             }
             Statement::CreateMacro {
                 or_replace,
@@ -10572,6 +10587,19 @@ pub enum CreateFunctionBody {
     ///
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#select_stmt
     AsReturnSelect(Select),
+}
+
+/// Body of a `CREATE PROCEDURE` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateProcedureBody {
+    /// Statements after `AS`.
+    As(ConditionalStatements),
+    /// SQL-standard body enclosed by `BEGIN ATOMIC` and `END`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
+    BeginAtomic(BeginEndStatements),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

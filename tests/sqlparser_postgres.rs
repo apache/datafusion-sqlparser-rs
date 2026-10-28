@@ -11115,3 +11115,55 @@ fn display_column_unique_nulls_distinct_propagates_formatter_errors() {
     let stmt = pg_and_generic().verified_stmt("CREATE TABLE t (u INT UNIQUE NULLS NOT DISTINCT)");
     assert_eq!(write!(RejectingWriter, "{stmt}"), Err(fmt::Error));
 }
+
+#[test]
+fn parse_alter_table_attach_partition_of() {
+    let sql =
+        "ALTER TABLE ONLY public.root ATTACH PARTITION public.part FOR VALUES FROM (0) TO (10)";
+    let Statement::AlterTable(alter) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::AttachPartitionOf {
+            partition: ObjectName::from(vec![Ident::new("public"), Ident::new("part")]),
+            for_values: ForValues::From {
+                from: vec![PartitionBoundValue::Expr(Expr::value(number("0")))],
+                to: vec![PartitionBoundValue::Expr(Expr::value(number("10")))],
+            },
+        }]
+    );
+
+    pg().verified_stmt("ALTER TABLE root ATTACH PARTITION part DEFAULT");
+    pg().verified_stmt("ALTER TABLE root ATTACH PARTITION part FOR VALUES IN (1, 2)");
+    // As written by pg_dump.
+    pg().one_statement_parses_to(
+        "ALTER TABLE ONLY public.hroot ATTACH PARTITION public.part4 FOR VALUES WITH (modulus 4, remainder 0)",
+        "ALTER TABLE ONLY public.hroot ATTACH PARTITION public.part4 FOR VALUES WITH (MODULUS 4, REMAINDER 0)",
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE root ATTACH PARTITION part",
+            "Expected: FOR, found: EOF",
+        ),
+        (
+            "ALTER TABLE root ATTACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE root ATTACH PARTITION part FOR VALUES IN ()",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "ALTER TABLE root ATTACH PARTITION part FOR VALUES",
+            "Expected: IN, FROM, or WITH after FOR VALUES, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

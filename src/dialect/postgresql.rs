@@ -569,4 +569,9 @@ impl Dialect for PostgreSqlDialect {
     fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }
+
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_attach_partition_of(&self) -> bool {
+        true
+    }
 }

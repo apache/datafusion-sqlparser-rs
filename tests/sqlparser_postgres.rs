@@ -12601,6 +12601,17 @@ fn parse_alter_server() {
             "ALTER SERVER public.s OWNER TO app",
             "Expected: VERSION, OPTIONS, OWNER TO, or RENAME TO after ALTER SERVER, found: .",
         ),
+        ("ALTER SERVER", "Expected: identifier, found: EOF"),
+        ("ALTER SERVER s RENAME TO", "Expected: identifier, found: EOF"),
+        (
+            "ALTER SERVER s OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF",
+        ),
+        ("ALTER SERVER s VERSION", "Expected: a value, found: EOF"),
+        (
+            "ALTER SERVER s OPTIONS (ADD host)",
+            "Expected: identifier, found: )",
+        ),
     ] {
         assert_eq!(
             pg_and_generic()
@@ -12609,6 +12620,37 @@ fn parse_alter_server() {
                 .to_string(),
             format!("sql parser error: {expected}"),
             "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_server_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let Statement::AlterServer(alter) =
+        pg_and_generic().verified_stmt("ALTER SERVER s VERSION '1' OPTIONS (ADD host 'db')")
+    else {
+        unreachable!()
+    };
+    for rejected in ["VERSION ", " ", "OPTIONS ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{}", alter.operation),
+            Err(fmt::Error),
+            "{rejected:?}"
         );
     }
 }

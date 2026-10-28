@@ -59,7 +59,8 @@ pub use self::data_type::{
 };
 pub use self::dcl::{
     AlterRoleOperation, CreateRole, Grant, GrantRole, ResetConfig, Revoke, RevokeRole,
-    RoleGrantOption, RoleGrantOptionValue, RoleOption, SecondaryRoles, SetConfigValue, Use,
+    RoleGrantOption, RoleGrantOptionValue, RoleKeyword, RoleOption, SecondaryRoles, SetConfigValue,
+    Use,
 };
 pub use self::ddl::{
     AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,

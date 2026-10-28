@@ -25,7 +25,8 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    Dialect, GenericDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
+    SnowflakeDialect,
 };
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Location, Span, Token, Tokenizer};
@@ -4739,11 +4740,11 @@ fn parse_operator_empty_parens_rejected() {
 
 #[test]
 fn parse_create_role() {
-    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    let sql = "CREATE ROLE mysql_a, mysql_b";
     match pg().verified_stmt(sql) {
         Statement::CreateRole(create_role) => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
-            assert!(create_role.if_not_exists);
+            assert!(!create_role.if_not_exists);
         }
         _ => unreachable!(),
     }
@@ -4832,6 +4833,67 @@ fn parse_create_role() {
             )))
         );
     }
+}
+
+#[test]
+fn parse_create_group() {
+    // `GROUP` names the same object as `ROLE` in PostgreSQL, but the keyword is preserved.
+    pg().verified_stmt("CREATE GROUP g");
+    pg().verified_stmt("CREATE GROUP staff SUPERUSER LOGIN CONNECTION LIMIT 5 USER karl, john");
+    pg().one_statement_parses_to(
+        "CREATE GROUP staff WITH SUPERUSER",
+        "CREATE GROUP staff SUPERUSER",
+    );
+
+    match pg().verified_stmt("CREATE GROUP staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Group);
+            assert_eq_vec(&["staff"], &create_role.names);
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+
+    // The `ROLE` spelling is unaffected.
+    match pg().verified_stmt("CREATE ROLE staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Role)
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE GROUP IF NOT EXISTS g"),
+        Err(ParserError::ParserError(
+            "IF NOT EXISTS is not supported for CREATE GROUP".to_string()
+        ))
+    );
+    pg().verified_stmt(r#"CREATE GROUP "IF""#);
+}
+
+#[test]
+fn parse_create_group_is_dialect_gated() {
+    let others = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(MySqlDialect {}),
+        Box::new(MsSqlDialect {}),
+    ]);
+    assert_eq!(
+        others.parse_sql_statements("CREATE GROUP staff"),
+        Err(ParserError::ParserError(
+            "Expected: an object type after CREATE, found: GROUP".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_role_if_not_exists_rejected() {
+    assert_eq!(
+        pg().parse_sql_statements("CREATE ROLE IF NOT EXISTS r"),
+        Err(ParserError::ParserError(
+            "IF NOT EXISTS is not supported for CREATE ROLE".to_string()
+        ))
+    );
+    pg().verified_stmt(r#"CREATE ROLE "IF""#);
 }
 
 #[test]

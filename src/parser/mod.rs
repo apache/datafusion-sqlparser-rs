@@ -5553,7 +5553,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
-            self.parse_create_role().map(Into::into)
+            self.parse_create_role(RoleKeyword::Role).map(Into::into)
+        } else if self.dialect.supports_create_group() && self.parse_keyword(Keyword::GROUP) {
+            self.parse_create_role(RoleKeyword::Group).map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::COLLATION) {
@@ -7098,9 +7100,23 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a `CREATE ROLE` statement.
-    pub fn parse_create_role(&mut self) -> Result<CreateRole, ParserError> {
-        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    /// Parse a `CREATE ROLE` or `CREATE GROUP` statement, after the keyword has been consumed.
+    pub fn parse_create_role(
+        &mut self,
+        role_keyword: RoleKeyword,
+    ) -> Result<CreateRole, ParserError> {
+        let supports_if_not_exists = matches!(role_keyword, RoleKeyword::Role)
+            && self.dialect.supports_create_role_if_not_exists();
+        if !supports_if_not_exists
+            && self.peek_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
+        {
+            return parser_err!(
+                format!("IF NOT EXISTS is not supported for CREATE {role_keyword}"),
+                self.peek_token_ref().span.start
+            );
+        }
+        let if_not_exists = supports_if_not_exists
+            && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 
         let _ = self.parse_keyword(Keyword::WITH); // [ WITH ]
@@ -7302,6 +7318,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(CreateRole {
+            keyword: role_keyword,
             names,
             if_not_exists,
             login,

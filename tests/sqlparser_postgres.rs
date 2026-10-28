@@ -11202,6 +11202,22 @@ fn parse_drop_foreign_table() {
             .to_string(),
         "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
     );
+    for (sql, expected) in [
+        ("DROP FOREIGN TABLE", "Expected: identifier, found: EOF"),
+        (
+            "DROP FOREIGN TABLE ft CASCADE RESTRICT",
+            "Cannot specify both CASCADE and RESTRICT in DROP",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
 }
 
 #[test]
@@ -11231,5 +11247,12 @@ fn parse_comment_on_foreign_table() {
             .unwrap_err()
             .to_string(),
         "sql parser error: Expected: TABLE, found: ft"
+    );
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN TABLE ft 'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: IS, found: 'x'"
     );
 }

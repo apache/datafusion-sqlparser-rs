@@ -6315,6 +6315,8 @@ pub struct CreateForeignTable {
     /// PostgreSQL's grammar accepts these here, but rejects primary key, unique,
     /// foreign key and exclusion constraints on a foreign table at execution.
     pub constraints: Vec<TableConstraint>,
+    /// `INHERITS ( parent_table [, ...] )`
+    pub inherits: Option<Vec<ObjectName>>,
     /// The `SERVER server_name` clause.
     pub server_name: Ident,
     /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
@@ -6338,7 +6340,11 @@ impl fmt::Display for CreateForeignTable {
             write!(f, ", ")?;
         }
         write!(f, "{}", display_comma_separated(&self.constraints))?;
-        write!(f, ") SERVER {}", self.server_name)?;
+        f.write_str(")")?;
+        if let Some(inherits) = &self.inherits {
+            write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
+        }
+        write!(f, " SERVER {}", self.server_name)?;
         if let Some(options) = &self.options {
             write!(f, " OPTIONS ({})", display_comma_separated(options))?;
         }
@@ -6414,6 +6420,7 @@ impl Spanned for CreateForeignTable {
             core::iter::once(self.name.span())
                 .chain(self.columns.iter().map(|column| column.span()))
                 .chain(self.constraints.iter().map(|constraint| constraint.span()))
+                .chain(self.inherits.iter().flatten().map(|parent| parent.span()))
                 .chain(core::iter::once(self.server_name.span))
                 .chain(
                     self.options

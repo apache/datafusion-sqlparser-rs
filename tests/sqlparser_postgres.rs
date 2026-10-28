@@ -11529,3 +11529,48 @@ fn parse_named_argument_with_assignment_operator() {
         "sql parser error: Expected: end of statement, found: :="
     );
 }
+
+#[test]
+fn parse_create_foreign_table_inherits() {
+    let sql = "CREATE FOREIGN TABLE child (id INT) INHERITS (parent, public.other) SERVER s OPTIONS (schema_name 'public')";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.inherits,
+        Some(vec![
+            ObjectName::from(vec![Ident::new("parent")]),
+            ObjectName::from(vec![Ident::new("public"), Ident::new("other")]),
+        ])
+    );
+
+    // As written by pg_dump.
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN TABLE public.child (\n)\nINHERITS (public.parent)\nSERVER s",
+        "CREATE FOREIGN TABLE public.child () INHERITS (public.parent) SERVER s",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE child INHERITS (parent) SERVER s",
+            "Expected: '(' before the column list of CREATE FOREIGN TABLE, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () INHERITS () SERVER s",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () SERVER s INHERITS (parent)",
+            "Expected: end of statement, found: INHERITS",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

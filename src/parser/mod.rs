@@ -21354,8 +21354,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `CREATE FOREIGN TABLE` statement.
     ///
-    /// Per-column `OPTIONS ( ... )`, `INHERITS`, and the `PARTITION OF` form are
-    /// not parsed yet.
+    /// Per-column `OPTIONS ( ... )` and the `PARTITION OF` form are not parsed yet.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
     pub fn parse_create_foreign_table(&mut self) -> Result<CreateForeignTable, ParserError> {
@@ -21368,6 +21367,11 @@ impl<'a> Parser<'a> {
             );
         }
         let (columns, constraints) = self.parse_columns()?;
+        let inherits = if self.parse_keyword(Keyword::INHERITS) {
+            Some(self.parse_parenthesized_qualified_column_list(IsOptional::Mandatory, false)?)
+        } else {
+            None
+        };
         self.expect_keyword_is(Keyword::SERVER)?;
         let server_name = self.parse_identifier()?;
         let options = self.parse_pg_options_clause()?;
@@ -21377,6 +21381,7 @@ impl<'a> Parser<'a> {
             if_not_exists,
             columns,
             constraints,
+            inherits,
             server_name,
             options,
         })

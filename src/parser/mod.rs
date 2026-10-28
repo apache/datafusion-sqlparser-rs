@@ -721,11 +721,17 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_deny()
                 }
-                Keyword::REVOKE => self.parse_privileges_or_roles(
-                    Keyword::FROM,
-                    Parser::parse_revoke,
-                    Parser::parse_revoke_role,
-                ),
+                Keyword::REVOKE => {
+                    if self.peek_role_grant_option_for() {
+                        self.parse_revoke_role().map(Into::into)
+                    } else {
+                        self.parse_privileges_or_roles(
+                            Keyword::FROM,
+                            Parser::parse_revoke,
+                            Parser::parse_revoke_role,
+                        )
+                    }
+                }
                 Keyword::START => self.parse_start_transaction(),
                 Keyword::BEGIN => self.parse_begin(),
                 Keyword::END => self.parse_end(),
@@ -19109,6 +19115,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `REVOKE` of role membership, after the `REVOKE` keyword.
     pub fn parse_revoke_role(&mut self) -> Result<RevokeRole, ParserError> {
+        let option_for = self.parse_role_grant_option_for();
         let roles = self.parse_comma_separated(Parser::parse_identifier)?;
         self.expect_keyword_is(Keyword::FROM)?;
         let grantees = self.parse_grantees()?;
@@ -19119,11 +19126,33 @@ impl<'a> Parser<'a> {
         };
         let cascade = self.parse_cascade_option();
         Ok(RevokeRole {
+            option_for,
             roles,
             grantees,
             granted_by,
             cascade,
         })
+    }
+
+    /// Parses `name OPTION FOR`, leaving `GRANT OPTION FOR` to the privilege form.
+    fn parse_role_grant_option_for(&mut self) -> Option<Ident> {
+        let index = self.index;
+        if !self.peek_keyword(Keyword::GRANT) {
+            if let Ok(name) = self.parse_identifier() {
+                if self.parse_keywords(&[Keyword::OPTION, Keyword::FOR]) {
+                    return Some(name);
+                }
+            }
+        }
+        self.index = index;
+        None
+    }
+
+    fn peek_role_grant_option_for(&mut self) -> bool {
+        let index = self.index;
+        let matched = self.parse_role_grant_option_for().is_some();
+        self.index = index;
+        matched
     }
 
     /// Parse an REPLACE statement

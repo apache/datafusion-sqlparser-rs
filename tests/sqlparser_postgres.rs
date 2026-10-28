@@ -12291,3 +12291,60 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_create_foreign_table_partition_of() {
+    let sql = "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES FROM (0) TO (10) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.partition_of,
+        Some(ObjectName::from(vec![Ident::new("root")]))
+    );
+    assert_eq!(
+        stmt.for_values,
+        Some(ForValues::From {
+            from: vec![PartitionBoundValue::Expr(Expr::value(number("0")))],
+            to: vec![PartitionBoundValue::Expr(Expr::value(number("10")))],
+        })
+    );
+    assert!(stmt.columns.is_empty());
+
+    for sql in [
+        "CREATE FOREIGN TABLE IF NOT EXISTS part PARTITION OF root DEFAULT SERVER s OPTIONS (table_name 'remote')",
+        "CREATE FOREIGN TABLE part PARTITION OF root (CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1, 2) SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES WITH (MODULUS 4, REMAINDER 0) SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) FOR VALUES IN (3) SERVER s",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root SERVER s",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: SERVER",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root DEFAULT INHERITS (other) SERVER s",
+            "Expected: SERVER, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root INHERITS (other) FOR VALUES IN (1) SERVER s",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES IN (1)",
+            "Expected: SERVER, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

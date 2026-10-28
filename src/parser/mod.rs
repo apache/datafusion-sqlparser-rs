@@ -21461,21 +21461,42 @@ impl<'a> Parser<'a> {
 
     /// Parse a `CREATE FOREIGN TABLE` statement.
     ///
-    /// Per-column `OPTIONS ( ... )` and the `PARTITION OF` form are not parsed yet.
+    /// Per-column `OPTIONS ( ... )` are not parsed yet.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
     pub fn parse_create_foreign_table(&mut self) -> Result<CreateForeignTable, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
-        if self.peek_token_ref().token != Token::LParen {
+        let partition_of = if self.parse_keywords(&[Keyword::PARTITION, Keyword::OF]) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+        if partition_of.is_none() && self.peek_token_ref().token != Token::LParen {
             return self.expected_ref(
                 "'(' before the column list of CREATE FOREIGN TABLE",
                 self.peek_token_ref(),
             );
         }
         let (columns, constraints) = self.parse_columns()?;
-        let inherits = if self.parse_keyword(Keyword::INHERITS) {
+        // `INHERITS` belongs to the column-list form only.
+        let inherits = if partition_of.is_none() && self.parse_keyword(Keyword::INHERITS) {
             Some(self.parse_parenthesized_qualified_column_list(IsOptional::Mandatory, false)?)
+        } else {
+            None
+        };
+
+        let for_values = if partition_of.is_some() {
+            if self
+                .peek_one_of_keywords(&[Keyword::FOR, Keyword::DEFAULT])
+                .is_none()
+            {
+                return self.expected_ref(
+                    "FOR VALUES or DEFAULT after PARTITION OF",
+                    self.peek_token_ref(),
+                );
+            }
+            Some(self.parse_partition_for_values()?)
         } else {
             None
         };
@@ -21489,6 +21510,8 @@ impl<'a> Parser<'a> {
             columns,
             constraints,
             inherits,
+            partition_of,
+            for_values,
             server_name,
             options,
         })

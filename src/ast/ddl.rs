@@ -6331,6 +6331,11 @@ pub struct CreateForeignTable {
     pub constraints: Vec<TableConstraint>,
     /// `INHERITS ( parent_table [, ...] )`
     pub inherits: Option<Vec<ObjectName>>,
+    /// The parent table of `PARTITION OF parent_table`.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub partition_of: Option<ObjectName>,
+    /// The partition bound following `PARTITION OF`.
+    pub for_values: Option<ForValues>,
     /// The `SERVER server_name` clause.
     pub server_name: Ident,
     /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
@@ -6341,22 +6346,30 @@ impl fmt::Display for CreateForeignTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}",
+            "CREATE FOREIGN TABLE {if_not_exists}{name}",
             if_not_exists = if self.if_not_exists {
                 "IF NOT EXISTS "
             } else {
                 ""
             },
             name = self.name,
-            columns = display_comma_separated(&self.columns),
         )?;
-        if !self.columns.is_empty() && !self.constraints.is_empty() {
-            write!(f, ", ")?;
+        if let Some(partition_of) = &self.partition_of {
+            write!(f, " PARTITION OF {partition_of}")?;
         }
-        write!(f, "{}", display_comma_separated(&self.constraints))?;
-        f.write_str(")")?;
+        // The column list is optional only in the `PARTITION OF` form.
+        if self.partition_of.is_none() || !self.columns.is_empty() || !self.constraints.is_empty() {
+            write!(f, " ({}", display_comma_separated(&self.columns))?;
+            if !self.columns.is_empty() && !self.constraints.is_empty() {
+                write!(f, ", ")?;
+            }
+            write!(f, "{})", display_comma_separated(&self.constraints))?;
+        }
         if let Some(inherits) = &self.inherits {
             write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
+        }
+        if let Some(for_values) = &self.for_values {
+            write!(f, " {for_values}")?;
         }
         write!(f, " SERVER {}", self.server_name)?;
         if let Some(options) = &self.options {
@@ -6435,6 +6448,8 @@ impl Spanned for CreateForeignTable {
                 .chain(self.columns.iter().map(|column| column.span()))
                 .chain(self.constraints.iter().map(|constraint| constraint.span()))
                 .chain(self.inherits.iter().flatten().map(|parent| parent.span()))
+                .chain(self.partition_of.iter().map(|parent| parent.span()))
+                .chain(self.for_values.iter().map(|for_values| for_values.span()))
                 .chain(core::iter::once(self.server_name.span))
                 .chain(
                     self.options

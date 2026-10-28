@@ -977,6 +977,10 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::EXTENSION => {
                 (CommentObject::Extension, self.parse_object_name(false)?)
             }
+            Token::Word(w) if w.keyword == Keyword::FOREIGN => {
+                self.expect_keyword_is(Keyword::TABLE)?;
+                (CommentObject::ForeignTable, self.parse_object_name(false)?)
+            }
             Token::Word(w) if w.keyword == Keyword::FUNCTION => {
                 (CommentObject::Function, self.parse_object_name(false)?)
             }
@@ -8083,6 +8087,8 @@ impl<'a> Parser<'a> {
 
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
+            ObjectType::ForeignTable
         } else if self.parse_keyword(Keyword::COLLATION) {
             ObjectType::Collation
         } else if self.parse_keyword(Keyword::VIEW) {
@@ -8136,7 +8142,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
                 self.peek_token_ref(),
             );
         };

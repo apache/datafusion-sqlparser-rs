@@ -2578,6 +2578,8 @@ pub enum CommentObject {
     Domain,
     /// An extension.
     Extension,
+    /// A foreign table.
+    ForeignTable,
     /// A function.
     Function,
     /// An index.
@@ -2610,6 +2612,7 @@ impl fmt::Display for CommentObject {
             CommentObject::Database => f.write_str("DATABASE"),
             CommentObject::Domain => f.write_str("DOMAIN"),
             CommentObject::Extension => f.write_str("EXTENSION"),
+            CommentObject::ForeignTable => f.write_str("FOREIGN TABLE"),
             CommentObject::Function => f.write_str("FUNCTION"),
             CommentObject::Index => f.write_str("INDEX"),
             CommentObject::MaterializedView => f.write_str("MATERIALIZED VIEW"),
@@ -8757,6 +8760,8 @@ pub enum ObjectType {
     Collation,
     /// A table.
     Table,
+    /// A foreign table.
+    ForeignTable,
     /// A view.
     View,
     /// A materialized view.
@@ -8788,6 +8793,7 @@ impl fmt::Display for ObjectType {
         f.write_str(match self {
             ObjectType::Collation => "COLLATION",
             ObjectType::Table => "TABLE",
+            ObjectType::ForeignTable => "FOREIGN TABLE",
             ObjectType::View => "VIEW",
             ObjectType::MaterializedView => "MATERIALIZED VIEW",
             ObjectType::Index => "INDEX",

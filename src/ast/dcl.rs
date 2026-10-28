@@ -622,6 +622,7 @@ impl From<RevokeRole> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct GrantRole {
     /// Roles whose membership is granted.
     pub roles: Vec<Ident>,
@@ -661,6 +662,7 @@ impl From<GrantRole> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RoleGrantOption {
     /// The option name, such as `ADMIN`, `INHERIT` or `SET`.
     pub name: Ident,
@@ -678,6 +680,7 @@ impl fmt::Display for RoleGrantOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RoleGrantOptionValue {
     /// `OPTION`, equivalent to `TRUE`.
     Option,

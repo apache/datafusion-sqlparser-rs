@@ -22698,7 +22698,8 @@ fn parse_delimited_identifiers() {
 
 #[test]
 fn parse_grant_function_signature() {
-    let objects = |sql: &str| match verified_stmt(sql) {
+    let dialects = all_dialects_where(|d| !d.supports_multiword_type_names());
+    let objects = |sql: &str| match dialects.verified_stmt(sql) {
         Statement::Grant(grant) => grant.objects,
         Statement::Revoke(revoke) => revoke.objects,
         stmt => panic!("unexpected statement: {stmt:?}"),
@@ -22729,9 +22730,9 @@ fn parse_grant_function_signature() {
         ]))]))
     );
 
-    verified_stmt("REVOKE ALL ON FUNCTION public.f(p_id UUID) FROM bob");
-    verified_stmt("GRANT EXECUTE ON FUNCTION f(INOUT x TEXT), s.g, h() TO bob");
-    verified_stmt("GRANT USAGE ON PROCEDURE p(OUT INT), q TO ROLE role1");
+    dialects.verified_stmt("REVOKE ALL ON FUNCTION public.f(p_id UUID) FROM bob");
+    dialects.verified_stmt("GRANT EXECUTE ON FUNCTION f(INOUT x TEXT), s.g, h() TO bob");
+    dialects.verified_stmt("GRANT USAGE ON PROCEDURE p(OUT INT), q TO ROLE role1");
 
     assert_eq!(
         all_dialects()
@@ -23101,6 +23102,7 @@ fn display_create_procedure_parameter_list_propagates_write_errors() {
 
 #[test]
 fn parse_grant_routines() {
+    let dialects = all_dialects_where(|d| !d.supports_multiword_type_names());
     let objects = |sql: &str| match verified_stmt(sql) {
         Statement::Grant(grant) => grant.objects,
         Statement::Revoke(revoke) => revoke.objects,
@@ -23141,7 +23143,7 @@ fn parse_grant_routines() {
         })
     );
 
-    verified_stmt("REVOKE ALL ON ROUTINE public.f(p_id UUID), g() FROM bob");
+    dialects.verified_stmt("REVOKE ALL ON ROUTINE public.f(p_id UUID), g() FROM bob");
     verified_stmt("REVOKE EXECUTE ON ALL PROCEDURES IN SCHEMA s, t FROM bob");
     verified_stmt("GRANT EXECUTE ON ALL ROUTINES IN SCHEMA s TO bob");
     assert_eq!(

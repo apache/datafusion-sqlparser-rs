@@ -10591,7 +10591,7 @@ impl<'a> Parser<'a> {
                 let nulls_distinct = self.parse_optional_nulls_distinct()?;
 
                 // optional index name
-                let index_name = self.parse_optional_ident()?;
+                let index_name = self.parse_optional_index_name()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
@@ -10626,7 +10626,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // optional index name
-                let index_name = self.parse_optional_ident()?;
+                let index_name = self.parse_optional_index_name()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
@@ -10707,10 +10707,7 @@ impl<'a> Parser<'a> {
             {
                 let display_as_key = w.keyword == Keyword::KEY;
 
-                let name = match &self.peek_token_ref().token {
-                    Token::Word(word) if word.keyword == Keyword::USING => None,
-                    _ => self.parse_optional_ident()?,
-                };
+                let name = self.parse_optional_index_name()?;
 
                 let index_type = self.parse_optional_using_then_index_type()?;
                 let columns = self.parse_parenthesized_index_column_list()?;
@@ -10975,6 +10972,15 @@ impl<'a> Parser<'a> {
     /// Parse an optional identifier, returning `Some(Ident)` if present.
     pub fn parse_optional_ident(&mut self) -> Result<Option<Ident>, ParserError> {
         self.maybe_parse(|parser| parser.parse_identifier())
+    }
+
+    /// Parse an optional index name, leaving a `USING` index type for the caller.
+    fn parse_optional_index_name(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.peek_keyword(Keyword::USING) {
+            Ok(None)
+        } else {
+            self.parse_optional_ident()
+        }
     }
 
     #[must_use]

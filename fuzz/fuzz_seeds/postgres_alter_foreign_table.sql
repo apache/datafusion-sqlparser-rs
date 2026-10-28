@@ -1,0 +1,1 @@
+ALTER FOREIGN TABLE IF EXISTS ONLY public.ft OWNER TO app, OPTIONS (ADD fetch_size '100', SET batch_size '10', DROP updatable), ALTER COLUMN id OPTIONS (column_name 'remote_id')

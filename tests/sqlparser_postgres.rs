@@ -11095,3 +11095,23 @@ fn parse_create_table_column_unique_nulls_distinct() {
         ParserError::ParserError("Expected: DISTINCT, found: )".to_string())
     );
 }
+
+#[test]
+fn display_column_unique_nulls_distinct_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter;
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains("NULLS") {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic().verified_stmt("CREATE TABLE t (u INT UNIQUE NULLS NOT DISTINCT)");
+    assert_eq!(write!(RejectingWriter, "{stmt}"), Err(fmt::Error));
+}

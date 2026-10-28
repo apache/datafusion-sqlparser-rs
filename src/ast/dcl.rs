@@ -536,7 +536,7 @@ impl From<Revoke> for crate::ast::Statement {
     }
 }
 
-/// `GRANT role [, ...] TO grantee [, ...] [GRANTED BY grantor]`
+/// `GRANT role [, ...] TO grantee [, ...] [WITH option [, ...]] [GRANTED BY grantor]`
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-grant.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -547,6 +547,8 @@ pub struct GrantRole {
     pub roles: Vec<Ident>,
     /// Roles receiving the membership.
     pub grantees: Vec<Grantee>,
+    /// Options of the membership, from `WITH`.
+    pub options: Vec<RoleGrantOption>,
     /// Optional `GRANTED BY` identifier.
     pub granted_by: Option<Ident>,
 }
@@ -559,6 +561,9 @@ impl fmt::Display for GrantRole {
             display_comma_separated(&self.roles),
             display_comma_separated(&self.grantees)
         )?;
+        if !self.options.is_empty() {
+            write!(f, " WITH {}", display_comma_separated(&self.options))?;
+        }
         if let Some(granted_by) = &self.granted_by {
             write!(f, " GRANTED BY {granted_by}")?;
         }
@@ -569,5 +574,45 @@ impl fmt::Display for GrantRole {
 impl From<GrantRole> for crate::ast::Statement {
     fn from(v: GrantRole) -> Self {
         crate::ast::Statement::GrantRole(v)
+    }
+}
+
+/// An option of a role membership, such as `ADMIN OPTION` or `SET FALSE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RoleGrantOption {
+    /// The option name, such as `ADMIN`, `INHERIT` or `SET`.
+    pub name: Ident,
+    /// The value it is set to.
+    pub value: RoleGrantOptionValue,
+}
+
+impl fmt::Display for RoleGrantOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.name, self.value)
+    }
+}
+
+/// The value of a [`RoleGrantOption`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RoleGrantOptionValue {
+    /// `OPTION`, equivalent to `TRUE`.
+    Option,
+    /// `TRUE`
+    True,
+    /// `FALSE`
+    False,
+}
+
+impl fmt::Display for RoleGrantOptionValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            RoleGrantOptionValue::Option => "OPTION",
+            RoleGrantOptionValue::True => "TRUE",
+            RoleGrantOptionValue::False => "FALSE",
+        })
     }
 }

@@ -18450,6 +18450,11 @@ impl<'a> Parser<'a> {
         let roles = self.parse_comma_separated(Parser::parse_identifier)?;
         self.expect_keyword_is(Keyword::TO)?;
         let grantees = self.parse_grantees()?;
+        let options = if self.parse_keyword(Keyword::WITH) {
+            self.parse_comma_separated(Parser::parse_role_grant_option)?
+        } else {
+            vec![]
+        };
         let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
             Some(self.parse_identifier()?)
         } else {
@@ -18458,8 +18463,21 @@ impl<'a> Parser<'a> {
         Ok(GrantRole {
             roles,
             grantees,
+            options,
             granted_by,
         })
+    }
+
+    fn parse_role_grant_option(&mut self) -> Result<RoleGrantOption, ParserError> {
+        let name = self.parse_identifier()?;
+        let value =
+            match self.parse_one_of_keywords(&[Keyword::OPTION, Keyword::TRUE, Keyword::FALSE]) {
+                Some(Keyword::OPTION) => RoleGrantOptionValue::Option,
+                Some(Keyword::TRUE) => RoleGrantOptionValue::True,
+                Some(Keyword::FALSE) => RoleGrantOptionValue::False,
+                _ => return self.expected_ref("OPTION, TRUE or FALSE", self.peek_token_ref()),
+            };
+        Ok(RoleGrantOption { name, value })
     }
 
     /// Parses a statement body with `privileges`, and with `roles` instead when that fails and

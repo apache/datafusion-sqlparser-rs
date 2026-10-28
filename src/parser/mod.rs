@@ -5535,7 +5535,8 @@ impl<'a> Parser<'a> {
                     modifier_loc
                 );
             }
-            self.expect_keywords(&[Keyword::USER, Keyword::MAPPING])?;
+            self.advance_token(); // USER
+            self.advance_token(); // MAPPING
             self.parse_create_user_mapping().map(Into::into)
         } else if self.parse_keyword(Keyword::USER) {
             self.parse_create_user(or_replace).map(Into::into)

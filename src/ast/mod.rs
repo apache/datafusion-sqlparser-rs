@@ -78,8 +78,8 @@ pub use self::ddl::{
     CreateForeignDataWrapper, CreateForeignTable, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
     CreateRule, CreateRuleAction, CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch,
-    CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior,
-    DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
+    CreateTrigger, CreateUserMapping, CreateView, Deduplicate, DeferrableInitial, DistStyle,
+    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
     DropOperatorSignature, DropPolicy, DropTrigger, ForValues, ForeignDataWrapperRoutineClause,
     FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
@@ -89,7 +89,8 @@ pub use self::ddl::{
     ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
     TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, UserMappingUser, ViewColumnDef,
+    WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -3847,6 +3848,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
     CreateForeignDataWrapper(CreateForeignDataWrapper),
     /// ```sql
+    /// CREATE USER MAPPING
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createusermapping.html)
+    CreateUserMapping(CreateUserMapping),
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
@@ -5729,6 +5735,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
             Statement::CreateForeignDataWrapper(stmt) => write!(f, "{stmt}"),
+            Statement::CreateUserMapping(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateRule(rule) => write!(f, "{rule}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),

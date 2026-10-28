@@ -5520,6 +5520,23 @@ impl<'a> Parser<'a> {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
+        } else if self.peek_keywords(&[Keyword::USER, Keyword::MAPPING, Keyword::FOR])
+            || self.peek_keywords(&[
+                Keyword::USER,
+                Keyword::MAPPING,
+                Keyword::IF,
+                Keyword::NOT,
+                Keyword::EXISTS,
+            ])
+        {
+            if has_modifier {
+                return parser_err!(
+                    "CREATE USER MAPPING does not accept this modifier",
+                    modifier_loc
+                );
+            }
+            self.expect_keywords(&[Keyword::USER, Keyword::MAPPING])?;
+            self.parse_create_user_mapping().map(Into::into)
         } else if self.parse_keyword(Keyword::USER) {
             self.parse_create_user(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::AGGREGATE) {
@@ -21454,6 +21471,38 @@ impl<'a> Parser<'a> {
         Ok(CreateForeignDataWrapper {
             name,
             routines,
+            options,
+        })
+    }
+
+    /// Parse a `CREATE USER MAPPING` statement, after `CREATE USER MAPPING`.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+    pub fn parse_create_user_mapping(&mut self) -> Result<CreateUserMapping, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        self.expect_keyword_is(Keyword::FOR)?;
+        let user = match self.parse_one_of_keywords(&[
+            Keyword::USER,
+            Keyword::CURRENT_ROLE,
+            Keyword::CURRENT_USER,
+            Keyword::SESSION_USER,
+            Keyword::PUBLIC,
+        ]) {
+            Some(Keyword::USER) => UserMappingUser::User,
+            Some(Keyword::CURRENT_ROLE) => UserMappingUser::CurrentRole,
+            Some(Keyword::CURRENT_USER) => UserMappingUser::CurrentUser,
+            Some(Keyword::SESSION_USER) => UserMappingUser::SessionUser,
+            Some(Keyword::PUBLIC) => UserMappingUser::Public,
+            _ => UserMappingUser::Name(self.parse_identifier()?),
+        };
+        self.expect_keyword_is(Keyword::SERVER)?;
+        let server_name = self.parse_identifier()?;
+        let options = self.parse_pg_options_clause()?;
+
+        Ok(CreateUserMapping {
+            if_not_exists,
+            user,
+            server_name,
             options,
         })
     }

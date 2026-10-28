@@ -6649,3 +6649,78 @@ impl Spanned for CreateForeignDataWrapper {
         )
     }
 }
+
+/// The user of a `CREATE USER MAPPING` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserMappingUser {
+    /// A role name.
+    Name(Ident),
+    /// `USER`, the current user.
+    User,
+    /// `CURRENT_ROLE`
+    CurrentRole,
+    /// `CURRENT_USER`
+    CurrentUser,
+    /// `SESSION_USER`
+    SessionUser,
+    /// `PUBLIC`, every role without a mapping of its own.
+    Public,
+}
+
+impl fmt::Display for UserMappingUser {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserMappingUser::Name(name) => write!(f, "{name}"),
+            UserMappingUser::User => f.write_str("USER"),
+            UserMappingUser::CurrentRole => f.write_str("CURRENT_ROLE"),
+            UserMappingUser::CurrentUser => f.write_str("CURRENT_USER"),
+            UserMappingUser::SessionUser => f.write_str("SESSION_USER"),
+            UserMappingUser::Public => f.write_str("PUBLIC"),
+        }
+    }
+}
+
+/// A `CREATE USER MAPPING` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createusermapping.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateUserMapping {
+    /// Whether `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// The user the mapping is for.
+    pub user: UserMappingUser,
+    /// The `SERVER server_name` clause.
+    pub server_name: Ident,
+    /// Optional `OPTIONS (key 'value', ...)` clause.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateUserMapping {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CREATE USER MAPPING {if_not_exists}FOR {user} SERVER {server_name}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            user = self.user,
+            server_name = self.server_name,
+        )?;
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateUserMapping> for crate::ast::Statement {
+    fn from(v: CreateUserMapping) -> Self {
+        crate::ast::Statement::CreateUserMapping(v)
+    }
+}

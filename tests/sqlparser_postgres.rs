@@ -12004,3 +12004,89 @@ fn display_table_inheritance_propagates_write_errors() {
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{sql}");
     }
 }
+
+#[test]
+fn parse_create_user_mapping() {
+    let sql =
+        r#"CREATE USER MAPPING FOR app SERVER s OPTIONS ("user" 'remote', password 'secret')"#;
+    let Statement::CreateUserMapping(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt,
+        CreateUserMapping {
+            if_not_exists: false,
+            user: UserMappingUser::Name(Ident::new("app")),
+            server_name: Ident::new("s"),
+            options: Some(vec![
+                CreateServerOption {
+                    key: Ident::with_quote('"', "user"),
+                    value: Ident::with_quote('\'', "remote"),
+                },
+                CreateServerOption {
+                    key: Ident::new("password"),
+                    value: Ident::with_quote('\'', "secret"),
+                },
+            ]),
+        }
+    );
+
+    for (sql, user) in [
+        (
+            "CREATE USER MAPPING IF NOT EXISTS FOR USER SERVER s",
+            UserMappingUser::User,
+        ),
+        (
+            "CREATE USER MAPPING FOR CURRENT_ROLE SERVER s",
+            UserMappingUser::CurrentRole,
+        ),
+        (
+            "CREATE USER MAPPING FOR CURRENT_USER SERVER s",
+            UserMappingUser::CurrentUser,
+        ),
+        (
+            "CREATE USER MAPPING FOR SESSION_USER SERVER s",
+            UserMappingUser::SessionUser,
+        ),
+        (
+            "CREATE USER MAPPING FOR PUBLIC SERVER s",
+            UserMappingUser::Public,
+        ),
+    ] {
+        let Statement::CreateUserMapping(stmt) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(stmt.user, user);
+    }
+    // As written by pg_dump.
+    pg_and_generic().one_statement_parses_to(
+        "CREATE USER MAPPING FOR public SERVER s",
+        "CREATE USER MAPPING FOR PUBLIC SERVER s",
+    );
+
+    // A user named `mapping`.
+    assert!(matches!(
+        pg_and_generic().verified_stmt("CREATE USER mapping"),
+        Statement::CreateUser(_)
+    ));
+
+    for (sql, expected) in [
+        (
+            "CREATE USER MAPPING FOR app",
+            "Expected: SERVER, found: EOF",
+        ),
+        (
+            "CREATE OR REPLACE USER MAPPING FOR app SERVER s",
+            "CREATE USER MAPPING does not accept this modifier",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

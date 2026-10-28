@@ -11603,11 +11603,15 @@ impl<'a> Parser<'a> {
                     generated_as,
                     sequence_options,
                 }
+            } else if self.parse_keyword(Keyword::OPTIONS) {
+                AlterColumnOperation::GenericOptions {
+                    options: self.parse_alter_generic_options()?,
+                }
             } else {
                 let message = if is_postgresql {
-                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or ADD GENERATED after ALTER COLUMN"
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN"
                 } else {
-                    "SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN"
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN"
                 };
 
                 return self.expected_ref(message, self.peek_token_ref());
@@ -11747,6 +11751,10 @@ impl<'a> Parser<'a> {
             let options = self.parse_comma_separated(|p| p.parse_object_name(false))?;
             self.expect_token(&Token::RParen)?;
             AlterTableOperation::ResetOptions { options }
+        } else if self.parse_keyword(Keyword::OPTIONS) {
+            AlterTableOperation::GenericOptions {
+                options: self.parse_alter_generic_options()?,
+            }
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -11818,10 +11826,14 @@ impl<'a> Parser<'a> {
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
-            Keyword::TABLE => self.parse_alter_table(false),
+            Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
-                self.parse_alter_table(true)
+                self.parse_alter_table(Some(AlterTableType::Iceberg))
+            }
+            Keyword::FOREIGN => {
+                self.expect_keyword(Keyword::TABLE)?;
+                self.parse_alter_table(Some(AlterTableType::Foreign))
             }
             Keyword::INDEX => {
                 let index_name = self.parse_object_name(false)?;
@@ -11863,7 +11875,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
                     self.peek_token_ref(),
                 )
             }
@@ -12084,7 +12096,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a [Statement::AlterTable]
-    pub fn parse_alter_table(&mut self, iceberg: bool) -> Result<Statement, ParserError> {
+    pub fn parse_alter_table(
+        &mut self,
+        table_type: Option<AlterTableType>,
+    ) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
@@ -12117,11 +12132,7 @@ impl<'a> Parser<'a> {
             operations,
             location,
             on_cluster,
-            table_type: if iceberg {
-                Some(AlterTableType::Iceberg)
-            } else {
-                None
-            },
+            table_type,
             end_token: AttachedToken(end_token),
         }
         .into())
@@ -21418,13 +21429,35 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.expect_token(&Token::LParen)?;
-        let options = self.parse_comma_separated(|p| {
-            let key = p.parse_identifier()?;
-            let value = p.parse_identifier()?;
-            Ok(CreateServerOption { key, value })
-        })?;
+        let options = self.parse_comma_separated(Parser::parse_pg_option)?;
         self.expect_token(&Token::RParen)?;
         Ok(Some(options))
+    }
+
+    fn parse_pg_option(&mut self) -> Result<CreateServerOption, ParserError> {
+        let key = self.parse_identifier()?;
+        let value = self.parse_identifier()?;
+        Ok(CreateServerOption { key, value })
+    }
+
+    /// Parse the parenthesized list following `OPTIONS` in an `ALTER` statement.
+    fn parse_alter_generic_options(&mut self) -> Result<Vec<AlterGenericOption>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| {
+            if p.parse_keyword(Keyword::SET) {
+                Ok(AlterGenericOption::Set(p.parse_pg_option()?))
+            } else if p.parse_keyword(Keyword::DROP) {
+                Ok(AlterGenericOption::Drop(p.parse_identifier()?))
+            } else {
+                let add_keyword = p.parse_keyword(Keyword::ADD);
+                Ok(AlterGenericOption::Add {
+                    option: p.parse_pg_option()?,
+                    add_keyword,
+                })
+            }
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(options)
     }
 
     /// Parse a `CREATE FOREIGN TABLE` statement.

@@ -15879,7 +15879,7 @@ fn parse_alter_trigger_spans() {
 
 #[test]
 fn parse_alter_rejects_missing_or_unknown_object_type() {
-    let objects = "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
+    let objects = "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR";
     for (sql, found) in [
         ("ALTER", "EOF"),
         ("ALTER 1", "1"),

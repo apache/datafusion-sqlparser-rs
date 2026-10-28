@@ -570,6 +570,14 @@ pub enum AlterTableOperation {
         /// Parameters to reset, optionally namespaced as in `toast.autovacuum_enabled`.
         options: Vec<ObjectName>,
     },
+    /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
+    /// options of a foreign table.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterforeigntable.html)
+    GenericOptions {
+        /// The option changes, in source order.
+        options: Vec<AlterGenericOption>,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -1135,6 +1143,9 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ResetOptions { options } => {
                 write!(f, "RESET ({})", display_comma_separated(options))
             }
+            AlterTableOperation::GenericOptions { options } => {
+                write!(f, "OPTIONS ({})", display_comma_separated(options))
+            }
         }
     }
 }
@@ -1388,6 +1399,14 @@ pub enum AlterColumnOperation {
         /// Optional sequence options for identity generation.
         sequence_options: Option<Vec<SequenceOptions>>,
     },
+    /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
+    /// options of a foreign table column.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterforeigntable.html)
+    GenericOptions {
+        /// The option changes, in source order.
+        options: Vec<AlterGenericOption>,
+    },
 }
 
 impl fmt::Display for AlterColumnOperation {
@@ -1437,6 +1456,48 @@ impl fmt::Display for AlterColumnOperation {
                 }
                 Ok(())
             }
+            AlterColumnOperation::GenericOptions { options } => {
+                write!(f, "OPTIONS ({})", display_comma_separated(options))
+            }
+        }
+    }
+}
+
+/// An element of a PostgreSQL `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`
+/// list in an `ALTER` statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterforeigntable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterGenericOption {
+    /// `[ ADD ] option 'value'`, which fails if the option is already set.
+    Add {
+        /// The option to add.
+        option: CreateServerOption,
+        /// Whether the `ADD` keyword was written.
+        add_keyword: bool,
+    },
+    /// `SET option 'value'`, which fails if the option is not set.
+    Set(CreateServerOption),
+    /// `DROP option`
+    Drop(Ident),
+}
+
+impl fmt::Display for AlterGenericOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterGenericOption::Add {
+                option,
+                add_keyword,
+            } => {
+                if *add_keyword {
+                    f.write_str("ADD ")?;
+                }
+                write!(f, "{option}")
+            }
+            AlterGenericOption::Set(option) => write!(f, "SET {option}"),
+            AlterGenericOption::Drop(key) => write!(f, "DROP {key}"),
         }
     }
 }
@@ -4864,6 +4925,9 @@ pub enum AlterTableType {
     /// External table type
     /// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
     External,
+    /// Foreign table type
+    /// <https://www.postgresql.org/docs/current/sql-alterforeigntable.html>
+    Foreign,
 }
 
 /// ALTER TABLE statement
@@ -4898,6 +4962,7 @@ impl fmt::Display for AlterTable {
             Some(AlterTableType::Iceberg) => write!(f, "ALTER ICEBERG TABLE ")?,
             Some(AlterTableType::Dynamic) => write!(f, "ALTER DYNAMIC TABLE ")?,
             Some(AlterTableType::External) => write!(f, "ALTER EXTERNAL TABLE ")?,
+            Some(AlterTableType::Foreign) => write!(f, "ALTER FOREIGN TABLE ")?,
             None => write!(f, "ALTER TABLE ")?,
         }
 

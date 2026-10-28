@@ -39,6 +39,7 @@ use crate::tokenizer::Span;
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RoleKeyword {
     /// `ROLE`, the general role object in both PostgreSQL and Redshift.
     Role,

@@ -6187,8 +6187,8 @@ impl<'a> Parser<'a> {
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
             } else if self.peek_keywords(&[Keyword::BEGIN, Keyword::ATOMIC]) {
                 ensure_not_set(&body.function_body, "BEGIN ATOMIC")?;
-                let begin_token = self.expect_keyword(Keyword::BEGIN)?;
-                self.expect_keyword_is(Keyword::ATOMIC)?;
+                let begin_token = self.next_token();
+                self.advance_token();
                 let statements = self.parse_statement_list(&[Keyword::END])?;
                 let end_token = self.expect_keyword(Keyword::END)?;
                 body.function_body = Some(CreateFunctionBody::BeginAtomic(BeginEndStatements {

@@ -12311,6 +12311,20 @@ fn parse_create_foreign_table_partition_of() {
     );
     assert!(stmt.columns.is_empty());
 
+    let sql = "CREATE FOREIGN TABLE part PARTITION OF public.root (id NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES FROM (MINVALUE) TO (MAXVALUE) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.columns.len(), 1);
+    assert_eq!(stmt.constraints.len(), 1);
+    assert_eq!(
+        stmt.for_values,
+        Some(ForValues::From {
+            from: vec![PartitionBoundValue::MinValue],
+            to: vec![PartitionBoundValue::MaxValue],
+        })
+    );
+
     for sql in [
         "CREATE FOREIGN TABLE IF NOT EXISTS part PARTITION OF root DEFAULT SERVER s OPTIONS (table_name 'remote')",
         "CREATE FOREIGN TABLE part PARTITION OF root (CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1, 2) SERVER s",
@@ -12337,6 +12351,22 @@ fn parse_create_foreign_table_partition_of() {
             "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES IN (1)",
             "Expected: SERVER, found: EOF",
         ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES IN () SERVER s",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES SERVER s",
+            "Expected: IN, FROM, or WITH after FOR VALUES, found: SERVER",
+        ),
+        (
+            "CREATE FOREIGN TABLE part (id INT) PARTITION OF root DEFAULT SERVER s",
+            "Expected: SERVER, found: PARTITION",
+        ),
     ] {
         assert_eq!(
             pg_and_generic()
@@ -12346,5 +12376,52 @@ fn parse_create_foreign_table_partition_of() {
             format!("sql parser error: {expected}"),
             "{sql}"
         );
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn visit_relations_create_foreign_table_partition_of() {
+    let stmts = pg()
+        .parse_sql_statements("CREATE FOREIGN TABLE part PARTITION OF public.root DEFAULT SERVER s")
+        .unwrap();
+    let mut relations = vec![];
+    let _ = sqlparser::ast::visit_relations(&stmts, |relation| {
+        relations.push(relation.to_string());
+        core::ops::ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(relations, ["part", "public.root"]);
+}
+
+#[test]
+fn display_create_foreign_table_partition_of_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1) SERVER s",
+    );
+    for rejected in [
+        "CREATE FOREIGN TABLE ",
+        " PARTITION OF ",
+        " (",
+        ", ",
+        ")",
+        "FOR VALUES IN (",
+        " SERVER ",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }

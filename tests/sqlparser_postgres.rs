@@ -12367,3 +12367,30 @@ fn display_alter_foreign_table_propagates_formatter_errors() {
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }
+
+#[test]
+fn parse_create_foreign_table_options_errors() {
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS schema_name 'public'",
+            "Expected: (, found: schema_name",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public'",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

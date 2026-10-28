@@ -12076,6 +12076,18 @@ fn parse_create_user_mapping() {
             "Expected: SERVER, found: EOF",
         ),
         (
+            "CREATE USER MAPPING FOR app SERVER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE USER MAPPING IF NOT EXISTS app SERVER s",
+            "Expected: FOR, found: app",
+        ),
+        (
+            "CREATE USER MAPPING FOR app SERVER s OPTIONS (password)",
+            "Expected: identifier, found: )",
+        ),
+        (
             "CREATE OR REPLACE USER MAPPING FOR app SERVER s",
             "CREATE USER MAPPING does not accept this modifier",
         ),
@@ -12088,5 +12100,29 @@ fn parse_create_user_mapping() {
             format!("sql parser error: {expected}"),
             "{sql}"
         );
+    }
+}
+
+#[test]
+fn display_create_user_mapping_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE USER MAPPING FOR app SERVER s OPTIONS (password 'secret')");
+    for rejected in ["CREATE USER MAPPING ", " OPTIONS ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }

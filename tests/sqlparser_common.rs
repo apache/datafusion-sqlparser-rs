@@ -22413,4 +22413,50 @@ fn parse_grant_role() {
             .unwrap_err(),
         ParserError::ParserError("Expected: a privilege keyword, found: bypasser".to_string())
     );
+
+    assert_matches!(
+        all_dialects().verified_stmt(r#"GRANT "select" TO anon"#),
+        Statement::GrantRole(_)
+    );
+    assert_matches!(
+        all_dialects().verified_stmt("GRANT SELECT TO anon"),
+        Statement::Grant(_)
+    );
+    for (sql, err) in [
+        ("GRANT bypasser TO", "Expected: identifier, found: EOF"),
+        (
+            "GRANT bypasser TO anon GRANTED BY 1",
+            "Expected: identifier, found: 1",
+        ),
+        ("GRANT 1 TO anon", "Expected: a privilege keyword, found: 1"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_grant_role_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let grant = verified_stmt("GRANT bypasser TO anon GRANTED BY admin");
+    for rejected in ["anon", "admin"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{grant}"), Err(fmt::Error), "{rejected}");
+    }
 }

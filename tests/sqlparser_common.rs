@@ -22666,3 +22666,51 @@ fn display_revoke_role_option_for_propagates_write_errors() {
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
     }
 }
+
+#[test]
+fn parse_grantee_after_public() {
+    let grantees =
+        |sql: &str| match all_dialects_except(|d| d.is::<MsSqlDialect>()).verified_stmt(sql) {
+            Statement::Grant(grant) => grant.grantees,
+            Statement::Revoke(revoke) => revoke.grantees,
+            stmt => panic!("unexpected statement: {stmt:?}"),
+        };
+    let public = || Grantee {
+        grantee_type: GranteesType::Public,
+        name: None,
+    };
+    let named = |grantee_type, name| Grantee {
+        grantee_type,
+        name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+            name,
+        )]))),
+    };
+
+    assert_eq!(
+        grantees("GRANT SELECT ON t TO PUBLIC, reader"),
+        vec![public(), named(GranteesType::None, "reader")]
+    );
+    assert_eq!(
+        grantees("REVOKE SELECT ON t FROM PUBLIC, ROLE r, PUBLIC"),
+        vec![public(), named(GranteesType::Role, "r"), public()]
+    );
+    assert_eq!(
+        grantees("GRANT SELECT ON t TO GROUP g, PUBLIC, reader"),
+        vec![
+            named(GranteesType::Group, "g"),
+            public(),
+            named(GranteesType::None, "reader")
+        ]
+    );
+
+    // MsSql reads PUBLIC as an ordinary name.
+    TestedDialects::new(vec![Box::new(MsSqlDialect {})])
+        .verified_stmt("GRANT SELECT ON t TO PUBLIC, reader");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT SELECT ON t TO PUBLIC,")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+}

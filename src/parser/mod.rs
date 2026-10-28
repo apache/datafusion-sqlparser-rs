@@ -12136,9 +12136,18 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
+        let on_cluster_loc = self.peek_token_ref().span.start;
         let on_cluster = self.parse_optional_on_cluster()?;
+        let foreign = table_type == Some(AlterTableType::Foreign);
+        if foreign && on_cluster.is_some() {
+            return parser_err!(
+                "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+                on_cluster_loc
+            );
+        }
         let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
 
+        let location_loc = self.peek_token_ref().span.start;
         let mut location = None;
         if self.parse_keyword(Keyword::LOCATION) {
             location = Some(HiveSetLocation {
@@ -12150,6 +12159,12 @@ impl<'a> Parser<'a> {
                 has_set: true,
                 location: self.parse_identifier()?,
             });
+        }
+        if foreign && location.is_some() {
+            return parser_err!(
+                "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+                location_loc
+            );
         }
 
         let end_token = if self.peek_token_ref().token == Token::SemiColon {

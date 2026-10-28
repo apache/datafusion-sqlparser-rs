@@ -11229,3 +11229,22 @@ fn parse_alter_table_attach_partition_of() {
         );
     }
 }
+
+#[test]
+fn parse_create_table_generated_column_modes() {
+    pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a))");
+    pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a) VIRTUAL)");
+    pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a) STORED)");
+
+    pg().one_statement_parses_to(
+        r#"CREATE TABLE users (
+    first_name text NOT NULL,
+    last_name text NOT NULL,
+    name character varying(255) GENERATED ALWAYS AS (((first_name || ' '::text) || last_name)) NOT NULL
+)"#,
+        "CREATE TABLE users (\
+        first_name TEXT NOT NULL, \
+        last_name TEXT NOT NULL, \
+        name CHARACTER VARYING(255) GENERATED ALWAYS AS (((first_name || ' '::TEXT) || last_name)) NOT NULL)",
+    );
+}

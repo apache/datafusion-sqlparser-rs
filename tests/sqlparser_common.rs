@@ -10602,7 +10602,7 @@ fn parse_create_role() {
     }
 
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
-    match verified_stmt(sql) {
+    match all_dialects_where(|d| d.supports_create_role_if_not_exists()).verified_stmt(sql) {
         Statement::CreateRole(create_role) => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
             assert!(create_role.if_not_exists);
@@ -22523,4 +22523,194 @@ fn display_grant_role_options_propagates_write_errors() {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
     }
+}
+
+#[test]
+fn parse_revoke_role() {
+    let sql = "REVOKE bypasser, auditor FROM anon GRANTED BY admin CASCADE";
+    assert_eq!(
+        all_dialects().verified_stmt(sql),
+        Statement::RevokeRole(RevokeRole {
+            option_for: None,
+            roles: vec![Ident::new("bypasser"), Ident::new("auditor")],
+            grantees: vec![Grantee {
+                grantee_type: GranteesType::None,
+                name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+                    "anon"
+                )]))),
+            }],
+            granted_by: Some(Ident::new("admin")),
+            cascade: Some(CascadeOption::Cascade),
+        })
+    );
+
+    all_dialects().verified_stmt("REVOKE bypasser FROM anon RESTRICT");
+    all_dialects().verified_stmt("REVOKE bypasser FROM anon");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE bypasser ON t FROM anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a privilege keyword, found: bypasser".to_string())
+    );
+    for (sql, expected) in [
+        ("REVOKE bypasser FROM", "Expected: identifier, found: EOF"),
+        (
+            "REVOKE bypasser FROM anon GRANTED BY",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+
+    let dialect = GenericDialect {};
+    for (sql, expected) in [
+        (
+            "1 FROM anon",
+            "Expected: identifier, found: 1 at Line: 1, Column: 1",
+        ),
+        (
+            "bypasser TO anon",
+            "Expected: FROM, found: TO at Line: 1, Column: 10",
+        ),
+    ] {
+        let err = Parser::new(&dialect)
+            .try_with_sql(sql)
+            .and_then(|mut parser| parser.parse_revoke_role())
+            .unwrap_err();
+        assert_eq!(err, ParserError::ParserError(expected.to_string()), "{sql}");
+    }
+}
+
+#[test]
+fn display_revoke_role_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement =
+        all_dialects().verified_stmt("REVOKE bypasser FROM anon GRANTED BY admin CASCADE");
+    for rejected in [
+        "REVOKE ",
+        "bypasser",
+        "anon",
+        " GRANTED BY ",
+        "admin",
+        "CASCADE",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}
+
+#[test]
+fn parse_revoke_role_option_for() {
+    let Statement::RevokeRole(RevokeRole { option_for, .. }) =
+        all_dialects().verified_stmt("REVOKE SET OPTION FOR bypasser FROM anon")
+    else {
+        panic!("Expected REVOKE role");
+    };
+    assert_eq!(option_for, Some(Ident::new("SET")));
+
+    all_dialects()
+        .verified_stmt("REVOKE ADMIN OPTION FOR bypasser FROM anon GRANTED BY admin RESTRICT");
+    all_dialects().verified_stmt("REVOKE INHERIT OPTION FOR bypasser, auditor FROM anon");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE ADMIN OPTION FOR bypasser TO anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: FROM, found: TO".to_string())
+    );
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE 1 FROM anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a privilege keyword, found: 1".to_string())
+    );
+}
+
+#[test]
+fn display_revoke_role_option_for_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = all_dialects().verified_stmt("REVOKE ADMIN OPTION FOR bypasser FROM anon");
+    for rejected in ["REVOKE ", "ADMIN", " OPTION FOR "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}
+
+#[test]
+fn parse_grantee_after_public() {
+    let grantees =
+        |sql: &str| match all_dialects_except(|d| d.is::<MsSqlDialect>()).verified_stmt(sql) {
+            Statement::Grant(grant) => grant.grantees,
+            Statement::Revoke(revoke) => revoke.grantees,
+            stmt => panic!("unexpected statement: {stmt:?}"),
+        };
+    let public = || Grantee {
+        grantee_type: GranteesType::Public,
+        name: None,
+    };
+    let named = |grantee_type, name| Grantee {
+        grantee_type,
+        name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+            name,
+        )]))),
+    };
+
+    assert_eq!(
+        grantees("GRANT SELECT ON t TO PUBLIC, reader"),
+        vec![public(), named(GranteesType::None, "reader")]
+    );
+    assert_eq!(
+        grantees("REVOKE SELECT ON t FROM PUBLIC, ROLE r, PUBLIC"),
+        vec![public(), named(GranteesType::Role, "r"), public()]
+    );
+    assert_eq!(
+        grantees("GRANT SELECT ON t TO GROUP g, PUBLIC, reader"),
+        vec![
+            named(GranteesType::Group, "g"),
+            public(),
+            named(GranteesType::None, "reader")
+        ]
+    );
+
+    // MsSql reads PUBLIC as an ordinary name.
+    TestedDialects::new(vec![Box::new(MsSqlDialect {})])
+        .verified_stmt("GRANT SELECT ON t TO PUBLIC, reader");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT SELECT ON t TO PUBLIC,")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }

@@ -445,6 +445,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `CREATE GROUP`.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-creategroup.html>
+    fn supports_create_group(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `CREATE ROLE` accepts `IF NOT EXISTS`.
+    fn supports_create_role_if_not_exists(&self) -> bool {
+        true
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false
@@ -1538,6 +1550,14 @@ pub trait Dialect: Debug + Any {
     ///
     /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
     fn supports_key_column_option(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports attaching a table as a partition with
+    /// `ALTER TABLE ... ATTACH PARTITION name { FOR VALUES ... | DEFAULT }`.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_attach_partition_of(&self) -> bool {
         false
     }
 

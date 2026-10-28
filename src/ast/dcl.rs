@@ -35,6 +35,27 @@ use crate::ast::{
 };
 use crate::tokenizer::Span;
 
+/// The object keyword in a `CREATE ROLE` or `CREATE GROUP` statement.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RoleKeyword {
+    /// `ROLE`, the general role object in both PostgreSQL and Redshift.
+    Role,
+    /// `GROUP`, an obsolete spelling of `ROLE` in PostgreSQL, and a user group
+    /// distinct from a role in Redshift.
+    Group,
+}
+
+impl fmt::Display for RoleKeyword {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            RoleKeyword::Role => "ROLE",
+            RoleKeyword::Group => "GROUP",
+        })
+    }
+}
+
 /// An option in `ROLE` statement.
 ///
 /// <https://www.postgresql.org/docs/current/sql-createrole.html>
@@ -309,6 +330,8 @@ impl fmt::Display for SecondaryRoles {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateRole {
+    /// Whether the statement was spelled `CREATE ROLE` or `CREATE GROUP`.
+    pub keyword: RoleKeyword,
     /// Role names to create.
     pub names: Vec<ObjectName>,
     /// Whether `IF NOT EXISTS` was specified.
@@ -353,7 +376,8 @@ impl fmt::Display for CreateRole {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+            "CREATE {keyword} {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+            keyword = self.keyword,
             if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
             names = display_separated(&self.names, ", "),
             superuser = match self.superuser {
@@ -533,6 +557,53 @@ impl fmt::Display for Revoke {
 impl From<Revoke> for crate::ast::Statement {
     fn from(v: Revoke) -> Self {
         crate::ast::Statement::Revoke(v)
+    }
+}
+
+/// `REVOKE [option OPTION FOR] role [, ...] FROM grantee [, ...] [GRANTED BY grantor] [CASCADE | RESTRICT]`
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-revoke.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RevokeRole {
+    /// The option named in `OPTION FOR`, such as `ADMIN`, withdrawn while the membership stays.
+    pub option_for: Option<Ident>,
+    /// Roles whose membership is revoked.
+    pub roles: Vec<Ident>,
+    /// Roles losing the membership.
+    pub grantees: Vec<Grantee>,
+    /// Optional `GRANTED BY` identifier.
+    pub granted_by: Option<Ident>,
+    /// Optional `CASCADE`/`RESTRICT` behavior.
+    pub cascade: Option<CascadeOption>,
+}
+
+impl fmt::Display for RevokeRole {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "REVOKE ")?;
+        if let Some(option_for) = &self.option_for {
+            write!(f, "{option_for} OPTION FOR ")?;
+        }
+        write!(
+            f,
+            "{} FROM {}",
+            display_comma_separated(&self.roles),
+            display_comma_separated(&self.grantees)
+        )?;
+        if let Some(granted_by) = &self.granted_by {
+            write!(f, " GRANTED BY {granted_by}")?;
+        }
+        if let Some(cascade) = &self.cascade {
+            write!(f, " {cascade}")?;
+        }
+        Ok(())
+    }
+}
+
+impl From<RevokeRole> for crate::ast::Statement {
+    fn from(v: RevokeRole) -> Self {
+        crate::ast::Statement::RevokeRole(v)
     }
 }
 

@@ -355,6 +355,14 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_create_group(&self) -> bool {
+        true
+    }
+
+    fn supports_create_role_if_not_exists(&self) -> bool {
+        false
+    }
+
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
             Precedence::Period => PERIOD_PREC,
@@ -567,6 +575,11 @@ impl Dialect for PostgreSqlDialect {
 
     /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
     fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_attach_partition_of(&self) -> bool {
         true
     }
 }

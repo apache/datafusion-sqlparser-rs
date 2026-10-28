@@ -238,6 +238,15 @@ pub enum AlterTableOperation {
         /// Partition expression to attach.
         partition: Partition,
     },
+    /// `ATTACH PARTITION partition_name { FOR VALUES partition_bound_spec | DEFAULT }`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    AttachPartitionOf {
+        /// The table to attach as a partition.
+        partition: ObjectName,
+        /// The partition bound.
+        for_values: ForValues,
+    },
     /// `DETACH PART|PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#detach-partitionpart)
@@ -929,6 +938,12 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::AttachPartition { partition } => {
                 write!(f, "ATTACH {partition}")
+            }
+            AlterTableOperation::AttachPartitionOf {
+                partition,
+                for_values,
+            } => {
+                write!(f, "ATTACH PARTITION {partition} {for_values}")
             }
             AlterTableOperation::DetachPartition { partition } => {
                 write!(f, "DETACH {partition}")

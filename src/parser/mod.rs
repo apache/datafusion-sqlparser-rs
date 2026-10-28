@@ -721,7 +721,17 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_deny()
                 }
-                Keyword::REVOKE => self.parse_revoke().map(Into::into),
+                Keyword::REVOKE => {
+                    if self.peek_role_grant_option_for() {
+                        self.parse_revoke_role().map(Into::into)
+                    } else {
+                        self.parse_privileges_or_roles(
+                            Keyword::FROM,
+                            Parser::parse_revoke,
+                            Parser::parse_revoke_role,
+                        )
+                    }
+                }
                 Keyword::START => self.parse_start_transaction(),
                 Keyword::BEGIN => self.parse_begin(),
                 Keyword::END => self.parse_end(),
@@ -5543,7 +5553,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
-            self.parse_create_role().map(Into::into)
+            self.parse_create_role(RoleKeyword::Role).map(Into::into)
+        } else if self.dialect.supports_create_group() && self.parse_keyword(Keyword::GROUP) {
+            self.parse_create_role(RoleKeyword::Group).map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::COLLATION) {
@@ -7088,9 +7100,23 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a `CREATE ROLE` statement.
-    pub fn parse_create_role(&mut self) -> Result<CreateRole, ParserError> {
-        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    /// Parse a `CREATE ROLE` or `CREATE GROUP` statement, after the keyword has been consumed.
+    pub fn parse_create_role(
+        &mut self,
+        role_keyword: RoleKeyword,
+    ) -> Result<CreateRole, ParserError> {
+        let supports_if_not_exists = matches!(role_keyword, RoleKeyword::Role)
+            && self.dialect.supports_create_role_if_not_exists();
+        if !supports_if_not_exists
+            && self.peek_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
+        {
+            return parser_err!(
+                format!("IF NOT EXISTS is not supported for CREATE {role_keyword}"),
+                self.peek_token_ref().span.start
+            );
+        }
+        let if_not_exists = supports_if_not_exists
+            && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 
         let _ = self.parse_keyword(Keyword::WITH); // [ WITH ]
@@ -7292,6 +7318,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(CreateRole {
+            keyword: role_keyword,
             names,
             if_not_exists,
             login,
@@ -10588,7 +10615,7 @@ impl<'a> Parser<'a> {
                 let nulls_distinct = self.parse_optional_nulls_distinct()?;
 
                 // optional index name
-                let index_name = self.parse_optional_ident()?;
+                let index_name = self.parse_optional_index_name()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
@@ -10623,7 +10650,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // optional index name
-                let index_name = self.parse_optional_ident()?;
+                let index_name = self.parse_optional_index_name()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
@@ -10704,10 +10731,7 @@ impl<'a> Parser<'a> {
             {
                 let display_as_key = w.keyword == Keyword::KEY;
 
-                let name = match &self.peek_token_ref().token {
-                    Token::Word(word) if word.keyword == Keyword::USING => None,
-                    _ => self.parse_optional_ident()?,
-                };
+                let name = self.parse_optional_index_name()?;
 
                 let index_type = self.parse_optional_using_then_index_type()?;
                 let columns = self.parse_parenthesized_index_column_list()?;
@@ -10972,6 +10996,15 @@ impl<'a> Parser<'a> {
     /// Parse an optional identifier, returning `Some(Ident)` if present.
     pub fn parse_optional_ident(&mut self) -> Result<Option<Ident>, ParserError> {
         self.maybe_parse(|parser| parser.parse_identifier())
+    }
+
+    /// Parse an optional index name, leaving a `USING` index type for the caller.
+    fn parse_optional_index_name(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.peek_keyword(Keyword::USING) {
+            Ok(None)
+        } else {
+            self.parse_optional_ident()
+        }
     }
 
     #[must_use]
@@ -11525,6 +11558,13 @@ impl<'a> Parser<'a> {
         {
             let new_owner = self.parse_owner()?;
             AlterTableOperation::OwnerTo { new_owner }
+        } else if self.dialect.supports_attach_partition_of()
+            && self.parse_keywords(&[Keyword::ATTACH, Keyword::PARTITION])
+        {
+            AlterTableOperation::AttachPartitionOf {
+                partition: self.parse_object_name(false)?,
+                for_values: self.parse_partition_for_values()?,
+            }
         } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
             && self.parse_keyword(Keyword::ATTACH)
         {
@@ -18522,6 +18562,9 @@ impl<'a> Parser<'a> {
                 GranteesType::ApplicationRole
             } else if self.parse_keyword(Keyword::APPLICATION) {
                 GranteesType::Application
+            } else if grantee_type == GranteesType::Public {
+                // PUBLIC does not carry over to the next grantee.
+                GranteesType::None
             } else {
                 grantee_type.clone() // keep from previous iteraton, if not specified
             };
@@ -19085,6 +19128,48 @@ impl<'a> Parser<'a> {
             granted_by,
             cascade,
         })
+    }
+
+    /// Parse a `REVOKE` of role membership, after the `REVOKE` keyword.
+    pub fn parse_revoke_role(&mut self) -> Result<RevokeRole, ParserError> {
+        let option_for = self.parse_role_grant_option_for();
+        let roles = self.parse_comma_separated(Parser::parse_identifier)?;
+        self.expect_keyword_is(Keyword::FROM)?;
+        let grantees = self.parse_grantees()?;
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        let cascade = self.parse_cascade_option();
+        Ok(RevokeRole {
+            option_for,
+            roles,
+            grantees,
+            granted_by,
+            cascade,
+        })
+    }
+
+    /// Parses `name OPTION FOR`, leaving `GRANT OPTION FOR` to the privilege form.
+    fn parse_role_grant_option_for(&mut self) -> Option<Ident> {
+        let index = self.index;
+        if !self.peek_keyword(Keyword::GRANT) {
+            if let Ok(name) = self.parse_identifier() {
+                if self.parse_keywords(&[Keyword::OPTION, Keyword::FOR]) {
+                    return Some(name);
+                }
+            }
+        }
+        self.index = index;
+        None
+    }
+
+    fn peek_role_grant_option_for(&mut self) -> bool {
+        let index = self.index;
+        let matched = self.parse_role_grant_option_for().is_some();
+        self.index = index;
+        matched
     }
 
     /// Parse an REPLACE statement

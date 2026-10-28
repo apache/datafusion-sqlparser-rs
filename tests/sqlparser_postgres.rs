@@ -11392,3 +11392,16 @@ fn parse_non_decimal_integer_literals() {
         assert!(err.contains(message), "{sql}: {err}");
     }
 }
+
+#[cfg(feature = "bigdecimal")]
+#[test]
+fn parse_non_decimal_integer_token_with_invalid_digits() {
+    let err = Parser::new(&PostgreSqlDialect {})
+        .with_tokens(vec![Token::Number("0xZZ".to_string(), false)])
+        .parse_value()
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ParserError::ParserError("Could not parse '0xZZ' as an integer".to_string())
+    );
+}

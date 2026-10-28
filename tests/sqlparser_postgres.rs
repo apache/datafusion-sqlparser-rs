@@ -12291,3 +12291,61 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_column_generic_options() {
+    let sql = r#"CREATE FOREIGN TABLE ft (id INT OPTIONS (column_name 'remote_id') NOT NULL, b TEXT OPTIONS (column_name 'rb', "x" 'y') COLLATE "C") SERVER s"#;
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.columns[0].options,
+        vec![
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::GenericOptions(vec![CreateServerOption {
+                    key: Ident::new("column_name"),
+                    value: Ident::with_quote('\'', "remote_id"),
+                }]),
+            },
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::NotNull,
+            },
+        ]
+    );
+    assert_eq!(
+        stmt.columns[1].options[0].option,
+        ColumnOption::GenericOptions(vec![
+            CreateServerOption {
+                key: Ident::new("column_name"),
+                value: Ident::with_quote('\'', "rb"),
+            },
+            CreateServerOption {
+                key: Ident::with_quote('"', "x"),
+                value: Ident::with_quote('\'', "y"),
+            },
+        ])
+    );
+
+    // PostgreSQL rejects column options on a table that is not foreign only at execution.
+    pg().verified_stmt("CREATE TABLE t (id INT OPTIONS (column_name 'remote_id'))");
+    pg().verified_stmt("ALTER TABLE t ADD COLUMN note TEXT OPTIONS (column_name 'memo')");
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE ft (id INT OPTIONS (column_name)) SERVER s",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (id INT OPTIONS ()) SERVER s",
+            "Expected: identifier, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

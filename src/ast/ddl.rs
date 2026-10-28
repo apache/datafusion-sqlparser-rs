@@ -2052,6 +2052,11 @@ pub enum ColumnOption {
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
     Options(Vec<SqlOption>),
+    /// PostgreSQL `OPTIONS ( option 'value' [, ...] )` of a column, passed to the
+    /// foreign-data wrapper of a foreign table.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+    GenericOptions(Vec<CreateServerOption>),
     /// Creates an identity or an autoincrement column in a table.
     /// Syntax
     /// ```sql
@@ -2224,6 +2229,9 @@ impl fmt::Display for ColumnOption {
             }
             Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            GenericOptions(options) => {
+                write!(f, "OPTIONS ({})", display_comma_separated(options))
             }
             Identity(parameters) => {
                 write!(f, "{parameters}")

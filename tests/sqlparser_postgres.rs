@@ -11351,3 +11351,44 @@ fn parse_drop_foreign_table_rejects_modifiers() {
         );
     }
 }
+
+#[test]
+fn parse_non_decimal_integer_literals() {
+    let sql = "SELECT 0x1F, 0X1F, 0o17, 0O17, 0b101, 0B101, 0x_1F, 0xFF_FF, 0xFFFFFFFFFFFFFFFFFFFF";
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 31, 31, 15, 15, 5, 5, 31, 65535, 1208925819614629174706175"
+    } else {
+        sql
+    };
+    let select = pg().verified_only_select_with_canonical(sql, canonical);
+    for item in &select.projection {
+        assert!(
+            matches!(
+                item,
+                SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+                    value: Value::Number(_, false),
+                    ..
+                }))
+            ),
+            "{item:?}"
+        );
+    }
+
+    assert_eq!(
+        expr_from_projection(&pg().verified_only_select("SELECT X'1F'").projection[0]),
+        &Expr::Value(Value::HexStringLiteral("1F".to_string()).with_empty_span())
+    );
+
+    for (sql, message) in [
+        ("SELECT 0x", "Expected a hexadecimal digit after '0x'"),
+        ("SELECT 0Xg", "Expected a hexadecimal digit after '0X'"),
+        ("SELECT 0o8", "Expected an octal digit after '0o'"),
+        ("SELECT 0b2", "Expected a binary digit after '0b'"),
+        ("SELECT 0x_", "Expected a hexadecimal digit after '0x'"),
+        ("SELECT 0x__1", "Unexpected character '_'"),
+        ("SELECT 0x1_", "Unexpected character '_'"),
+    ] {
+        let err = pg().parse_sql_statements(sql).unwrap_err().to_string();
+        assert!(err.contains(message), "{sql}: {err}");
+    }
+}

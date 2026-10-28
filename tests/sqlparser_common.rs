@@ -22544,6 +22544,7 @@ fn parse_revoke_role() {
     );
 
     all_dialects().verified_stmt("REVOKE bypasser FROM anon RESTRICT");
+    all_dialects().verified_stmt("REVOKE bypasser FROM anon");
 
     assert_eq!(
         all_dialects()
@@ -22551,4 +22552,66 @@ fn parse_revoke_role() {
             .unwrap_err(),
         ParserError::ParserError("Expected: a privilege keyword, found: bypasser".to_string())
     );
+    for (sql, expected) in [
+        ("REVOKE bypasser FROM", "Expected: identifier, found: EOF"),
+        (
+            "REVOKE bypasser FROM anon GRANTED BY",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+
+    let dialect = GenericDialect {};
+    for (sql, expected) in [
+        (
+            "1 FROM anon",
+            "Expected: identifier, found: 1 at Line: 1, Column: 1",
+        ),
+        (
+            "bypasser TO anon",
+            "Expected: FROM, found: TO at Line: 1, Column: 10",
+        ),
+    ] {
+        let err = Parser::new(&dialect)
+            .try_with_sql(sql)
+            .and_then(|mut parser| parser.parse_revoke_role())
+            .unwrap_err();
+        assert_eq!(err, ParserError::ParserError(expected.to_string()), "{sql}");
+    }
+}
+
+#[test]
+fn display_revoke_role_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement =
+        all_dialects().verified_stmt("REVOKE bypasser FROM anon GRANTED BY admin CASCADE");
+    for rejected in [
+        "REVOKE ",
+        "bypasser",
+        "anon",
+        " GRANTED BY ",
+        "admin",
+        "CASCADE",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
 }

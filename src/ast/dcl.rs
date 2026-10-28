@@ -575,6 +575,7 @@ impl From<Revoke> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RevokeRole {
     /// The option named in `OPTION FOR`, such as `ADMIN`, withdrawn while the membership stays.
     pub option_for: Option<Ident>,

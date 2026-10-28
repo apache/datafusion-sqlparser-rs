@@ -12394,3 +12394,30 @@ fn parse_create_foreign_table_options_errors() {
         );
     }
 }
+
+#[test]
+fn parse_alter_foreign_table_rejects_clauses() {
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft ON CLUSTER c ADD COLUMN x INT",
+            "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT SET LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

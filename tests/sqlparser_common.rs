@@ -22501,3 +22501,26 @@ fn parse_grant_role_options() {
         ParserError::ParserError("Expected: identifier, found: 1".to_string())
     );
 }
+
+#[test]
+fn display_grant_role_options_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = all_dialects().verified_stmt("GRANT bypasser TO anon WITH SET FALSE");
+    for rejected in [" WITH ", "SET", "FALSE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}

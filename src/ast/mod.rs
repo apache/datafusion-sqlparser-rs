@@ -4577,7 +4577,7 @@ pub enum Statement {
         or_alter: bool,
         /// Procedure name.
         name: ObjectName,
-        /// Optional procedure parameters.
+        /// Parenthesized parameter list, `None` when absent.
         params: Option<Vec<ProcedureParam>>,
         /// Optional language identifier.
         language: Option<Ident>,
@@ -5591,9 +5591,7 @@ impl fmt::Display for Statement {
                 )?;
 
                 if let Some(p) = params {
-                    if !p.is_empty() {
-                        write!(f, " ({})", display_comma_separated(p))?;
-                    }
+                    write!(f, " ({})", display_comma_separated(p))?;
                 }
 
                 if let Some(language) = language {

@@ -195,6 +195,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/delete.html>
+    fn supports_delete_limit(&self) -> bool {
+        true
+    }
+
     fn supports_data_type_signed_suffix(&self) -> bool {
         true
     }

@@ -11059,6 +11059,64 @@ fn parse_role_signed_connection_limit() {
 }
 
 #[test]
+fn parse_create_table_column_unique_nulls_distinct() {
+    let Statement::CreateTable(CreateTable { columns, .. }) = pg_and_generic().verified_stmt(
+        "CREATE TABLE t (u INT UNIQUE NULLS NOT DISTINCT, v INT UNIQUE NULLS DISTINCT, w INT UNIQUE)",
+    ) else {
+        panic!("Expected CREATE TABLE");
+    };
+    let nulls_distinct: Vec<_> = columns
+        .iter()
+        .map(|column| match &column.options[..] {
+            [ColumnOptionDef {
+                option: ColumnOption::Unique(constraint),
+                ..
+            }] => &constraint.nulls_distinct,
+            options => panic!("Expected one UNIQUE option, got {options:?}"),
+        })
+        .collect();
+    assert_eq!(
+        nulls_distinct,
+        vec![
+            &NullsDistinctOption::NotDistinct,
+            &NullsDistinctOption::Distinct,
+            &NullsDistinctOption::None,
+        ]
+    );
+
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (u INT CONSTRAINT k UNIQUE NULLS NOT DISTINCT DEFERRABLE NOT NULL)",
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("CREATE TABLE t (u INT UNIQUE NULLS NOT)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: DISTINCT, found: )".to_string())
+    );
+}
+
+#[test]
+fn display_column_unique_nulls_distinct_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter;
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains("NULLS") {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic().verified_stmt("CREATE TABLE t (u INT UNIQUE NULLS NOT DISTINCT)");
+    assert_eq!(write!(RejectingWriter, "{stmt}"), Err(fmt::Error));
+}
+
+#[test]
 fn parse_create_table_generated_column_modes() {
     pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a))");
     pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a) VIRTUAL)");

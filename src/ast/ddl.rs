@@ -1978,7 +1978,7 @@ pub enum ColumnOption {
 
     /// `PRIMARY KEY [<constraint_characteristics>]`
     PrimaryKey(PrimaryKeyConstraint),
-    /// `UNIQUE [<constraint_characteristics>]`
+    /// `UNIQUE [NULLS [NOT] DISTINCT] [<constraint_characteristics>]`
     Unique(UniqueConstraint),
     /// A referential integrity constraint (`REFERENCES <foreign_table> (<referred_columns>)
     /// [ MATCH { FULL | PARTIAL | SIMPLE } ]
@@ -2113,7 +2113,11 @@ impl fmt::Display for ColumnOption {
                 Ok(())
             }
             Unique(constraint) => {
-                write!(f, "UNIQUE{:>}", constraint.index_type_display)?;
+                write!(
+                    f,
+                    "UNIQUE{:>}{}",
+                    constraint.index_type_display, constraint.nulls_distinct
+                )?;
                 if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
                 }

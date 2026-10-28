@@ -10129,6 +10129,7 @@ impl<'a> Parser<'a> {
                 } else {
                     KeyOrIndexDisplay::None
                 };
+            let nulls_distinct = self.parse_optional_nulls_distinct()?;
             let characteristics = self.parse_constraint_characteristics()?;
             Ok(Some(
                 UniqueConstraint {
@@ -10140,7 +10141,7 @@ impl<'a> Parser<'a> {
                     include: vec![],
                     index_options: vec![],
                     characteristics,
-                    nulls_distinct: NullsDistinctOption::None,
+                    nulls_distinct,
                 }
                 .into(),
             ))

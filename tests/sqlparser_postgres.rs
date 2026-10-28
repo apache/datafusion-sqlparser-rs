@@ -11255,4 +11255,11 @@ fn parse_comment_on_foreign_table() {
             .to_string(),
         "sql parser error: Expected: IS, found: 'x'"
     );
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN TABLE")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
 }

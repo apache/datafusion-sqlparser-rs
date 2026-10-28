@@ -12542,3 +12542,73 @@ fn parse_alter_foreign_table_rejects_clauses() {
         );
     }
 }
+
+#[test]
+fn parse_alter_server() {
+    let sql = "ALTER SERVER s VERSION NULL OPTIONS (ADD host 'db', SET port '5432', DROP dbname)";
+    let Statement::AlterServer(alter) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(alter.name, Ident::new("s"));
+    let AlterServerOperation::Update { version, options } = alter.operation else {
+        unreachable!()
+    };
+    assert_eq!(version.map(|version| version.value), Some(Value::Null));
+    assert_eq!(
+        options,
+        Some(vec![
+            AlterGenericOption::Add {
+                option: CreateServerOption {
+                    key: Ident::new("host"),
+                    value: Ident::with_quote('\'', "db"),
+                },
+                add_keyword: true,
+            },
+            AlterGenericOption::Set(CreateServerOption {
+                key: Ident::new("port"),
+                value: Ident::with_quote('\'', "5432"),
+            }),
+            AlterGenericOption::Drop(Ident::new("dbname")),
+        ])
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER SERVER s OWNER TO postgres"),
+        Statement::AlterServer(AlterServer {
+            name: Ident::new("s"),
+            operation: AlterServerOperation::OwnerTo(Owner::Ident(Ident::new("postgres"))),
+        })
+    );
+    for sql in [
+        "ALTER SERVER s VERSION '2.0'",
+        "ALTER SERVER s OPTIONS (host 'db')",
+        "ALTER SERVER s OWNER TO CURRENT_USER",
+        "ALTER SERVER s RENAME TO s2",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER SERVER s",
+            "Expected: VERSION, OPTIONS, OWNER TO, or RENAME TO after ALTER SERVER, found: EOF",
+        ),
+        (
+            "ALTER SERVER s OPTIONS (port '1') VERSION '4'",
+            "Expected: end of statement, found: VERSION",
+        ),
+        (
+            "ALTER SERVER public.s OWNER TO app",
+            "Expected: VERSION, OPTIONS, OWNER TO, or RENAME TO after ALTER SERVER, found: .",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

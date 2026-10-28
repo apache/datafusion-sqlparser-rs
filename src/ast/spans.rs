@@ -29,28 +29,28 @@ use crate::tokenizer::Span;
 
 use super::{
     comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterGenericOption, AlterIndexOperation, AlterTableOperation, AlterTrigger,
-    AlterTriggerOperation, AlterView, AlterViewOperation, Analyze, Array, Assignment,
-    AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
-    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
-    ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
-    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
-    Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
-    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
-    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RefreshMaterializedView,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    AlterGenericOption, AlterIndexOperation, AlterServer, AlterServerOperation,
+    AlterTableOperation, AlterTrigger, AlterTriggerOperation, AlterView, AlterViewOperation,
+    Analyze, Array, Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement,
+    CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
+    ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectByKind,
+    ConstraintCharacteristics, CopySource, CreateIndex, CreateRule, CreateRuleAction, CreateTable,
+    CreateTableOptions, CreateUserMapping, Cte, Delete, DoUpdate, ExceptSelectItem,
+    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
+    IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
+    JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge,
+    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
+    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr,
+    OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
+    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
+    Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -416,6 +416,7 @@ impl Spanned for Statement {
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterCollation { .. } => Span::empty(),
+            Statement::AlterServer(alter_server) => alter_server.span(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
@@ -2852,6 +2853,23 @@ impl Spanned for CreateUserMapping {
                     .flat_map(|option| [option.key.span, option.value.span]),
             ),
         )
+    }
+}
+
+impl Spanned for AlterServer {
+    fn span(&self) -> Span {
+        let operation = match &self.operation {
+            AlterServerOperation::Update { version, options } => Span::union_iter(
+                version
+                    .iter()
+                    .map(|version| version.span)
+                    .chain(options.iter().flatten().map(|option| option.span())),
+            ),
+            AlterServerOperation::OwnerTo(Owner::Ident(owner)) => owner.span,
+            AlterServerOperation::OwnerTo(_) => Span::empty(),
+            AlterServerOperation::RenameTo { new_name } => new_name.span,
+        };
+        self.name.span.union(&operation)
     }
 }
 

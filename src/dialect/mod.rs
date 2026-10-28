@@ -1541,6 +1541,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports attaching a table as a partition with
+    /// `ALTER TABLE ... ATTACH PARTITION name { FOR VALUES ... | DEFAULT }`.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_attach_partition_of(&self) -> bool {
+        false
+    }
+
     /// Returns true if the specified keyword is reserved and cannot be
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {

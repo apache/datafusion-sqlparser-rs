@@ -11528,6 +11528,13 @@ impl<'a> Parser<'a> {
         {
             let new_owner = self.parse_owner()?;
             AlterTableOperation::OwnerTo { new_owner }
+        } else if self.dialect.supports_attach_partition_of()
+            && self.parse_keywords(&[Keyword::ATTACH, Keyword::PARTITION])
+        {
+            AlterTableOperation::AttachPartitionOf {
+                partition: self.parse_object_name(false)?,
+                for_values: self.parse_partition_for_values()?,
+            }
         } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
             && self.parse_keyword(Keyword::ATTACH)
         {

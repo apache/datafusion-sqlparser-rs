@@ -1208,6 +1208,10 @@ impl Spanned for AlterTableOperation {
                 drop_behavior: _,
             } => union_spans(column_names.iter().map(|i| i.span)),
             AlterTableOperation::AttachPartition { partition } => partition.span(),
+            AlterTableOperation::AttachPartitionOf {
+                partition,
+                for_values,
+            } => partition.span().union(&for_values.span()),
             AlterTableOperation::DetachPartition { partition } => partition.span(),
             AlterTableOperation::FreezePartition {
                 partition,

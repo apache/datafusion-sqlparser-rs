@@ -12378,6 +12378,26 @@ fn parse_alter_foreign_table() {
             "Expected: identifier, found: )",
         ),
         (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100'",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ADD fetch_size '100'",
+            "Expected: (, found: ADD",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS column_name 'remote_id'",
+            "Expected: (, found: column_name",
+        ),
+        (
             "ALTER FOREIGN ft OWNER TO app",
             "Expected: TABLE, found: ft",
         ),
@@ -12390,5 +12410,43 @@ fn parse_alter_foreign_table() {
             format!("sql parser error: {expected}"),
             "{sql}"
         );
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+}
+
+#[test]
+fn display_alter_foreign_table_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt =
+        pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100')");
+    for rejected in ["ALTER FOREIGN TABLE ", "ADD "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }

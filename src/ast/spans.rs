@@ -302,6 +302,7 @@ impl Spanned for Values {
 /// - [Statement::Assert]
 /// - [Statement::Grant]
 /// - [Statement::Revoke]
+/// - [Statement::GrantRole]
 /// - [Statement::Deallocate]
 /// - [Statement::Execute]
 /// - [Statement::Prepare]
@@ -469,6 +470,7 @@ impl Spanned for Statement {
             Statement::Grant { .. } => Span::empty(),
             Statement::Deny { .. } => Span::empty(),
             Statement::Revoke { .. } => Span::empty(),
+            Statement::GrantRole { .. } => Span::empty(),
             Statement::Deallocate { .. } => Span::empty(),
             Statement::Execute { .. } => Span::empty(),
             Statement::Prepare { .. } => Span::empty(),

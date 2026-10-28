@@ -58,8 +58,8 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo, TypeModifier,
 };
 pub use self::dcl::{
-    AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
-    SetConfigValue, Use,
+    AlterRoleOperation, CreateRole, Grant, GrantRole, ResetConfig, Revoke, RoleOption,
+    SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
     AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,
@@ -4669,6 +4669,10 @@ pub enum Statement {
     /// ```
     Grant(Grant),
     /// ```sql
+    /// GRANT roles TO grantees
+    /// ```
+    GrantRole(GrantRole),
+    /// ```sql
     /// DENY privileges ON object TO grantees
     /// ```
     Deny(DenyStatement),
@@ -6183,6 +6187,7 @@ impl fmt::Display for Statement {
             Statement::Grant(grant) => write!(f, "{grant}"),
             Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke(revoke) => write!(f, "{revoke}"),
+            Statement::GrantRole(grant) => write!(f, "{grant}"),
             Statement::Deallocate { name, prepare } => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",

@@ -1978,7 +1978,7 @@ pub enum ColumnOption {
 
     /// `PRIMARY KEY [<constraint_characteristics>]`
     PrimaryKey(PrimaryKeyConstraint),
-    /// `UNIQUE [<constraint_characteristics>]`
+    /// `UNIQUE [NULLS [NOT] DISTINCT] [<constraint_characteristics>]`
     Unique(UniqueConstraint),
     /// A referential integrity constraint (`REFERENCES <foreign_table> (<referred_columns>)
     /// [ MATCH { FULL | PARTIAL | SIMPLE } ]
@@ -2113,7 +2113,11 @@ impl fmt::Display for ColumnOption {
                 Ok(())
             }
             Unique(constraint) => {
-                write!(f, "UNIQUE{:>}", constraint.index_type_display)?;
+                write!(
+                    f,
+                    "UNIQUE{:>}{}",
+                    constraint.index_type_display, constraint.nulls_distinct
+                )?;
                 if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
                 }
@@ -5101,17 +5105,13 @@ impl fmt::Display for OperatorClassItem {
                 op_types,
                 function_name,
                 argument_types,
-            } => {
-                write!(f, "FUNCTION {support_number}")?;
-                if let Some(types) = op_types {
-                    write!(f, " ({})", display_comma_separated(types))?;
-                }
-                write!(f, " {function_name}")?;
-                if !argument_types.is_empty() {
-                    write!(f, "({})", display_comma_separated(argument_types))?;
-                }
-                Ok(())
-            }
+            } => fmt_operator_function(
+                f,
+                *support_number,
+                op_types.as_deref(),
+                function_name,
+                argument_types,
+            ),
             OperatorClassItem::Storage { storage_type } => {
                 write!(f, "STORAGE {storage_type}")
             }
@@ -5337,19 +5337,33 @@ impl fmt::Display for OperatorFamilyItem {
                 op_types,
                 function_name,
                 argument_types,
-            } => {
-                write!(f, "FUNCTION {support_number}")?;
-                if let Some(types) = op_types {
-                    write!(f, " ({})", display_comma_separated(types))?;
-                }
-                write!(f, " {function_name}")?;
-                if !argument_types.is_empty() {
-                    write!(f, "({})", display_comma_separated(argument_types))?;
-                }
-                Ok(())
-            }
+            } => fmt_operator_function(
+                f,
+                *support_number,
+                op_types.as_deref(),
+                function_name,
+                argument_types,
+            ),
         }
     }
+}
+
+fn fmt_operator_function(
+    f: &mut fmt::Formatter,
+    support_number: u64,
+    op_types: Option<&[DataType]>,
+    function_name: &ObjectName,
+    argument_types: &[DataType],
+) -> fmt::Result {
+    write!(f, "FUNCTION {support_number}")?;
+    if let Some(types) = op_types {
+        write!(f, " ({})", display_comma_separated(types))?;
+    }
+    write!(f, " {function_name}")?;
+    if !argument_types.is_empty() {
+        write!(f, "({})", display_comma_separated(argument_types))?;
+    }
+    Ok(())
 }
 
 impl fmt::Display for OperatorFamilyDropItem {

@@ -151,7 +151,9 @@ pub use self::teradata::TeradataDialect;
 #[cfg(feature = "derive-dialect")]
 pub use sqlparser_derive::derive_dialect;
 
-use crate::ast::{ColumnOption, DataType, Expr, GranteesType, Ident, ObjectNamePart, Statement};
+use crate::ast::{
+    BinaryOperator, ColumnOption, DataType, Expr, GranteesType, Ident, ObjectNamePart, Statement,
+};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -2317,6 +2319,26 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "teradata" => Some(Box::new(TeradataDialect {})),
         _ => None,
     }
+}
+
+/// Parse `DIV` using the caller's infix precedence.
+fn parse_div_infix(
+    parser: &mut Parser,
+    expr: &Expr,
+    precedence: u8,
+) -> Option<Result<Expr, ParserError>> {
+    if !parser.parse_keyword(Keyword::DIV) {
+        return None;
+    }
+    Some(
+        parser
+            .parse_subexpr(precedence)
+            .map(|right| Expr::BinaryOp {
+                left: Box::new(expr.clone()),
+                op: BinaryOperator::MyIntegerDivide,
+                right: Box::new(right),
+            }),
+    )
 }
 
 #[cfg(test)]

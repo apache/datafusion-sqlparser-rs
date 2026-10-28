@@ -3805,6 +3805,7 @@ fn parse_string_introducers() {
     mysql().verified_stmt("SELECT _binary 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
+    mysql().one_statement_parses_to("SELECT _utf8mb4\"abc\"", "SELECT _utf8mb4 \"abc\"");
     mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
 }
 

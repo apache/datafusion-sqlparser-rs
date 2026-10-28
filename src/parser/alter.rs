@@ -523,7 +523,7 @@ impl Parser<'_> {
             Some(Keyword::NOBYPASSRLS) => RoleOption::BypassRLS(false),
             Some(Keyword::CONNECTION) => {
                 self.expect_keyword_is(Keyword::LIMIT)?;
-                RoleOption::ConnectionLimit(Expr::Value(self.parse_number_value()?))
+                RoleOption::ConnectionLimit(self.parse_number()?)
             }
             Some(Keyword::CREATEDB) => RoleOption::CreateDB(true),
             Some(Keyword::NOCREATEDB) => RoleOption::CreateDB(false),

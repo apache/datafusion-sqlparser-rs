@@ -1477,6 +1477,22 @@ impl fmt::Display for TableIndexDirective {
     }
 }
 
+/// PostgreSQL table inheritance marker, see [`TableFactor::Table::inheritance`].
+///
+/// <https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableInheritance {
+    /// `ONLY name`, or `ONLY (name)` when `parenthesized`, excluding descendant tables.
+    Only {
+        /// Whether the name was written in parentheses.
+        parenthesized: bool,
+    },
+    /// `name *`, explicitly including descendant tables.
+    IncludeDescendants,
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1516,6 +1532,8 @@ pub enum TableFactor {
         sample: Option<TableSampleKind>,
         /// Optional table-level index-selection hints or requirements.
         index_directives: Vec<TableIndexDirective>,
+        /// PostgreSQL `ONLY` or `*` inheritance marker.
+        inheritance: Option<TableInheritance>,
     },
     /// A derived table (a parenthesized subquery), optionally `LATERAL`.
     Derived {
@@ -2250,8 +2268,18 @@ impl fmt::Display for TableFactor {
                 json_path,
                 sample,
                 index_directives,
+                inheritance,
             } => {
-                name.fmt(f)?;
+                match inheritance {
+                    Some(TableInheritance::Only {
+                        parenthesized: true,
+                    }) => write!(f, "ONLY ({name})")?,
+                    Some(TableInheritance::Only {
+                        parenthesized: false,
+                    }) => write!(f, "ONLY {name}")?,
+                    Some(TableInheritance::IncludeDescendants) => write!(f, "{name} *")?,
+                    None => name.fmt(f)?,
+                }
                 if let Some(json_path) = json_path {
                     json_path.fmt(f)?;
                 }

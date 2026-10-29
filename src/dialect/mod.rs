@@ -2174,6 +2174,20 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `ONLY` and `*` table
+    /// inheritance markers on a table factor.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM ONLY parent;
+    /// SELECT * FROM parent *;
+    /// ```
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM)
+    fn supports_table_inheritance_markers(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `FORMAT` clause in `SELECT` statements.
     ///
     /// Example:

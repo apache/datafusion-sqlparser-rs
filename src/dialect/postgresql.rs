@@ -338,7 +338,7 @@ impl Dialect for PostgreSqlDialect {
             | Token::ShiftLeft
             | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
             // lowest prec to prevent it from turning into a binary op
-            Token::Colon => Some(Ok(self.prec_unknown())),
+            Token::Colon | Token::Assignment => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }
@@ -459,6 +459,11 @@ impl Dialect for PostgreSqlDialect {
     /// SELECT json_object('label': 'value')
     /// ```
     fn supports_named_fn_args_with_expr_name(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-syntax-calling-funcs.html#SQL-SYNTAX-CALLING-FUNCS-NAMED>
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
         true
     }
 

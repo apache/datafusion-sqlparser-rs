@@ -1187,6 +1187,7 @@ define_keywords!(
     VARYING,
     VAR_POP,
     VAR_SAMP,
+    VECTOR,
     VERBOSE,
     VERSION,
     VERSIONING,

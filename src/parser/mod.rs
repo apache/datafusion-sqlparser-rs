@@ -5565,12 +5565,7 @@ impl<'a> Parser<'a> {
             self.parse_create_schema(or_replace)
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
             self.parse_create_warehouse(or_replace).map(Into::into)
-        } else if matches!(
-            &self.peek_token_ref().token,
-            Token::Word(w) if w.keyword == Keyword::NoKeyword && w.value.eq_ignore_ascii_case("VECTOR")
-        ) {
-            // `CREATE [OR REPLACE] VECTOR INDEX ...`; VECTOR is not a keyword.
-            self.next_token();
+        } else if self.parse_keyword(Keyword::VECTOR) {
             self.expect_keyword_is(Keyword::INDEX)?;
             self.parse_create_index_inner(false, true, or_replace)
                 .map(Into::into)
@@ -8919,6 +8914,13 @@ impl<'a> Parser<'a> {
             Vec::new()
         };
 
+        // SQL Server places a vector index on a filegroup: `ON [PRIMARY]`.
+        let filegroup = if vector && self.parse_keyword(Keyword::ON) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
         // `OPTIONS(...)` clause (e.g. `CREATE VECTOR INDEX`); no-op when absent.
         let options = self.parse_options(Keyword::OPTIONS)?;
 
@@ -8959,6 +8961,7 @@ impl<'a> Parser<'a> {
             storing,
             nulls_distinct,
             with,
+            filegroup,
             options,
             predicate,
             index_options,

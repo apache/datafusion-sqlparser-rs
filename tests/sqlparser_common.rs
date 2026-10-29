@@ -10447,6 +10447,7 @@ fn test_create_index_with_using_function() {
             or_replace: _,
             options: _,
             storing: _,
+            filegroup: _,
         }) => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
@@ -10508,6 +10509,7 @@ fn test_create_index_with_with_clause() {
             or_replace: _,
             options: _,
             storing: _,
+            filegroup: _,
         }) => {
             pretty_assertions::assert_eq!("title_idx", name.to_string());
             pretty_assertions::assert_eq!("films", table_name.to_string());

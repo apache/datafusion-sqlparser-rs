@@ -2970,9 +2970,18 @@ fn parse_quoted_statement_keyword_aliases() {
 
 #[test]
 fn parse_mssql_create_vector_index() {
-    // SQL Server's form: bracket-quoted names and a `WITH (...)` options clause
-    // (`METRIC` / `TYPE` / `MAXDOP`).
+    // SQL Server's form: bracket-quoted names, a `WITH (...)` options clause
+    // (`METRIC` / `TYPE` / `MAXDOP`) and an `ON <filegroup>` clause.
     ms().verified_stmt(
         "CREATE VECTOR INDEX vec_idx ON [dbo].[articles]([title_vector]) WITH (METRIC = 'cosine', TYPE = 'DiskANN', MAXDOP = 8)",
     );
+    match ms().verified_stmt(
+        "CREATE VECTOR INDEX vec_idx ON [dbo].[articles]([title_vector]) WITH (METRIC = 'cosine', TYPE = 'DiskANN', MAXDOP = 8) ON [PRIMARY]",
+    ) {
+        Statement::CreateIndex(CreateIndex { filegroup, .. }) => {
+            assert_eq!(filegroup, Some(Ident::with_quote('[', "PRIMARY")));
+        }
+        other => panic!("expected CreateIndex, got {other:?}"),
+    }
+    ms().verified_stmt(r#"CREATE VECTOR INDEX vec_idx ON articles(title_vector) ON "default""#);
 }

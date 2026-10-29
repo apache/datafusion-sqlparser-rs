@@ -757,6 +757,7 @@ impl Spanned for CreateIndex {
             storing,
             nulls_distinct: _, // bool
             with,
+            filegroup,
             options,
             predicate,
             index_options: _,
@@ -771,6 +772,7 @@ impl Spanned for CreateIndex {
                 .chain(include.iter().map(|i| i.span))
                 .chain(storing.iter().map(|i| i.span))
                 .chain(with.iter().map(|i| i.span()))
+                .chain(filegroup.iter().map(|i| i.span))
                 .chain(options.iter().map(|i| i.span()))
                 .chain(predicate.iter().map(|i| i.span()))
                 .chain(alter_options.iter().map(|i| i.span())),

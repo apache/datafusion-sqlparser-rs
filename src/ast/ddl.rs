@@ -2917,6 +2917,8 @@ pub struct CreateIndex {
     pub nulls_distinct: Option<bool>,
     /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub with: Vec<Expr>,
+    /// `ON <filegroup>` clause: <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-vector-index-transact-sql>
+    pub filegroup: Option<Ident>,
     /// `OPTIONS(...)` clause, e.g. on `CREATE VECTOR INDEX`
     pub options: Vec<SqlOption>,
     /// WHERE clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
@@ -2975,6 +2977,9 @@ impl fmt::Display for CreateIndex {
         }
         if !self.with.is_empty() {
             write!(f, " WITH ({})", display_comma_separated(&self.with))?;
+        }
+        if let Some(filegroup) = &self.filegroup {
+            write!(f, " ON {filegroup}")?;
         }
         if !self.options.is_empty() {
             write!(f, " OPTIONS({})", display_comma_separated(&self.options))?;

@@ -604,6 +604,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if an `L` ending a number, as in `1L`, makes it a long
+    /// literal even when [`Dialect::supports_numeric_prefix`] would otherwise
+    /// read `1L` as an identifier. `1La` is still an identifier.
+    fn supports_long_suffix_before_numeric_prefix(&self) -> bool {
+        false
+    }
+
     /// Returns true if a period directly after an identifier starts a tuple
     /// element access such as `t.1`, instead of the number `.1`.
     fn supports_tuple_element_access(&self) -> bool {

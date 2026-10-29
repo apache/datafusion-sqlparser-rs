@@ -23670,3 +23670,28 @@ fn parse_grant_revoke_all_privileges_columns() {
 fn parse_pgq_keywords_as_identifiers() {
     all_dialects().verified_stmt("SELECT edge.label AS property FROM graph AS edge");
 }
+
+#[test]
+fn parse_long_suffix_before_numeric_prefix() {
+    let dialects = all_dialects_where(|d| d.supports_long_suffix_before_numeric_prefix());
+    assert_eq!(
+        dialects.verified_only_select("SELECT 1L").projection,
+        vec![SelectItem::UnnamedExpr(Expr::value(Value::Number(
+            "1".parse().unwrap(),
+            true
+        )))]
+    );
+    assert_eq!(
+        dialects.verified_only_select("SELECT 1La").projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1La")))]
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| {
+            d.supports_numeric_prefix() && !d.supports_long_suffix_before_numeric_prefix()
+        })
+        .verified_only_select("SELECT 1L")
+        .projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1L")))]
+    );
+}

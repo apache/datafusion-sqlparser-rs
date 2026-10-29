@@ -9952,8 +9952,11 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_procedure_parameters(
         &mut self,
     ) -> Result<Option<Vec<ProcedureParam>>, ParserError> {
+        if !self.consume_token(&Token::LParen) {
+            return Ok(None);
+        }
         let mut params = vec![];
-        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
+        if self.consume_token(&Token::RParen) {
             return Ok(Some(params));
         }
         loop {

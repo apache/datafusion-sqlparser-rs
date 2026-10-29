@@ -12315,7 +12315,17 @@ fn parse_create_foreign_table_partition_of() {
     let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.columns.len(), 1);
+    assert_eq!(
+        stmt.columns,
+        vec![ColumnDef {
+            name: Ident::new("id"),
+            data_type: DataType::Unspecified,
+            options: vec![ColumnOptionDef {
+                name: None,
+                option: ColumnOption::NotNull,
+            }],
+        }]
+    );
     assert_eq!(stmt.constraints.len(), 1);
     assert_eq!(
         stmt.for_values,
@@ -12333,6 +12343,11 @@ fn parse_create_foreign_table_partition_of() {
     ] {
         pg_and_generic().verified_stmt(sql);
     }
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN TABLE part PARTITION OF root (id WITH OPTIONS NOT NULL) DEFAULT SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) DEFAULT SERVER s",
+    );
 
     for (sql, expected) in [
         (
@@ -12366,6 +12381,14 @@ fn parse_create_foreign_table_partition_of() {
         (
             "CREATE FOREIGN TABLE part (id INT) PARTITION OF root DEFAULT SERVER s",
             "Expected: SERVER, found: PARTITION",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root (id INT) DEFAULT SERVER s",
+            "Expected: ',' or ')' after column definition, found: INT",
+        ),
+        (
+            "CREATE FOREIGN TABLE part (id) SERVER s",
+            "Expected: a data type name, found: )",
         ),
     ] {
         assert_eq!(

@@ -3401,6 +3401,19 @@ SETTINGS update_parallel_mode = 'auto'"#;
     }
 
     #[test]
+    fn test_create_foreign_table_partition_of_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql =
+            "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) FOR VALUES IN (1) SERVER s";
+        let test = SpanTest::new(dialect, sql);
+        let r = Parser::parse_sql(dialect, sql).unwrap();
+        assert_eq!(
+            test.get_source(r[0].span()),
+            "part PARTITION OF root (id NOT NULL) FOR VALUES IN (1) SERVER s"
+        );
+    }
+
+    #[test]
     fn test_alter_table_modify_order_by_span() {
         let dialect = &crate::dialect::ClickHouseDialect {};
         let sql = "ALTER TABLE t MODIFY ORDER BY (a, b.c)";

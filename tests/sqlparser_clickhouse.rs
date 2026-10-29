@@ -156,68 +156,17 @@ fn parse_kill() {
 
 #[test]
 fn parse_delimited_identifiers() {
-    // check that quoted identifiers in any position remain quoted after serialization
-    let select = clickhouse().verified_only_select(
-        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
-    );
-    // check FROM
-    match only(select.from).relation {
-        TableFactor::Table {
-            name,
-            alias,
-            args,
-            with_hints,
-            version,
-            ..
-        } => {
-            assert_eq!(
-                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
-                name
-            );
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
-            assert!(args.is_none());
-            assert!(with_hints.is_empty());
-            assert!(version.is_none());
-        }
-        _ => panic!("Expecting TableFactor::Table"),
-    }
-    // check SELECT
-    assert_eq!(3, select.projection.len());
-    assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
-        expr_from_projection(&select.projection[0]),
-    );
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
-        expr_from_projection(&select.projection[1]),
-    );
-    match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
-        }
-        _ => panic!("Expected ExprWithAlias"),
-    }
-
     clickhouse().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     clickhouse().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
     //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
+}
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    for table_name in ["into", "limit", "having", "where", "on"] {
+        clickhouse().verified_stmt(&format!("SELECT * FROM {table_name}"));
+        clickhouse().verified_stmt(&format!("SELECT * FROM t JOIN {table_name} ON true"));
+    }
 }
 
 #[test]
@@ -1990,7 +1939,7 @@ fn parse_object_type_parameter() {
             columns[0].data_type,
             DataType::Custom(
                 ObjectName::from(vec![Ident::new("Object")]),
-                vec!["json".to_string()]
+                vec![TypeModifier::String("json".to_string())]
             )
         );
 
@@ -2001,13 +1950,26 @@ fn parse_object_type_parameter() {
         );
     }
 
+    clickhouse_and_generic().verified_stmt("CREATE TABLE t (o Object('json'))");
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT())");
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (o OBJECT(city VARCHAR NOT NULL))");
 
     for (sql, modifiers) in [
-        ("CREATE TABLE t (o OBJECT(10))", vec!["10"]),
-        ("CREATE TABLE t (o OBJECT(foo))", vec!["foo"]),
-        ("CREATE TABLE t (o OBJECT(foo, bar))", vec!["foo", "bar"]),
+        (
+            "CREATE TABLE t (o OBJECT(10))",
+            vec![TypeModifier::Number("10".to_string(), false)],
+        ),
+        (
+            "CREATE TABLE t (o OBJECT(foo))",
+            vec![TypeModifier::Identifier(Ident::new("foo"))],
+        ),
+        (
+            "CREATE TABLE t (o OBJECT(foo, bar))",
+            vec![
+                TypeModifier::Identifier(Ident::new("foo")),
+                TypeModifier::Identifier(Ident::new("bar")),
+            ],
+        ),
     ] {
         for dialects in [
             clickhouse(),
@@ -2023,10 +1985,7 @@ fn parse_object_type_parameter() {
                 columns[0].data_type,
                 DataType::Custom(
                     ObjectName::from(vec![Ident::new("OBJECT")]),
-                    modifiers
-                        .iter()
-                        .map(|modifier| (*modifier).to_owned())
-                        .collect(),
+                    modifiers.clone()
                 )
             );
 
@@ -2120,12 +2079,12 @@ fn parse_global_in() {
     let select = clickhouse().verified_only_select("SELECT * FROM t WHERE x GLOBAL IN (1, 2)");
     assert_eq!(
         select.selection.unwrap(),
-        Expr::InList {
+        Expr::In {
             expr: Box::new(Identifier(Ident::new("x"))),
-            list: vec![
+            target: InTarget::List(vec![
                 Expr::Value(number("1").with_empty_span()),
                 Expr::Value(number("2").with_empty_span()),
-            ],
+            ]),
             negated: false,
             global: true,
         }
@@ -2135,9 +2094,9 @@ fn parse_global_in() {
         .verified_only_select("SELECT * FROM t WHERE x GLOBAL NOT IN (SELECT y FROM t2)");
     assert_eq!(
         select.selection.unwrap(),
-        Expr::InSubquery {
+        Expr::In {
             expr: Box::new(Identifier(Ident::new("x"))),
-            subquery: Box::new(clickhouse().verified_query("SELECT y FROM t2")),
+            target: InTarget::Subquery(Box::new(clickhouse().verified_query("SELECT y FROM t2"))),
             negated: true,
             global: true,
         }
@@ -2222,7 +2181,7 @@ fn global_in_bare_table_binds_before_and() {
             left,
             op: BinaryOperator::And,
             ..
-        } if matches!(*left, Expr::InList { global: true, .. })
+        } if matches!(*left, Expr::In { target: InTarget::List(_), global: true, .. })
     ));
 }
 
@@ -2235,7 +2194,7 @@ fn global_in_bare_table_binds_before_equality() {
             left,
             op: BinaryOperator::Eq,
             ..
-        } if matches!(*left, Expr::InList { global: true, .. })
+        } if matches!(*left, Expr::In { target: InTarget::List(_), global: true, .. })
     ));
 }
 

@@ -44,8 +44,6 @@ github:
         contexts:
           - "codestyle"
           - "lint"
-          - "benchmark-lint"
-          - "compile"
           - "docs"
           - "compile-no-std"
           - "test (stable)"

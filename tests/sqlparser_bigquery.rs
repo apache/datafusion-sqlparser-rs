@@ -1767,7 +1767,7 @@ fn parse_table_time_travel() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_hints: vec![],
+                index_directives: vec![],
             },
             joins: vec![]
         },]
@@ -1882,7 +1882,7 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 },
                 table
             );
@@ -1897,7 +1897,7 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    index_hints: vec![],
+                    index_directives: vec![],
                 },
                 source
             );
@@ -2191,7 +2191,7 @@ fn parse_big_query_declare() {
         ),
     ] {
         match bigquery().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,

@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::dialect::{Dialect, Precedence};
+use crate::dialect::{BindPlaceholderStyle, Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -232,6 +232,10 @@ impl Dialect for PostgreSqlDialect {
         Some('"')
     }
 
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::DollarNumbered)
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' // Postgres does not support backticks to quote identifiers
     }
@@ -351,6 +355,14 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_create_group(&self) -> bool {
+        true
+    }
+
+    fn supports_create_role_if_not_exists(&self) -> bool {
+        false
+    }
+
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
             Precedence::Period => PERIOD_PREC,
@@ -413,6 +425,10 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
         true
     }
 
@@ -559,6 +575,11 @@ impl Dialect for PostgreSqlDialect {
 
     /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
     fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_attach_partition_of(&self) -> bool {
         true
     }
 }

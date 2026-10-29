@@ -22,8 +22,9 @@ use crate::{
         Action, ActionApplyType, ActionCreateObjectType, ActionExecuteObjectType, ActionManageType,
         ActionModifyType, ActionMonitorType, ContextModifier, CreatePolicy, CreatePolicyCommand,
         CreatePolicyType, CreateRole, CreateUser, CurrentGrantsKind, DenyStatement, DropPolicy,
-        Expr, Grant, GrantObjects, Grantee, GranteeName, GranteesType, Ident, ObjectName, Password,
-        Privileges, Revoke, SecondaryRoles, Set, Statement, Use,
+        Expr, Grant, GrantObjects, GrantRole, Grantee, GranteeName, GranteesType, Ident,
+        ObjectName, Password, Privileges, Revoke, RevokeRole, RoleGrantOption,
+        RoleGrantOptionValue, RoleKeyword, SecondaryRoles, Set, Statement, Use,
     },
     dialect::{DatabricksDialect, HiveDialect, MsSqlDialect, PostgreSqlDialect, SnowflakeDialect},
     keywords::Keyword,
@@ -73,6 +74,65 @@ impl Parser<'_> {
         })
     }
 
+    /// Parse a `GRANT` of role membership, after the `GRANT` keyword.
+    pub fn parse_grant_role(&mut self) -> Result<GrantRole, ParserError> {
+        let roles = self.parse_comma_separated(Parser::parse_identifier)?;
+        self.expect_keyword_is(Keyword::TO)?;
+        let grantees = self.parse_grantees()?;
+        let options = if self.parse_keyword(Keyword::WITH) {
+            self.parse_comma_separated(Parser::parse_role_grant_option)?
+        } else {
+            vec![]
+        };
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        Ok(GrantRole {
+            roles,
+            grantees,
+            options,
+            granted_by,
+        })
+    }
+
+    fn parse_role_grant_option(&mut self) -> Result<RoleGrantOption, ParserError> {
+        let name = self.parse_identifier()?;
+        let value =
+            match self.parse_one_of_keywords(&[Keyword::OPTION, Keyword::TRUE, Keyword::FALSE]) {
+                Some(Keyword::OPTION) => RoleGrantOptionValue::Option,
+                Some(Keyword::TRUE) => RoleGrantOptionValue::True,
+                Some(Keyword::FALSE) => RoleGrantOptionValue::False,
+                _ => return self.expected_ref("OPTION, TRUE or FALSE", self.peek_token_ref()),
+            };
+        Ok(RoleGrantOption { name, value })
+    }
+
+    /// Parses a statement body with `privileges`, and with `roles` instead when that fails and
+    /// the body opens with a role list followed by `keyword`.
+    pub(super) fn parse_privileges_or_roles<P: Into<Statement>, R: Into<Statement>>(
+        &mut self,
+        keyword: Keyword,
+        privileges: fn(&mut Self) -> Result<P, ParserError>,
+        roles: fn(&mut Self) -> Result<R, ParserError>,
+    ) -> Result<Statement, ParserError> {
+        let index = self.index;
+        let privileges_err = match privileges(self) {
+            Ok(statement) => return Ok(statement.into()),
+            Err(err) => err,
+        };
+        self.index = index;
+        let is_role_list = self.parse_comma_separated(Parser::parse_identifier).is_ok()
+            && self.parse_keyword(keyword);
+        self.index = index;
+        if is_role_list {
+            roles(self).map(Into::into)
+        } else {
+            Err(privileges_err)
+        }
+    }
+
     fn parse_grantees(&mut self) -> Result<Vec<Grantee>, ParserError> {
         let mut values = vec![];
         let mut grantee_type = GranteesType::None;
@@ -93,6 +153,9 @@ impl Parser<'_> {
                 GranteesType::ApplicationRole
             } else if self.parse_keyword(Keyword::APPLICATION) {
                 GranteesType::Application
+            } else if grantee_type == GranteesType::Public {
+                // PUBLIC does not carry over to the next grantee.
+                GranteesType::None
             } else {
                 grantee_type.clone() // keep from previous iteraton, if not specified
             };
@@ -282,6 +345,14 @@ impl Parser<'_> {
                 Some(GrantObjects::ExternalVolumes(
                     self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 ))
+            } else if self.parse_keyword(Keyword::FUNCTION) {
+                Some(GrantObjects::Functions(
+                    self.parse_comma_separated(Parser::parse_function_desc)?,
+                ))
+            } else if self.parse_keyword(Keyword::PROCEDURE) {
+                Some(GrantObjects::Procedures(
+                    self.parse_comma_separated(Parser::parse_function_desc)?,
+                ))
             } else {
                 let object_type = self.parse_one_of_keywords(&[
                     Keyword::SEQUENCE,
@@ -296,8 +367,6 @@ impl Parser<'_> {
                     Keyword::INTEGRATION,
                     Keyword::USER,
                     Keyword::CONNECTION,
-                    Keyword::PROCEDURE,
-                    Keyword::FUNCTION,
                 ]);
                 let objects =
                     self.parse_comma_separated(|p| p.parse_object_name_inner(false, true));
@@ -310,13 +379,6 @@ impl Parser<'_> {
                     Some(Keyword::VIEW) => Some(GrantObjects::Views(objects?)),
                     Some(Keyword::USER) => Some(GrantObjects::Users(objects?)),
                     Some(Keyword::CONNECTION) => Some(GrantObjects::Connections(objects?)),
-                    kw @ (Some(Keyword::PROCEDURE) | Some(Keyword::FUNCTION)) => {
-                        if let Some(name) = objects?.first() {
-                            self.parse_grant_procedure_or_function(name, &kw)?
-                        } else {
-                            self.expected_ref("procedure or function name", self.peek_token_ref())?
-                        }
-                    }
                     Some(Keyword::TABLE) | None => Some(GrantObjects::Tables(objects?)),
                     Some(unexpected_keyword) => return Err(ParserError::ParserError(
                         format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in grant objects"),
@@ -328,31 +390,6 @@ impl Parser<'_> {
         };
 
         Ok((privileges, objects))
-    }
-
-    fn parse_grant_procedure_or_function(
-        &mut self,
-        name: &ObjectName,
-        kw: &Option<Keyword>,
-    ) -> Result<Option<GrantObjects>, ParserError> {
-        let arg_types = if self.consume_token(&Token::LParen) {
-            let list = self.parse_comma_separated0(Self::parse_data_type, Token::RParen)?;
-            self.expect_token(&Token::RParen)?;
-            list
-        } else {
-            vec![]
-        };
-        match kw {
-            Some(Keyword::PROCEDURE) => Ok(Some(GrantObjects::Procedure {
-                name: name.clone(),
-                arg_types,
-            })),
-            Some(Keyword::FUNCTION) => Ok(Some(GrantObjects::Function {
-                name: name.clone(),
-                arg_types,
-            })),
-            _ => self.expected_ref("procedure or function keywords", self.peek_token_ref())?,
-        }
     }
 
     /// Parse a single grantable permission/action (used within GRANT statements).
@@ -684,6 +721,48 @@ impl Parser<'_> {
         })
     }
 
+    /// Parse a `REVOKE` of role membership, after the `REVOKE` keyword.
+    pub fn parse_revoke_role(&mut self) -> Result<RevokeRole, ParserError> {
+        let option_for = self.parse_role_grant_option_for();
+        let roles = self.parse_comma_separated(Parser::parse_identifier)?;
+        self.expect_keyword_is(Keyword::FROM)?;
+        let grantees = self.parse_grantees()?;
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        let cascade = self.parse_cascade_option();
+        Ok(RevokeRole {
+            option_for,
+            roles,
+            grantees,
+            granted_by,
+            cascade,
+        })
+    }
+
+    /// Parses `name OPTION FOR`, leaving `GRANT OPTION FOR` to the privilege form.
+    fn parse_role_grant_option_for(&mut self) -> Option<Ident> {
+        let index = self.index;
+        if !self.peek_keyword(Keyword::GRANT) {
+            if let Ok(name) = self.parse_identifier() {
+                if self.parse_keywords(&[Keyword::OPTION, Keyword::FOR]) {
+                    return Some(name);
+                }
+            }
+        }
+        self.index = index;
+        None
+    }
+
+    pub(super) fn peek_role_grant_option_for(&mut self) -> bool {
+        let index = self.index;
+        let matched = self.parse_role_grant_option_for().is_some();
+        self.index = index;
+        matched
+    }
+
     /// Parse a list of actions for `GRANT` statements.
     pub fn parse_actions_list(&mut self) -> Result<Vec<Action>, ParserError> {
         let mut values = vec![];
@@ -739,9 +818,23 @@ impl Parser<'_> {
         })
     }
 
-    /// Parse a `CREATE ROLE` statement.
-    pub fn parse_create_role(&mut self) -> Result<CreateRole, ParserError> {
-        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    /// Parse a `CREATE ROLE` or `CREATE GROUP` statement, after the keyword has been consumed.
+    pub fn parse_create_role(
+        &mut self,
+        role_keyword: RoleKeyword,
+    ) -> Result<CreateRole, ParserError> {
+        let supports_if_not_exists = matches!(role_keyword, RoleKeyword::Role)
+            && self.dialect.supports_create_role_if_not_exists();
+        if !supports_if_not_exists
+            && self.peek_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
+        {
+            return parser_err!(
+                format!("IF NOT EXISTS is not supported for CREATE {role_keyword}"),
+                self.peek_token_ref().span.start
+            );
+        }
+        let if_not_exists = supports_if_not_exists
+            && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 
         let _ = self.parse_keyword(Keyword::WITH); // [ WITH ]
@@ -882,7 +975,7 @@ impl Parser<'_> {
                     if connection_limit.is_some() {
                         parser_err!("Found multiple CONNECTION LIMIT", loc)
                     } else {
-                        connection_limit = Some(Expr::Value(self.parse_number_value()?));
+                        connection_limit = Some(self.parse_number()?);
                         Ok(())
                     }
                 }
@@ -943,6 +1036,7 @@ impl Parser<'_> {
         }
 
         Ok(CreateRole {
+            keyword: role_keyword,
             names,
             if_not_exists,
             login,

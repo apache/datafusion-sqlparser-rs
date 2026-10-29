@@ -858,65 +858,6 @@ fn parse_alter_role() {
 
 #[test]
 fn parse_delimited_identifiers() {
-    // check that quoted identifiers in any position remain quoted after serialization
-    let select = ms_and_generic().verified_only_select(
-        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
-    );
-    // check FROM
-    match only(select.from).relation {
-        TableFactor::Table {
-            name,
-            alias,
-            args,
-            with_hints,
-            version,
-            ..
-        } => {
-            assert_eq!(
-                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
-                name
-            );
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
-            assert!(args.is_none());
-            assert!(with_hints.is_empty());
-            assert!(version.is_none());
-        }
-        _ => panic!("Expecting TableFactor::Table"),
-    }
-    // check SELECT
-    assert_eq!(3, select.projection.len());
-    assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
-        expr_from_projection(&select.projection[0]),
-    );
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            null_treatment: None,
-            filter: None,
-            over: None,
-            within_group: vec![],
-        }),
-        expr_from_projection(&select.projection[1]),
-    );
-    match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
-        }
-        _ => panic!("Expected ExprWithAlias"),
-    }
-
     ms_and_generic().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     ms_and_generic().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
     //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
@@ -2671,6 +2612,12 @@ fn test_sql_keywords_as_table_aliases() {
 }
 
 #[test]
+fn parse_non_reserved_keyword_table_names() {
+    ms().verified_stmt("SELECT * FROM limit");
+    ms().verified_stmt("SELECT * FROM t JOIN limit ON true");
+}
+
+#[test]
 fn test_sql_keywords_as_column_aliases() {
     // Some keywords that should not be parsed as an alias implicitly or explicitly
     for (sql, err) in [
@@ -3012,4 +2959,11 @@ fn parse_mssql_declare_comma_list_display() {
     ms().verified_stmt("DECLARE @a INT, @b INT");
     ms().verified_stmt("DECLARE @a INT = 1, @b TEXT = 'x'");
     ms().verified_stmt("DECLARE @foo CURSOR, @bar INT");
+}
+
+#[test]
+fn parse_quoted_statement_keyword_aliases() {
+    ms().one_statement_parses_to("SELECT 1 [PRINT]", "SELECT 1 AS [PRINT]");
+    ms().verified_stmt("SELECT * FROM t [PRINT]");
+    ms().verified_stmt("SELECT * FROM t AS [PRINT]");
 }

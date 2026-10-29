@@ -541,6 +541,35 @@ fn parse_where_in_empty_list() {
 }
 
 #[test]
+fn parse_in_table_keyword_names() {
+    // Keywords SQLite lets fall back to an identifier name a table after `IN`.
+    for sql in [
+        "SELECT 1 IN view",
+        "SELECT 1 IN offset",
+        "SELECT 1 IN key",
+        "SELECT 1 IN abort",
+    ] {
+        sqlite().verified_stmt(sql);
+    }
+    // Its reserved keywords do not, so the target falls back to a parenthesized list.
+    for (sql, found) in [
+        ("SELECT 1 IN FROM t", "FROM"),
+        ("SELECT 1 IN select", "select"),
+        ("SELECT 1 IN where", "where"),
+        ("SELECT 1 IN NULL", "NULL"),
+        ("SELECT 1 IN table", "table"),
+        ("SELECT a FROM t WHERE a IN AND b", "AND"),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("Expected: (, found: {found}")),
+        );
+    }
+    // A quoted keyword is a plain name.
+    sqlite().verified_stmt(r#"SELECT 1 IN "from""#);
+}
+
+#[test]
 fn invalid_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN (,,)";
     let sqlite = sqlite_with_options(ParserOptions::new().with_trailing_commas(true));
@@ -956,6 +985,38 @@ fn test_drop_trigger() {
 }
 
 #[test]
+fn parse_between_low_bound_precedence() {
+    match sqlite().verified_expr("a BETWEEN b > 1 AND c") {
+        Expr::Between { low, .. } => assert!(
+            matches!(
+                *low,
+                Expr::BinaryOp {
+                    op: BinaryOperator::Gt,
+                    ..
+                }
+            ),
+            "{low:?}"
+        ),
+        other => panic!("expected BETWEEN, got {other:?}"),
+    }
+    sqlite().verified_expr("a BETWEEN b LIKE 'x' AND c");
+    sqlite().verified_expr("a BETWEEN b IS NOT NULL AND c");
+    sqlite().expr_parses_to("a BETWEEN b NOTNULL AND c", "a BETWEEN b IS NOT NULL AND c");
+    sqlite().verified_expr("a BETWEEN b BETWEEN 1 AND 2 AND c");
+
+    // Operators after the high bound apply to the whole BETWEEN.
+    sqlite().verified_expr("5 BETWEEN 1 AND NULL IS NULL");
+    sqlite().verified_expr("5 BETWEEN 1 AND 10 = 1");
+
+    assert_eq!(
+        sqlite().parse_sql_statements("SELECT a BETWEEN (1 AND 2 FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: FROM".to_string()
+        ))
+    );
+}
+
+#[test]
 fn parse_pattern_operators_bind_at_like_precedence() {
     fn where_operator(sql: &str) -> BinaryOperator {
         let Statement::Query(query) = sqlite().verified_stmt(sql) else {
@@ -1055,6 +1116,108 @@ fn test_cast_empty_type() {
             .parse_sql_statements("SELECT CAST(a AS)")
             .unwrap_err(),
         ParserError::ParserError("Expected: a data type name, found: )".to_string())
+    );
+}
+
+#[test]
+fn test_signed_type_modifiers() {
+    // signed and decimal modifiers round-trip verbatim for any type name
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(+10))");
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(-1))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT(-1))");
+    sqlite().verified_stmt("CREATE TABLE t (a NUMERIC(10.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a FLOAT(2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a NVARCHAR(+5))");
+    sqlite().verified_stmt("CREATE TABLE t (a TIMESTAMP(-1))");
+    sqlite().verified_stmt("SELECT CAST(x AS REAL(1.5))");
+    // a non-standard modifier anywhere in the list selects the custom path
+    sqlite().verified_stmt("CREATE TABLE t (a CHAR(1, 1.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT(1, -2))");
+    sqlite().verified_stmt("CREATE TABLE t (a DECIMAL(1, 2.5))");
+    // signed decimals and oversized values select the custom path in either slot
+    sqlite().verified_stmt("CREATE TABLE t (a REAL(-1.5, +2.5))");
+    sqlite().verified_stmt("CREATE TABLE t (a DECIMAL(10, 99999999999999999999999))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARCHAR(1, .5))");
+    for sql in [
+        "CREATE TABLE t (a CHAR(0.0))",
+        "CREATE TABLE t (a CHAR(-0))",
+        "CREATE TABLE t (a CHAR(1.))",
+        "CREATE TABLE t (a CHAR(1e3))",
+        "CREATE TABLE t (a CHAR(+1.5e-3))",
+        "CREATE TABLE t (a CHAR(+1, +2))",
+        "CREATE TABLE t (a CHAR(-1) NOT NULL DEFAULT NULL)",
+        "CREATE TABLE t (a CHAR(1.5), b CHAR(10))",
+        "CREATE TABLE t (a char(-1))",
+        r#"CREATE TABLE t (a "CHAR"(-1))"#,
+        "CREATE TABLE t (a [CHAR](-1))",
+        "SELECT 1::CHAR(-1)",
+    ] {
+        sqlite().verified_stmt(sql);
+    }
+    sqlite().one_statement_parses_to(
+        "CREATE TABLE t (a CHAR ( - 1 ))",
+        "CREATE TABLE t (a CHAR(-1))",
+    );
+    sqlite().one_statement_parses_to(
+        "CREATE TABLE t (a CHAR(-1,-2))",
+        "CREATE TABLE t (a CHAR(-1, -2))",
+    );
+    sqlite().verified_stmt("SELECT abs(-1), round(1, 1.5), char(+1, -2)");
+    // plain unsigned integer keeps the normal AST
+    let Statement::CreateTable(CreateTable { columns, .. }) =
+        sqlite().verified_stmt("CREATE TABLE t (a CHAR(10))")
+    else {
+        panic!("expected a CREATE TABLE statement");
+    };
+    assert_eq!(
+        columns[0].data_type,
+        DataType::Char(Some(CharacterLength::IntegerLength {
+            length: 10,
+            unit: None,
+        }))
+    );
+    sqlite().verified_stmt("CREATE TABLE t (a INT(10))");
+    // Oversized precision renders with a space after the comma
+    sqlite().one_statement_parses_to(
+        "SELECT CAST(a AS DECIMAL(99999999999999999999999,2))",
+        "SELECT CAST(a AS DECIMAL(99999999999999999999999, 2))",
+    );
+    // SQLite's typetoken grammar allows at most two modifiers
+    assert_eq!(
+        sqlite().parse_sql_statements("CREATE TABLE t (a CHAR(1.5, 2, 3))"),
+        Err(ParserError::ParserError(
+            "Could not parse '1.5' as u64: invalid digit found in string".to_string()
+        ))
+    );
+    for (sql, error) in [
+        (
+            "CREATE TABLE t (a CHAR(1.5,))",
+            "Could not parse '1.5' as u64: invalid digit found in string",
+        ),
+        (
+            "CREATE TABLE t (a CHAR(+-1))",
+            "Expected: literal int, found: +",
+        ),
+        (
+            "CREATE TABLE t (a CHAR(NULL))",
+            "Expected: literal int, found: NULL",
+        ),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}",
+        );
+    }
+    // other dialects must still reject these
+    assert_eq!(
+        all_dialects_except(|d| d.is::<SQLiteDialect>())
+            .parse_sql_statements("CREATE TABLE t (a CHAR(+10))"),
+        Err(ParserError::ParserError(
+            "Expected: literal int, found: +".to_string()
+        ))
     );
 }
 
@@ -1362,6 +1525,30 @@ fn parse_over_as_column_alias_after_function() {
     );
 }
 
+#[test]
+fn parse_on_conflict_target_predicate() {
+    // SQLite's upsert target takes the same `( indexed-column, ... ) WHERE expr` as PostgreSQL's.
+    // See <https://www.sqlite.org/lang_upsert.html>
+    let sql = "INSERT INTO t VALUES (1, 2, 3) ON CONFLICT(a) WHERE b > 0 DO NOTHING";
+    match sqlite().verified_stmt(sql) {
+        Statement::Insert(Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target:
+                        Some(ConflictTarget::Columns {
+                            columns,
+                            predicate: Some(predicate),
+                        }),
+                    action: OnConflictAction::DoNothing,
+                })),
+            ..
+        }) => {
+            assert_eq!(columns, vec![Ident::new("a")]);
+            assert_eq!(predicate.to_string(), "b > 0");
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+}
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }
@@ -1517,6 +1704,142 @@ fn parse_bitwise_and_or_share_precedence() {
                 bin(num("1"), BitwiseOr, num("2")),
                 Eq,
                 bin(num("3"), BitwiseAnd, num("4")),
+            ),
+        ),
+    ] {
+        assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
+}
+
+#[test]
+fn parse_bitwise_shift_operators() {
+    sqlite().verified_stmt("SELECT a << 1 FROM t");
+    sqlite().verified_stmt("SELECT a >> 1 FROM t");
+
+    let unsupported = all_dialects_where(|d| !d.supports_bitwise_shift_operators());
+    for (sql, token) in [
+        ("SELECT a << 1 FROM t", "ShiftLeft"),
+        ("SELECT a >> 1 FROM t", "ShiftRight"),
+    ] {
+        assert_eq!(
+            unsupported.parse_sql_statements(sql),
+            Err(ParserError::ParserError(format!(
+                "No infix parser for token {token}"
+            ))),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_left_shift_and_bitwise_and_are_left_associative() {
+    assert_eq!(
+        sqlite().verified_expr("1 << 2 & 4"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("1"))),
+                op: BinaryOperator::PGBitwiseShiftLeft,
+                right: Box::new(Expr::value(number("2"))),
+            }),
+            op: BinaryOperator::BitwiseAnd,
+            right: Box::new(Expr::value(number("4"))),
+        }
+    );
+}
+
+#[test]
+fn parse_right_shift_and_bitwise_and_are_left_associative() {
+    assert_eq!(
+        sqlite().verified_expr("8 >> 1 & 2"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("8"))),
+                op: BinaryOperator::PGBitwiseShiftRight,
+                right: Box::new(Expr::value(number("1"))),
+            }),
+            op: BinaryOperator::BitwiseAnd,
+            right: Box::new(Expr::value(number("2"))),
+        }
+    );
+}
+
+#[test]
+fn parse_bitwise_shifts_share_precedence() {
+    use BinaryOperator::{BitwiseAnd, BitwiseOr, PGBitwiseShiftLeft, PGBitwiseShiftRight};
+
+    for (sql, first, second) in [
+        ("a | b << c", BitwiseOr, PGBitwiseShiftLeft),
+        ("a | b >> c", BitwiseOr, PGBitwiseShiftRight),
+        ("a << b | c", PGBitwiseShiftLeft, BitwiseOr),
+        ("a >> b | c", PGBitwiseShiftRight, BitwiseOr),
+        ("a & b << c", BitwiseAnd, PGBitwiseShiftLeft),
+        ("a & b >> c", BitwiseAnd, PGBitwiseShiftRight),
+        ("a << b >> c", PGBitwiseShiftLeft, PGBitwiseShiftRight),
+        ("a >> b << c", PGBitwiseShiftRight, PGBitwiseShiftLeft),
+    ] {
+        assert_eq!(
+            sqlite().verified_expr(sql),
+            Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("a"))),
+                    op: first,
+                    right: Box::new(Expr::Identifier(Ident::new("b"))),
+                }),
+                op: second,
+                right: Box::new(Expr::Identifier(Ident::new("c"))),
+            },
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_bitwise_shift_precedence_boundaries() {
+    let id = |name| Expr::Identifier(Ident::new(name));
+    let bin = |left, op, right| Expr::BinaryOp {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    };
+    use BinaryOperator::{
+        BitwiseAnd, Divide, Eq, Multiply, PGBitwiseShiftLeft, PGBitwiseShiftRight, Plus,
+    };
+
+    for (sql, expected) in [
+        (
+            "a << b + c",
+            bin(id("a"), PGBitwiseShiftLeft, bin(id("b"), Plus, id("c"))),
+        ),
+        (
+            "a + b << c",
+            bin(bin(id("a"), Plus, id("b")), PGBitwiseShiftLeft, id("c")),
+        ),
+        (
+            "a >> b * c",
+            bin(
+                id("a"),
+                PGBitwiseShiftRight,
+                bin(id("b"), Multiply, id("c")),
+            ),
+        ),
+        (
+            "a / b >> c",
+            bin(bin(id("a"), Divide, id("b")), PGBitwiseShiftRight, id("c")),
+        ),
+        (
+            "a << b = c",
+            bin(bin(id("a"), PGBitwiseShiftLeft, id("b")), Eq, id("c")),
+        ),
+        (
+            "a = b >> c",
+            bin(id("a"), Eq, bin(id("b"), PGBitwiseShiftRight, id("c"))),
+        ),
+        (
+            "a << (b & c)",
+            bin(
+                id("a"),
+                PGBitwiseShiftLeft,
+                Expr::Nested(Box::new(bin(id("b"), BitwiseAnd, id("c")))),
             ),
         ),
     ] {

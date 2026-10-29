@@ -72,6 +72,11 @@ impl Dialect for DatabricksDialect {
         true
     }
 
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/data-types/bigint-type>
+    fn supports_long_suffix_before_numeric_prefix(&self) -> bool {
+        true
+    }
+
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }

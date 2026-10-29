@@ -532,6 +532,7 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::RefreshMaterializedView(s) => s.name.span(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
     }

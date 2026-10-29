@@ -789,6 +789,7 @@ impl<'a> Parser<'a> {
                     self.parse_vacuum()
                 }
                 Keyword::RESET => self.parse_reset().map(Into::into),
+                Keyword::REFRESH => self.parse_refresh_materialized_view().map(Into::into),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -22263,6 +22264,25 @@ impl<'a> Parser<'a> {
         let obj = self.parse_object_name(false)?;
         Ok(ResetStatement {
             reset: Reset::ConfigurationParameter(obj),
+        })
+    }
+
+    /// Parse a `REFRESH MATERIALIZED VIEW` statement, after the `REFRESH` keyword.
+    fn parse_refresh_materialized_view(&mut self) -> Result<RefreshMaterializedView, ParserError> {
+        self.expect_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW])?;
+        let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
+        let name = self.parse_object_name(false)?;
+        let with_data = if self.parse_keywords(&[Keyword::WITH, Keyword::DATA]) {
+            Some(true)
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::DATA]) {
+            Some(false)
+        } else {
+            None
+        };
+        Ok(RefreshMaterializedView {
+            concurrently,
+            name,
+            with_data,
         })
     }
 }

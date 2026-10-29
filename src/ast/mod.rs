@@ -7779,6 +7779,16 @@ pub enum GrantObjects {
         /// The target schema names.
         schemas: Vec<ObjectName>,
     },
+    /// Grant privileges on `ALL PROCEDURES IN SCHEMA <schema_name> [, ...]`
+    AllProceduresInSchema {
+        /// The target schema names.
+        schemas: Vec<ObjectName>,
+    },
+    /// Grant privileges on `ALL ROUTINES IN SCHEMA <schema_name> [, ...]`
+    AllRoutinesInSchema {
+        /// The target schema names.
+        schemas: Vec<ObjectName>,
+    },
     /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
     FutureSchemasInDatabase {
         /// The target database names.
@@ -7847,6 +7857,13 @@ pub enum GrantObjects {
     /// For example:
     /// `GRANT EXECUTE ON FUNCTION foo(p_id uuid), bar() TO role1`
     Functions(Vec<FunctionDesc>),
+    /// Grant privileges on routines, which name functions and procedures alike.
+    ///
+    /// For example:
+    /// `GRANT EXECUTE ON ROUTINE foo(p_id uuid), bar() TO role1`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-grant.html)
+    Routines(Vec<FunctionDesc>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -7912,6 +7929,20 @@ impl fmt::Display for GrantObjects {
                 write!(
                     f,
                     "ALL FUNCTIONS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllProceduresInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL PROCEDURES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllRoutinesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL ROUTINES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }
@@ -7983,6 +8014,9 @@ impl fmt::Display for GrantObjects {
             }
             GrantObjects::Functions(functions) => {
                 write!(f, "FUNCTION {}", display_comma_separated(functions))
+            }
+            GrantObjects::Routines(routines) => {
+                write!(f, "ROUTINE {}", display_comma_separated(routines))
             }
         }
     }

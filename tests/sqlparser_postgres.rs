@@ -11229,3 +11229,125 @@ fn parse_alter_table_attach_partition_of() {
         );
     }
 }
+
+#[test]
+fn parse_drop_foreign_table() {
+    match pg_and_generic().verified_stmt("DROP FOREIGN TABLE IF EXISTS ft, public.other CASCADE") {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+            restrict,
+            ..
+        } => {
+            assert_eq!(object_type, ObjectType::ForeignTable);
+            assert!(if_exists);
+            assert_eq!(
+                names,
+                vec![
+                    ObjectName::from(vec![Ident::new("ft")]),
+                    ObjectName::from(vec![Ident::new("public"), Ident::new("other")]),
+                ]
+            );
+            assert!(cascade);
+            assert!(!restrict);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("DROP FOREIGN TABLE ft RESTRICT");
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("DROP FOREIGN ft")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
+    );
+    for (sql, expected) in [
+        ("DROP FOREIGN TABLE", "Expected: identifier, found: EOF"),
+        (
+            "DROP FOREIGN TABLE ft CASCADE RESTRICT",
+            "Cannot specify both CASCADE and RESTRICT in DROP",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_comment_on_foreign_table() {
+    match pg_and_generic().verified_stmt("COMMENT ON FOREIGN TABLE public.ft IS 'remote orders'") {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(object_type, CommentObject::ForeignTable);
+            assert_eq!(
+                object_name,
+                ObjectName::from(vec![Ident::new("public"), Ident::new("ft")])
+            );
+            assert_eq!(comment, Some("remote orders".to_string()));
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("COMMENT ON FOREIGN TABLE ft IS NULL");
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN ft IS 'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TABLE, found: ft"
+    );
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN TABLE ft 'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: IS, found: 'x'"
+    );
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN TABLE")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_drop_foreign_table_rejects_modifiers() {
+    for sql in [
+        "DROP TEMPORARY FOREIGN TABLE ft",
+        "DROP FOREIGN TABLE ft PURGE",
+        "DROP FOREIGN TABLE ft ON t",
+    ] {
+        for dialect in all_dialects().dialects {
+            assert!(
+                Parser::parse_sql(dialect.as_ref(), sql).is_err(),
+                "{sql} with {dialect:?}"
+            );
+        }
+    }
+    for sql in ["DROP FOREIGN TABLE ft PURGE", "DROP FOREIGN TABLE ft ON t"] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            "sql parser error: Cannot specify TEMPORARY, PURGE, or ON in DROP FOREIGN TABLE",
+            "{sql}"
+        );
+    }
+}

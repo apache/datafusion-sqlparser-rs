@@ -656,6 +656,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `exists(...)` is a call to a function named `exists`,
+    /// as in `exists(array(1, 2), x -> x > 1)`, unless a query follows the
+    /// parenthesis, as in `EXISTS (SELECT 1)`.
+    fn supports_exists_function(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LAMBDA` keyword spelling of
     /// lambda functions, for example:
     ///

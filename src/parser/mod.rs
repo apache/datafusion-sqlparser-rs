@@ -5135,6 +5135,30 @@ impl<'a> Parser<'a> {
         })
     }
 
+    #[cfg(not(feature = "bigdecimal"))]
+    fn parse_number_literal(s: String, _loc: Location) -> Result<String, ParserError> {
+        Ok(s)
+    }
+
+    #[cfg(feature = "bigdecimal")]
+    fn parse_number_literal(
+        s: String,
+        loc: Location,
+    ) -> Result<bigdecimal::BigDecimal, ParserError> {
+        let radix = match s.get(..2) {
+            Some("0x" | "0X") => 16,
+            Some("0o" | "0O") => 8,
+            Some("0b" | "0B") => 2,
+            _ => return Self::parse(s, loc),
+        };
+        let digits = s[2..].strip_prefix('_').unwrap_or(&s[2..]);
+        bigdecimal::num_bigint::BigInt::parse_bytes(digits.as_bytes(), radix)
+            .map(bigdecimal::BigDecimal::from)
+            .ok_or_else(|| {
+                ParserError::ParserError(format!("Could not parse '{s}' as an integer{loc}"))
+            })
+    }
+
     /// Parse a comma-separated list of 1+ SelectItem
     pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
         // BigQuery and Snowflake allow trailing commas, but only in project lists
@@ -12990,10 +13014,10 @@ impl<'a> Parser<'a> {
                     },
                 ),
             },
-            // The call to n.parse() returns a bigdecimal when the
-            // bigdecimal feature is enabled, and is otherwise a no-op
-            // (i.e., it returns the input string).
-            Token::Number(n, l) => ok_value(Value::Number(Self::parse(n, span.start)?, l)),
+            // A BigDecimal with the bigdecimal feature, the literal as written otherwise.
+            Token::Number(n, l) => {
+                ok_value(Value::Number(Self::parse_number_literal(n, span.start)?, l))
+            }
             Token::SingleQuotedString(ref s) => ok_value(Value::SingleQuotedString(
                 self.maybe_concat_string_literal(s.to_string()),
             )),

@@ -490,6 +490,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-CONSTANTS-NUMERIC>
+    fn supports_non_decimal_integer_literals(&self) -> bool {
+        true
+    }
+
     /// See: <https://www.postgresql.org/docs/current/arrays.html#ARRAYS-DECLARATION>
     fn supports_array_typedef_with_brackets(&self) -> bool {
         true

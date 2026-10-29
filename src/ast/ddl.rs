@@ -36,19 +36,19 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated,
+    display_comma_separated, display_separated, format_statement_list,
     table_constraints::{
         CheckConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint,
         UniqueConstraint,
     },
-    ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
-    CreateFunctionUsing, CreateServerOption, CreateTableLikeKind, CreateTableOptions,
-    CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDefinitionSetParam, FunctionDesc, FunctionDeterminismSpecifier, FunctionParallel,
-    FunctionSecurity, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat,
-    HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
-    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
-    ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, Statement,
+    ArgMode, AttachedToken, BeginEndStatements, CommentDef, ConditionalStatements,
+    CreateFunctionBody, CreateFunctionUsing, CreateServerOption, CreateTableLikeKind,
+    CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior,
+    FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc, FunctionDeterminismSpecifier,
+    FunctionParallel, FunctionSecurity, HiveDistributionStyle, HiveFormat, HiveIOFormat,
+    HiveRowFormat, HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName,
+    OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query,
+    RefreshModeKind, ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, Statement,
     StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
     TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
     WrappedCollection,
@@ -3881,6 +3881,16 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(CreateFunctionBody::Return(function_body)) = &self.function_body {
             write!(f, " RETURN {function_body}")?;
+        }
+        if let Some(CreateFunctionBody::BeginAtomic(BeginEndStatements { statements, .. })) =
+            &self.function_body
+        {
+            write!(f, " BEGIN ATOMIC")?;
+            if !statements.is_empty() {
+                write!(f, " ")?;
+                format_statement_list(f, statements)?;
+            }
+            write!(f, " END")?;
         }
         if let Some(CreateFunctionBody::AsReturnExpr(function_body)) = &self.function_body {
             write!(f, " AS RETURN {function_body}")?;

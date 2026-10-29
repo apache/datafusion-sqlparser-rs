@@ -10506,6 +10506,10 @@ pub enum CreateFunctionBody {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
     Return(Expr),
+    /// SQL-standard function body enclosed by `BEGIN ATOMIC` and `END`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    BeginAtomic(BeginEndStatements),
 
     /// Function body expression using the 'AS RETURN' keywords
     ///

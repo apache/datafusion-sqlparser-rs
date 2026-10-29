@@ -11405,3 +11405,93 @@ fn parse_non_decimal_integer_token_with_invalid_digits() {
         ParserError::ParserError("Could not parse '0xZZ' as an integer".to_string())
     );
 }
+
+#[test]
+fn parse_create_function_begin_atomic() {
+    let sql = "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END";
+    pg_and_generic().verified_stmt(sql);
+    match pg_and_generic().run_parser_method(sql, |parser| parser.parse_statement().unwrap()) {
+        Statement::CreateFunction(CreateFunction {
+            function_body: Some(CreateFunctionBody::BeginAtomic(body)),
+            ..
+        }) => {
+            assert_eq!(
+                body.statements,
+                vec![pg_and_generic().verified_stmt("SELECT 1")]
+            );
+            assert_eq!(
+                body.span(),
+                Span::new(Location::new(1, 46), Location::new(1, 72))
+            );
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for sql in [
+        "CREATE FUNCTION f(a INT) RETURNS INT LANGUAGE sql IMMUTABLE BEGIN ATOMIC SELECT a; RETURN a + 1; END",
+        "CREATE OR REPLACE FUNCTION f(a INT) RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT CASE WHEN a > 0 THEN 1 END; END",
+        "CREATE FUNCTION f() RETURNS VOID LANGUAGE sql BEGIN ATOMIC END",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE OR REPLACE FUNCTION public.f(a integer)
+ RETURNS integer
+ LANGUAGE sql
+BEGIN ATOMIC
+ INSERT INTO t VALUES (a);
+ RETURN a;
+END"#,
+        "CREATE OR REPLACE FUNCTION public.f(a INTEGER) RETURNS INTEGER LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (a); RETURN a; END",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1 END",
+            "Expected: ;, found: END",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql RETURN 1 BEGIN ATOMIC SELECT 1; END",
+            "BEGIN ATOMIC specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN SELECT 1; END",
+            "Expected: end of statement, found: BEGIN",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_create_function_begin_atomic_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
+    for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}

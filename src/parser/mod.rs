@@ -6185,6 +6185,17 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.function_body, "RETURN")?;
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
+            } else if self.peek_keywords(&[Keyword::BEGIN, Keyword::ATOMIC]) {
+                ensure_not_set(&body.function_body, "BEGIN ATOMIC")?;
+                let begin_token = self.next_token();
+                self.advance_token();
+                let statements = self.parse_statement_list(&[Keyword::END])?;
+                let end_token = self.expect_keyword(Keyword::END)?;
+                body.function_body = Some(CreateFunctionBody::BeginAtomic(BeginEndStatements {
+                    begin_token: AttachedToken(begin_token),
+                    statements,
+                    end_token: AttachedToken(end_token),
+                }));
             } else {
                 break;
             }

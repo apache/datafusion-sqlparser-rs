@@ -12208,3 +12208,74 @@ fn parse_namespaced_storage_parameters_without_value() {
         ParserError::ParserError("Expected: identifier, found: )".to_string())
     );
 }
+
+#[test]
+fn parse_create_table_partition_of_untyped_columns() {
+    let column = |name: &str, options: Vec<ColumnOptionDef>| ColumnDef {
+        name: Ident::new(name),
+        data_type: DataType::Unspecified,
+        options,
+    };
+    let option = |option| ColumnOptionDef { name: None, option };
+    let create_table = |sql: &str| match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => create_table,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+
+    assert_eq!(
+        create_table(
+            "CREATE TABLE part PARTITION OF root (id NOT NULL, note DEFAULT 'x', flag) DEFAULT"
+        )
+        .columns,
+        vec![
+            column("id", vec![option(ColumnOption::NotNull)]),
+            column(
+                "note",
+                vec![option(ColumnOption::Default(Expr::value(
+                    Value::SingleQuotedString("x".to_string())
+                )))]
+            ),
+            column("flag", vec![]),
+        ]
+    );
+
+    let stmt = create_table(
+        "CREATE TABLE part PARTITION OF root (id CONSTRAINT id_present NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1)",
+    );
+    assert_eq!(
+        stmt.columns,
+        vec![column(
+            "id",
+            vec![ColumnOptionDef {
+                name: Some(Ident::new("id_present")),
+                option: ColumnOption::NotNull,
+            }]
+        )]
+    );
+    assert_eq!(stmt.constraints.len(), 1);
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE TABLE part PARTITION OF root (id WITH OPTIONS NOT NULL, flag WITH OPTIONS) DEFAULT",
+        "CREATE TABLE part PARTITION OF root (id NOT NULL, flag) DEFAULT",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE TABLE part PARTITION OF root (id INT) DEFAULT",
+            "Expected: ',' or ')' after column definition, found: INT",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id WITH NOT NULL) DEFAULT",
+            "Expected: ',' or ')' after column definition, found: WITH",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

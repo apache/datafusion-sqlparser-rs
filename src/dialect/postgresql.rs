@@ -613,4 +613,9 @@ impl Dialect for PostgreSqlDialect {
     fn supports_attach_partition_of(&self) -> bool {
         true
     }
+
+    /// See <https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM>
+    fn supports_table_inheritance_markers(&self) -> bool {
+        true
+    }
 }

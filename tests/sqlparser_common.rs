@@ -643,6 +643,7 @@ fn parse_update_with_table_alias() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![],
                 },
@@ -745,6 +746,7 @@ fn parse_select_with_table_alias() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![],
         }]
@@ -951,6 +953,7 @@ fn parse_where_delete_with_alias_statement() {
                     json_path: None,
                     sample: None,
                     index_directives: vec![],
+                    inheritance: None,
                 },
                 from[0].relation,
             );
@@ -967,6 +970,7 @@ fn parse_where_delete_with_alias_statement() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![],
                 }]),
@@ -8227,6 +8231,7 @@ fn parse_joins_on() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -8369,6 +8374,7 @@ fn parse_joins_using() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
@@ -8464,6 +8470,7 @@ fn parse_natural_join() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -10980,6 +10987,7 @@ fn parse_merge() {
                     json_path: None,
                     sample: None,
                     index_directives: vec![],
+                    inheritance: None,
                 }
             );
             assert_eq!(table, table_no_into);
@@ -12457,6 +12465,7 @@ fn parse_pivot_table() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -12537,6 +12546,7 @@ fn parse_pivot_table() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             }),
             aggregate_functions: vec![
                 ExprWithAlias {
@@ -12623,6 +12633,7 @@ fn parse_unpivot_table() {
             json_path: None,
             sample: None,
             index_directives: vec![],
+            inheritance: None,
         }),
         null_inclusion: None,
         value: Expr::Identifier(Ident::new("quantity")),
@@ -12882,6 +12893,7 @@ fn parse_select_table_with_index_hints() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![],
         }]
@@ -12911,6 +12923,7 @@ fn parse_pivot_unpivot_table() {
                     json_path: None,
                     sample: None,
                     index_directives: vec![],
+                    inheritance: None,
                 }),
                 null_inclusion: None,
                 value: Expr::Identifier(Ident::new("population")),
@@ -19000,6 +19013,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -19013,6 +19027,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -19067,6 +19082,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -19080,6 +19096,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
@@ -19134,6 +19151,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -19147,6 +19165,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
@@ -19201,6 +19220,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -19214,6 +19234,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
@@ -19268,6 +19289,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -19281,6 +19303,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::FullOuter(JoinConstraint::On(

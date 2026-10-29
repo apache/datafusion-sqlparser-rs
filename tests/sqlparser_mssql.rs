@@ -75,7 +75,8 @@ fn parse_table_time_travel() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![]
         },]
@@ -495,7 +496,8 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -549,7 +551,8 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -603,7 +606,8 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -658,6 +662,7 @@ fn parse_mssql_openjson() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -692,6 +697,7 @@ fn parse_mssql_openjson() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {

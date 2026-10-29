@@ -4772,11 +4772,12 @@ pub enum Statement {
         table_name: ObjectName,
     },
     /// ```sql
-    /// DESC | DESCRIBE { VIEW | DATABASE | SCHEMA } <name>
+    /// DESC | DESCRIBE { VIEW | DATABASE | SCHEMA | EXTERNAL VOLUME } <name>
     /// ```
     /// See [DESCRIBE VIEW](https://docs.snowflake.com/en/sql-reference/sql/desc-view),
-    /// [DESCRIBE DATABASE](https://docs.snowflake.com/en/sql-reference/sql/desc-database)
-    /// and [DESCRIBE SCHEMA](https://docs.snowflake.com/en/sql-reference/sql/desc-schema)
+    /// [DESCRIBE DATABASE](https://docs.snowflake.com/en/sql-reference/sql/desc-database),
+    /// [DESCRIBE SCHEMA](https://docs.snowflake.com/en/sql-reference/sql/desc-schema)
+    /// and [DESCRIBE EXTERNAL VOLUME](https://docs.snowflake.com/en/sql-reference/sql/desc-external-volume)
     DescribeObject(DescribeObject),
     /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE]  <statement>
@@ -8796,6 +8797,8 @@ pub enum ObjectType {
     User,
     /// A stream.
     Stream,
+    /// A Snowflake external volume.
+    ExternalVolume,
     /// A warehouse.
     Warehouse,
 }
@@ -8817,6 +8820,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
+            ObjectType::ExternalVolume => "EXTERNAL VOLUME",
             ObjectType::Warehouse => "WAREHOUSE",
         })
     }
@@ -8995,18 +8999,19 @@ impl fmt::Display for DescribeAlias {
 }
 
 /// ```sql
-/// DESC | DESCRIBE { VIEW | DATABASE | SCHEMA } <name>
+/// DESC | DESCRIBE { VIEW | DATABASE | SCHEMA | EXTERNAL VOLUME } <name>
 /// ```
 /// See [DESCRIBE VIEW](https://docs.snowflake.com/en/sql-reference/sql/desc-view),
-/// [DESCRIBE DATABASE](https://docs.snowflake.com/en/sql-reference/sql/desc-database)
-/// and [DESCRIBE SCHEMA](https://docs.snowflake.com/en/sql-reference/sql/desc-schema)
+/// [DESCRIBE DATABASE](https://docs.snowflake.com/en/sql-reference/sql/desc-database),
+/// [DESCRIBE SCHEMA](https://docs.snowflake.com/en/sql-reference/sql/desc-schema)
+/// and [DESCRIBE EXTERNAL VOLUME](https://docs.snowflake.com/en/sql-reference/sql/desc-external-volume)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DescribeObject {
     /// The keyword used, `DESC` or `DESCRIBE`.
     pub describe_alias: DescribeAlias,
-    /// The kind of object described: `VIEW`, `DATABASE` or `SCHEMA`.
+    /// The kind of object described: `VIEW`, `DATABASE`, `SCHEMA` or `EXTERNAL VOLUME`.
     pub object_type: ObjectType,
     /// Name of the object.
     pub name: ObjectName,

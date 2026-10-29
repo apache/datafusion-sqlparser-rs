@@ -5042,3 +5042,9 @@ fn test_stage_name_delimiters() {
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
 }
+
+#[test]
+fn parse_describe_external_volume() {
+    snowflake().verified_stmt("DESCRIBE EXTERNAL VOLUME my_vol");
+    snowflake().verified_stmt("DESC EXTERNAL VOLUME my_vol");
+}

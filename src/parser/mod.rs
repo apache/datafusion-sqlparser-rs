@@ -15223,21 +15223,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse `{ VIEW | DATABASE | SCHEMA } <name>` following `DESC | DESCRIBE`.
+    /// Parse `{ VIEW | DATABASE | SCHEMA | EXTERNAL VOLUME } <name>` following `DESC | DESCRIBE`.
     /// Returns `None` if none of the object type keywords is present.
     fn parse_describe_object(
         &mut self,
         describe_alias: DescribeAlias,
     ) -> Result<Option<Statement>, ParserError> {
-        let object_type = match self.parse_one_of_keywords(&[
-            Keyword::VIEW,
-            Keyword::DATABASE,
-            Keyword::SCHEMA,
-        ]) {
-            Some(Keyword::VIEW) => ObjectType::View,
-            Some(Keyword::DATABASE) => ObjectType::Database,
-            Some(Keyword::SCHEMA) => ObjectType::Schema,
-            _ => return Ok(None),
+        let object_type = if self.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
+            ObjectType::ExternalVolume
+        } else {
+            match self.parse_one_of_keywords(&[Keyword::VIEW, Keyword::DATABASE, Keyword::SCHEMA]) {
+                Some(Keyword::VIEW) => ObjectType::View,
+                Some(Keyword::DATABASE) => ObjectType::Database,
+                Some(Keyword::SCHEMA) => ObjectType::Schema,
+                _ => return Ok(None),
+            }
         };
         let name = self.parse_object_name(false)?;
         Ok(Some(

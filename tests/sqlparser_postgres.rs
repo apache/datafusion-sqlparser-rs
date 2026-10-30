@@ -11888,3 +11888,31 @@ fn parse_table_inheritance_markers() {
         }
     }
 }
+
+#[test]
+fn display_table_inheritance_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for (sql, rejected) in [
+        ("SELECT * FROM ONLY (t)", "ONLY ("),
+        ("SELECT * FROM ONLY t", "ONLY "),
+        ("SELECT * FROM t *", " *"),
+        ("SELECT * FROM t", "t"),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{sql}");
+    }
+}

@@ -22979,3 +22979,26 @@ fn test_visit_relations_refresh_materialized_view() {
     });
     assert_eq!(relations, vec!["app.m"]);
 }
+
+#[test]
+fn display_refresh_materialized_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = verified_stmt("REFRESH MATERIALIZED VIEW CONCURRENTLY app.m WITH NO DATA");
+    for rejected in ["REFRESH", "CONCURRENTLY", "app", "NO DATA"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
+}

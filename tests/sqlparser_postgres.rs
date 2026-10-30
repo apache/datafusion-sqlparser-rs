@@ -11529,3 +11529,95 @@ fn parse_named_argument_with_assignment_operator() {
         "sql parser error: Expected: end of statement, found: :="
     );
 }
+
+#[test]
+fn parse_create_foreign_table_inherits() {
+    let sql = "CREATE FOREIGN TABLE child (id INT) INHERITS (parent, public.other) SERVER s OPTIONS (schema_name 'public')";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.inherits,
+        Some(vec![
+            ObjectName::from(vec![Ident::new("parent")]),
+            ObjectName::from(vec![Ident::new("public"), Ident::new("other")]),
+        ])
+    );
+
+    // As written by pg_dump.
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN TABLE public.child (\n)\nINHERITS (public.parent)\nSERVER s",
+        "CREATE FOREIGN TABLE public.child () INHERITS (public.parent) SERVER s",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE child INHERITS (parent) SERVER s",
+            "Expected: '(' before the column list of CREATE FOREIGN TABLE, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () INHERITS () SERVER s",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () INHERITS parent SERVER s",
+            "Expected: a list of columns in parentheses, found: parent",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () INHERITS (parent) OPTIONS (schema_name 'public')",
+            "Expected: SERVER, found: OPTIONS",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () SERVER s INHERITS (parent)",
+            "Expected: end of statement, found: INHERITS",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_inherits_span() {
+    let sql = "CREATE FOREIGN TABLE child (id INT) INHERITS (parent, public.other) SERVER s OPTIONS (schema_name 'public')";
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(sql)
+        .unwrap();
+    let Statement::CreateForeignTable(stmt) = parser.parse_statement().unwrap() else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.span(),
+        Span::new(Location::new(1, 22), Location::new(1, 107)),
+    );
+}
+
+#[test]
+fn display_create_foreign_table_inherits_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt =
+        pg_and_generic().verified_stmt("CREATE FOREIGN TABLE child () INHERITS (parent) SERVER s");
+    for rejected in [")", " INHERITS (", " SERVER "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}

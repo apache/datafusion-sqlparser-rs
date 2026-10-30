@@ -17156,6 +17156,7 @@ impl<'a> Parser<'a> {
                     && !natural
                     && self.peek_parens_less_nested_join()
                 {
+                    let _guard = self.recursion_counter.try_decrease()?;
                     let joins = self.parse_joins()?;
                     relation = TableFactor::NestedJoin {
                         table_with_joins: Box::new(TableWithJoins { relation, joins }),
@@ -18123,18 +18124,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
-        let pattern = self.parse_concat_pattern()?;
-        if self.consume_token(&Token::Pipe) {
-            match self.parse_pattern()? {
-                // flatten nested alternations
-                MatchRecognizePattern::Alternation(mut patterns) => {
-                    patterns.insert(0, pattern);
-                    Ok(MatchRecognizePattern::Alternation(patterns))
-                }
-                next => Ok(MatchRecognizePattern::Alternation(vec![pattern, next])),
-            }
-        } else {
-            Ok(pattern)
+        let _guard = self.recursion_counter.try_decrease()?;
+        let mut patterns = vec![self.parse_concat_pattern()?];
+        while self.consume_token(&Token::Pipe) {
+            patterns.push(self.parse_concat_pattern()?);
+        }
+        match <[MatchRecognizePattern; 1]>::try_from(patterns) {
+            Ok([pattern]) => Ok(pattern),
+            Err(patterns) => Ok(MatchRecognizePattern::Alternation(patterns)),
         }
     }
 
@@ -18189,6 +18186,7 @@ impl<'a> Parser<'a> {
     /// Parses MySQL's JSON_TABLE column definition.
     /// For example: `id INT EXISTS PATH '$' DEFAULT '0' ON EMPTY ERROR ON ERROR`
     pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
         if self.parse_keyword(Keyword::NESTED) {
             let _has_path_keyword = self.parse_keyword(Keyword::PATH);
             let path = self.parse_value()?;
@@ -22104,6 +22102,7 @@ impl<'a> Parser<'a> {
         parenthesized: bool,
         end_words: &[Keyword],
     ) -> Result<KeyValueOptions, ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
         let mut options: Vec<KeyValueOption> = Vec::new();
         let mut delimiter = KeyValueOptionsDelimiter::Space;
         if parenthesized {

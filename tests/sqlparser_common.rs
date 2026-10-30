@@ -22744,3 +22744,64 @@ fn display_create_procedure_parameter_list_propagates_write_errors() {
     let mut writer = RejectingWriter(" (");
     assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
 }
+
+#[test]
+fn parse_deeply_nested_match_recognize_pattern_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!(
+        "SELECT * FROM t MATCH_RECOGNIZE(PATTERN ({}a{}) DEFINE a AS true)",
+        "(".repeat(1000),
+        ")".repeat(1000)
+    );
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_json_table_columns_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!(
+        "SELECT * FROM JSON_TABLE('{{}}', '$' COLUMNS({}a INT PATH '$'{}))",
+        "NESTED PATH '$' COLUMNS(".repeat(1000),
+        ")".repeat(1000)
+    );
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_match_recognize_pattern_alternation_within_recursion_limits() {
+    let sql = format!(
+        "SELECT * FROM t MATCH_RECOGNIZE(PATTERN ({}) DEFINE a AS 1 = 1)",
+        vec!["a"; 100].join(" | ")
+    );
+    all_dialects_where(|d| d.supports_match_recognize()).verified_stmt(&sql);
+}
+
+#[test]
+fn parse_nested_parenthesized_joins_within_recursion_limits() {
+    let sql = format!(
+        "SELECT * FROM {}u{}",
+        "(t JOIN ".repeat(6),
+        " ON true)".repeat(6)
+    );
+    // A lower limit keeps the debug-build stack within a test thread's default.
+    let res = Parser::new(&GenericDialect {})
+        .with_recursion_limit(10)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+    assert!(res.is_ok(), "{res:?}");
+}

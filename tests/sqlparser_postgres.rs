@@ -12236,6 +12236,42 @@ fn parse_alter_view_postgres() {
             "Expected: SET DEFAULT or DROP DEFAULT after ALTER COLUMN, found: SET",
         ),
         ("ALTER VIEW v RENAME COLUMN a", "Expected: TO, found: EOF"),
+        (
+            "ALTER VIEW v OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. \
+             sql parser error: Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER VIEW v SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v SET a", "Expected: (, found: a"),
+        (
+            "ALTER VIEW v SET (a = )",
+            "Expected: an expression, found: )",
+        ),
+        ("ALTER VIEW v SET (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v RESET a", "Expected: (, found: a"),
+        ("ALTER VIEW v RESET (a b)", "Expected: ), found: b"),
+        ("ALTER VIEW v RESET (a, )", "Expected: identifier, found: )"),
+        ("ALTER VIEW v RENAME TO", "Expected: identifier, found: EOF"),
+        ("ALTER VIEW v RENAME", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v RENAME COLUMN a TO",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v ALTER", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET DEFAULT",
+            "Expected: an expression, found: EOF",
+        ),
+        ("ALTER VIEW v (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v WITH (a", "Expected: =, found: EOF"),
+        ("ALTER VIEW v WITH (a = 1)", "Expected: AS, found: EOF"),
+        (
+            "ALTER VIEW v AS",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
     ] {
         assert_eq!(
             pg_and_generic().parse_sql_statements(sql).unwrap_err(),
@@ -12306,4 +12342,38 @@ fn parse_namespaced_storage_parameters_without_value() {
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: )".to_string())
     );
+}
+
+#[test]
+fn display_alter_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let with_options =
+        pg_and_generic().verified_stmt("ALTER VIEW IF EXISTS v WITH (x = 1) AS SELECT 1");
+    for rejected in ["ALTER VIEW ", "IF EXISTS ", "WITH ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{with_options}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+
+    let columns = pg_and_generic().verified_stmt("ALTER VIEW IF EXISTS v (zeta) AS SELECT 1");
+    for rejected in ["ALTER VIEW ", "IF EXISTS ", "("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{columns}"), Err(fmt::Error), "{rejected:?}");
+    }
 }

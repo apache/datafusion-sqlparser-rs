@@ -567,8 +567,8 @@ pub enum AlterTableOperation {
     /// ```
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
     ResetOptions {
-        /// Parameters to reset.
-        options: Vec<Ident>,
+        /// Parameters to reset, optionally namespaced as in `toast.autovacuum_enabled`.
+        options: Vec<ObjectName>,
     },
 }
 

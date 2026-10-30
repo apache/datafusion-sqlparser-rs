@@ -11705,7 +11705,7 @@ impl<'a> Parser<'a> {
             AlterTableOperation::SetUnlogged
         } else if self.parse_keyword(Keyword::RESET) {
             self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_identifier)?;
+            let options = self.parse_comma_separated(|p| p.parse_object_name(false))?;
             self.expect_token(&Token::RParen)?;
             AlterTableOperation::ResetOptions { options }
         } else {

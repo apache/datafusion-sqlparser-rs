@@ -22848,3 +22848,28 @@ fn parse_grant_on_tables_named_after_object_types() {
         verified_stmt(&format!("GRANT SELECT ON {name}.t TO r"));
     }
 }
+
+#[test]
+fn parse_long_suffix_before_numeric_prefix() {
+    let dialects = all_dialects_where(|d| d.supports_long_suffix_before_numeric_prefix());
+    assert_eq!(
+        dialects.verified_only_select("SELECT 1L").projection,
+        vec![SelectItem::UnnamedExpr(Expr::value(Value::Number(
+            "1".parse().unwrap(),
+            true
+        )))]
+    );
+    assert_eq!(
+        dialects.verified_only_select("SELECT 1La").projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1La")))]
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| {
+            d.supports_numeric_prefix() && !d.supports_long_suffix_before_numeric_prefix()
+        })
+        .verified_only_select("SELECT 1L")
+        .projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1L")))]
+    );
+}

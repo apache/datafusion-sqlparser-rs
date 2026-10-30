@@ -11584,6 +11584,21 @@ fn parse_create_foreign_table_inherits() {
 }
 
 #[test]
+fn parse_create_foreign_table_inherits_span() {
+    let sql = "CREATE FOREIGN TABLE child (id INT) INHERITS (parent, public.other) SERVER s OPTIONS (schema_name 'public')";
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(sql)
+        .unwrap();
+    let Statement::CreateForeignTable(stmt) = parser.parse_statement().unwrap() else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.span(),
+        Span::new(Location::new(1, 22), Location::new(1, 107)),
+    );
+}
+
+#[test]
 fn display_create_foreign_table_inherits_propagates_formatter_errors() {
     use core::fmt::{self, Write};
 

@@ -1620,22 +1620,8 @@ impl<'a> Parser<'a> {
             Keyword::TRY_CAST => Ok(Some(self.parse_cast_expr(CastKind::TryCast)?)),
             Keyword::SAFE_CAST => Ok(Some(self.parse_cast_expr(CastKind::SafeCast)?)),
             Keyword::EXISTS
-            // A query after the parenthesis is still the EXISTS predicate.
-            if !self.dialect.supports_exists_function()
-                || matches!(
-                        self.peek_nth_token_ref(1).token,
-                        Token::Word(Word {
-                            keyword: Keyword::SELECT
-                                | Keyword::WITH
-                                | Keyword::TABLE
-                                | Keyword::VALUES
-                                | Keyword::FROM,
-                            ..
-                        })
-                    ) =>
-                {
-                    Ok(Some(self.parse_exists_expr(false)?))
-                }
+            // `None` lets a dialect's `exists` function parse as a function call.
+            => self.maybe_parse_exists_expr(false),
             Keyword::EXTRACT => Ok(Some(self.parse_extract_expr()?)),
             Keyword::CEIL => Ok(Some(self.parse_ceil_floor_expr(true)?)),
             Keyword::FLOOR => Ok(Some(self.parse_ceil_floor_expr(false)?)),
@@ -3028,6 +3014,16 @@ impl<'a> Parser<'a> {
         Ok(exists_node)
     }
 
+    /// Parse `EXISTS (<query>)` after the `EXISTS` keyword, or return `None` when
+    /// the dialect reads the parentheses as the arguments of an `exists` function.
+    fn maybe_parse_exists_expr(&mut self, negated: bool) -> Result<Option<Expr>, ParserError> {
+        if self.dialect.supports_exists_function() {
+            self.maybe_parse(|parser| parser.parse_exists_expr(negated))
+        } else {
+            self.parse_exists_expr(negated).map(Some)
+        }
+    }
+
     /// Parse a SQL `EXTRACT` expression e.g. `EXTRACT(YEAR FROM date)`.
     pub fn parse_extract_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -3386,25 +3382,16 @@ impl<'a> Parser<'a> {
     ///
     /// Represented in the AST as `Expr::UnaryOp` with `UnaryOperator::Not`.
     pub fn parse_not(&mut self) -> Result<Expr, ParserError> {
-        match &self.peek_token_ref().token {
-            Token::Word(w) => match w.keyword {
-                Keyword::EXISTS => {
-                    let negated = true;
-                    let _ = self.parse_keyword(Keyword::EXISTS);
-                    self.parse_exists_expr(negated)
-                }
-                _ => Ok(Expr::UnaryOp {
-                    op: UnaryOperator::Not,
-                    expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
-                    ),
-                }),
-            },
-            _ => Ok(Expr::UnaryOp {
-                op: UnaryOperator::Not,
-                expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
-            }),
+        if self.parse_keyword(Keyword::EXISTS) {
+            if let Some(expr) = self.maybe_parse_exists_expr(true)? {
+                return Ok(expr);
+            }
+            self.prev_token();
         }
+        Ok(Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
+        })
     }
 
     /// Parse expression types that start with a left brace '{'.

@@ -9089,11 +9089,24 @@ fn parse_exists_function() {
         "EXISTS (WITH t AS (SELECT 1) SELECT * FROM t)",
         "EXISTS (VALUES (1))",
         "EXISTS (TABLE t)",
+        "EXISTS ((SELECT 1))",
+        "EXISTS ((SELECT 1) UNION (SELECT 2))",
     ] {
         assert!(
             matches!(dialects.verified_expr(sql), Expr::Exists { .. }),
             "{sql}"
         );
+    }
+    assert!(matches!(
+        dialects.verified_expr("NOT EXISTS (SELECT 1)"),
+        Expr::Exists { negated: true, .. }
+    ));
+    match dialects.verified_expr("NOT exists(array(1, 2), x -> x > 1)") {
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr,
+        } => assert!(matches!(*expr, Expr::Function(_))),
+        other => panic!("expected NOT of a function, got {other:?}"),
     }
     let dialects =
         all_dialects_where(|d| d.supports_exists_function() && d.supports_from_first_select());

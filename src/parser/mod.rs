@@ -18666,6 +18666,20 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    /// Whether the keyword at the next token introduces a grant object type. A table named after
+    /// the keyword is followed by `TO`, `FROM`, `,` or `.`, as in `GRANT SELECT ON function TO r`.
+    fn peek_grant_object_type(&self) -> bool {
+        !matches!(
+            &self.peek_nth_token_ref(1).token,
+            Token::Comma
+                | Token::Period
+                | Token::Word(Word {
+                    keyword: Keyword::TO | Keyword::FROM,
+                    ..
+                })
+        )
+    }
+
     /// Parse privileges and optional target objects for GRANT/DENY/REVOKE statements.
     pub fn parse_grant_deny_revoke_privileges_objects(
         &mut self,
@@ -18825,33 +18839,37 @@ impl<'a> Parser<'a> {
                 Some(GrantObjects::ExternalVolumes(
                     self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 ))
-            } else if self.parse_keyword(Keyword::FUNCTION) {
+            } else if self.peek_grant_object_type() && self.parse_keyword(Keyword::FUNCTION) {
                 Some(GrantObjects::Functions(
                     self.parse_comma_separated(Parser::parse_function_desc)?,
                 ))
-            } else if self.parse_keyword(Keyword::PROCEDURE) {
+            } else if self.peek_grant_object_type() && self.parse_keyword(Keyword::PROCEDURE) {
                 Some(GrantObjects::Procedures(
                     self.parse_comma_separated(Parser::parse_function_desc)?,
                 ))
-            } else if self.parse_keyword(Keyword::ROUTINE) {
+            } else if self.peek_grant_object_type() && self.parse_keyword(Keyword::ROUTINE) {
                 Some(GrantObjects::Routines(
                     self.parse_comma_separated(Parser::parse_function_desc)?,
                 ))
             } else {
-                let object_type = self.parse_one_of_keywords(&[
-                    Keyword::SEQUENCE,
-                    Keyword::DATABASE,
-                    Keyword::SCHEMA,
-                    Keyword::TABLE,
-                    Keyword::VIEW,
-                    Keyword::WAREHOUSE,
-                    Keyword::INTEGRATION,
-                    Keyword::VIEW,
-                    Keyword::WAREHOUSE,
-                    Keyword::INTEGRATION,
-                    Keyword::USER,
-                    Keyword::CONNECTION,
-                ]);
+                let object_type = if self.peek_grant_object_type() {
+                    self.parse_one_of_keywords(&[
+                        Keyword::SEQUENCE,
+                        Keyword::DATABASE,
+                        Keyword::SCHEMA,
+                        Keyword::TABLE,
+                        Keyword::VIEW,
+                        Keyword::WAREHOUSE,
+                        Keyword::INTEGRATION,
+                        Keyword::VIEW,
+                        Keyword::WAREHOUSE,
+                        Keyword::INTEGRATION,
+                        Keyword::USER,
+                        Keyword::CONNECTION,
+                    ])
+                } else {
+                    None
+                };
                 let objects =
                     self.parse_comma_separated(|p| p.parse_object_name_inner(false, true));
                 match object_type {

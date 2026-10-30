@@ -22790,11 +22790,61 @@ fn parse_grant_routines() {
     verified_stmt("REVOKE ALL ON ROUTINE public.f(p_id UUID), g() FROM bob");
     verified_stmt("REVOKE EXECUTE ON ALL PROCEDURES IN SCHEMA s, t FROM bob");
     verified_stmt("GRANT EXECUTE ON ALL ROUTINES IN SCHEMA s TO bob");
-
     assert_eq!(
-        all_dialects()
-            .parse_sql_statements("GRANT EXECUTE ON ROUTINE f(INT")
-            .unwrap_err(),
-        ParserError::ParserError("Expected: ), found: EOF".to_string())
+        objects("GRANT EXECUTE ON ROUTINE routine TO bob"),
+        Some(GrantObjects::Routines(vec![FunctionDesc {
+            name: name("routine"),
+            args: None,
+        }]))
     );
+
+    for (sql, err) in [
+        ("GRANT EXECUTE ON ROUTINE f(INT", "Expected: ), found: EOF"),
+        (
+            "GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "GRANT EXECUTE ON ALL ROUTINES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_grant_on_tables_named_after_object_types() {
+    for name in [
+        "function",
+        "procedure",
+        "routine",
+        "sequence",
+        "database",
+        "schema",
+        "view",
+        "warehouse",
+        "integration",
+        "user",
+        "connection",
+    ] {
+        let sql = format!("GRANT SELECT ON {name} TO r");
+        match verified_stmt(&sql) {
+            Statement::Grant(grant) => assert_eq!(
+                grant.objects,
+                Some(GrantObjects::Tables(vec![ObjectName::from(vec![
+                    Ident::new(name)
+                ])])),
+                "{sql}"
+            ),
+            stmt => panic!("unexpected statement: {stmt:?}"),
+        }
+        one_statement_parses_to(&format!("GRANT SELECT ON TABLE {name} TO r"), &sql);
+        verified_stmt(&format!("REVOKE SELECT ON {name}, t FROM r"));
+        verified_stmt(&format!("GRANT SELECT ON {name}.t TO r"));
+    }
 }

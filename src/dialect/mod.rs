@@ -1369,6 +1369,47 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `kw` can start the qualifier of an `INTERVAL` value, e.g. `DAY` in `INTERVAL '1' DAY`.
+    fn is_interval_qualifier(&self, kw: Keyword) -> bool {
+        matches!(
+            kw,
+            Keyword::YEAR
+                | Keyword::YEARS
+                | Keyword::MONTH
+                | Keyword::MONTHS
+                | Keyword::WEEK
+                | Keyword::WEEKS
+                | Keyword::DAY
+                | Keyword::DAYS
+                | Keyword::HOUR
+                | Keyword::HOURS
+                | Keyword::MINUTE
+                | Keyword::MINUTES
+                | Keyword::SECOND
+                | Keyword::SECONDS
+                | Keyword::CENTURY
+                | Keyword::DECADE
+                | Keyword::DOW
+                | Keyword::DOY
+                | Keyword::EPOCH
+                | Keyword::ISODOW
+                | Keyword::ISOYEAR
+                | Keyword::JULIAN
+                | Keyword::MICROSECOND
+                | Keyword::MICROSECONDS
+                | Keyword::MILLENIUM
+                | Keyword::MILLENNIUM
+                | Keyword::MILLISECOND
+                | Keyword::MILLISECONDS
+                | Keyword::NANOSECOND
+                | Keyword::NANOSECONDS
+                | Keyword::QUARTER
+                | Keyword::TIMEZONE
+                | Keyword::TIMEZONE_HOUR
+                | Keyword::TIMEZONE_MINUTE
+        )
+    }
+
     /// Returns true if the dialect supports `EXPLAIN` statements with utility options
     /// e.g. `EXPLAIN (ANALYZE TRUE, BUFFERS TRUE) SELECT * FROM tbl;`
     fn supports_explain_with_utility_options(&self) -> bool {

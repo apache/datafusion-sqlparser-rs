@@ -11671,3 +11671,40 @@ fn parse_drop_group_is_dialect_gated() {
         ))
     );
 }
+
+#[test]
+fn parse_interval_followed_by_alias() {
+    for alias in [
+        "WEEK", "WEEKS", "DAYS", "YEARS", "DECADE", "QUARTER", "EPOCH",
+    ] {
+        let select = pg().verified_only_select_with_canonical(
+            &format!("SELECT INTERVAL '1' {alias}"),
+            &format!("SELECT INTERVAL '1' AS {alias}"),
+        );
+        match only(&select.projection) {
+            SelectItem::ExprWithAlias {
+                expr: Expr::Interval(interval),
+                alias: ident,
+            } => {
+                assert_eq!(interval.leading_field, None);
+                assert_eq!(ident.value, alias);
+            }
+            item => panic!("unexpected projection: {item:?}"),
+        }
+    }
+
+    let select = pg().verified_only_select("SELECT INTERVAL '1' DAY");
+    assert!(matches!(
+        only(&select.projection),
+        SelectItem::UnnamedExpr(Expr::Interval(Interval {
+            leading_field: Some(DateTimeField::Day),
+            ..
+        }))
+    ));
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT 1 WHERE x > INTERVAL '1' WEEK")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: WEEK".to_string())
+    );
+}

@@ -7080,8 +7080,11 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
+    // PostgreSQL reads `WEEK` and the plural units as a column alias.
+    let dialects = all_dialects_except(|d| d.is::<PostgreSqlDialect>());
+
     let sql = "SELECT INTERVAL 5 DAYS";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::value(number("5"))),
@@ -7122,18 +7125,18 @@ fn parse_interval_all() {
 
     verified_only_select("SELECT INTERVAL '1' YEAR");
     verified_only_select("SELECT INTERVAL '1' MONTH");
-    verified_only_select("SELECT INTERVAL '1' WEEK");
+    dialects.verified_only_select("SELECT INTERVAL '1' WEEK");
     verified_only_select("SELECT INTERVAL '1' DAY");
     verified_only_select("SELECT INTERVAL '1' HOUR");
     verified_only_select("SELECT INTERVAL '1' MINUTE");
     verified_only_select("SELECT INTERVAL '1' SECOND");
-    verified_only_select("SELECT INTERVAL '1' YEARS");
-    verified_only_select("SELECT INTERVAL '1' MONTHS");
-    verified_only_select("SELECT INTERVAL '1' WEEKS");
-    verified_only_select("SELECT INTERVAL '1' DAYS");
-    verified_only_select("SELECT INTERVAL '1' HOURS");
-    verified_only_select("SELECT INTERVAL '1' MINUTES");
-    verified_only_select("SELECT INTERVAL '1' SECONDS");
+    dialects.verified_only_select("SELECT INTERVAL '1' YEARS");
+    dialects.verified_only_select("SELECT INTERVAL '1' MONTHS");
+    dialects.verified_only_select("SELECT INTERVAL '1' WEEKS");
+    dialects.verified_only_select("SELECT INTERVAL '1' DAYS");
+    dialects.verified_only_select("SELECT INTERVAL '1' HOURS");
+    dialects.verified_only_select("SELECT INTERVAL '1' MINUTES");
+    dialects.verified_only_select("SELECT INTERVAL '1' SECONDS");
     verified_only_select("SELECT INTERVAL '1' YEAR TO MONTH");
     verified_only_select("SELECT INTERVAL '1' DAY TO HOUR");
     verified_only_select("SELECT INTERVAL '1' DAY TO MINUTE");
@@ -7143,18 +7146,18 @@ fn parse_interval_all() {
     verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
     verified_only_select("SELECT INTERVAL 1 YEAR");
     verified_only_select("SELECT INTERVAL 1 MONTH");
-    verified_only_select("SELECT INTERVAL 1 WEEK");
+    dialects.verified_only_select("SELECT INTERVAL 1 WEEK");
     verified_only_select("SELECT INTERVAL 1 DAY");
     verified_only_select("SELECT INTERVAL 1 HOUR");
     verified_only_select("SELECT INTERVAL 1 MINUTE");
     verified_only_select("SELECT INTERVAL 1 SECOND");
-    verified_only_select("SELECT INTERVAL 1 YEARS");
-    verified_only_select("SELECT INTERVAL 1 MONTHS");
-    verified_only_select("SELECT INTERVAL 1 WEEKS");
-    verified_only_select("SELECT INTERVAL 1 DAYS");
-    verified_only_select("SELECT INTERVAL 1 HOURS");
-    verified_only_select("SELECT INTERVAL 1 MINUTES");
-    verified_only_select("SELECT INTERVAL 1 SECONDS");
+    dialects.verified_only_select("SELECT INTERVAL 1 YEARS");
+    dialects.verified_only_select("SELECT INTERVAL 1 MONTHS");
+    dialects.verified_only_select("SELECT INTERVAL 1 WEEKS");
+    dialects.verified_only_select("SELECT INTERVAL 1 DAYS");
+    dialects.verified_only_select("SELECT INTERVAL 1 HOURS");
+    dialects.verified_only_select("SELECT INTERVAL 1 MINUTES");
+    dialects.verified_only_select("SELECT INTERVAL 1 SECONDS");
     verified_only_select(
         "SELECT '2 years 15 months 100 weeks 99 hours 123456789 milliseconds'::INTERVAL",
     );

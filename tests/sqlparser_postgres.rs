@@ -12229,6 +12229,7 @@ fn parse_alter_view_postgres() {
     );
 
     for (sql, expected) in [
+        ("ALTER VIEW 123", "Expected: identifier, found: 123"),
         ("ALTER VIEW v SET ()", "Expected: identifier, found: )"),
         ("ALTER VIEW IF v OWNER TO o", "Expected: AS, found: v"),
         ("ALTER VIEW v RESET (a = 1)", "Expected: ), found: ="),

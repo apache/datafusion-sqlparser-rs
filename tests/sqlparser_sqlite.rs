@@ -1999,3 +1999,14 @@ fn parse_bitwise_shift_precedence_boundaries() {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
     }
 }
+
+#[test]
+fn parse_create_table_string_literal_column_with_dangling_constraint_name() {
+    assert_eq!(
+        sqlite()
+            .parse_sql_statements("CREATE TABLE t ('a' CONSTRAINT c)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: constraint details after CONSTRAINT <name>, found: )"
+    );
+}

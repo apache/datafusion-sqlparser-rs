@@ -12268,6 +12268,14 @@ fn parse_create_table_partition_of_untyped_columns() {
             "CREATE TABLE part PARTITION OF root (id WITH NOT NULL) DEFAULT",
             "Expected: ',' or ')' after column definition, found: WITH",
         ),
+        (
+            "CREATE TABLE part PARTITION OF root (id CONSTRAINT c) DEFAULT",
+            "Expected: constraint details after CONSTRAINT <name>, found: )",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id CONSTRAINT c COLLATE) DEFAULT",
+            "Expected: identifier, found: )",
+        ),
     ] {
         assert_eq!(
             pg_and_generic()

@@ -114,6 +114,7 @@ impl<T> Spanned for Parens<T> {
 }
 
 impl Spanned for Query {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         let Query {
             with,
@@ -218,6 +219,7 @@ impl Spanned for Cte {
 ///
 /// [SetExpr::Table] is not implemented.
 impl Spanned for SetExpr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         match self {
             SetExpr::Select(select) => select.span(),
@@ -323,6 +325,7 @@ impl Spanned for Values {
 /// - [Statement::Unload]
 /// - [Statement::OptimizeTable]
 impl Spanned for Statement {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         match self {
             Statement::Analyze(analyze) => analyze.span(),
@@ -1559,6 +1562,7 @@ impl Spanned for AssignmentTarget {
 /// - [Expr::Map] # DuckDB specific
 /// - [Expr::Lambda]
 impl Spanned for Expr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         match self {
             Expr::Identifier(ident) => ident.span,
@@ -1809,6 +1813,7 @@ impl Spanned for ObjectName {
 }
 
 impl Spanned for ObjectNamePart {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         match self {
             ObjectNamePart::Identifier(ident) => ident.span,
@@ -1937,6 +1942,7 @@ impl Spanned for SelectItemQualifiedWildcardKind {
 }
 
 impl Spanned for SelectItem {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         match self {
             SelectItem::UnnamedExpr(expr) => expr.span(),
@@ -2043,6 +2049,7 @@ impl Spanned for ReplaceSelectElement {
 /// Missing spans:
 /// - [TableFactor::JsonTable]
 impl Spanned for TableFactor {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         match self {
             TableFactor::Table {
@@ -2403,6 +2410,7 @@ impl Spanned for TableWithJoins {
 }
 
 impl Spanned for Select {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn span(&self) -> Span {
         let Select {
             select_token,
@@ -3422,5 +3430,49 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let expr = test.0.parse_expr().unwrap();
             assert_eq!(test.get_source(expr.span()), expected, "{sql}");
         }
+    }
+
+    #[test]
+    #[cfg(feature = "recursive-protection")]
+    fn test_deeply_nested_expr_span_does_not_overflow() {
+        // 200k nested nodes on a 512 KiB stack overflow unless the walk grows the stack.
+        std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(|| {
+                let mut expr = Expr::Identifier(crate::ast::Ident::new("x"));
+                for _ in 0..200_000 {
+                    expr = Expr::Nested(Box::new(expr));
+                }
+                let _ = expr.span();
+                // Dropping the chain recurses too; leak it so the test measures only the span walk.
+                core::mem::forget(expr);
+            })
+            .unwrap()
+            .join()
+            .expect("span walk overflowed the small-stack thread");
+    }
+
+    #[test]
+    #[cfg(feature = "recursive-protection")]
+    fn test_deeply_nested_object_name_part_span_does_not_overflow() {
+        // Same check for the ObjectNamePart -> FunctionArgExpr::QualifiedWildcard cycle.
+        std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(|| {
+                let mut part = ObjectNamePart::Identifier(crate::ast::Ident::new("x"));
+                for _ in 0..200_000 {
+                    part = ObjectNamePart::Function(crate::ast::ObjectNamePartFunction {
+                        name: crate::ast::Ident::new("f"),
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::QualifiedWildcard(
+                            ObjectName(vec![part]),
+                        ))],
+                    });
+                }
+                let _ = part.span();
+                core::mem::forget(part);
+            })
+            .unwrap()
+            .join()
+            .expect("span walk overflowed the small-stack thread");
     }
 }

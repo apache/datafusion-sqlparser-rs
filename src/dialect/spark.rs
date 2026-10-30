@@ -17,6 +17,7 @@
 
 use crate::ast::Expr;
 use crate::dialect::Dialect;
+use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
 
 /// A [`Dialect`] for [Apache Spark SQL](https://spark.apache.org/docs/latest/sql-ref.html).
@@ -114,6 +115,16 @@ impl Dialect for SparkSqlDialect {
 
     fn require_interval_qualifier(&self) -> bool {
         true
+    }
+
+    /// See <https://spark.apache.org/docs/latest/sql-ref-literals.html#interval-literal>
+    fn supports_interval_string_without_qualifier(&self) -> bool {
+        true
+    }
+
+    /// `SELECT interval FROM t` names a column.
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        kw != Keyword::INTERVAL && keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
     fn supports_bang_not_operator(&self) -> bool {

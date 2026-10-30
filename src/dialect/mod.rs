@@ -2178,6 +2178,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports Common Scalar Expressions in a `WITH` clause.
+    ///
+    /// For example:
+    /// ```sql
+    /// WITH 42 AS answer SELECT answer FROM t
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions)
+    fn supports_common_scalar_expressions(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the two-argument comma-separated
     /// form of the `TRIM` function: `TRIM(expr, characters)`.
     fn supports_comma_separated_trim(&self) -> bool {
@@ -2219,6 +2231,18 @@ pub trait Dialect: Debug + Any {
 
     /// Whether a custom type name may introduce a typed string.
     fn is_custom_type_typed_string(&self, _first_keyword: Keyword, _qualified: bool) -> bool {
+        false
+    }
+
+    // Returns true if the dialect supports a leading `WITH XMLNAMESPACES (...)`
+    /// clause in queries.
+    ///
+    /// Example:
+    /// ```sql
+    /// WITH XMLNAMESPACES ('urn:example' AS ns)
+    /// SELECT 1
+    /// ```
+    fn supports_with_xmlnamespaces_clause(&self) -> bool {
         false
     }
 

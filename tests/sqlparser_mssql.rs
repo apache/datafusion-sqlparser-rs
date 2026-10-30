@@ -31,7 +31,7 @@ use sqlparser::ast::DataType::{Int, Text, Varbinary};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, MsSqlDialect};
+use sqlparser::dialect::{Dialect, GenericDialect, MsSqlDialect};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
 #[test]
@@ -2914,6 +2914,39 @@ fn parse_mssql_money_constants() {
         &Expr::Value(Value::Placeholder("$0".to_string()).with_empty_span()),
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_xmlnamespaces() {
+    let sql =
+        "WITH XMLNAMESPACES ('urn:test' AS ns) SELECT 1 AS [ns:Value] FOR XML PATH('ns:Root')";
+    let query = ms().verified_query(sql);
+    let with = query.with.as_ref().unwrap();
+    assert_eq!(with.exprs.len(), 1);
+    assert_eq!(with.to_string(), "WITH XMLNAMESPACES ('urn:test' AS ns)");
+    assert_eq!(
+        with.exprs[0].to_string(),
+        "XMLNAMESPACES ('urn:test' AS ns)"
+    );
+    assert_eq!(query.to_string(), sql);
+    assert_eq!(with.span(), Span::empty());
+    match &with.exprs[0] {
+        WithExpression::XmlNamespaces(namespaces) => {
+            assert_eq!(namespaces.len(), 1);
+            assert_eq!(namespaces[0].to_string(), "'urn:test' AS ns");
+            assert_eq!(namespaces[0].span(), Span::empty());
+        }
+        other => panic!("expected XMLNAMESPACES, got {other:?}"),
+    }
+
+    let query = ms().verified_query(
+        "WITH XMLNAMESPACES ('urn:example' AS ns), t AS (SELECT 1 AS id) SELECT id FROM t",
+    );
+    let with = query.with.as_ref().unwrap();
+    assert_eq!(with.exprs.len(), 2);
+    assert!(matches!(with.exprs[0], WithExpression::XmlNamespaces(_)));
+    assert!(matches!(with.exprs[1], WithExpression::Cte(_)));
+    assert!(!GenericDialect {}.supports_with_xmlnamespaces_clause());
 }
 
 #[test]

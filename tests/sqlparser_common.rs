@@ -8611,18 +8611,21 @@ fn parse_ctes() {
 
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
         for (i, exp) in expected.iter().enumerate() {
-            let Cte { alias, query, .. } = &sel.with.as_ref().unwrap().cte_tables[i];
-            assert_eq!(*exp, query.to_string());
-            assert_eq!(false, alias.explicit);
+            let cte = match &sel.with.as_ref().unwrap().exprs[i] {
+                WithExpression::Cte(cte) => cte,
+                other => panic!("expected a CTE, got {other:?}"),
+            };
+            assert_eq!(*exp, cte.query.to_string());
+            assert_eq!(false, cte.alias.explicit);
             assert_eq!(
                 if i == 0 {
                     Ident::new("a")
                 } else {
                     Ident::new("b")
                 },
-                alias.name
+                cte.alias.name
             );
-            assert!(alias.columns.is_empty());
+            assert!(cte.alias.columns.is_empty());
         }
     }
 
@@ -8655,26 +8658,29 @@ fn parse_ctes() {
     // CTE in a CTE...
     let sql = &format!("WITH outer_cte AS ({with}) SELECT * FROM outer_cte");
     let select = verified_query(sql);
-    assert_ctes_in_select(&cte_sqls, &only(&select.with.unwrap().cte_tables).query);
+    let with = select.with.as_ref().unwrap();
+    let outer_cte = match only(&with.exprs) {
+        WithExpression::Cte(cte) => cte,
+        other => panic!("expected a CTE, got {other:?}"),
+    };
+    assert_ctes_in_select(&cte_sqls, &outer_cte.query);
 }
 
 #[test]
 fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
     let query = all_dialects().verified_query(sql);
+    let with = query.with.unwrap();
+    let cte = match with.exprs.first().unwrap() {
+        WithExpression::Cte(cte) => cte,
+        other => panic!("expected a CTE, got {other:?}"),
+    };
     assert_eq!(
         vec![
             TableAliasColumnDef::from_name("col1"),
             TableAliasColumnDef::from_name("col2")
         ],
-        query
-            .with
-            .unwrap()
-            .cte_tables
-            .first()
-            .unwrap()
-            .alias
-            .columns
+        cte.alias.columns
     );
 }
 
@@ -8688,8 +8694,8 @@ fn parse_recursive_cte() {
 
     let with = query.with.as_ref().unwrap();
     assert!(with.recursive);
-    assert_eq!(with.cte_tables.len(), 1);
-    let expected = Cte {
+    assert_eq!(with.exprs.len(), 1);
+    let expected = WithExpression::Cte(Cte {
         alias: TableAlias {
             explicit: false,
             name: Ident {
@@ -8704,8 +8710,8 @@ fn parse_recursive_cte() {
         from: None,
         materialized: None,
         closing_paren_token: AttachedToken::empty(),
-    };
-    assert_eq!(with.cte_tables.first().unwrap(), &expected);
+    });
+    assert_eq!(with.exprs.first().unwrap(), &expected);
 }
 
 #[test]
@@ -21883,11 +21889,16 @@ fn parse_cte_materialization() {
         let sql = format!("WITH c AS {directive}(SELECT 1) SELECT * FROM c");
         TestedDialects::new(vec![Box::new(DuckDbDialect {})]).verified_query(&sql);
         let query = all_dialects_where(|d| d.supports_cte_materialization()).verified_query(&sql);
-        assert_eq!(query.with.unwrap().cte_tables[0].materialized, expected);
+        let with = query.with.unwrap();
+        let cte = match &with.exprs[0] {
+            WithExpression::Cte(cte) => cte,
+            other => panic!("expected a CTE, got {other:?}"),
+        };
+        assert_eq!(cte.materialized, expected);
         if expected.is_some() {
-            all_dialects_where(|d| !d.supports_cte_materialization())
-                .parse_sql_statements(&sql)
-                .unwrap_err();
+            for dialect in all_dialects_where(|d| !d.supports_cte_materialization()).dialects {
+                Parser::parse_sql(dialect.as_ref(), &sql).unwrap_err();
+            }
         }
     }
 }

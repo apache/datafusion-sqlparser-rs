@@ -189,6 +189,18 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_aggregate_order_by_with_empty_args(&self) -> bool {
+        true
+    }
+
+    fn supports_in_table_expression(&self) -> bool {
+        true
+    }
+
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     fn supports_comment_on(&self) -> bool {
         true
     }

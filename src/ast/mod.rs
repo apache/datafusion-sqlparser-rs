@@ -58,25 +58,29 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo, TypeModifier,
 };
 pub use self::dcl::{
-    AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
-    SetConfigValue, Use,
+    AlterRoleOperation, CreateRole, Grant, GrantRole, ResetConfig, Revoke, RevokeRole,
+    RoleGrantOption, RoleGrantOptionValue, RoleKeyword, RoleOption, SecondaryRoles, SetConfigValue,
+    Use,
 };
 pub use self::ddl::{
-    Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner,
-    AlterFunction, AlterFunctionAction, AlterFunctionKind, AlterFunctionOperation,
-    AlterIndexOperation, AlterOperator, AlterOperatorClass, AlterOperatorClassOperation,
-    AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
-    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
-    AlterTableLock, AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
-    AlterTextSearchOption, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,
+    AlterConnectorOwner, AlterFunction, AlterFunctionAction, AlterFunctionKind,
+    AlterFunctionOperation, AlterIndexOperation, AlterOperator, AlterOperatorClass,
+    AlterOperatorClassOperation, AlterOperatorFamily, AlterOperatorFamilyOperation,
+    AlterOperatorOperation, AlterPolicy, AlterPolicyOperation, AlterSchema, AlterSchemaOperation,
+    AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterTableType,
+    AlterTextSearch, AlterTextSearchOperation, AlterTextSearchOption, AlterTrigger,
+    AlterTriggerOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
     AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
     ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateCollation, CreateCollationDefinition, CreateConnector,
-    CreateDomain, CreateExtension, CreateForeignTable, CreateFunction, CreateIndex, CreateOperator,
+    ConstraintCharacteristics, CreateAggregate, CreateAggregateArgs, CreateAggregateOption,
+    CreateCollation, CreateCollationDefinition, CreateConnector, CreateDomain, CreateExtension,
+    CreateForeignDataWrapper, CreateForeignTable, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
-    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger, ForValues,
+    CreateRule, CreateRuleAction, CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch,
+    CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior,
+    DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
+    DropOperatorSignature, DropPolicy, DropTrigger, ForValues, ForeignDataWrapperRoutineClause,
     FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
     IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
@@ -883,6 +887,15 @@ pub enum InTarget {
     /// `UNNEST(array_expression)`, see
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators)
     Unnest(Box<Expr>),
+    /// A table name or table-valued function, read as `(SELECT * FROM name)`, see
+    /// [SQLite](https://www.sqlite.org/lang_expr.html#in_op)
+    Table {
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        /// Table or table-valued function name, visited as a relation.
+        name: ObjectName,
+        /// Table-valued function arguments, `None` for a plain table name.
+        args: Option<Vec<FunctionArg>>,
+    },
 }
 
 impl fmt::Display for InTarget {
@@ -891,6 +904,13 @@ impl fmt::Display for InTarget {
             InTarget::List(list) => write!(f, "({})", display_comma_separated(list)),
             InTarget::Subquery(subquery) => write!(f, "({subquery})"),
             InTarget::Unnest(array_expr) => write!(f, "UNNEST({array_expr})"),
+            InTarget::Table { name, args } => {
+                write!(f, "{name}")?;
+                if let Some(args) = args {
+                    write!(f, "({})", display_comma_separated(args))?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -2559,6 +2579,8 @@ pub enum CommentObject {
     Domain,
     /// An extension.
     Extension,
+    /// A foreign table.
+    ForeignTable,
     /// A function.
     Function,
     /// An index.
@@ -2591,6 +2613,7 @@ impl fmt::Display for CommentObject {
             CommentObject::Database => f.write_str("DATABASE"),
             CommentObject::Domain => f.write_str("DOMAIN"),
             CommentObject::Extension => f.write_str("EXTENSION"),
+            CommentObject::ForeignTable => f.write_str("FOREIGN TABLE"),
             CommentObject::Function => f.write_str("FUNCTION"),
             CommentObject::Index => f.write_str("INDEX"),
             CommentObject::MaterializedView => f.write_str("MATERIALIZED VIEW"),
@@ -3819,10 +3842,20 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
     CreateForeignTable(CreateForeignTable),
     /// ```sql
+    /// CREATE FOREIGN DATA WRAPPER
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
+    CreateForeignDataWrapper(CreateForeignDataWrapper),
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
     CreatePolicy(CreatePolicy),
+    /// ```sql
+    /// CREATE RULE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrule.html)
+    CreateRule(CreateRule),
     /// ```sql
     /// CREATE CONNECTOR
     /// ```
@@ -3847,6 +3880,11 @@ pub enum Statement {
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html)
     CreateTextSearch(CreateTextSearch),
+    /// ```sql
+    /// CREATE AGGREGATE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createaggregate.html)
+    CreateAggregate(CreateAggregate),
     /// ```sql
     /// ALTER TABLE
     /// ```
@@ -3929,6 +3967,11 @@ pub enum Statement {
     /// ```
     /// (Postgresql-specific)
     AlterPolicy(AlterPolicy),
+    /// ```sql
+    /// ALTER TRIGGER <NAME> ON <TABLE NAME> <OPERATION>
+    /// ```
+    /// (Postgresql-specific)
+    AlterTrigger(AlterTrigger),
     /// ```sql
     /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
     /// or
@@ -4537,7 +4580,7 @@ pub enum Statement {
         or_alter: bool,
         /// Procedure name.
         name: ObjectName,
-        /// Optional procedure parameters.
+        /// Parenthesized parameter list, `None` when absent.
         params: Option<Vec<ProcedureParam>>,
         /// Optional language identifier.
         language: Option<Ident>,
@@ -4630,6 +4673,10 @@ pub enum Statement {
     /// ```
     Grant(Grant),
     /// ```sql
+    /// GRANT roles TO grantees
+    /// ```
+    GrantRole(GrantRole),
+    /// ```sql
     /// DENY privileges ON object TO grantees
     /// ```
     Deny(DenyStatement),
@@ -4637,6 +4684,10 @@ pub enum Statement {
     /// REVOKE privileges ON objects FROM grantees
     /// ```
     Revoke(Revoke),
+    /// ```sql
+    /// REVOKE roles FROM grantees
+    /// ```
+    RevokeRole(RevokeRole),
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
     /// ```
@@ -4810,12 +4861,8 @@ pub enum Statement {
         if_not_exists: bool,
         /// Sequence name.
         name: ObjectName,
-        /// Optional data type for the sequence.
-        data_type: Option<DataType>,
-        /// Sequence options (INCREMENT, MINVALUE, etc.).
+        /// Sequence options, in the order they were written.
         sequence_options: Vec<SequenceOptions>,
-        /// Optional `OWNED BY` target.
-        owned_by: Option<ObjectName>,
     },
     /// A `CREATE DOMAIN` statement.
     CreateDomain(CreateDomain),
@@ -5547,9 +5594,7 @@ impl fmt::Display for Statement {
                 )?;
 
                 if let Some(p) = params {
-                    if !p.is_empty() {
-                        write!(f, " ({})", display_comma_separated(p))?;
-                    }
+                    write!(f, " ({})", display_comma_separated(p))?;
                 }
 
                 if let Some(language) = language {
@@ -5683,13 +5728,16 @@ impl fmt::Display for Statement {
                 write!(f, "{stmt}")
             }
             Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
+            Statement::CreateForeignDataWrapper(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
+            Statement::CreateRule(rule) => write!(f, "{rule}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
             Statement::CreateOperatorFamily(create_operator_family) => {
                 create_operator_family.fmt(f)
             }
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
+            Statement::CreateAggregate(create_aggregate) => create_aggregate.fmt(f),
             Statement::CreateTextSearch(create_text_search) => create_text_search.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
@@ -5727,6 +5775,7 @@ impl fmt::Display for Statement {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
             Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
+            Statement::AlterTrigger(alter_trigger) => write!(f, "{alter_trigger}"),
             Statement::AlterConnector {
                 name,
                 properties,
@@ -6144,6 +6193,8 @@ impl fmt::Display for Statement {
             Statement::Grant(grant) => write!(f, "{grant}"),
             Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke(revoke) => write!(f, "{revoke}"),
+            Statement::GrantRole(grant) => write!(f, "{grant}"),
+            Statement::RevokeRole(revoke) => write!(f, "{revoke}"),
             Statement::Deallocate { name, prepare } => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",
@@ -6262,32 +6313,19 @@ impl fmt::Display for Statement {
                 temporary,
                 if_not_exists,
                 name,
-                data_type,
                 sequence_options,
-                owned_by,
             } => {
-                let as_type: String = if let Some(dt) = data_type.as_ref() {
-                    //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
-                    // " AS ".to_owned() + &dt.to_string()
-                    [" AS ", &dt.to_string()].concat()
-                } else {
-                    "".to_string()
-                };
                 write!(
                     f,
-                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
-                    as_type = as_type
                 )?;
                 for sequence_option in sequence_options {
                     write!(f, "{sequence_option}")?;
                 }
-                if let Some(ob) = owned_by.as_ref() {
-                    write!(f, " OWNED BY {ob}")?;
-                }
-                write!(f, "")
+                Ok(())
             }
             Statement::CreateStage {
                 or_replace,
@@ -6573,14 +6611,21 @@ impl fmt::Display for Statement {
 
 /// Can use to describe options in create sequence or table column type identity
 /// ```sql
-/// [ INCREMENT [ BY ] increment ]
+/// [ AS data_type ] [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+///     [ OWNED BY { table_name.column_name | NONE } ]
 /// ```
+///
+/// The options form an unordered list, so they are stored in the order written.
+/// `AS` and `OWNED BY` are only accepted by `CREATE SEQUENCE`, not by an
+/// identity column.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SequenceOptions {
+    /// `AS <data_type>` option.
+    DataType(DataType),
     /// `INCREMENT [BY] <expr>` option; second value indicates presence of `BY` keyword.
     IncrementBy(Expr, bool),
     /// `MINVALUE <expr>` or `NO MINVALUE`.
@@ -6593,11 +6638,16 @@ pub enum SequenceOptions {
     Cache(Expr),
     /// `CYCLE` or `NO CYCLE` option.
     Cycle(bool),
+    /// `OWNED BY <object_name>`, or `OWNED BY NONE` when no target is given.
+    OwnedBy(Option<ObjectName>),
 }
 
 impl fmt::Display for SequenceOptions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            SequenceOptions::DataType(data_type) => {
+                write!(f, " AS {data_type}")
+            }
             SequenceOptions::IncrementBy(increment, by) => {
                 write!(
                     f,
@@ -6631,6 +6681,12 @@ impl fmt::Display for SequenceOptions {
             }
             SequenceOptions::Cycle(no) => {
                 write!(f, " {}CYCLE", if *no { "NO " } else { "" })
+            }
+            SequenceOptions::OwnedBy(Some(object_name)) => {
+                write!(f, " OWNED BY {object_name}")
+            }
+            SequenceOptions::OwnedBy(None) => {
+                write!(f, " OWNED BY NONE")
             }
         }
     }
@@ -6916,8 +6972,18 @@ pub struct OnConflict {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Target specification for an `ON CONFLICT` clause.
 pub enum ConflictTarget {
-    /// Target specified as a list of columns.
-    Columns(Vec<Ident>),
+    /// Target specified as a list of columns, optionally followed by
+    /// `WHERE index_predicate`, which lets a partial unique index be inferred as the arbiter:
+    /// `ON CONFLICT (a) WHERE b > 0 DO ...`. PostgreSQL and SQLite both accept the predicate.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-insert.html>
+    /// and <https://www.sqlite.org/lang_upsert.html>
+    Columns {
+        /// The columns of the conflict target.
+        columns: Vec<Ident>,
+        /// The `WHERE index_predicate` after the columns, if any.
+        predicate: Option<Expr>,
+    },
     /// Target specified as a named constraint.
     OnConstraint(ObjectName),
 }
@@ -6967,7 +7033,13 @@ impl fmt::Display for OnConflict {
 impl fmt::Display for ConflictTarget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ConflictTarget::Columns(cols) => write!(f, "({})", display_comma_separated(cols)),
+            ConflictTarget::Columns { columns, predicate } => {
+                write!(f, "({})", display_comma_separated(columns))?;
+                if let Some(predicate) = predicate {
+                    write!(f, " WHERE {predicate}")?;
+                }
+                Ok(())
+            }
             ConflictTarget::OnConstraint(name) => write!(f, " ON CONSTRAINT {name}"),
         }
     }
@@ -7765,29 +7837,16 @@ pub enum GrantObjects {
     ReplicationGroup(Vec<ObjectName>),
     /// Grant privileges on external volumes
     ExternalVolumes(Vec<ObjectName>),
-    /// Grant privileges on a procedure. In dialects that
-    /// support overloading, the argument types must be specified.
+    /// Grant privileges on procedures, each with an optional argument list.
     ///
     /// For example:
     /// `GRANT USAGE ON PROCEDURE foo(varchar) TO ROLE role1`
-    Procedure {
-        /// The procedure name.
-        name: ObjectName,
-        /// Optional argument types for overloaded procedures.
-        arg_types: Vec<DataType>,
-    },
-
-    /// Grant privileges on a function. In dialects that
-    /// support overloading, the argument types must be specified.
+    Procedures(Vec<FunctionDesc>),
+    /// Grant privileges on functions, each with an optional argument list.
     ///
     /// For example:
-    /// `GRANT USAGE ON FUNCTION foo(varchar) TO ROLE role1`
-    Function {
-        /// The function name.
-        name: ObjectName,
-        /// Optional argument types for overloaded functions.
-        arg_types: Vec<DataType>,
-    },
+    /// `GRANT EXECUTE ON FUNCTION foo(p_id uuid), bar() TO role1`
+    Functions(Vec<FunctionDesc>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -7919,19 +7978,11 @@ impl fmt::Display for GrantObjects {
             GrantObjects::ExternalVolumes(objects) => {
                 write!(f, "EXTERNAL VOLUME {}", display_comma_separated(objects))
             }
-            GrantObjects::Procedure { name, arg_types } => {
-                write!(f, "PROCEDURE {name}")?;
-                if !arg_types.is_empty() {
-                    write!(f, "({})", display_comma_separated(arg_types))?;
-                }
-                Ok(())
+            GrantObjects::Procedures(procedures) => {
+                write!(f, "PROCEDURE {}", display_comma_separated(procedures))
             }
-            GrantObjects::Function { name, arg_types } => {
-                write!(f, "FUNCTION {name}")?;
-                if !arg_types.is_empty() {
-                    write!(f, "({})", display_comma_separated(arg_types))?;
-                }
-                Ok(())
+            GrantObjects::Functions(functions) => {
+                write!(f, "FUNCTION {}", display_comma_separated(functions))
             }
         }
     }
@@ -8713,6 +8764,8 @@ pub enum ObjectType {
     Collation,
     /// A table.
     Table,
+    /// A foreign table.
+    ForeignTable,
     /// A view.
     View,
     /// A materialized view.
@@ -8744,6 +8797,7 @@ impl fmt::Display for ObjectType {
         f.write_str(match self {
             ObjectType::Collation => "COLLATION",
             ObjectType::Table => "TABLE",
+            ObjectType::ForeignTable => "FOREIGN TABLE",
             ObjectType::View => "VIEW",
             ObjectType::MaterializedView => "MATERIALIZED VIEW",
             ObjectType::Index => "INDEX",
@@ -10335,13 +10389,20 @@ pub enum FunctionParallel {
     Safe,
 }
 
+impl FunctionParallel {
+    /// Returns the bare keyword for this parallel mode, without the `PARALLEL` prefix.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FunctionParallel::Unsafe => "UNSAFE",
+            FunctionParallel::Restricted => "RESTRICTED",
+            FunctionParallel::Safe => "SAFE",
+        }
+    }
+}
+
 impl fmt::Display for FunctionParallel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FunctionParallel::Unsafe => write!(f, "PARALLEL UNSAFE"),
-            FunctionParallel::Restricted => write!(f, "PARALLEL RESTRICTED"),
-            FunctionParallel::Safe => write!(f, "PARALLEL SAFE"),
-        }
+        write!(f, "PARALLEL {}", self.as_str())
     }
 }
 
@@ -10445,6 +10506,10 @@ pub enum CreateFunctionBody {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
     Return(Expr),
+    /// SQL-standard function body enclosed by `BEGIN ATOMIC` and `END`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    BeginAtomic(BeginEndStatements),
 
     /// Function body expression using the 'AS RETURN' keywords
     ///

@@ -1619,6 +1619,20 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::Number(s, false)));
                     }
 
+                    if s == "0" && self.dialect.supports_non_decimal_integer_literals() {
+                        let radix = match chars.peek() {
+                            Some('x' | 'X') => Some((16, "a hexadecimal")),
+                            Some('o' | 'O') => Some((8, "an octal")),
+                            Some('b' | 'B') => Some((2, "a binary")),
+                            _ => None,
+                        };
+                        if let Some((radix, name)) = radix {
+                            return self
+                                .tokenize_non_decimal_integer(chars, radix, name)
+                                .map(Some);
+                        }
+                    }
+
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
@@ -2294,6 +2308,32 @@ impl<'a> Tokenizer<'a> {
         }
 
         Ok(s)
+    }
+
+    /// Tokenizes an integer literal such as `0x1F` after its leading `0`,
+    /// keeping the spelling as written.
+    fn tokenize_non_decimal_integer(
+        &self,
+        chars: &mut State,
+        radix: u32,
+        name: &str,
+    ) -> Result<Token, TokenizerError> {
+        let mut s = String::from('0');
+        s.extend(chars.next());
+        // An underscore may directly follow the prefix, as in `0x_1F`.
+        if chars.peek() == Some(&'_') && self.dialect.supports_numeric_literal_underscores() {
+            chars.next();
+            s.push('_');
+        }
+        let digits = self.tokenize_number_part(chars, |ch| ch.is_digit(radix))?;
+        if digits.is_empty() {
+            return self.tokenizer_error(
+                chars.location(),
+                format!("Expected {name} digit after '{}'", &s[..2]),
+            );
+        }
+        s.push_str(&digits);
+        Ok(Token::Number(s, false))
     }
 
     // Consume characters until newline
@@ -3029,10 +3069,25 @@ mod tests {
             ],
         );
 
-        numeric_underscore_dialects.tokenizes_to(
+        let hex_string_dialects = all_dialects_where(|dialect| {
+            dialect.supports_numeric_literal_underscores()
+                && !dialect.supports_non_decimal_integer_literals()
+        });
+        hex_string_dialects.tokenizes_to(
             "0xFF_FF",
             vec![Token::HexStringLiteral("FF_FF".to_string())],
         );
+        // Digit-leading identifier dialects read `0x_1` as a word instead.
+        for dialect in hex_string_dialects
+            .dialects
+            .iter()
+            .filter(|dialect| !dialect.supports_numeric_prefix())
+        {
+            let err = Tokenizer::new(&**dialect, "SELECT 0x_1")
+                .tokenize()
+                .unwrap_err();
+            assert_eq!("Unexpected character '_'", err.message);
+        }
 
         for dialect in &numeric_underscore_dialects.dialects {
             for sql in ["SELECT 1_000.123_", "SELECT 1._000"] {
@@ -3053,7 +3108,6 @@ mod tests {
                 "SELECT 1e_1",
                 "SELECT 1e1_",
                 "SELECT 1e1__0",
-                "SELECT 0x_1",
                 "SELECT 0x1_",
             ] {
                 let err = Tokenizer::new(&**dialect, sql).tokenize().unwrap_err();

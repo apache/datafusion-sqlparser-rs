@@ -20,6 +20,8 @@ use core::iter::Peekable;
 use core::str::Chars;
 
 use crate::dialect::Dialect;
+use crate::keywords::Keyword;
+use crate::parser::Parser;
 use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
@@ -48,6 +50,12 @@ impl Dialect for ClickHouseDialect {
         // Undocumented, but the server accepts `$` in identifiers for MySQL compatibility
         // since https://github.com/ClickHouse/ClickHouse/pull/14232
         self.is_identifier_start(ch) || ch.is_ascii_digit() || ch == '$'
+    }
+
+    /// ClickHouse keywords are not reserved, so any of them can be a table name.
+    /// See <https://clickhouse.com/docs/en/sql-reference/syntax>
+    fn is_table_factor(&self, _kw: &Keyword, _parser: &mut Parser) -> bool {
+        true
     }
 
     /// ClickHouse accepts both backticks and double quotes, but its own

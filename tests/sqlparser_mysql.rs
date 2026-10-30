@@ -241,6 +241,16 @@ fn parse_flush() {
 }
 
 #[test]
+fn parse_flush_preserves_keyword_table_names() {
+    for sql in [
+        "FLUSH TABLES handler WITH READ LOCK",
+        "FLUSH TABLES validator WITH READ LOCK",
+    ] {
+        mysql_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_show_columns() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
@@ -3795,6 +3805,7 @@ fn parse_string_introducers() {
     mysql().verified_stmt("SELECT _binary 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
+    mysql().one_statement_parses_to("SELECT _utf8mb4\"abc\"", "SELECT _utf8mb4 \"abc\"");
     mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
 }
 
@@ -5201,6 +5212,38 @@ fn parse_alter_table_column_position() {
 fn parse_create_table_engine_name_quoting() {
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `InnoDB`");
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = InnoDB");
+}
+
+#[test]
+fn parse_key_constraint_index_type_before_columns() {
+    for key in ["PRIMARY KEY", "UNIQUE", "UNIQUE KEY"] {
+        let sql = format!("CREATE TABLE t (id INT, {key} USING BTREE (id))");
+        let Statement::CreateTable(CreateTable { constraints, .. }) =
+            mysql_and_generic().verified_stmt(&sql)
+        else {
+            unreachable!()
+        };
+        let (index_name, index_type) = match &constraints[..] {
+            [TableConstraint::PrimaryKey(c)] => (&c.index_name, &c.index_type),
+            [TableConstraint::Unique(c)] => (&c.index_name, &c.index_type),
+            _ => unreachable!(),
+        };
+        assert_eq!(index_name, &None, "{sql}");
+        assert_eq!(index_type, &Some(IndexType::BTree), "{sql}");
+
+        mysql_and_generic().verified_stmt(&format!(
+            "ALTER TABLE t ADD CONSTRAINT c {key} USING HASH (id)"
+        ));
+
+        let sql = format!("CREATE TABLE t (id INT, {key} USING (id))");
+        assert_eq!(
+            mysql_and_generic().parse_sql_statements(&sql),
+            Err(ParserError::ParserError(
+                "Expected: identifier, found: (".to_string()
+            )),
+            "{sql}"
+        );
+    }
 }
 
 #[test]

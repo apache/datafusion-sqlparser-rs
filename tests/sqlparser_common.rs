@@ -15886,6 +15886,45 @@ fn parse_drop_rule_rejects_missing_names() {
 }
 
 #[test]
+fn parse_drop_rule_rejects_lists_and_extra_options() {
+    for (sql, expected) in [
+        ("DROP RULE r1, r2 ON t", "Expected: ON, found: ,"),
+        ("DROP RULE s.r ON t", "Expected: ON, found: ."),
+        ("DROP RULE 1 ON t", "Expected: identifier, found: 1"),
+        ("DROP RULE IF EXISTS", "Expected: identifier, found: EOF"),
+        ("DROP RULE IF NOT EXISTS r ON t", "Expected: ON, found: NOT"),
+        ("DROP RULE r t", "Expected: ON, found: t"),
+        ("DROP RULE r ON (t)", "Expected: identifier, found: ("),
+        (
+            "DROP RULE r ON t1, t2",
+            "Expected: end of statement, found: ,",
+        ),
+        (
+            "DROP RULE r ON t ON t",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "DROP RULE r ON t CASCADE RESTRICT",
+            "Expected: end of statement, found: RESTRICT",
+        ),
+        (
+            "DROP RULE r ON t RESTRICT CASCADE",
+            "Expected: end of statement, found: CASCADE",
+        ),
+        (
+            "DROP RULE r ON t PURGE",
+            "Expected: end of statement, found: PURGE",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql),
+            Err(ParserError::ParserError(expected.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn display_drop_rule_propagates_write_errors() {
     use core::fmt::{self, Write};
 

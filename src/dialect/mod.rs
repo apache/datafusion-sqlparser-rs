@@ -1847,6 +1847,9 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports binary `IS` and `IS NOT` operators.
+    ///
+    /// Their right operand is any expression, so `IS UNKNOWN`, `IS JSON` and
+    /// `IS NORMALIZED` are not parsed as predicates.
     fn supports_is_operator(&self) -> bool {
         false
     }

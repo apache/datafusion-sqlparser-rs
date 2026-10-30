@@ -788,6 +788,39 @@ fn sqlite_is_operators() {
 }
 
 #[test]
+fn sqlite_is_operator_keyword_operands() {
+    // SQLite has no `IS UNKNOWN`, `IS JSON` or `IS NORMALIZED` predicate.
+    for right in ["json('{}')", "json", "unknown", "normalized", "nfc"] {
+        for (op, not) in [(BinaryOperator::Is, ""), (BinaryOperator::IsNot, "NOT ")] {
+            let sql = format!("a IS {not}{right}");
+            assert_eq!(
+                sqlite().verified_expr(&sql),
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("a"))),
+                    op,
+                    right: Box::new(sqlite().verified_expr(right)),
+                },
+                "{sql}"
+            );
+        }
+    }
+    sqlite().verified_stmt("SELECT a IS json('{}'), a IS NOT json('{}') FROM t");
+
+    for (sql, found) in [
+        ("SELECT a FROM t WHERE a IS NFC NORMALIZED", "NORMALIZED"),
+        ("SELECT a FROM t WHERE a IS NOT JSON OBJECT", "OBJECT"),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(format!(
+                "Expected: end of statement, found: {found}"
+            ))),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn test_update_delete_limit() {
     match sqlite().verified_stmt("UPDATE foo SET bar = 1 LIMIT 99") {
         Statement::Update(Update { limit, .. }) => {

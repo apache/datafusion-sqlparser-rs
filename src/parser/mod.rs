@@ -15225,6 +15225,14 @@ impl<'a> Parser<'a> {
                 options,
             }),
             _ => {
+                if describe_alias != DescribeAlias::Explain
+                    && self.dialect.supports_describe_object()
+                {
+                    if let Some(statement) = self.parse_describe_object(describe_alias)? {
+                        return Ok(statement);
+                    }
+                }
+
                 let hive_format =
                     match self.parse_one_of_keywords(&[Keyword::EXTENDED, Keyword::FORMATTED]) {
                         Some(Keyword::EXTENDED) => Some(HiveDescribeFormat::Extended),
@@ -15248,6 +15256,33 @@ impl<'a> Parser<'a> {
                 })
             }
         }
+    }
+
+    /// Parse `{ VIEW | DATABASE | SCHEMA } <name>` following `DESC | DESCRIBE`.
+    /// Returns `None` if none of the object type keywords is present.
+    fn parse_describe_object(
+        &mut self,
+        describe_alias: DescribeAlias,
+    ) -> Result<Option<Statement>, ParserError> {
+        let object_type = match self.parse_one_of_keywords(&[
+            Keyword::VIEW,
+            Keyword::DATABASE,
+            Keyword::SCHEMA,
+        ]) {
+            Some(Keyword::VIEW) => ObjectType::View,
+            Some(Keyword::DATABASE) => ObjectType::Database,
+            Some(Keyword::SCHEMA) => ObjectType::Schema,
+            _ => return Ok(None),
+        };
+        let name = self.parse_object_name(false)?;
+        Ok(Some(
+            DescribeObject {
+                describe_alias,
+                object_type,
+                name,
+            }
+            .into(),
+        ))
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally

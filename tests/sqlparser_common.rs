@@ -22744,3 +22744,18 @@ fn display_create_procedure_parameter_list_propagates_write_errors() {
     let mut writer = RejectingWriter(" (");
     assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
 }
+
+#[test]
+fn parse_describe_object() {
+    let dialects = all_dialects_where(|d| d.supports_describe_object());
+    dialects.verified_stmt("DESCRIBE VIEW v");
+    dialects.verified_stmt("DESC VIEW db.s.v");
+    dialects.verified_stmt("DESCRIBE DATABASE d");
+    dialects.verified_stmt("DESC SCHEMA db.s");
+
+    let dialects = all_dialects_where(|d| !d.supports_describe_object());
+    assert!(matches!(
+        dialects.verified_stmt("DESC schema"),
+        Statement::ExplainTable { .. }
+    ));
+}

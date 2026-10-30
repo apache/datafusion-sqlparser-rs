@@ -4772,6 +4772,13 @@ pub enum Statement {
         table_name: ObjectName,
     },
     /// ```sql
+    /// DESC | DESCRIBE { VIEW | DATABASE | SCHEMA } <name>
+    /// ```
+    /// See [DESCRIBE VIEW](https://docs.snowflake.com/en/sql-reference/sql/desc-view),
+    /// [DESCRIBE DATABASE](https://docs.snowflake.com/en/sql-reference/sql/desc-database)
+    /// and [DESCRIBE SCHEMA](https://docs.snowflake.com/en/sql-reference/sql/desc-schema)
+    DescribeObject(DescribeObject),
+    /// ```sql
     /// [EXPLAIN | DESC | DESCRIBE]  <statement>
     /// ```
     Explain {
@@ -5259,6 +5266,7 @@ impl fmt::Display for Statement {
 
                 write!(f, "{id}")
             }
+            Statement::DescribeObject(s) => write!(f, "{s}"),
             Statement::ExplainTable {
                 describe_alias,
                 hive_format,
@@ -8983,6 +8991,34 @@ impl fmt::Display for DescribeAlias {
             Explain => "EXPLAIN",
             Desc => "DESC",
         })
+    }
+}
+
+/// ```sql
+/// DESC | DESCRIBE { VIEW | DATABASE | SCHEMA } <name>
+/// ```
+/// See [DESCRIBE VIEW](https://docs.snowflake.com/en/sql-reference/sql/desc-view),
+/// [DESCRIBE DATABASE](https://docs.snowflake.com/en/sql-reference/sql/desc-database)
+/// and [DESCRIBE SCHEMA](https://docs.snowflake.com/en/sql-reference/sql/desc-schema)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DescribeObject {
+    /// The keyword used, `DESC` or `DESCRIBE`.
+    pub describe_alias: DescribeAlias,
+    /// The kind of object described: `VIEW`, `DATABASE` or `SCHEMA`.
+    pub object_type: ObjectType,
+    /// Name of the object.
+    pub name: ObjectName,
+}
+
+impl fmt::Display for DescribeObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            self.describe_alias, self.object_type, self.name
+        )
     }
 }
 
@@ -12752,6 +12788,12 @@ impl From<CreateUser> for Statement {
 impl From<CreateWarehouse> for Statement {
     fn from(c: CreateWarehouse) -> Self {
         Self::CreateWarehouse(c)
+    }
+}
+
+impl From<DescribeObject> for Statement {
+    fn from(d: DescribeObject) -> Self {
+        Self::DescribeObject(d)
     }
 }
 

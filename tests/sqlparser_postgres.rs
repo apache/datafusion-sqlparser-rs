@@ -11756,4 +11756,16 @@ fn parse_storage_parameters_without_value() {
             .unwrap_err(),
         ParserError::ParserError("Expected: =, found: )".to_string())
     );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (fillfactor =)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER TABLE t SET TBLPROPERTIES (fillfactor 70)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: 70".to_string())
+    );
 }

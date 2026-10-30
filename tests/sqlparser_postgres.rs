@@ -916,9 +916,27 @@ fn parse_create_extension() {
         }
     }
 
-    pg_and_generic()
-        .parse_sql_statements("CREATE EXTENSION extension_name WITH WITH SCHEMA schema_name")
-        .unwrap_err();
+    for (sql, error) in [
+        (
+            "CREATE EXTENSION extension_name WITH WITH SCHEMA schema_name",
+            "Expected: end of statement, found: WITH",
+        ),
+        ("CREATE EXTENSION", "Expected: identifier, found: EOF"),
+        (
+            "CREATE EXTENSION e SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE EXTENSION e VERSION",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
     for (sql, keyword) in [
         ("CREATE EXTENSION e SCHEMA a SCHEMA b", "SCHEMA"),
         ("CREATE EXTENSION e VERSION a CASCADE VERSION b", "VERSION"),
@@ -931,6 +949,30 @@ fn parse_create_extension() {
             pg_and_generic().parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError(format!("{keyword} specified more than once")),
         );
+    }
+}
+
+#[test]
+fn display_create_extension_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement =
+        pg_and_generic().verified_stmt("CREATE EXTENSION e WITH SCHEMA s VERSION v CASCADE");
+    for rejected in ["CREATE", "WITH", "SCHEMA", "VERSION", "CASCADE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
     }
 }
 

@@ -5315,6 +5315,44 @@ fn parse_alter_default_privileges_spans() {
 }
 
 #[test]
+fn display_alter_default_privileges_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let grant = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g WITH GRANT OPTION",
+    );
+    for rejected in [
+        "ALTER DEFAULT PRIVILEGES",
+        "FOR ROLE ",
+        "GRANT ",
+        " WITH GRANT OPTION",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{grant}"), Err(fmt::Error), "{rejected}");
+    }
+
+    let revoke = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON TABLES FROM g CASCADE",
+    );
+    for rejected in ["REVOKE ", "GRANT OPTION FOR ", " FROM ", "CASCADE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{revoke}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     pg().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
@@ -11012,7 +11050,6 @@ fn parse_geometric_typed_literal_error_propagates() {
     );
 }
 
-
 #[test]
 fn parse_create_aggregate_rejects_output_arguments_and_defaults() {
     for (args, expected) in [
@@ -11822,4 +11859,3 @@ fn parse_drop_group_is_dialect_gated() {
         ))
     );
 }
-

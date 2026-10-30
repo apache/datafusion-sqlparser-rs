@@ -22744,3 +22744,107 @@ fn display_create_procedure_parameter_list_propagates_write_errors() {
     let mut writer = RejectingWriter(" (");
     assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
 }
+
+#[test]
+fn parse_grant_routines() {
+    let objects = |sql: &str| match verified_stmt(sql) {
+        Statement::Grant(grant) => grant.objects,
+        Statement::Revoke(revoke) => revoke.objects,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+    let name = |name: &str| ObjectName::from(vec![Ident::new(name)]);
+
+    assert_eq!(
+        objects("GRANT EXECUTE ON ROUTINE f(INT) TO bob"),
+        Some(GrantObjects::Routines(vec![FunctionDesc {
+            name: name("f"),
+            args: Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))]),
+        }]))
+    );
+    assert_eq!(
+        objects("REVOKE ALL ON ROUTINE f, g() FROM bob"),
+        Some(GrantObjects::Routines(vec![
+            FunctionDesc {
+                name: name("f"),
+                args: None,
+            },
+            FunctionDesc {
+                name: name("g"),
+                args: Some(vec![]),
+            },
+        ]))
+    );
+    assert_eq!(
+        objects("GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA s TO bob"),
+        Some(GrantObjects::AllProceduresInSchema {
+            schemas: vec![name("s")],
+        })
+    );
+    assert_eq!(
+        objects("REVOKE EXECUTE ON ALL ROUTINES IN SCHEMA s, t FROM bob"),
+        Some(GrantObjects::AllRoutinesInSchema {
+            schemas: vec![name("s"), name("t")],
+        })
+    );
+
+    verified_stmt("REVOKE ALL ON ROUTINE public.f(p_id UUID), g() FROM bob");
+    verified_stmt("REVOKE EXECUTE ON ALL PROCEDURES IN SCHEMA s, t FROM bob");
+    verified_stmt("GRANT EXECUTE ON ALL ROUTINES IN SCHEMA s TO bob");
+    assert_eq!(
+        objects("GRANT EXECUTE ON ROUTINE routine TO bob"),
+        Some(GrantObjects::Routines(vec![FunctionDesc {
+            name: name("routine"),
+            args: None,
+        }]))
+    );
+
+    for (sql, err) in [
+        ("GRANT EXECUTE ON ROUTINE f(INT", "Expected: ), found: EOF"),
+        (
+            "GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "GRANT EXECUTE ON ALL ROUTINES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_grant_on_tables_named_after_object_types() {
+    for name in [
+        "function",
+        "procedure",
+        "routine",
+        "sequence",
+        "database",
+        "schema",
+        "view",
+        "warehouse",
+        "integration",
+        "user",
+        "connection",
+    ] {
+        let sql = format!("GRANT SELECT ON {name} TO r");
+        match verified_stmt(&sql) {
+            Statement::Grant(grant) => assert_eq!(
+                grant.objects,
+                Some(GrantObjects::Tables(vec![ObjectName::from(vec![
+                    Ident::new(name)
+                ])])),
+                "{sql}"
+            ),
+            stmt => panic!("unexpected statement: {stmt:?}"),
+        }
+        one_statement_parses_to(&format!("GRANT SELECT ON TABLE {name} TO r"), &sql);
+        verified_stmt(&format!("REVOKE SELECT ON {name}, t FROM r"));
+        verified_stmt(&format!("GRANT SELECT ON {name}.t TO r"));
+    }
+}

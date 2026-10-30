@@ -12347,3 +12347,30 @@ fn parse_alter_materialized_view() {
         );
     }
 }
+
+#[test]
+fn display_alter_materialized_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let materialized = pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m RENAME TO m2");
+    for rejected in ["ALTER ", "MATERIALIZED ", "VIEW "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{materialized}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+}

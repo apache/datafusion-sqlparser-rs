@@ -3566,47 +3566,10 @@ impl<'a> Parser<'a> {
     /// Peek at the next token and determine if it is a temporal unit
     /// like `second`.
     pub fn next_token_is_temporal_unit(&mut self) -> bool {
-        if let Token::Word(word) = &self.peek_token_ref().token {
-            matches!(
-                word.keyword,
-                Keyword::YEAR
-                    | Keyword::YEARS
-                    | Keyword::MONTH
-                    | Keyword::MONTHS
-                    | Keyword::WEEK
-                    | Keyword::WEEKS
-                    | Keyword::DAY
-                    | Keyword::DAYS
-                    | Keyword::HOUR
-                    | Keyword::HOURS
-                    | Keyword::MINUTE
-                    | Keyword::MINUTES
-                    | Keyword::SECOND
-                    | Keyword::SECONDS
-                    | Keyword::CENTURY
-                    | Keyword::DECADE
-                    | Keyword::DOW
-                    | Keyword::DOY
-                    | Keyword::EPOCH
-                    | Keyword::ISODOW
-                    | Keyword::ISOYEAR
-                    | Keyword::JULIAN
-                    | Keyword::MICROSECOND
-                    | Keyword::MICROSECONDS
-                    | Keyword::MILLENIUM
-                    | Keyword::MILLENNIUM
-                    | Keyword::MILLISECOND
-                    | Keyword::MILLISECONDS
-                    | Keyword::NANOSECOND
-                    | Keyword::NANOSECONDS
-                    | Keyword::QUARTER
-                    | Keyword::TIMEZONE
-                    | Keyword::TIMEZONE_HOUR
-                    | Keyword::TIMEZONE_MINUTE
-            )
-        } else {
-            false
-        }
+        matches!(
+            &self.peek_token_ref().token,
+            Token::Word(word) if self.dialect.is_interval_qualifier(word.keyword)
+        )
     }
 
     /// Syntax

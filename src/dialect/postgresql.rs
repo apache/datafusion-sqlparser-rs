@@ -544,6 +544,19 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See `opt_interval` in <https://github.com/postgres/postgres/blob/master/src/backend/parser/gram.y>
+    fn is_interval_qualifier(&self, kw: Keyword) -> bool {
+        matches!(
+            kw,
+            Keyword::YEAR
+                | Keyword::MONTH
+                | Keyword::DAY
+                | Keyword::HOUR
+                | Keyword::MINUTE
+                | Keyword::SECOND
+        )
+    }
+
     fn supports_insert_table_alias(&self) -> bool {
         true
     }

@@ -241,6 +241,16 @@ fn parse_flush() {
 }
 
 #[test]
+fn parse_flush_preserves_keyword_table_names() {
+    for sql in [
+        "FLUSH TABLES handler WITH READ LOCK",
+        "FLUSH TABLES validator WITH READ LOCK",
+    ] {
+        mysql_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_show_columns() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
@@ -1946,13 +1956,18 @@ fn parse_zerofill() {
         mysql_and_generic().verified_stmt(&format!("CREATE TABLE t (a {data_type} ZEROFILL)"));
     }
     mysql_and_generic().verified_stmt("CREATE TABLE t (a INT(10) UNSIGNED ZEROFILL)");
-    assert!(mysql_and_generic()
-        .parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)")
-        .is_err());
-    assert!(
+    assert_eq!(
+        mysql_and_generic().parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
+    );
+    assert_eq!(
         all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
-            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)")
-            .is_err()
+            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: ZEROFILL".to_string()
+        ))
     );
 }
 
@@ -2789,7 +2804,7 @@ fn parse_update_with_joins() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        index_hints: vec![],
+                        index_directives: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2802,7 +2817,7 @@ fn parse_update_with_joins() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            index_hints: vec![],
+                            index_directives: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
@@ -3790,6 +3805,7 @@ fn parse_string_introducers() {
     mysql().verified_stmt("SELECT _binary 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
+    mysql().one_statement_parses_to("SELECT _utf8mb4\"abc\"", "SELECT _utf8mb4 \"abc\"");
     mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
 }
 
@@ -5162,15 +5178,69 @@ fn parse_alter_table_column_position() {
     mysql_and_generic().verified_stmt("ALTER TABLE tab ADD COLUMN a INT FIRST, CHANGE COLUMN b c INT AFTER a, MODIFY COLUMN d INT AFTER c");
 
     // FIRST and AFTER are mutually exclusive, and AFTER needs a target.
-    for sql in [
-        "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
-        "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
-        "ALTER TABLE tab ADD COLUMN c INT AFTER",
-        "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
-        "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+    for (sql, err) in [
+        (
+            "ALTER TABLE tab ADD COLUMN c INT FIRST AFTER b",
+            "Expected: end of statement, found: AFTER",
+        ),
+        (
+            "ALTER TABLE tab ADD COLUMN c INT AFTER b FIRST",
+            "Expected: end of statement, found: FIRST",
+        ),
+        (
+            "ALTER TABLE tab ADD COLUMN c INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE tab CHANGE COLUMN a b INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE tab MODIFY COLUMN c INT AFTER",
+            "Expected: identifier, found: EOF",
+        ),
     ] {
-        assert!(
-            mysql_and_generic().parse_sql_statements(sql).is_err(),
+        assert_eq!(
+            mysql_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_table_engine_name_quoting() {
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = `InnoDB`");
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = InnoDB");
+}
+
+#[test]
+fn parse_key_constraint_index_type_before_columns() {
+    for key in ["PRIMARY KEY", "UNIQUE", "UNIQUE KEY"] {
+        let sql = format!("CREATE TABLE t (id INT, {key} USING BTREE (id))");
+        let Statement::CreateTable(CreateTable { constraints, .. }) =
+            mysql_and_generic().verified_stmt(&sql)
+        else {
+            unreachable!()
+        };
+        let (index_name, index_type) = match &constraints[..] {
+            [TableConstraint::PrimaryKey(c)] => (&c.index_name, &c.index_type),
+            [TableConstraint::Unique(c)] => (&c.index_name, &c.index_type),
+            _ => unreachable!(),
+        };
+        assert_eq!(index_name, &None, "{sql}");
+        assert_eq!(index_type, &Some(IndexType::BTree), "{sql}");
+
+        mysql_and_generic().verified_stmt(&format!(
+            "ALTER TABLE t ADD CONSTRAINT c {key} USING HASH (id)"
+        ));
+
+        let sql = format!("CREATE TABLE t (id INT, {key} USING (id))");
+        assert_eq!(
+            mysql_and_generic().parse_sql_statements(&sql),
+            Err(ParserError::ParserError(
+                "Expected: identifier, found: (".to_string()
+            )),
             "{sql}"
         );
     }

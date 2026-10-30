@@ -16,6 +16,8 @@
 // under the License.
 
 use crate::dialect::Dialect;
+use crate::keywords::{Keyword, RESERVED_FOR_TABLE_FACTOR};
+use crate::parser::Parser;
 
 /// A [`Dialect`] for [Hive](https://hive.apache.org/).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -25,6 +27,22 @@ pub struct HiveDialect {}
 impl Dialect for HiveDialect {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         (ch == '"') || (ch == '`')
+    }
+
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
+    /// The alias is an `identifier`, see `selectItem` in
+    /// <https://github.com/apache/hive/blob/master/parser/src/java/org/apache/hadoop/hive/ql/parse/SelectClauseParser.g>
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// The alias is an `identifier`, see `tableSource` in
+    /// <https://github.com/apache/hive/blob/master/parser/src/java/org/apache/hadoop/hive/ql/parse/FromClauseParser.g>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
+        false
     }
 
     /// See <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-RulesforColumnNames>
@@ -44,6 +62,12 @@ impl Dialect for HiveDialect {
             || ch == '$'
             || ch == '{'
             || ch == '}'
+    }
+
+    /// LIMIT is not reserved in Hive; identifiers may be nonReserved keywords.
+    /// See <https://github.com/apache/hive/blob/4e9caba7c02a947a39c60de427acb7189c8c1fe8/parser/src/java/org/apache/hadoop/hive/ql/parse/IdentifiersParser.g#L945>
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        kw == &Keyword::LIMIT || !RESERVED_FOR_TABLE_FACTOR.contains(kw)
     }
 
     fn supports_filter_during_aggregation(&self) -> bool {

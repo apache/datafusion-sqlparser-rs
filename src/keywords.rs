@@ -54,7 +54,10 @@ macro_rules! define_keywords {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-        #[allow(non_camel_case_types)]
+        #[expect(
+            non_camel_case_types,
+            reason = "variants are spelled like the SQL keywords they name, such as `CURRENT_DATE`"
+        )]
         /// An enumeration of SQL keywords recognized by the parser.
         pub enum Keyword {
             /// Represents no keyword.
@@ -112,6 +115,7 @@ define_keywords!(
     ALL,
     ALLOCATE,
     ALLOWOVERWRITE,
+    ALSO,
     ALTER,
     ALWAYS,
     ANALYZE,
@@ -150,6 +154,7 @@ define_keywords!(
     BACKUP,
     BACKWARD,
     BASE64,
+    BASETYPE,
     BASE_LOCATION,
     BEFORE,
     BEGIN,
@@ -237,6 +242,7 @@ define_keywords!(
     COLUMN,
     COLUMNS,
     COLUMNSTORE,
+    COMBINEFUNC,
     COMMENT,
     COMMIT,
     COMMITTED,
@@ -333,6 +339,7 @@ define_keywords!(
     DEREF,
     DESC,
     DESCRIBE,
+    DESERIALFUNC,
     DETACH,
     DETAIL,
     DETERMINISTIC,
@@ -429,6 +436,9 @@ define_keywords!(
     FILL,
     FILTER,
     FINAL,
+    FINALFUNC,
+    FINALFUNC_EXTRA,
+    FINALFUNC_MODIFY,
     FIRST,
     FIRST_VALUE,
     FIXEDSTRING,
@@ -482,6 +492,7 @@ define_keywords!(
     GROUPING,
     GROUPS,
     GZIP,
+    HANDLER,
     HASH,
     HASHES,
     HAVING,
@@ -495,6 +506,7 @@ define_keywords!(
     HOUR,
     HOURS,
     HUGEINT,
+    HYPOTHETICAL,
     IAM_ROLE,
     ICEBERG,
     ID,
@@ -516,9 +528,11 @@ define_keywords!(
     INCREMENT,
     INCREMENTAL,
     INDEX,
+    INDEXED,
     INDICATOR,
     INHERIT,
     INHERITS,
+    INITCOND,
     INITIALIZE,
     INITIALLY,
     INNER,
@@ -647,6 +661,9 @@ define_keywords!(
     METRIC,
     METRICS,
     MFA,
+    MFINALFUNC,
+    MFINALFUNC_EXTRA,
+    MFINALFUNC_MODIFY,
     MICROSECOND,
     MICROSECONDS,
     MILLENIUM,
@@ -654,10 +671,12 @@ define_keywords!(
     MILLISECOND,
     MILLISECONDS,
     MIN,
+    MINITCOND,
     MINUS,
     MINUTE,
     MINUTES,
     MINVALUE,
+    MINVFUNC,
     MIN_ROWS,
     MOD,
     MODE,
@@ -669,6 +688,9 @@ define_keywords!(
     MONTH,
     MONTHS,
     MSCK,
+    MSFUNC,
+    MSSPACE,
+    MSTYPE,
     MULTIRANGE_TYPE_NAME,
     MULTISET,
     MUTATION,
@@ -845,6 +867,7 @@ define_keywords!(
     READ,
     READS,
     READ_ONLY,
+    READ_WRITE,
     REAL,
     RECEIVE,
     RECLUSTER,
@@ -948,6 +971,7 @@ define_keywords!(
     SEQUENCES,
     SERDE,
     SERDEPROPERTIES,
+    SERIALFUNC,
     SERIALIZABLE,
     SERVER,
     SERVICE,
@@ -958,7 +982,9 @@ define_keywords!(
     SETOF,
     SETS,
     SETTINGS,
+    SFUNC,
     SHARE,
+    SHAREABLE,
     SHARED,
     SHARING,
     SHOW,
@@ -974,6 +1000,7 @@ define_keywords!(
     SORT,
     SORTED,
     SORTKEY,
+    SORTOP,
     SOURCE,
     SPATIAL,
     SPECIFIC,
@@ -990,6 +1017,7 @@ define_keywords!(
     SQL_SMALL_RESULT,
     SQRT,
     SRID,
+    SSPACE,
     STABLE,
     STAGE,
     START,
@@ -1016,6 +1044,7 @@ define_keywords!(
     STRICT,
     STRING,
     STRUCT,
+    STYPE,
     SUBMULTISET,
     SUBSCRIPT,
     SUBSTR,
@@ -1143,6 +1172,7 @@ define_keywords!(
     VALID,
     VALIDATE,
     VALIDATION_MODE,
+    VALIDATOR,
     VALUE,
     VALUES,
     VALUE_OF,
@@ -1302,14 +1332,16 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::END,
 ];
 
-/// Global list of reserved keywords allowed after FROM.
-/// Parser should call Dialect::get_reserved_keyword_after_from
-/// to allow for each dialect to customize the list.
+/// Global list of reserved keywords that cannot be parsed as a table
+/// factor name without special handling like quoting. Parser should
+/// call `Dialect::is_table_factor` to allow for each dialect to
+/// customize the list.
 pub const RESERVED_FOR_TABLE_FACTOR: &[Keyword] = &[
     Keyword::INTO,
     Keyword::LIMIT,
     Keyword::HAVING,
     Keyword::WHERE,
+    Keyword::ON,
 ];
 
 /// Global list of reserved keywords that cannot be parsed as identifiers

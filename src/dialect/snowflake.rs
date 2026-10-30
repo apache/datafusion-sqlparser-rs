@@ -140,6 +140,10 @@ impl Dialect for SnowflakeDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    fn supports_hash_comment(&self) -> bool {
+        true
+    }
+
     /// See <https://docs.snowflake.com/en/sql-reference/identifiers-syntax>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
@@ -721,6 +725,11 @@ impl Dialect for SnowflakeDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after
@@ -866,7 +875,10 @@ fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, Pars
 /// Parse snowflake create table statement.
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each flag is a `CREATE` modifier the caller parsed before `TABLE`"
+)]
 pub fn parse_create_table(
     or_replace: bool,
     global: Option<bool>,

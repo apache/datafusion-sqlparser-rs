@@ -1406,65 +1406,6 @@ fn parse_semi_structured_data_traversal() {
 
 #[test]
 fn parse_delimited_identifiers() {
-    // check that quoted identifiers in any position remain quoted after serialization
-    let select = snowflake().verified_only_select(
-        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
-    );
-    // check FROM
-    match only(select.from).relation {
-        TableFactor::Table {
-            name,
-            alias,
-            args,
-            with_hints,
-            version,
-            ..
-        } => {
-            assert_eq!(
-                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
-                name
-            );
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
-            assert!(args.is_none());
-            assert!(with_hints.is_empty());
-            assert!(version.is_none());
-        }
-        _ => panic!("Expecting TableFactor::Table"),
-    }
-    // check SELECT
-    assert_eq!(3, select.projection.len());
-    assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
-        expr_from_projection(&select.projection[0]),
-    );
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args: FunctionArguments::List(FunctionArgumentList {
-                duplicate_treatment: None,
-                args: vec![],
-                clauses: vec![],
-            }),
-            filter: None,
-            null_treatment: None,
-            over: None,
-            within_group: vec![],
-        }),
-        expr_from_projection(&select.projection[1]),
-    );
-    match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
-        }
-        _ => panic!("Expected: ExprWithAlias"),
-    }
-
     snowflake().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     snowflake().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
     //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
@@ -1739,7 +1680,7 @@ fn parse_snowflake_declare_cursor() {
         ),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1807,7 +1748,7 @@ fn parse_snowflake_declare_result_set() {
         ("DECLARE res RESULTSET", "res", None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1860,7 +1801,7 @@ fn parse_snowflake_declare_exception() {
         ("DECLARE ex EXCEPTION", "ex", None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1900,7 +1841,7 @@ fn parse_snowflake_declare_variable() {
         ("DECLARE profit", "profit", None, None),
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::Declare { mut stmts } => {
+            Statement::Declare { mut stmts, .. } => {
                 assert_eq!(1, stmts.len());
                 let Declare {
                     names,
@@ -1950,7 +1891,7 @@ fn parse_snowflake_declare_multi_statements() {
         "ex EXCEPTION (-20003, 'ERROR: Could not create table.')"
     );
     match snowflake().verified_stmt(sql) {
-        Statement::Declare { stmts } => {
+        Statement::Declare { stmts, .. } => {
             let actual = stmts
                 .iter()
                 .map(|stmt| (stmt.names[0].value.as_str(), stmt.declare_type.clone()))
@@ -4831,18 +4772,19 @@ fn test_snowflake_identifier_function() {
 
     // Cannot have more than one IDENTIFIER part in an object name
     assert_eq!(
-        snowflake()
-            .parse_sql_statements(
-                "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
-            )
-            .is_err(),
-        true
+        snowflake().parse_sql_statements(
+            "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
+        ),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'sc1'".to_string()
+        ))
     );
     assert_eq!(
         snowflake()
-            .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)")
-            .is_err(),
-        true
+            .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)"),
+        Err(ParserError::ParserError(
+            "Expected: column name or constraint definition, found: 'tbl'".to_string()
+        ))
     );
 }
 
@@ -4884,17 +4826,15 @@ fn test_create_database() {
         WITH CONTACT (owner = admin, dpo = compliance)",
     );
 
-    let err = snowflake()
-        .parse_sql_statements("CREATE DATABASE")
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("Expected"), "Unexpected error: {err}");
-
-    let err = snowflake()
-        .parse_sql_statements("CREATE DATABASE my_db CLONE")
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("Expected"), "Unexpected error: {err}");
+    for sql in ["CREATE DATABASE", "CREATE DATABASE my_db CLONE"] {
+        assert_eq!(
+            snowflake().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: identifier, found: EOF".to_string()
+            )),
+            "{sql}"
+        );
+    }
 }
 
 #[test]

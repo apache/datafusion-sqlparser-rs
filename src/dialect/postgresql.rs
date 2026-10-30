@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::dialect::{Dialect, Precedence};
+use crate::dialect::{BindPlaceholderStyle, Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -47,6 +47,157 @@ const RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::START,
     Keyword::TOP,
     Keyword::VIEW,
+];
+
+const RESERVED_TYPE_NAME_KEYWORDS: &[Keyword] = &[
+    Keyword::ALL,
+    Keyword::ANALYZE,
+    Keyword::AND,
+    Keyword::ANY,
+    Keyword::ARRAY,
+    Keyword::AS,
+    Keyword::ASC,
+    Keyword::ASYMMETRIC,
+    Keyword::BOTH,
+    Keyword::CASE,
+    Keyword::CAST,
+    Keyword::CHECK,
+    Keyword::COLLATE,
+    Keyword::COLUMN,
+    Keyword::CONSTRAINT,
+    Keyword::CREATE,
+    Keyword::CURRENT_CATALOG,
+    Keyword::CURRENT_DATE,
+    Keyword::CURRENT_ROLE,
+    Keyword::CURRENT_TIME,
+    Keyword::CURRENT_TIMESTAMP,
+    Keyword::CURRENT_USER,
+    Keyword::DEFAULT,
+    Keyword::DEFERRABLE,
+    Keyword::DESC,
+    Keyword::DISTINCT,
+    Keyword::DO,
+    Keyword::ELSE,
+    Keyword::END,
+    Keyword::EXCEPT,
+    Keyword::FALSE,
+    Keyword::FETCH,
+    Keyword::FOR,
+    Keyword::FOREIGN,
+    Keyword::FROM,
+    Keyword::GRANT,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::IN,
+    Keyword::INITIALLY,
+    Keyword::INTERSECT,
+    Keyword::INTO,
+    Keyword::LATERAL,
+    Keyword::LEADING,
+    Keyword::LIMIT,
+    Keyword::LOCALTIME,
+    Keyword::LOCALTIMESTAMP,
+    Keyword::NOT,
+    Keyword::NULL,
+    Keyword::OFFSET,
+    Keyword::ON,
+    Keyword::ONLY,
+    Keyword::OR,
+    Keyword::ORDER,
+    Keyword::PLACING,
+    Keyword::PRIMARY,
+    Keyword::REFERENCES,
+    Keyword::RETURNING,
+    Keyword::SELECT,
+    Keyword::SESSION_USER,
+    Keyword::SOME,
+    Keyword::SYMMETRIC,
+    Keyword::SYSTEM_USER,
+    Keyword::TABLE,
+    Keyword::THEN,
+    Keyword::TO,
+    Keyword::TRAILING,
+    Keyword::TRUE,
+    Keyword::UNION,
+    Keyword::UNIQUE,
+    Keyword::USER,
+    Keyword::USING,
+    Keyword::VARIADIC,
+    Keyword::WHEN,
+    Keyword::WHERE,
+    Keyword::WINDOW,
+    Keyword::WITH,
+];
+
+const COL_NAME_KEYWORDS: &[Keyword] = &[
+    Keyword::BETWEEN,
+    Keyword::BIGINT,
+    Keyword::BIT,
+    Keyword::BOOLEAN,
+    Keyword::CHAR,
+    Keyword::CHARACTER,
+    Keyword::COALESCE,
+    Keyword::DEC,
+    Keyword::DECIMAL,
+    Keyword::EXISTS,
+    Keyword::EXTRACT,
+    Keyword::FLOAT,
+    Keyword::GROUPING,
+    Keyword::INOUT,
+    Keyword::INT,
+    Keyword::INTEGER,
+    Keyword::INTERVAL,
+    Keyword::JSON,
+    Keyword::JSON_TABLE,
+    Keyword::LEAST,
+    Keyword::NATIONAL,
+    Keyword::NCHAR,
+    Keyword::NONE,
+    Keyword::NORMALIZE,
+    Keyword::NULLIF,
+    Keyword::NUMERIC,
+    Keyword::OUT,
+    Keyword::OVERLAY,
+    Keyword::POSITION,
+    Keyword::PRECISION,
+    Keyword::REAL,
+    Keyword::ROW,
+    Keyword::SETOF,
+    Keyword::SMALLINT,
+    Keyword::SUBSTRING,
+    Keyword::TIME,
+    Keyword::TIMESTAMP,
+    Keyword::TREAT,
+    Keyword::TRIM,
+    Keyword::VALUES,
+    Keyword::VARCHAR,
+    Keyword::XMLNAMESPACES,
+    Keyword::XMLTABLE,
+];
+
+const TYPE_FUNC_NAME_KEYWORDS: &[Keyword] = &[
+    Keyword::AUTHORIZATION,
+    Keyword::BINARY,
+    Keyword::COLLATION,
+    Keyword::CONCURRENTLY,
+    Keyword::CROSS,
+    Keyword::CURRENT_SCHEMA,
+    Keyword::FREEZE,
+    Keyword::FULL,
+    Keyword::ILIKE,
+    Keyword::INNER,
+    Keyword::IS,
+    Keyword::JOIN,
+    Keyword::LEFT,
+    Keyword::LIKE,
+    Keyword::NATURAL,
+    Keyword::NOTNULL,
+    Keyword::OUTER,
+    Keyword::OVERLAPS,
+    Keyword::RIGHT,
+    Keyword::SIMILAR,
+    Keyword::TABLESAMPLE,
+    Keyword::VERBOSE,
 ];
 
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
@@ -73,8 +224,16 @@ const AND_PREC: u8 = 20;
 const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
+    fn supports_cte_materialization(&self) -> bool {
+        true
+    }
+
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
+    }
+
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::DollarNumbered)
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
@@ -108,6 +267,18 @@ impl Dialect for PostgreSqlDialect {
     fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
         !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
             || RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS.contains(kw)
+    }
+
+    /// Aliases are identifiers, see `output_name` and `alias` in
+    /// <https://www.postgresql.org/docs/current/sql-select.html>
+    fn supports_string_literal_column_alias(&self, _explicit: bool) -> bool {
+        false
+    }
+
+    /// Aliases are identifiers, see `alias` in
+    /// <https://www.postgresql.org/docs/current/sql-select.html>
+    fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
+        false
     }
 
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
@@ -167,7 +338,7 @@ impl Dialect for PostgreSqlDialect {
             | Token::ShiftLeft
             | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
             // lowest prec to prevent it from turning into a binary op
-            Token::Colon => Some(Ok(self.prec_unknown())),
+            Token::Colon | Token::Assignment => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }
@@ -182,6 +353,14 @@ impl Dialect for PostgreSqlDialect {
 
     fn supports_alter_user_as_alter_role(&self) -> bool {
         true
+    }
+
+    fn supports_create_group(&self) -> bool {
+        true
+    }
+
+    fn supports_create_role_if_not_exists(&self) -> bool {
+        false
     }
 
     fn prec_value(&self, prec: Precedence) -> u8 {
@@ -245,6 +424,14 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-comment.html>
     fn supports_comment_on(&self) -> bool {
         true
@@ -275,12 +462,19 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/current/sql-syntax-calling-funcs.html#SQL-SYNTAX-CALLING-FUNCS-NAMED>
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        true
+    }
+
     /// Return true if the dialect supports empty projections in SELECT statements
     ///
     /// Example
     /// ```sql
     /// SELECT from table_name
     /// ```
+    ///
+    /// The target list is optional in <https://www.postgresql.org/docs/current/sql-select.html>
     fn supports_empty_projections(&self) -> bool {
         true
     }
@@ -289,11 +483,20 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_copy_from_stdin_data(&self) -> bool {
+        true
+    }
+
     fn supports_string_escape_constant(&self) -> bool {
         true
     }
 
     fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
+
+    /// See: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-CONSTANTS-NUMERIC>
+    fn supports_non_decimal_integer_literals(&self) -> bool {
         true
     }
 
@@ -357,6 +560,17 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>.
+    fn is_custom_type_typed_string(&self, first_keyword: Keyword, qualified: bool) -> bool {
+        let not_a_type_name = if qualified {
+            TYPE_FUNC_NAME_KEYWORDS
+        } else {
+            COL_NAME_KEYWORDS
+        };
+        !RESERVED_TYPE_NAME_KEYWORDS.contains(&first_keyword)
+            && !not_a_type_name.contains(&first_keyword)
+    }
+
     fn supports_aliased_function_args(&self) -> bool {
         true
     }
@@ -366,6 +580,16 @@ impl Dialect for PostgreSqlDialect {
     ///
     /// See <https://github.com/ossc-db/pg_hint_plan>
     fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_add_column_if_not_exists(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_attach_partition_of(&self) -> bool {
         true
     }
 }

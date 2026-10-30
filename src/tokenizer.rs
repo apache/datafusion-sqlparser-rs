@@ -40,16 +40,16 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use crate::ast::{DollarQuotedString, QuoteDelimitedString};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use crate::{
-    ast::{DollarQuotedString, QuoteDelimitedString},
-    dialect::HiveDialect,
-};
+
+/// Chars that may join a preceding `-` or `!` into one token.
+pub(crate) const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -163,6 +163,15 @@ pub enum Token {
     SemiColon,
     /// Backslash `\` used in terminating the COPY payload with `\.`
     Backslash,
+    /// The verbatim inline payload of a `COPY ... FROM STDIN` statement,
+    /// captured raw by the tokenizer. `terminated` records whether the `\.`
+    /// terminator line was present.
+    CopyData {
+        /// The payload text, without the terminator line.
+        data: String,
+        /// Whether the `\.` terminator line was present.
+        terminated: bool,
+    },
     /// Left bracket `[`
     LBracket,
     /// Right bracket `]`
@@ -339,6 +348,7 @@ impl fmt::Display for Token {
             Token::Assignment => f.write_str(":="),
             Token::SemiColon => f.write_str(";"),
             Token::Backslash => f.write_str("\\"),
+            Token::CopyData { data, .. } => f.write_str(data),
             Token::LBracket => f.write_str("["),
             Token::RBracket => f.write_str("]"),
             Token::Ampersand => f.write_str("&"),
@@ -833,6 +843,80 @@ impl State<'_> {
     }
 }
 
+/// Tracks whether the statement being tokenized is a `COPY ... FROM STDIN` statement.
+struct CopyStatementTracker {
+    enabled: bool,
+    first_token_seen: bool,
+    starts_with_copy: bool,
+    prev_was_from: bool,
+    from_stdin: bool,
+    paren_depth: u32,
+}
+
+impl CopyStatementTracker {
+    fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            first_token_seen: false,
+            starts_with_copy: false,
+            prev_was_from: false,
+            from_stdin: false,
+            paren_depth: 0,
+        }
+    }
+
+    /// Whether the `;` closing the current statement captures the raw payload.
+    fn captures_payload(&self) -> bool {
+        self.enabled && self.starts_with_copy && self.from_stdin
+    }
+
+    /// Record a token, ignoring whitespace, and reset the statement on `;`.
+    fn note(&mut self, token: &Token) {
+        if !self.enabled {
+            return;
+        }
+        match token {
+            Token::SemiColon => {
+                self.first_token_seen = false;
+                self.starts_with_copy = false;
+                self.prev_was_from = false;
+                self.from_stdin = false;
+                self.paren_depth = 0;
+            }
+            Token::LParen => {
+                self.paren_depth += 1;
+                self.first_token_seen = true;
+                self.prev_was_from = false;
+            }
+            Token::RParen => {
+                self.paren_depth = self.paren_depth.saturating_sub(1);
+                self.first_token_seen = true;
+                self.prev_was_from = false;
+            }
+            Token::Whitespace(_) => {}
+            Token::Word(word) => {
+                if !self.first_token_seen {
+                    self.first_token_seen = true;
+                    self.starts_with_copy = word.keyword == Keyword::COPY;
+                }
+                if self.prev_was_from && word.keyword == Keyword::STDIN && self.paren_depth == 0 {
+                    self.from_stdin = true;
+                }
+                self.prev_was_from = word.keyword == Keyword::FROM;
+            }
+            _ => {
+                self.first_token_seen = true;
+                self.prev_was_from = false;
+            }
+        }
+    }
+}
+
+/// The captured `COPY ... FROM STDIN` payload and the rest of the `;` line.
+/// The `Option` is the payload token, absent when the data is empty and
+/// unterminated, followed by the tokens of the rest of the line.
+type CopyCapture = (Option<(String, bool, Span)>, Vec<TokenWithSpan>);
+
 /// Represents how many quote characters enclose a string literal.
 #[derive(Copy, Clone)]
 enum NumStringQuoteChars {
@@ -950,8 +1034,7 @@ impl<'a> Tokenizer<'a> {
         self.tokenize_with_location_into_buf_with_mapper(buf, |token| token)
     }
 
-    /// Tokenize the statement and produce a vector of tokens, mapping each token
-    /// with provided `mapper`
+    /// Tokenize into the provided buffer, using existing and mapped tokens as context for subsequent tokens.
     pub fn tokenize_with_location_into_buf_with_mapper(
         &mut self,
         buf: &mut Vec<TokenWithSpan>,
@@ -963,9 +1046,43 @@ impl<'a> Tokenizer<'a> {
             col: 1,
         };
 
+        let mut prev_non_ws = buf
+            .iter()
+            .rposition(|t| !matches!(t.token, Token::Whitespace(_)));
         let mut location = state.location();
-        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        let mut copy = CopyStatementTracker::new(self.dialect.supports_copy_from_stdin_data());
+        while let Some(token) = self.next_token(
+            &mut state,
+            buf.last().map(|t| &t.token),
+            prev_non_ws.map(|index| &buf[index].token),
+        )? {
             let span = location.span_to(state.location());
+
+            // Capture before tokenizing the rest of the line so both keep their source locations.
+            let mut payload: Option<CopyCapture> = None;
+            if let Token::SemiColon = &token {
+                if copy.captures_payload() {
+                    payload = Some(self.capture_copy_data(&mut state, Some(&token))?);
+                }
+            }
+            copy.note(&token);
+
+            let (copy_data, rest) = match payload {
+                Some((copy_data, rest)) => (copy_data, Some(rest)),
+                None => (None, None),
+            };
+
+            // The payload token precedes the `;` so the statement loop owns the delimiter.
+            if let Some((data, terminated, data_span)) = copy_data {
+                let token = mapper(TokenWithSpan {
+                    token: Token::CopyData { data, terminated },
+                    span: data_span,
+                });
+                if !matches!(token.token, Token::Whitespace(_)) {
+                    prev_non_ws = Some(buf.len());
+                }
+                buf.push(token);
+            }
 
             // Check if this is a multiline comment hint that should be expanded
             match &token {
@@ -974,13 +1091,27 @@ impl<'a> Tokenizer<'a> {
                         && comment.starts_with('!') =>
                 {
                     // Re-tokenize the hints and add them to the buffer
-                    self.tokenize_comment_hints(comment, span, buf, &mut mapper)?;
+                    self.tokenize_comment_hints(comment, span, buf, &mut prev_non_ws, &mut mapper)?;
                 }
                 _ => {
-                    buf.push(mapper(TokenWithSpan { token, span }));
+                    let token = mapper(TokenWithSpan { token, span });
+                    if !matches!(token.token, Token::Whitespace(_)) {
+                        prev_non_ws = Some(buf.len());
+                    }
+                    buf.push(token);
                 }
             }
 
+            if let Some(rest_tokens) = rest {
+                for rest_token in rest_tokens {
+                    copy.note(&rest_token.token);
+                    let rest_token = mapper(rest_token);
+                    if !matches!(rest_token.token, Token::Whitespace(_)) {
+                        prev_non_ws = Some(buf.len());
+                    }
+                    buf.push(rest_token);
+                }
+            }
             location = state.location();
         }
         Ok(())
@@ -993,6 +1124,7 @@ impl<'a> Tokenizer<'a> {
         comment: &str,
         span: Span,
         buf: &mut Vec<TokenWithSpan>,
+        prev_non_ws: &mut Option<usize>,
         mut mapper: impl FnMut(TokenWithSpan) -> TokenWithSpan,
     ) -> Result<(), TokenizerError> {
         // Strip the leading '!' and any version digits (e.g., "50110")
@@ -1018,16 +1150,104 @@ impl<'a> Tokenizer<'a> {
 
         // Tokenize the hint content and add tokens to the buffer
         let mut location = state.location();
-        while let Some(token) = inner.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = inner.next_token(
+            &mut state,
+            buf.last().map(|t| &t.token),
+            prev_non_ws.map(|index| &buf[index].token),
+        )? {
             let token_span = location.span_to(state.location());
-            buf.push(mapper(TokenWithSpan {
+            let token = mapper(TokenWithSpan {
                 token,
                 span: token_span,
-            }));
+            });
+            if !matches!(token.token, Token::Whitespace(_)) {
+                *prev_non_ws = Some(buf.len());
+            }
+            buf.push(token);
             location = state.location();
         }
 
         Ok(())
+    }
+
+    /// Capture the raw payload after the `;` of a `COPY ... FROM STDIN` statement, returning the rest
+    /// of that line as tokens to emit after the `;`. The payload token is absent when the data is
+    /// empty and unterminated, e.g. a bare `COPY t FROM STDIN;` at end of input.
+    fn capture_copy_data(
+        &self,
+        state: &mut State,
+        prev: Option<&Token>,
+    ) -> Result<CopyCapture, TokenizerError> {
+        let mut rest: Vec<TokenWithSpan> = Vec::new();
+        let mut location = state.location();
+        let mut prev_non_ws = None;
+        while let Some(token) = self.next_token(
+            state,
+            rest.last().map(|t| &t.token).or(prev),
+            prev_non_ws.map(|index: usize| &rest[index].token).or(prev),
+        )? {
+            let span = location.span_to(state.location());
+            if !matches!(token, Token::Whitespace(_)) {
+                prev_non_ws = Some(rest.len());
+            }
+            rest.push(TokenWithSpan { token, span });
+            location = state.location();
+            if matches!(
+                rest.last().map(|t| &t.token),
+                Some(&Token::Whitespace(Whitespace::Newline))
+            ) {
+                break;
+            }
+        }
+        let data_start = state.location();
+        let (data, terminated) = self.read_copy_data(state);
+        let payload = if data.is_empty() && !terminated {
+            None
+        } else {
+            Some((data, terminated, data_start.span_to(state.location())))
+        };
+        Ok((payload, rest))
+    }
+
+    /// Read the raw payload from `state` (at the start of a line) up to a
+    /// line holding only `\.` (the terminator, which is consumed) or end of
+    /// input.
+    fn read_copy_data(&self, state: &mut State) -> (String, bool) {
+        let mut data = String::new();
+        loop {
+            let mut line = String::new();
+            while let Some(&ch) = state.peek() {
+                if ch == '\n' || ch == '\r' {
+                    break;
+                }
+                line.push(ch);
+                state.next();
+            }
+            if line == "\\." {
+                // A final terminator without a line end still terminates.
+                if state.peek() == Some(&'\r') {
+                    state.next();
+                }
+                if state.peek() == Some(&'\n') {
+                    state.next();
+                }
+                return (data, true);
+            }
+            data.push_str(&line);
+            if state.peek() == Some(&'\n') {
+                data.push('\n');
+                state.next();
+            } else if state.peek() == Some(&'\r') {
+                data.push('\r');
+                state.next();
+                if state.peek() == Some(&'\n') {
+                    data.push('\n');
+                    state.next();
+                }
+            } else {
+                return (data, false);
+            }
+        }
     }
 
     // Tokenize the identifier or keywords in `ch`
@@ -1061,9 +1281,16 @@ impl<'a> Tokenizer<'a> {
         &self,
         chars: &mut State,
         prev_token: Option<&Token>,
+        prev_non_ws_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
+                ch if prev_token == Some(&Token::Period)
+                    && ch.is_ascii_alphabetic()
+                    && self.dialect.supports_literal_prefix_in_qualified_name() =>
+                {
+                    self.tokenize_identifier_or_keyword([ch], chars)
+                }
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
                 '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
                 '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
@@ -1338,12 +1565,9 @@ impl<'a> Tokenizer<'a> {
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
-                    // special case where if ._ is encountered after a word then that word
-                    // is a table and the _ is the start of the col name.
-                    // if the prev token is not a word, then this is not a valid sql
-                    // word or number.
+                    // ._ after a word is a field access, not a decimal point
                     if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if let Some(Token::Word(_)) = prev_non_ws_token {
                             chars.next();
                             return Ok(Some(Token::Period));
                         }
@@ -1380,6 +1604,20 @@ impl<'a> Tokenizer<'a> {
                         && prev_token == Some(&Token::Period)
                     {
                         return Ok(Some(Token::Number(s, false)));
+                    }
+
+                    if s == "0" && self.dialect.supports_non_decimal_integer_literals() {
+                        let radix = match chars.peek() {
+                            Some('x' | 'X') => Some((16, "a hexadecimal")),
+                            Some('o' | 'O') => Some((8, "an octal")),
+                            Some('b' | 'B') => Some((2, "a binary")),
+                            _ => None,
+                        };
+                        if let Some((radix, name)) = radix {
+                            return self
+                                .tokenize_non_decimal_integer(chars, radix, name)
+                                .map(Some);
+                        }
                     }
 
                     // match binary literal that starts with 0x
@@ -1614,7 +1852,7 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some('*') => self
                                     .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
-                                Some('~') => {
+                                Some('~') if self.dialect.supports_tilde_like_match_operator() => {
                                     chars.next();
                                     match chars.peek() {
                                         Some('*') => self.consume_and_return(
@@ -1736,9 +1974,15 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
+                '#' if self.dialect.supports_hash_comment()
+                    && (!self.dialect.requires_hash_comment_space()
+                        || chars
+                            .peekable
+                            .clone()
+                            .nth(1)
+                            .is_some_and(|c| c == ' ' || c == '!')) =>
                 {
-                    chars.next(); // consume the '#', starting a snowflake single-line comment
+                    chars.next(); // consume the '#', starting a single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
                         prefix: "#".to_owned(),
@@ -1752,7 +1996,7 @@ impl<'a> Tokenizer<'a> {
                         Some('=') if self.dialect.supports_geometric_types() => {
                             self.consume_for_binop(chars, "~=", Token::TildeEqual)
                         }
-                        Some('~') => {
+                        Some('~') if self.dialect.supports_tilde_like_match_operator() => {
                             chars.next();
                             match chars.peek() {
                                 Some('*') => {
@@ -2072,6 +2316,32 @@ impl<'a> Tokenizer<'a> {
         Ok(s)
     }
 
+    /// Tokenizes an integer literal such as `0x1F` after its leading `0`,
+    /// keeping the spelling as written.
+    fn tokenize_non_decimal_integer(
+        &self,
+        chars: &mut State,
+        radix: u32,
+        name: &str,
+    ) -> Result<Token, TokenizerError> {
+        let mut s = String::from('0');
+        s.extend(chars.next());
+        // An underscore may directly follow the prefix, as in `0x_1F`.
+        if chars.peek() == Some(&'_') && self.dialect.supports_numeric_literal_underscores() {
+            chars.next();
+            s.push('_');
+        }
+        let digits = self.tokenize_number_part(chars, |ch| ch.is_digit(radix))?;
+        if digits.is_empty() {
+            return self.tokenizer_error(
+                chars.location(),
+                format!("Expected {name} digit after '{}'", &s[..2]),
+            );
+        }
+        s.push_str(&digits);
+        Ok(Token::Number(s, false))
+    }
+
     // Consume characters until newline
     fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
         peeking_take_while(chars, |ch| match ch {
@@ -2389,6 +2659,9 @@ impl<'a> Tokenizer<'a> {
                     s.push(ch);
                 }
                 None => {
+                    if self.dialect.supports_unterminated_block_comments() {
+                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                    }
                     break self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",
@@ -2421,7 +2694,10 @@ impl<'a> Tokenizer<'a> {
         (s, last_char)
     }
 
-    #[allow(clippy::unnecessary_wraps)]
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the match arms in `next_token` return this value directly"
+    )]
     fn consume_and_return(
         &self,
         chars: &mut State,
@@ -2799,10 +3075,20 @@ mod tests {
             ],
         );
 
-        numeric_underscore_dialects.tokenizes_to(
+        let hex_string_dialects = all_dialects_where(|dialect| {
+            dialect.supports_numeric_literal_underscores()
+                && !dialect.supports_non_decimal_integer_literals()
+        });
+        hex_string_dialects.tokenizes_to(
             "0xFF_FF",
             vec![Token::HexStringLiteral("FF_FF".to_string())],
         );
+        for dialect in &hex_string_dialects.dialects {
+            let err = Tokenizer::new(&**dialect, "SELECT 0x_1")
+                .tokenize()
+                .unwrap_err();
+            assert_eq!("Unexpected character '_'", err.message);
+        }
 
         for dialect in &numeric_underscore_dialects.dialects {
             for sql in [
@@ -2814,7 +3100,6 @@ mod tests {
                 "SELECT 1e_1",
                 "SELECT 1e1_",
                 "SELECT 1e1__0",
-                "SELECT 0x_1",
                 "SELECT 0x1_",
             ] {
                 let err = Tokenizer::new(&**dialect, sql).tokenize().unwrap_err();
@@ -3707,6 +3992,26 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_tilde_without_like_match_operators() {
+        all_dialects_where(|d| !d.supports_tilde_like_match_operator()).tokenizes_to(
+            "~~ ~~* !~~ !~~*",
+            vec![
+                Token::Tilde,
+                Token::Tilde,
+                Token::Whitespace(Whitespace::Space),
+                Token::Tilde,
+                Token::TildeAsterisk,
+                Token::Whitespace(Whitespace::Space),
+                Token::ExclamationMarkTilde,
+                Token::Tilde,
+                Token::Whitespace(Whitespace::Space),
+                Token::ExclamationMarkTilde,
+                Token::TildeAsterisk,
+            ],
+        );
+    }
+
+    #[test]
     fn tokenize_quoted_identifier() {
         let sql = r#" "a "" b" "a """ "c """"" "#;
         let dialect = GenericDialect {};
@@ -4376,15 +4681,30 @@ mod tests {
 
         compare(expected, tokens);
 
-        let sql = String::from("SELECT ._123");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
+        // Whitespace between the word and ._ is accepted
+        let sql = String::from("SELECT table ._col");
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "table".to_string(),
+                quote_style: None,
+                keyword: Keyword::TABLE,
+            }),
+            Token::Whitespace(Whitespace::Space),
+            Token::Period,
+            Token::Word(Word {
+                value: "_col".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+        ];
+        compare(expected, tokens);
 
-        let sql = String::from("SELECT ._abc");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
+        // Without a preceding identifier ._ is still rejected
+        let err = Tokenizer::new(&dialect, "._abc").tokenize();
+        assert!(err.is_err(), "expected tokenizer error for bare ._abc");
     }
 
     #[test]
@@ -4483,6 +4803,47 @@ mod tests {
                 Token::Whitespace(Whitespace::Space),
                 Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
+            ],
+            tokens,
+        );
+    }
+
+    #[test]
+    fn tokenize_comment_hint_underscore_after_non_word_is_error() {
+        let sql = "SELECT 1 /*!50110 ._a */ FROM t";
+        let dialect = MySqlDialect {};
+        let err = Tokenizer::new(&dialect, sql).tokenize().unwrap_err();
+        assert_eq!(
+            err,
+            TokenizerError {
+                message: "Unexpected character '_'".to_string(),
+                location: Location::new(1, 11),
+            }
+        );
+    }
+
+    #[test]
+    fn tokenize_into_existing_buffer_keeps_qualified_name_context() {
+        let dialect = MySqlDialect {};
+        let mut tokens = Tokenizer::new(&dialect, "SELECT t ")
+            .tokenize_with_location()
+            .unwrap();
+        Tokenizer::new(&dialect, "._col FROM t")
+            .tokenize_with_location_into_buf(&mut tokens)
+            .unwrap();
+        let tokens = tokens
+            .into_iter()
+            .map(|token| token.token)
+            .filter(|token| !matches!(token, Token::Whitespace(_)))
+            .collect();
+        compare(
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::make_word("t", None),
+                Token::Period,
+                Token::make_word("_col", None),
+                Token::make_keyword("FROM"),
+                Token::make_word("t", None),
             ],
             tokens,
         );
@@ -4675,5 +5036,135 @@ mod tests {
             ],
             tokens,
         );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload() {
+        let sql = "COPY t FROM STDIN; SELECT 1;\nrow1\n\\.\nSELECT 2;";
+        let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::make_word("COPY", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("t", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("FROM", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("STDIN", None),
+                Token::CopyData {
+                    data: "row1\n".to_string(),
+                    terminated: true,
+                },
+                Token::SemiColon,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("SELECT", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+                Token::SemiColon,
+                Token::Whitespace(Whitespace::Newline),
+                Token::make_word("SELECT", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("2".to_string(), false),
+                Token::SemiColon,
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenize_qualified_underscore_across_copy_payload() {
+        for sql in [
+            "COPY t FROM STDIN; SELECT t ._a FROM t;\nrow1\n\\.\n",
+            "COPY t FROM STDIN; SELECT t\nrow1\n\\.\n ._a FROM t;",
+        ] {
+            let tokens: Vec<_> = Tokenizer::new(&PostgreSqlDialect {}, sql)
+                .tokenize()
+                .unwrap()
+                .into_iter()
+                .filter(|token| !matches!(token, Token::Whitespace(_)))
+                .collect();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::make_word("COPY", None),
+                    Token::make_word("t", None),
+                    Token::make_word("FROM", None),
+                    Token::make_word("STDIN", None),
+                    Token::CopyData {
+                        data: "row1\n".to_string(),
+                        terminated: true,
+                    },
+                    Token::SemiColon,
+                    Token::make_word("SELECT", None),
+                    Token::make_word("t", None),
+                    Token::Period,
+                    Token::make_word("_a", None),
+                    Token::make_word("FROM", None),
+                    Token::make_word("t", None),
+                    Token::SemiColon,
+                ],
+                "{sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload_span() {
+        let sql = "COPY t FROM STDIN;\nrow1\n\\.";
+        let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize_with_location()
+            .unwrap();
+        let payload = tokens
+            .iter()
+            .find(|t| matches!(t.token, Token::CopyData { .. }))
+            .unwrap();
+        assert_eq!(
+            payload.span,
+            Span::new(Location::new(2, 1), Location::new(3, 3))
+        );
+        assert_eq!(
+            payload.token,
+            Token::CopyData {
+                data: "row1\n".to_string(),
+                terminated: true,
+            }
+        );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload_malformed_semicolon_line() {
+        // An unterminated string on the `;` line fails the capture.
+        let sql = "COPY t FROM STDIN; 'unterminated";
+        let err = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize()
+            .unwrap_err();
+        assert_eq!(
+            err,
+            TokenizerError {
+                message: "Unterminated string literal".to_string(),
+                location: Location::new(1, 20),
+            }
+        );
+    }
+
+    #[test]
+    fn tokenize_copy_from_stdin_payload_not_captured() {
+        // A `FROM STDIN` nested in parens, or a statement not starting with `COPY`,
+        // keeps the data out of a payload token.
+        for sql in [
+            "COPY (SELECT x FROM stdin) TO STDOUT;\nrow1\n\\.\n",
+            "SELECT * FROM stdin;\nrow1\n\\.\n",
+            "COPY t TO STDOUT;\nrow1\n\\.\n",
+        ] {
+            let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+                .tokenize()
+                .unwrap();
+            assert!(
+                tokens.iter().all(|t| !matches!(t, Token::CopyData { .. })),
+                "{sql}"
+            );
+        }
     }
 }

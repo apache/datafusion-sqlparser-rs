@@ -2534,6 +2534,35 @@ impl fmt::Display for AddDropSync {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The argument of a `SHOW` statement, either a GUC name or one of the fixed
+/// multi-word forms from the [PostgreSQL grammar](https://www.postgresql.org/docs/current/sql-show.html).
+pub enum ShowVariableName {
+    /// A dot-separated, possibly quoted name such as `custom.my_guc`.
+    Name(ObjectName),
+    /// The fixed `SHOW TIME ZONE` form.
+    TimeZone,
+    /// The fixed `SHOW TRANSACTION ISOLATION LEVEL` form.
+    TransactionIsolationLevel,
+    /// The fixed `SHOW SESSION AUTHORIZATION` form.
+    SessionAuthorization,
+}
+
+impl fmt::Display for ShowVariableName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ShowVariableName::Name(name) => write!(f, "{name}"),
+            ShowVariableName::TimeZone => f.write_str("TIME ZONE"),
+            ShowVariableName::TransactionIsolationLevel => {
+                f.write_str("TRANSACTION ISOLATION LEVEL")
+            }
+            ShowVariableName::SessionAuthorization => f.write_str("SESSION AUTHORIZATION"),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -4228,8 +4257,8 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable {
-        /// Variable name as one or more identifiers.
-        variable: Vec<Ident>,
+        /// The GUC name or fixed multi-word form to show.
+        variable: ShowVariableName,
     },
     /// ```sql
     /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
@@ -5898,11 +5927,7 @@ impl fmt::Display for Statement {
             }
             Self::Set(set) => write!(f, "{set}"),
             Statement::ShowVariable { variable } => {
-                write!(f, "SHOW")?;
-                if !variable.is_empty() {
-                    write!(f, " {}", display_separated(variable, " "))?;
-                }
-                Ok(())
+                write!(f, "SHOW {variable}")
             }
             Statement::ShowStatus {
                 filter,

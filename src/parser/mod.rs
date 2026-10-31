@@ -16816,6 +16816,23 @@ impl<'a> Parser<'a> {
 
     /// Parse a `SHOW` statement and dispatch to specific SHOW handlers.
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
+        // The fixed PostgreSQL forms take no scope keywords, so they must be
+        // matched before SESSION is consumed as a scope.
+        if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
+            return Ok(Statement::ShowVariable {
+                variable: ShowVariableName::SessionAuthorization,
+            });
+        }
+        if self.parse_keywords(&[Keyword::TRANSACTION, Keyword::ISOLATION, Keyword::LEVEL]) {
+            return Ok(Statement::ShowVariable {
+                variable: ShowVariableName::TransactionIsolationLevel,
+            });
+        }
+        if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
+            return Ok(Statement::ShowVariable {
+                variable: ShowVariableName::TimeZone,
+            });
+        }
         let terse = self.parse_keyword(Keyword::TERSE);
         let extended = self.parse_keyword(Keyword::EXTENDED);
         let full = self.parse_keyword(Keyword::FULL);
@@ -16873,7 +16890,7 @@ impl<'a> Parser<'a> {
             self.parse_show_charset(true)
         } else {
             Ok(Statement::ShowVariable {
-                variable: self.parse_identifiers()?,
+                variable: ShowVariableName::Name(self.parse_object_name(false)?),
             })
         }
     }

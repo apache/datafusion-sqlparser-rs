@@ -2360,21 +2360,19 @@ fn parse_set_role() {
 
 #[test]
 fn parse_show() {
-    let stmt = pg_and_generic().verified_stmt("SHOW a a");
+    // A run of bare words is not a variable name.
     assert_eq!(
-        stmt,
-        Statement::ShowVariable {
-            variable: vec!["a".into(), "a".into()]
-        }
+        pg_and_generic()
+            .parse_sql_statements("SHOW a a")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: a".to_string())
     );
-
-    let stmt = pg_and_generic().verified_stmt("SHOW ALL ALL");
     assert_eq!(
-        stmt,
-        Statement::ShowVariable {
-            variable: vec!["ALL".into(), "ALL".into()]
-        }
-    )
+        pg_and_generic()
+            .parse_sql_statements("SHOW ALL ALL")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: ALL".to_string())
+    );
 }
 
 #[test]
@@ -12290,4 +12288,78 @@ fn parse_create_table_partition_of_untyped_columns() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_show_dotted_variable() {
+    pg_and_generic().one_statement_parses_to("SHOW custom.my_guc", "SHOW custom.my_guc");
+    pg_and_generic().one_statement_parses_to(
+        "SHOW custom.my.qualified.guc",
+        "SHOW custom.my.qualified.guc",
+    );
+    pg_and_generic().one_statement_parses_to("SHOW search_path", "SHOW search_path");
+    pg_and_generic().one_statement_parses_to(r#"SHOW "custom".my_guc"#, r#"SHOW "custom".my_guc"#);
+    pg_and_generic()
+        .one_statement_parses_to(r#"SHOW custom."bad-guc""#, r#"SHOW custom."bad-guc""#);
+
+    let stmt = pg_and_generic().verified_stmt(r#"SHOW custom."bad-guc""#);
+    assert_eq!(
+        stmt,
+        Statement::ShowVariable {
+            variable: ShowVariableName::Name(ObjectName::from(vec![
+                Ident::new("custom"),
+                Ident::with_quote('"', "bad-guc")
+            ]))
+        }
+    );
+
+    // The fixed multi-word forms from the PostgreSQL grammar.
+    pg_and_generic().one_statement_parses_to("SHOW ALL", "SHOW ALL");
+    pg_and_generic().one_statement_parses_to("SHOW all", "SHOW all");
+    pg_and_generic().one_statement_parses_to("SHOW time zone", "SHOW TIME ZONE");
+    let stmt = pg_and_generic().verified_stmt("SHOW TIME ZONE");
+    assert_eq!(
+        stmt,
+        Statement::ShowVariable {
+            variable: ShowVariableName::TimeZone
+        }
+    );
+    pg_and_generic().one_statement_parses_to(
+        "SHOW transaction isolation level",
+        "SHOW TRANSACTION ISOLATION LEVEL",
+    );
+    let stmt = pg_and_generic().verified_stmt("SHOW TRANSACTION ISOLATION LEVEL");
+    assert_eq!(
+        stmt,
+        Statement::ShowVariable {
+            variable: ShowVariableName::TransactionIsolationLevel
+        }
+    );
+    pg_and_generic()
+        .one_statement_parses_to("SHOW session authorization", "SHOW SESSION AUTHORIZATION");
+    let stmt = pg_and_generic().verified_stmt("SHOW SESSION AUTHORIZATION");
+    assert_eq!(
+        stmt,
+        Statement::ShowVariable {
+            variable: ShowVariableName::SessionAuthorization
+        }
+    );
+
+    // A GUC name is a single dot-separated run, not arbitrary words.
+    pg_and_generic()
+        .parse_sql_statements("SHOW 123")
+        .unwrap_err();
+    pg_and_generic()
+        .parse_sql_statements("SHOW a.b c")
+        .unwrap_err();
+    // Trailing strings are rejected instead of silently dropped.
+    pg_and_generic()
+        .parse_sql_statements("SHOW search_path 'x'")
+        .unwrap_err();
+    pg_and_generic()
+        .parse_sql_statements("SHOW TIME ZONE extra")
+        .unwrap_err();
+    pg_and_generic()
+        .parse_sql_statements("SHOW SESSION AUTHORIZATION extra")
+        .unwrap_err();
 }

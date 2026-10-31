@@ -9071,7 +9071,7 @@ fn parse_exists_subquery() {
     verified_stmt("SELECT * FROM t WHERE EXISTS (WITH u AS (SELECT 1) SELECT * FROM u)");
     verified_stmt("SELECT EXISTS (SELECT 1)");
 
-    let res = all_dialects_except(|d| d.is::<DatabricksDialect>())
+    let res = all_dialects_except(|d| d.supports_exists_function())
         .parse_sql_statements("SELECT EXISTS (");
     assert_eq!(
         ParserError::ParserError(
@@ -9080,13 +9080,60 @@ fn parse_exists_subquery() {
         res.unwrap_err(),
     );
 
-    let res = all_dialects_except(|d| d.is::<DatabricksDialect>())
+    let res = all_dialects_except(|d| d.supports_exists_function())
         .parse_sql_statements("SELECT EXISTS (NULL)");
     assert_eq!(
         ParserError::ParserError(
             "Expected: SELECT, VALUES, or a subquery in the query body, found: NULL".to_string()
         ),
         res.unwrap_err(),
+    );
+}
+
+#[test]
+fn parse_exists_function() {
+    let dialects = all_dialects_where(|d| d.supports_exists_function());
+    match dialects.verified_expr("exists(array(1, 2), x -> x > 1)") {
+        Expr::Function(f) => assert_eq!(f.name.to_string(), "exists"),
+        other => panic!("expected a function, got {other:?}"),
+    }
+    for sql in [
+        "EXISTS (SELECT 1)",
+        "EXISTS (WITH t AS (SELECT 1) SELECT * FROM t)",
+        "EXISTS (VALUES (1))",
+        "EXISTS (TABLE t)",
+        "EXISTS ((SELECT 1))",
+        "EXISTS ((SELECT 1) UNION (SELECT 2))",
+    ] {
+        assert!(
+            matches!(dialects.verified_expr(sql), Expr::Exists { .. }),
+            "{sql}"
+        );
+    }
+    assert!(matches!(
+        dialects.verified_expr("NOT EXISTS (SELECT 1)"),
+        Expr::Exists { negated: true, .. }
+    ));
+    match dialects.verified_expr("NOT exists(array(1, 2), x -> x > 1)") {
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr,
+        } => assert!(matches!(*expr, Expr::Function(_))),
+        other => panic!("expected NOT of a function, got {other:?}"),
+    }
+    let dialects =
+        all_dialects_where(|d| d.supports_exists_function() && d.supports_from_first_select());
+    assert!(matches!(
+        dialects.verified_expr("EXISTS (FROM t SELECT a)"),
+        Expr::Exists { .. }
+    ));
+
+    assert_eq!(
+        all_dialects_except(|d| d.supports_exists_function())
+            .parse_sql_statements("SELECT exists(array(1, 2), x -> x > 1)"),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: array".to_string()
+        ))
     );
 }
 

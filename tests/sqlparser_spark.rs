@@ -157,6 +157,12 @@ fn test_lambda_transform() {
     spark().verified_stmt("SELECT transform(arr, x -> x * 2) FROM t");
 }
 
+#[test]
+fn test_exists_function() {
+    spark().verified_stmt("SELECT exists(arr, x -> x > 2), NOT exists(arr, x -> x < 0) FROM t");
+    spark().verified_stmt("SELECT * FROM t WHERE EXISTS (SELECT 1) AND NOT EXISTS ((SELECT 2))");
+}
+
 // --------------------------------
 // DIV integer division
 // --------------------------------

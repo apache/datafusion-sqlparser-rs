@@ -22918,6 +22918,14 @@ fn parse_window_frame_untyped_string_offset() {
     dialects.verified_stmt(
         "SELECT sum(x) OVER (ORDER BY f ROWS BETWEEN 'hello' PRECEDING AND 10 FOLLOWING) FROM t",
     );
+    assert_eq!(
+        dialects
+            .parse_sql_statements(
+                "SELECT sum(x) OVER (ORDER BY f ROWS BETWEEN ) PRECEDING AND CURRENT ROW) FROM t"
+            )
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
 
     let select = dialects.verified_only_select(
         "SELECT sum(x) OVER (ORDER BY f RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND CURRENT ROW) FROM t",

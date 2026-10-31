@@ -20713,14 +20713,22 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a FOR UPDATE/FOR SHARE clause
+    /// Parse a `FOR` row-locking clause.
     pub fn parse_lock(&mut self) -> Result<LockClause, ParserError> {
-        let lock_type = match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
-            Keyword::UPDATE => LockType::Update,
-            Keyword::SHARE => LockType::Share,
-            unexpected_keyword => return Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{UPDATE, SHARE}}, got {unexpected_keyword:?}"),
-            )),
+        let lock_type = if self.parse_keyword(Keyword::NO) {
+            self.expect_keywords(&[Keyword::KEY, Keyword::UPDATE])?;
+            LockType::NoKeyUpdate
+        } else if self.parse_keyword(Keyword::KEY) {
+            self.expect_keyword(Keyword::SHARE)?;
+            LockType::KeyShare
+        } else {
+            match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
+                Keyword::UPDATE => LockType::Update,
+                Keyword::SHARE => LockType::Share,
+                unexpected_keyword => return Err(ParserError::ParserError(
+                    format!("Internal parser error: expected any of {{UPDATE, SHARE}}, got {unexpected_keyword:?}"),
+                )),
+            }
         };
         let of = if self.parse_keyword(Keyword::OF) {
             Some(self.parse_object_name(false)?)

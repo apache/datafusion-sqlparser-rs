@@ -12291,3 +12291,77 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_for_no_key_update_and_key_share() {
+    for (sql, expected_lock_type, expected_of, expected_nonblock) in [
+        (
+            "SELECT id FROM t WHERE id = 1 FOR NO KEY UPDATE",
+            LockType::NoKeyUpdate,
+            None,
+            None,
+        ),
+        (
+            "SELECT id FROM t WHERE id = 1 FOR NO KEY UPDATE OF t SKIP LOCKED",
+            LockType::NoKeyUpdate,
+            Some("t"),
+            Some(NonBlock::SkipLocked),
+        ),
+        (
+            "SELECT id FROM t WHERE id = 1 FOR KEY SHARE",
+            LockType::KeyShare,
+            None,
+            None,
+        ),
+        (
+            "SELECT id FROM t WHERE id = 1 FOR KEY SHARE OF t NOWAIT",
+            LockType::KeyShare,
+            Some("t"),
+            Some(NonBlock::Nowait),
+        ),
+    ] {
+        let statement = pg_and_generic().verified_stmt(sql);
+        assert_eq!(statement.to_string(), sql);
+
+        let Statement::Query(query) = statement else {
+            panic!("expected a query for {sql}");
+        };
+        assert_eq!(query.locks.len(), 1, "{sql}");
+        let lock = &query.locks[0];
+        assert_eq!(lock.lock_type, expected_lock_type, "{sql}");
+        assert_eq!(
+            lock.of.as_ref().map(ToString::to_string).as_deref(),
+            expected_of,
+            "{sql}"
+        );
+        assert_eq!(lock.nonblock, expected_nonblock, "{sql}");
+    }
+
+    assert_ne!(LockType::NoKeyUpdate, LockType::Update);
+    assert_ne!(LockType::KeyShare, LockType::Share);
+}
+
+#[test]
+fn reject_incomplete_for_lock_strength() {
+    for (sql, expected) in [
+        ("SELECT * FROM t FOR NO KEY", "Expected: UPDATE, found: EOF"),
+        (
+            "SELECT * FROM t FOR NO KEY SHARE",
+            "Expected: UPDATE, found: SHARE",
+        ),
+        ("SELECT * FROM t FOR KEY", "Expected: SHARE, found: EOF"),
+        (
+            "SELECT * FROM t FOR KEY UPDATE",
+            "Expected: SHARE, found: UPDATE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

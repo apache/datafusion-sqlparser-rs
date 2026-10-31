@@ -1,0 +1,3 @@
+SELECT interval(2) '1 day 01:23:45.6789';
+SELECT INTERVAL (3) '1.23456 seconds';
+SELECT INTERVAL(3) '1.23456 seconds';

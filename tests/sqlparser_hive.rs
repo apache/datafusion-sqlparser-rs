@@ -418,7 +418,7 @@ fn parse_create_function() {
                 function_body,
                 Some(CreateFunctionBody::AsBeforeOptions {
                     body: Expr::Value(
-                        (Value::SingleQuotedString("org.random.class.Name".to_string()))
+                        (Value::SingleQuotedString("org.random.class.Name".to_string().into()))
                             .with_empty_span()
                     ),
                     link_symbol: None,

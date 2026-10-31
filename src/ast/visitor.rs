@@ -1309,7 +1309,7 @@ mod visit_mut_tests {
 
         fn pre_visit_value(&mut self, value: &mut ValueWithSpan) -> ControlFlow<Self::Break> {
             self.index += 1;
-            value.value = Value::SingleQuotedString(format!("REDACTED_{}", self.index));
+            value.value = Value::SingleQuotedString(format!("REDACTED_{}", self.index).into());
             ControlFlow::Continue(())
         }
 

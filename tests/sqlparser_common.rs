@@ -656,7 +656,8 @@ fn parse_update_with_table_alias() {
                         Ident::new("username")
                     ])),
                     value: Expr::Value(
-                        (Value::SingleQuotedString("new_user".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("new_user".to_string().into()))
+                            .with_empty_span()
                     ),
                 }],
                 assignments
@@ -669,7 +670,8 @@ fn parse_update_with_table_alias() {
                     ])),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("old_user".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("old_user".to_string().into()))
+                            .with_empty_span()
                     )),
                 }),
                 selection
@@ -1628,7 +1630,7 @@ fn parse_escaped_single_quote_string_predicate_with_escape() {
             left: Box::new(Expr::Identifier(Ident::new("salary"))),
             op: NotEq,
             right: Box::new(Expr::Value(
-                (Value::SingleQuotedString("Jim's salary".to_string())).with_empty_span()
+                (Value::SingleQuotedString("Jim's salary".to_string().into())).with_empty_span()
             )),
         }),
         ast.selection,
@@ -1654,7 +1656,11 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
             left: Box::new(Expr::Identifier(Ident::new("salary"))),
             op: NotEq,
             right: Box::new(Expr::Value(
-                (Value::SingleQuotedString("Jim''s salary".to_string())).with_empty_span()
+                (Value::SingleQuotedString(QuotedString {
+                    value: "Jim''s salary".to_string(),
+                    escaping: QuoteEscaping::Raw,
+                }))
+                .with_empty_span()
             )),
         }),
         ast.selection,
@@ -2379,7 +2385,7 @@ fn parse_ilike() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: None,
                 any: false,
@@ -2398,10 +2404,10 @@ fn parse_ilike() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: Some(Box::new(Expr::value(
-                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                    Value::SingleQuotedString('^'.to_string().into()).with_empty_span(),
                 ))),
                 any: false,
             },
@@ -2420,7 +2426,7 @@ fn parse_ilike() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: None,
                 any: false,
@@ -2476,7 +2482,7 @@ fn parse_like() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: None,
                 any: false,
@@ -2495,10 +2501,10 @@ fn parse_like() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: Some(Box::new(Expr::value(
-                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                    Value::SingleQuotedString('^'.to_string().into()).with_empty_span(),
                 ))),
                 any: false,
             },
@@ -2517,7 +2523,7 @@ fn parse_like() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: None,
                 any: false,
@@ -2547,7 +2553,7 @@ fn parse_similar_to() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: None,
             },
@@ -2565,10 +2571,10 @@ fn parse_similar_to() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: Some(Box::new(Expr::value(
-                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                    Value::SingleQuotedString('^'.to_string().into()).with_empty_span(),
                 ))),
             },
             select.selection.unwrap()
@@ -2584,7 +2590,7 @@ fn parse_similar_to() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: Some(Box::new(Expr::value(Value::Null.with_empty_span()))),
             },
@@ -2602,10 +2608,10 @@ fn parse_similar_to() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("%a".to_string().into())).with_empty_span()
                 )),
                 escape_char: Some(Box::new(Expr::value(
-                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                    Value::SingleQuotedString('^'.to_string().into()).with_empty_span(),
                 ))),
             })),
             select.selection.unwrap()
@@ -2627,8 +2633,12 @@ fn parse_in_list() {
             Expr::In {
                 expr: Box::new(Expr::Identifier(Ident::new("segment"))),
                 target: InTarget::List(vec![
-                    Expr::Value((Value::SingleQuotedString("HIGH".to_string())).with_empty_span()),
-                    Expr::Value((Value::SingleQuotedString("MED".to_string())).with_empty_span()),
+                    Expr::Value(
+                        (Value::SingleQuotedString("HIGH".to_string().into())).with_empty_span()
+                    ),
+                    Expr::Value(
+                        (Value::SingleQuotedString("MED".to_string().into())).with_empty_span()
+                    ),
                 ]),
                 negated,
                 global: false,
@@ -4034,13 +4044,13 @@ fn parse_listagg() {
                         "dateid"
                     )))),
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::SingleQuotedString(", ".to_owned())).with_empty_span()
+                        (Value::SingleQuotedString(", ".to_owned().into())).with_empty_span()
                     )))
                 ],
                 clauses: vec![FunctionArgumentClause::OnOverflow(
                     ListAggOnOverflow::Truncate {
                         filler: Some(Box::new(Expr::Value(
-                            (Value::SingleQuotedString("%".to_string(),)).with_empty_span()
+                            (Value::SingleQuotedString("%".to_string().into(),)).with_empty_span()
                         ))),
                         with_count: false,
                     }
@@ -5031,7 +5041,7 @@ fn parse_assert_message() {
                     value: Value::SingleQuotedString(s),
                     span: _,
                 })),
-        } => assert_eq!(s, "No rows in my_table"),
+        } => assert_eq!(s.value, "No rows in my_table"),
         _ => unreachable!(),
     }
 }
@@ -5522,7 +5532,7 @@ fn parse_alter_table() {
                         span: Span::empty(),
                     },
                     value: Expr::Value(
-                        (Value::SingleQuotedString("parquet".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("parquet".to_string().into())).with_empty_span()
                     ),
                 }],
             );
@@ -6395,14 +6405,14 @@ fn parse_named_argument_function() {
                     FunctionArg::Named {
                         name: Ident::new("a"),
                         arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("1".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("1".to_owned().into())).with_empty_span()
                         )),
                         operator: FunctionArgOperator::RightArrow
                     },
                     FunctionArg::Named {
                         name: Ident::new("b"),
                         arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("2".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("2".to_owned().into())).with_empty_span()
                         )),
                         operator: FunctionArgOperator::RightArrow
                     },
@@ -6435,14 +6445,14 @@ fn parse_named_argument_function_with_eq_operator() {
                     FunctionArg::Named {
                         name: Ident::new("a"),
                         arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("1".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("1".to_owned().into())).with_empty_span()
                         )),
                         operator: FunctionArgOperator::Equals
                     },
                     FunctionArg::Named {
                         name: Ident::new("b"),
                         arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("2".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("2".to_owned().into())).with_empty_span()
                         )),
                         operator: FunctionArgOperator::Equals
                     },
@@ -6916,17 +6926,17 @@ fn parse_literal_string() {
     let select = national_string_dialects.verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
-        &Expr::Value((Value::SingleQuotedString("one".to_string())).with_empty_span()),
+        &Expr::Value((Value::SingleQuotedString("one".to_string().into())).with_empty_span()),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::NationalStringLiteral("national string".to_string())).with_empty_span()
+            (Value::NationalStringLiteral("national string".to_string().into())).with_empty_span()
         ),
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
-        &Expr::Value((Value::HexStringLiteral("deadBEEF".to_string())).with_empty_span()),
+        &Expr::Value((Value::HexStringLiteral("deadBEEF".to_string().into())).with_empty_span()),
         expr_from_projection(&select.projection[2])
     );
 
@@ -7037,7 +7047,7 @@ fn parse_interval_all() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                (Value::SingleQuotedString(String::from("1-1"))).with_empty_span()
+                (Value::SingleQuotedString(String::from("1-1").into())).with_empty_span()
             )),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
@@ -7052,7 +7062,7 @@ fn parse_interval_all() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                (Value::SingleQuotedString(String::from("01:01.01"))).with_empty_span()
+                (Value::SingleQuotedString(String::from("01:01.01").into())).with_empty_span()
             )),
             leading_field: Some(DateTimeField::Minute),
             leading_precision: Some(5),
@@ -7067,7 +7077,7 @@ fn parse_interval_all() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                (Value::SingleQuotedString(String::from("1"))).with_empty_span()
+                (Value::SingleQuotedString(String::from("1").into())).with_empty_span()
             )),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
@@ -7082,7 +7092,7 @@ fn parse_interval_all() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                (Value::SingleQuotedString(String::from("10"))).with_empty_span()
+                (Value::SingleQuotedString(String::from("10").into())).with_empty_span()
             )),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
@@ -7126,7 +7136,7 @@ fn parse_interval_all() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                (Value::SingleQuotedString(String::from("10"))).with_empty_span()
+                (Value::SingleQuotedString(String::from("10").into())).with_empty_span()
             )),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
@@ -7197,7 +7207,7 @@ fn parse_interval_dont_require_unit() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
+                (Value::SingleQuotedString(String::from("1 DAY").into())).with_empty_span()
             )),
             leading_field: None,
             leading_precision: None,
@@ -7253,11 +7263,11 @@ fn parse_interval_require_qualifier() {
         &Expr::Interval(Interval {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("1".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("1".to_string().into())).with_empty_span()
                 )),
                 op: BinaryOperator::Plus,
                 right: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("1".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("1".to_string().into())).with_empty_span()
                 )),
             }),
             leading_field: Some(DateTimeField::Day),
@@ -7275,16 +7285,16 @@ fn parse_interval_require_qualifier() {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("1".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("1".to_string().into())).with_empty_span()
                     )),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("2".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("2".to_string().into())).with_empty_span()
                     )),
                 }),
                 op: BinaryOperator::Minus,
                 right: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("3".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("3".to_string().into())).with_empty_span()
                 )),
             }),
             leading_field: Some(DateTimeField::Day),
@@ -7305,7 +7315,7 @@ fn parse_interval_disallow_interval_expr() {
         expr_from_projection(only(&select.projection)),
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
+                (Value::SingleQuotedString(String::from("1 DAY").into())).with_empty_span()
             )),
             leading_field: None,
             leading_precision: None,
@@ -7328,7 +7338,7 @@ fn parse_interval_disallow_interval_expr() {
         &Expr::BinaryOp {
             left: Box::new(Expr::Interval(Interval {
                 value: Box::new(Expr::Value(
-                    (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
+                    (Value::SingleQuotedString(String::from("1 DAY").into())).with_empty_span()
                 )),
                 leading_field: None,
                 leading_precision: None,
@@ -7338,7 +7348,7 @@ fn parse_interval_disallow_interval_expr() {
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Interval(Interval {
                 value: Box::new(Expr::Value(
-                    (Value::SingleQuotedString(String::from("1 SECOND"))).with_empty_span()
+                    (Value::SingleQuotedString(String::from("1 SECOND").into())).with_empty_span()
                 )),
                 leading_field: None,
                 leading_precision: None,
@@ -7358,7 +7368,7 @@ fn interval_disallow_interval_expr_gt() {
         Expr::BinaryOp {
             left: Box::new(Expr::Interval(Interval {
                 value: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("1 second".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("1 second".to_string().into())).with_empty_span()
                 )),
                 leading_field: None,
                 leading_precision: None,
@@ -7386,7 +7396,7 @@ fn interval_disallow_interval_expr_double_colon() {
             kind: CastKind::DoubleColon,
             expr: Box::new(Expr::Interval(Interval {
                 value: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("1 second".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("1 second".to_string().into())).with_empty_span()
                 )),
                 leading_field: None,
                 leading_precision: None,
@@ -7504,7 +7514,8 @@ fn parse_interval_and_or_xor() {
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(
-                                (Value::SingleQuotedString("5 days".to_string())).with_empty_span(),
+                                (Value::SingleQuotedString("5 days".to_string().into()))
+                                    .with_empty_span(),
                             )),
                             leading_field: None,
                             leading_precision: None,
@@ -7532,7 +7543,8 @@ fn parse_interval_and_or_xor() {
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(
-                                (Value::SingleQuotedString("3 days".to_string())).with_empty_span(),
+                                (Value::SingleQuotedString("3 days".to_string().into()))
+                                    .with_empty_span(),
                             )),
                             leading_field: None,
                             leading_precision: None,
@@ -7594,7 +7606,7 @@ fn parse_at_timezone() {
         &Expr::AtTimeZone {
             timestamp: Box::new(call("FROM_UNIXTIME", [zero.clone()])),
             time_zone: Box::new(Expr::Value(
-                (Value::SingleQuotedString("UTC-06:00".to_string())).with_empty_span()
+                (Value::SingleQuotedString("UTC-06:00".to_string().into())).with_empty_span()
             )),
         },
         expr_from_projection(only(&select.projection)),
@@ -7610,11 +7622,13 @@ fn parse_at_timezone() {
                     Expr::AtTimeZone {
                         timestamp: Box::new(call("FROM_UNIXTIME", [zero])),
                         time_zone: Box::new(Expr::Value(
-                            (Value::SingleQuotedString("UTC-06:00".to_string())).with_empty_span()
+                            (Value::SingleQuotedString("UTC-06:00".to_string().into()))
+                                .with_empty_span()
                         )),
                     },
                     Expr::Value(
-                        (Value::SingleQuotedString("%Y-%m-%dT%H".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("%Y-%m-%dT%H".to_string().into()))
+                            .with_empty_span()
                     )
                 ]
             ),
@@ -7678,6 +7692,7 @@ fn parse_json_keyword() {
     }
 }"#
                     .to_string()
+                    .into()
                 ),
                 span: Span::empty(),
             },
@@ -7828,7 +7843,7 @@ fn parse_table_function() {
                 call(
                     "FUN",
                     [Expr::Value(
-                        (Value::SingleQuotedString("1".to_owned())).with_empty_span()
+                        (Value::SingleQuotedString("1".to_owned().into())).with_empty_span()
                     )],
                 ),
                 expr
@@ -8088,7 +8103,7 @@ fn parse_searched_case_expr() {
             conditions: vec![
                 CaseWhen {
                     condition: IsNull(Box::new(Identifier(Ident::new("bar")))),
-                    result: Expr::value(Value::SingleQuotedString("null".to_string())),
+                    result: Expr::value(Value::SingleQuotedString("null".to_string().into())),
                 },
                 CaseWhen {
                     condition: BinaryOp {
@@ -8096,7 +8111,7 @@ fn parse_searched_case_expr() {
                         op: Eq,
                         right: Box::new(Expr::value(number("0"))),
                     },
-                    result: Expr::value(Value::SingleQuotedString("=0".to_string())),
+                    result: Expr::value(Value::SingleQuotedString("=0".to_string().into())),
                 },
                 CaseWhen {
                     condition: BinaryOp {
@@ -8104,11 +8119,11 @@ fn parse_searched_case_expr() {
                         op: GtEq,
                         right: Box::new(Expr::value(number("0"))),
                     },
-                    result: Expr::value(Value::SingleQuotedString(">=0".to_string())),
+                    result: Expr::value(Value::SingleQuotedString(">=0".to_string().into())),
                 },
             ],
             else_result: Some(Box::new(Expr::value(Value::SingleQuotedString(
-                "<0".to_string()
+                "<0".to_string().into()
             )))),
         },
         expr_from_projection(only(&select.projection)),
@@ -8128,10 +8143,10 @@ fn parse_simple_case_expr() {
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
             conditions: vec![CaseWhen {
                 condition: Expr::value(number("1")),
-                result: Expr::value(Value::SingleQuotedString("Y".to_string())),
+                result: Expr::value(Value::SingleQuotedString("Y".to_string().into())),
             }],
             else_result: Some(Box::new(Expr::value(Value::SingleQuotedString(
-                "N".to_string()
+                "N".to_string().into()
             )))),
         },
         expr_from_projection(only(&select.projection)),
@@ -8968,7 +8983,7 @@ fn parse_overlay() {
     assert_eq!(
         &Expr::Overlay {
             expr: Box::new(Expr::Value(
-                (Value::SingleQuotedString("abcdef".to_string())).with_empty_span()
+                (Value::SingleQuotedString("abcdef".to_string().into())).with_empty_span()
             )),
             overlay_what: Box::new(Expr::Identifier(Ident::new("name"))),
             overlay_from: Box::new(Expr::value(number("3"))),
@@ -9024,12 +9039,12 @@ fn parse_trim() {
     assert_eq!(
         &Expr::Trim {
             expr: Box::new(Expr::Value(
-                Value::SingleQuotedString("  xyz  ".to_owned()).with_empty_span()
+                Value::SingleQuotedString("  xyz  ".to_owned().into()).with_empty_span()
             )),
             trim_where: None,
             trim_what: None,
             trim_characters: Some(vec![Expr::Value(
-                Value::SingleQuotedString(" ".to_owned()).with_empty_span()
+                Value::SingleQuotedString(" ".to_owned().into()).with_empty_span()
             )]),
         },
         expr_from_projection(only(&select.projection))
@@ -9040,12 +9055,12 @@ fn parse_trim() {
     assert_eq!(
         &Expr::Trim {
             expr: Box::new(Expr::Value(
-                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+                Value::SingleQuotedString("xyz".to_owned().into()).with_empty_span()
             )),
             trim_where: None,
             trim_what: None,
             trim_characters: Some(vec![Expr::Value(
-                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+                Value::SingleQuotedString("a".to_owned().into()).with_empty_span()
             )]),
         },
         expr_from_projection(only(&select.projection))
@@ -10243,14 +10258,14 @@ fn parse_double_colon_cast_at_timezone() {
             timestamp: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("2001-01-01T00:00:00.000Z".to_string()))
+                    (Value::SingleQuotedString("2001-01-01T00:00:00.000Z".to_string().into()))
                         .with_empty_span()
                 )),
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 format: None
             }),
             time_zone: Box::new(Expr::Value(
-                (Value::SingleQuotedString("Europe/Brussels".to_string())).with_empty_span()
+                (Value::SingleQuotedString("Europe/Brussels".to_string().into())).with_empty_span()
             )),
         },
         expr_from_projection(only(&select.projection)),
@@ -11156,7 +11171,8 @@ fn parse_merge() {
                             ])),
                             op: BinaryOperator::Eq,
                             right: Box::new(Expr::Value(
-                                (Value::SingleQuotedString("a".to_string())).with_empty_span()
+                                (Value::SingleQuotedString("a".to_string().into()))
+                                    .with_empty_span()
                             )),
                         }),
                         action: MergeAction::Update(MergeUpdateExpr {
@@ -11726,7 +11742,7 @@ fn parse_position() {
     assert_eq!(
         Expr::Position {
             expr: Box::new(Expr::Value(
-                (Value::SingleQuotedString("@".to_string())).with_empty_span()
+                (Value::SingleQuotedString("@".to_string().into())).with_empty_span()
             )),
             r#in: Box::new(Expr::Identifier(Ident::new("field"))),
         },
@@ -11738,8 +11754,10 @@ fn parse_position() {
         call(
             "position",
             [
-                Expr::Value((Value::SingleQuotedString("an".to_owned())).with_empty_span()),
-                Expr::Value((Value::SingleQuotedString("banana".to_owned())).with_empty_span()),
+                Expr::Value((Value::SingleQuotedString("an".to_owned().into())).with_empty_span()),
+                Expr::Value(
+                    (Value::SingleQuotedString("banana".to_owned().into())).with_empty_span()
+                ),
                 Expr::value(number("1")),
             ]
         ),
@@ -12381,7 +12399,8 @@ fn parse_escaped_string_with_unescape() {
                     assert_eq!(
                         *expr,
                         Expr::Value(
-                            (Value::SingleQuotedString(quoted.to_string())).with_empty_span()
+                            (Value::SingleQuotedString(quoted.to_string().into()))
+                                .with_empty_span()
                         )
                     );
                 }
@@ -12444,7 +12463,11 @@ fn parse_escaped_string_without_unescape() {
                     assert_eq!(
                         *expr,
                         Expr::Value(
-                            (Value::SingleQuotedString(quoted.to_string())).with_empty_span()
+                            (Value::SingleQuotedString(QuotedString {
+                                value: quoted.to_string(),
+                                escaping: QuoteEscaping::Raw,
+                            }))
+                            .with_empty_span()
                         )
                     );
                 }
@@ -12522,7 +12545,7 @@ fn parse_pivot_table() {
                 },
                 ExprWithAlias {
                     expr: Expr::Value(
-                        (Value::SingleQuotedString("two".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("two".to_string().into())).with_empty_span()
                     ),
                     alias: None
                 },
@@ -12606,7 +12629,8 @@ fn parse_pivot_table() {
                 ExprWithAlias {
                     expr: Expr::Tuple(vec![
                         Expr::Value(
-                            (Value::SingleQuotedString("John".to_string())).with_empty_span()
+                            (Value::SingleQuotedString("John".to_string().into()))
+                                .with_empty_span()
                         ),
                         Expr::Value(
                             (Value::Number("30".parse().unwrap(), false)).with_empty_span()
@@ -12617,7 +12641,8 @@ fn parse_pivot_table() {
                 ExprWithAlias {
                     expr: Expr::Tuple(vec![
                         Expr::Value(
-                            (Value::SingleQuotedString("Mike".to_string())).with_empty_span()
+                            (Value::SingleQuotedString("Mike".to_string().into()))
+                                .with_empty_span()
                         ),
                         Expr::Value(
                             (Value::Number("40".parse().unwrap(), false)).with_empty_span()
@@ -12985,14 +13010,14 @@ fn parse_pivot_unpivot_table() {
             value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::Value(
-                        (Value::SingleQuotedString("population_2000".to_string()))
+                        (Value::SingleQuotedString("population_2000".to_string().into()))
                             .with_empty_span()
                     ),
                     alias: None
                 },
                 ExprWithAlias {
                     expr: Expr::Value(
-                        (Value::SingleQuotedString("population_2010".to_string()))
+                        (Value::SingleQuotedString("population_2010".to_string().into()))
                             .with_empty_span()
                     ),
                     alias: None
@@ -13465,7 +13490,7 @@ fn parse_call() {
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (Value::SingleQuotedString("a".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("a".to_string().into())).with_empty_span()
                 )))],
                 clauses: vec![],
             }),
@@ -13496,8 +13521,12 @@ fn parse_execute_stored_procedure() {
             },
         ])),
         parameters: vec![
-            Expr::Value((Value::NationalStringLiteral("param1".to_string())).with_empty_span()),
-            Expr::Value((Value::NationalStringLiteral("param2".to_string())).with_empty_span()),
+            Expr::Value(
+                (Value::NationalStringLiteral("param1".to_string().into())).with_empty_span(),
+            ),
+            Expr::Value(
+                (Value::NationalStringLiteral("param2".to_string().into())).with_empty_span(),
+            ),
         ],
         has_parentheses: false,
         immediate: false,
@@ -13541,7 +13570,7 @@ fn parse_execute_immediate() {
 
     let expected = Statement::Execute {
         parameters: vec![Expr::Value(
-            (Value::SingleQuotedString("SELECT 1".to_string())).with_empty_span(),
+            (Value::SingleQuotedString("SELECT 1".to_string().into())).with_empty_span(),
         )],
         immediate: true,
         using: vec![ExprWithAlias {
@@ -13702,7 +13731,7 @@ fn parse_unload() {
                     span: Span::empty(),
                 },
                 value: Expr::Value(
-                    (Value::SingleQuotedString("AVRO".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("AVRO".to_string().into())).with_empty_span()
                 )
             }],
             query_text: None,
@@ -14058,7 +14087,8 @@ fn parse_connect_by() {
                         left: Box::new(Expr::Identifier(Ident::new("title"))),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(
-                            Value::SingleQuotedString("president".to_owned()).with_empty_span(),
+                            Value::SingleQuotedString("president".to_owned().into())
+                                .with_empty_span(),
                         )),
                     }
                     .into()
@@ -14136,7 +14166,8 @@ fn parse_connect_by() {
                         left: Box::new(Expr::Identifier(Ident::new("title"))),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(
-                            Value::SingleQuotedString("president".to_owned()).with_empty_span(),
+                            Value::SingleQuotedString("president".to_owned().into())
+                                .with_empty_span(),
                         )),
                     }
                     .into()
@@ -14197,7 +14228,8 @@ fn parse_connect_by() {
                         left: Box::new(Expr::Identifier(Ident::new("title"))),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(
-                            (Value::SingleQuotedString("president".to_owned(),)).with_empty_span()
+                            (Value::SingleQuotedString("president".to_owned().into(),))
+                                .with_empty_span()
                         )),
                     }
                     .into()
@@ -14355,7 +14387,7 @@ fn test_selective_aggregation() {
                         negated: false,
                         expr: Box::new(Expr::Identifier(Ident::new("name"))),
                         pattern: Box::new(Expr::Value(
-                            (Value::SingleQuotedString("a%".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("a%".to_owned().into())).with_empty_span()
                         )),
                         escape_char: None,
                         any: false,
@@ -14796,7 +14828,7 @@ fn test_select_wildcard_with_replace() {
         opt_replace: Some(ReplaceSelectItem {
             items: vec![Box::new(ReplaceSelectElement {
                 expr: Expr::Value(
-                    (Value::SingleQuotedString("widget".to_owned())).with_empty_span(),
+                    (Value::SingleQuotedString("widget".to_owned().into())).with_empty_span(),
                 ),
                 column_name: Ident::new("item_name"),
                 as_keyword: true,
@@ -14940,13 +14972,13 @@ fn test_dictionary_syntax() {
             DictionaryField {
                 key: Ident::with_quote('\'', "Alberta"),
                 value: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("Edmonton".to_owned())).with_empty_span(),
+                    (Value::SingleQuotedString("Edmonton".to_owned().into())).with_empty_span(),
                 )),
             },
             DictionaryField {
                 key: Ident::with_quote('\'', "Manitoba"),
                 value: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("Winnipeg".to_owned())).with_empty_span(),
+                    (Value::SingleQuotedString("Winnipeg".to_owned().into())).with_empty_span(),
                 )),
             },
         ]),
@@ -14960,7 +14992,8 @@ fn test_dictionary_syntax() {
                 value: Box::new(Expr::Cast {
                     kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("2023-04-01".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("2023-04-01".to_owned().into()))
+                            .with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
                     format: None,
@@ -14971,7 +15004,8 @@ fn test_dictionary_syntax() {
                 value: Box::new(Expr::Cast {
                     kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("2023-04-05".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("2023-04-05".to_owned().into()))
+                            .with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
                     format: None,
@@ -14996,18 +15030,18 @@ fn test_map_syntax() {
             entries: vec![
                 MapEntry {
                     key: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("Alberta".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("Alberta".to_owned().into())).with_empty_span(),
                     )),
                     value: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("Edmonton".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("Edmonton".to_owned().into())).with_empty_span(),
                     )),
                 },
                 MapEntry {
                     key: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("Manitoba".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("Manitoba".to_owned().into())).with_empty_span(),
                     )),
                     value: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("Winnipeg".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("Winnipeg".to_owned().into())).with_empty_span(),
                     )),
                 },
             ],
@@ -15067,20 +15101,22 @@ fn test_map_syntax() {
                 entries: vec![
                     MapEntry {
                         key: Box::new(Expr::Value(
-                            (Value::SingleQuotedString("a".to_owned())).with_empty_span(),
+                            (Value::SingleQuotedString("a".to_owned().into())).with_empty_span(),
                         )),
                         value: Box::new(number_expr("10")),
                     },
                     MapEntry {
                         key: Box::new(Expr::Value(
-                            (Value::SingleQuotedString("b".to_owned())).with_empty_span(),
+                            (Value::SingleQuotedString("b".to_owned().into())).with_empty_span(),
                         )),
                         value: Box::new(number_expr("20")),
                     },
                 ],
             })),
             access_chain: vec![AccessExpr::Subscript(Subscript::Index {
-                index: Expr::Value((Value::SingleQuotedString("a".to_owned())).with_empty_span()),
+                index: Expr::Value(
+                    (Value::SingleQuotedString("a".to_owned().into())).with_empty_span(),
+                ),
             })],
         },
     );
@@ -15093,13 +15129,13 @@ fn test_map_syntax() {
             entries: vec![
                 MapEntry {
                     key: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("a".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("a".to_owned().into())).with_empty_span(),
                     )),
                     value: Box::new(number_expr("1")),
                 },
                 MapEntry {
                     key: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("b".to_owned())).with_empty_span(),
+                        (Value::SingleQuotedString("b".to_owned().into())).with_empty_span(),
                     )),
                     value: Box::new(null_expr()),
                 },
@@ -15264,7 +15300,7 @@ fn test_extract_seconds_ok() {
             expr: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("2 seconds".to_string().into())).with_empty_span()
                 )),
                 data_type: DataType::Interval {
                     fields: None,
@@ -15294,7 +15330,8 @@ fn test_extract_seconds_ok() {
                 expr: Box::new(Expr::Cast {
                     kind: CastKind::DoubleColon,
                     expr: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span(),
+                        (Value::SingleQuotedString("2 seconds".to_string().into()))
+                            .with_empty_span(),
                     )),
                     data_type: DataType::Interval {
                         fields: None,
@@ -15352,7 +15389,7 @@ fn test_extract_seconds_single_quote_ok() {
             expr: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("2 seconds".to_string().into())).with_empty_span()
                 )),
                 data_type: DataType::Interval {
                     fields: None,
@@ -15448,7 +15485,7 @@ fn parse_explain_with_option_list() {
             UtilityOption {
                 name: Ident::new("FORMAT2"),
                 arg: Some(Expr::Value(
-                    (Value::SingleQuotedString("JSON".to_string())).with_empty_span(),
+                    (Value::SingleQuotedString("JSON".to_string().into())).with_empty_span(),
                 )),
             },
             UtilityOption {
@@ -15954,13 +15991,15 @@ fn test_create_connector() {
                     SqlOption::KeyValue {
                         key: Ident::with_quote('\'', "user"),
                         value: Expr::Value(
-                            (Value::SingleQuotedString("root".to_string())).with_empty_span()
+                            (Value::SingleQuotedString("root".to_string().into()))
+                                .with_empty_span()
                         )
                     },
                     SqlOption::KeyValue {
                         key: Ident::with_quote('\'', "password"),
                         value: Expr::Value(
-                            (Value::SingleQuotedString("password".to_string())).with_empty_span()
+                            (Value::SingleQuotedString("password".to_string().into()))
+                                .with_empty_span()
                         )
                     }
                 ])
@@ -16025,13 +16064,15 @@ fn test_alter_connector() {
                     SqlOption::KeyValue {
                         key: Ident::with_quote('\'', "user"),
                         value: Expr::Value(
-                            (Value::SingleQuotedString("root".to_string())).with_empty_span()
+                            (Value::SingleQuotedString("root".to_string().into()))
+                                .with_empty_span()
                         )
                     },
                     SqlOption::KeyValue {
                         key: Ident::with_quote('\'', "password"),
                         value: Expr::Value(
-                            (Value::SingleQuotedString("password".to_string())).with_empty_span()
+                            (Value::SingleQuotedString("password".to_string().into()))
+                                .with_empty_span()
                         )
                     }
                 ])
@@ -16582,13 +16623,17 @@ fn parse_load_data() {
                 Some(HiveLoadDataFormat {
                     serde: Expr::Value(
                         (Value::SingleQuotedString(
-                            "org.apache.hadoop.hive.serde2.OpenCSVSerde".to_string()
+                            "org.apache.hadoop.hive.serde2.OpenCSVSerde"
+                                .to_string()
+                                .into()
                         ))
                         .with_empty_span()
                     ),
                     input_format: Expr::Value(
                         (Value::SingleQuotedString(
-                            "org.apache.hadoop.mapred.TextInputFormat".to_string()
+                            "org.apache.hadoop.mapred.TextInputFormat"
+                                .to_string()
+                                .into()
                         ))
                         .with_empty_span()
                     )
@@ -17805,10 +17850,12 @@ fn test_lambdas() {
                     "array",
                     [
                         Expr::Value(
-                            (Value::SingleQuotedString("Hello".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("Hello".to_owned().into()))
+                                .with_empty_span()
                         ),
                         Expr::Value(
-                            (Value::SingleQuotedString("World".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("World".to_owned().into()))
+                                .with_empty_span()
                         )
                     ]
                 ),
@@ -18028,7 +18075,7 @@ fn test_geometry_type() {
         Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Point),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("1,2".to_string()),
+                value: Value::SingleQuotedString("1,2".to_string().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -18041,7 +18088,7 @@ fn test_geometry_type() {
         Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Line),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                value: Value::SingleQuotedString("1,2,3,4".to_string().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -18054,7 +18101,7 @@ fn test_geometry_type() {
         Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                value: Value::SingleQuotedString("1,2,3,4".to_string().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -18066,7 +18113,7 @@ fn test_geometry_type() {
         Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                value: Value::SingleQuotedString("1,2,3,4".to_string().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -18079,7 +18126,7 @@ fn test_geometry_type() {
         Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Circle),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("1,2,3".to_string()),
+                value: Value::SingleQuotedString("1,2,3".to_string().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -18092,7 +18139,7 @@ fn test_geometry_type() {
         Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                value: Value::SingleQuotedString("1,2,3,4".to_string().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -18104,7 +18151,7 @@ fn test_geometry_type() {
         Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                value: Value::SingleQuotedString("1,2,3,4".to_string().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -19816,7 +19863,8 @@ fn parse_create_user() {
                         KeyValueOption {
                             option_name: "PASSWORD".to_string(),
                             option_value: KeyValueOptionKind::Single(
-                                Value::SingleQuotedString("secret".to_string()).with_empty_span()
+                                Value::SingleQuotedString("secret".to_string().into())
+                                    .with_empty_span()
                             ),
                         },
                         KeyValueOption {
@@ -19843,13 +19891,15 @@ fn parse_create_user() {
                         KeyValueOption {
                             option_name: "t1".to_string(),
                             option_value: KeyValueOptionKind::Single(
-                                Value::SingleQuotedString("v1".to_string()).with_empty_span()
+                                Value::SingleQuotedString("v1".to_string().into())
+                                    .with_empty_span()
                             ),
                         },
                         KeyValueOption {
                             option_name: "t2".to_string(),
                             option_value: KeyValueOptionKind::Single(
-                                Value::SingleQuotedString("v2".to_string()).with_empty_span()
+                                Value::SingleQuotedString("v2".to_string().into())
+                                    .with_empty_span()
                             ),
                         },
                     ]
@@ -20519,7 +20569,7 @@ fn test_parse_alter_user() {
                 vec![KeyValueOption {
                     option_name: "k1".to_string(),
                     option_value: KeyValueOptionKind::Single(
-                        Value::SingleQuotedString("v1".to_string()).with_empty_span()
+                        Value::SingleQuotedString("v1".to_string().into()).with_empty_span()
                     ),
                 },]
             );
@@ -20557,7 +20607,8 @@ fn test_parse_alter_user() {
                         KeyValueOption {
                             option_name: "PASSWORD".to_string(),
                             option_value: KeyValueOptionKind::Single(
-                                Value::SingleQuotedString("secret".to_string()).with_empty_span()
+                                Value::SingleQuotedString("secret".to_string().into())
+                                    .with_empty_span()
                             ),
                         },
                         KeyValueOption {
@@ -20596,7 +20647,7 @@ fn test_parse_alter_user() {
                 vec![KeyValueOption {
                     option_name: "DEFAULT_SECONDARY_ROLES".to_string(),
                     option_value: KeyValueOptionKind::Multi(vec![Value::SingleQuotedString(
-                        "ALL".to_string()
+                        "ALL".to_string().into()
                     )
                     .with_empty_span()])
                 }]
@@ -20630,7 +20681,7 @@ fn test_parse_alter_user() {
                                 option_name: "ARN".to_string(),
                                 option_value: KeyValueOptionKind::Single(
                                     Value::SingleQuotedString(
-                                        "arn:aws:iam::123456789:r1/".to_string()
+                                        "arn:aws:iam::123456789:r1/".to_string().into()
                                     )
                                     .with_empty_span()
                                 ),
@@ -21010,7 +21061,7 @@ fn parse_xmlparse() {
                     vec![FunctionArg::Named {
                         name: Ident::new(mode),
                         arg: FunctionArgExpr::Expr(Expr::Value(
-                            Value::SingleQuotedString("<a/>".to_string()).into()
+                            Value::SingleQuotedString("<a/>".to_string().into()).into()
                         )),
                         operator: FunctionArgOperator::Space,
                     }]
@@ -23036,4 +23087,35 @@ fn quoted_identifiers_print_verbatim_without_unescape() {
         }),
         expr_from_projection(&select.projection[0]),
     );
+}
+
+#[test]
+fn string_values_round_trip_decoded_quotes_doubled() {
+    // A decoded value is re-escaped with a doubled delimiter, so a source
+    // with adjacent or quote-adjacent-backslash quotes renders byte-exact
+    let dialects = all_dialects_where(|d| !d.supports_string_literal_backslash_escape());
+    dialects.verified_stmt(r#"SELECT 'a''''b'"#);
+    dialects.verified_stmt(r#"SELECT websearch_to_tsquery('''abc''''def''')"#);
+    dialects.verified_stmt(r"SELECT 'a\''b'");
+    dialects.verified_stmt(r#"SELECT json_valid('" \'' "')"#);
+}
+
+#[test]
+fn string_values_print_verbatim_without_unescape() {
+    // With `with_unescape(false)` the tokenizer keeps the source spelling, so
+    // `Display` prints string values verbatim instead of re-escaping
+    let options = ParserOptions::new().with_unescape(false);
+    let dialects: Vec<Box<dyn Dialect>> = vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(SQLiteDialect {}),
+        Box::new(GenericDialect {}),
+    ];
+    TestedDialects::new_with_options(dialects, options.clone())
+        .verified_stmt(r#"SELECT 'a\''''b'"#);
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r#"SELECT 'x''y\'z'"#);
+    TestedDialects::new_with_options(vec![Box::new(BigQueryDialect {})], options.clone())
+        .verified_stmt(r#"SELECT 'a''b'"#);
+    TestedDialects::new_with_options(vec![Box::new(SnowflakeDialect {})], options)
+        .verified_stmt(r#"SELECT 'a''b'"#);
 }

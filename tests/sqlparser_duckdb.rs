@@ -429,7 +429,7 @@ fn test_duckdb_struct_literal() {
             elem: vec![Expr::Dictionary(vec![DictionaryField {
                 key: Ident::with_quote('\'', "a"),
                 value: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("abc".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("abc".to_string().into())).with_empty_span()
                 )),
             },],)],
             named: false
@@ -464,7 +464,7 @@ fn test_duckdb_struct_literal() {
             DictionaryField {
                 key: Ident::with_quote('\'', "b"),
                 value: Expr::Value(
-                    (Value::SingleQuotedString("abc".to_string())).with_empty_span()
+                    (Value::SingleQuotedString("abc".to_string().into())).with_empty_span()
                 )
                 .into(),
             },
@@ -647,14 +647,14 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
                     FunctionArg::Named {
                         name: Ident::new("a"),
                         arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("1".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("1".to_owned().into())).with_empty_span()
                         )),
                         operator: FunctionArgOperator::Assignment
                     },
                     FunctionArg::Named {
                         name: Ident::new("b"),
                         arg: FunctionArgExpr::Expr(Expr::Value(
-                            (Value::SingleQuotedString("2".to_owned())).with_empty_span()
+                            (Value::SingleQuotedString("2".to_owned().into())).with_empty_span()
                         )),
                         operator: FunctionArgOperator::Assignment
                     },
@@ -684,9 +684,15 @@ fn test_array_index() {
         &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Array(Array {
                 elem: vec![
-                    Expr::Value((Value::SingleQuotedString("a".to_owned())).with_empty_span()),
-                    Expr::Value((Value::SingleQuotedString("b".to_owned())).with_empty_span()),
-                    Expr::Value((Value::SingleQuotedString("c".to_owned())).with_empty_span())
+                    Expr::Value(
+                        (Value::SingleQuotedString("a".to_owned().into())).with_empty_span()
+                    ),
+                    Expr::Value(
+                        (Value::SingleQuotedString("b".to_owned().into())).with_empty_span()
+                    ),
+                    Expr::Value(
+                        (Value::SingleQuotedString("c".to_owned().into())).with_empty_span()
+                    )
                 ],
                 named: false
             })),
@@ -870,12 +876,12 @@ fn test_duckdb_trim() {
     assert_eq!(
         &Expr::Trim {
             expr: Box::new(Expr::Value(
-                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+                Value::SingleQuotedString("xyz".to_owned().into()).with_empty_span()
             )),
             trim_where: None,
             trim_what: None,
             trim_characters: Some(vec![Expr::Value(
-                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+                Value::SingleQuotedString("a".to_owned().into()).with_empty_span()
             )]),
         },
         expr_from_projection(only(&select.projection))

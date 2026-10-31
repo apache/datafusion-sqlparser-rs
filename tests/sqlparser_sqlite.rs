@@ -479,7 +479,7 @@ fn parse_attach_database() {
             database: true,
         } => {
             assert_eq!(schema_name.value, "test");
-            assert_eq!(literal_name, "test.db");
+            assert_eq!(literal_name.value, "test.db");
         }
         _ => unreachable!(),
     }
@@ -633,7 +633,7 @@ fn test_match_operator() {
             op: BinaryOperator::Match,
             left: Box::new(Expr::Identifier(Ident::new("col"))),
             right: Box::new(Expr::Value(
-                (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+                (Value::SingleQuotedString("pattern".to_string().into())).with_empty_span()
             ))
         }
     );
@@ -648,7 +648,7 @@ fn test_regexp_operator() {
             op: BinaryOperator::Regexp,
             left: Box::new(Expr::Identifier(Ident::new("col"))),
             right: Box::new(Expr::Value(
-                (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+                (Value::SingleQuotedString("pattern".to_string().into())).with_empty_span()
             ))
         }
     );
@@ -673,7 +673,7 @@ fn test_glob_operator() {
             op: BinaryOperator::Glob,
             left: Box::new(Expr::Identifier(Ident::new("col"))),
             right: Box::new(Expr::Value(
-                (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+                (Value::SingleQuotedString("pattern".to_string().into())).with_empty_span()
             ))
         }
     );

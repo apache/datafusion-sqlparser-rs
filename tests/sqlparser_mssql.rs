@@ -69,7 +69,7 @@ fn parse_table_time_travel() {
                 args: None,
                 with_hints: vec![],
                 version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
-                    (Value::SingleQuotedString(version)).with_empty_span()
+                    (Value::SingleQuotedString(version.into())).with_empty_span()
                 ))),
                 partitions: vec![],
                 with_ordinality: false,
@@ -1431,7 +1431,7 @@ fn parse_mssql_declare() {
                     }],
                     data_type: Some(Text),
                     assignment: Some(MsSqlAssignment(Box::new(Expr::Value(
-                        (SingleQuotedString("foobar".to_string())).with_empty_span()
+                        (SingleQuotedString("foobar".to_string().into())).with_empty_span()
                     )))),
                     declare_type: None,
                     binary: None,
@@ -1577,7 +1577,7 @@ fn test_mssql_while_statement() {
                 conditional_statements: ConditionalStatements::Sequence {
                     statements: vec![Statement::Print(PrintStatement {
                         message: Box::new(Expr::Value(
-                            (Value::SingleQuotedString("Hello World".to_string()))
+                            (Value::SingleQuotedString("Hello World".to_string().into()))
                                 .with_empty_span()
                         )),
                     })],
@@ -1612,7 +1612,7 @@ fn test_parse_raiserror() {
         s,
         Statement::RaisError {
             message: Box::new(Expr::Value(
-                (Value::SingleQuotedString("This is a test".to_string())).with_empty_span()
+                (Value::SingleQuotedString("This is a test".to_string().into())).with_empty_span()
             )),
             severity: Box::new(Expr::Value(
                 (Value::Number("16".parse().unwrap(), false)).with_empty_span()
@@ -1653,7 +1653,8 @@ fn test_parse_throw() {
                 (Value::Number("51000".parse().unwrap(), false)).with_empty_span()
             ))),
             message: Some(Box::new(Expr::Value(
-                (Value::SingleQuotedString("Record does not exist.".to_string())).with_empty_span()
+                (Value::SingleQuotedString("Record does not exist.".to_string().into()))
+                    .with_empty_span()
             ))),
             state: Some(Box::new(Expr::Value(
                 (Value::Number("1".parse().unwrap(), false)).with_empty_span()
@@ -1688,7 +1689,7 @@ fn test_parse_waitfor() {
         Statement::WaitFor(WaitForStatement {
             wait_type: WaitForType::Delay,
             expr: Expr::Value(
-                (Value::SingleQuotedString("00:00:05".to_string())).with_empty_span()
+                (Value::SingleQuotedString("00:00:05".to_string().into())).with_empty_span()
             ),
         })
     );
@@ -1701,7 +1702,7 @@ fn test_parse_waitfor() {
         Statement::WaitFor(WaitForStatement {
             wait_type: WaitForType::Time,
             expr: Expr::Value(
-                (Value::SingleQuotedString("14:30:00".to_string())).with_empty_span()
+                (Value::SingleQuotedString("14:30:00".to_string().into())).with_empty_span()
             ),
         })
     );
@@ -2496,7 +2497,7 @@ fn parse_create_trigger() {
             statements: Some(ConditionalStatements::Sequence {
                 statements: vec![Statement::RaisError {
                     message: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("Notify Customer Relations".to_string()))
+                        (Value::SingleQuotedString("Notify Customer Relations".to_string().into()))
                             .with_empty_span()
                     )),
                     severity: Box::new(Expr::Value(
@@ -2586,7 +2587,7 @@ fn parse_print() {
         print_stmt,
         Statement::Print(PrintStatement {
             message: Box::new(Expr::Value(
-                (Value::SingleQuotedString("Hello, world!".to_string())).with_empty_span()
+                (Value::SingleQuotedString("Hello, world!".to_string().into())).with_empty_span()
             )),
         })
     );

@@ -128,7 +128,8 @@ pub use self::trigger::{
 
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, QuoteDelimitedString, QuoteEscaping, TrimWhereField, Value, ValueWithSpan,
+    NormalizationForm, QuoteDelimitedString, QuoteEscaping, QuotedString, TrimWhereField, Value,
+    ValueWithSpan,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -12959,7 +12960,7 @@ mod tests {
     fn test_interval_display() {
         let interval = Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                Value::SingleQuotedString(String::from("123:45.67")).with_empty_span(),
+                Value::SingleQuotedString(String::from("123:45.67").into()).with_empty_span(),
             )),
             leading_field: Some(DateTimeField::Minute),
             leading_precision: Some(10),
@@ -12973,7 +12974,7 @@ mod tests {
 
         let interval = Expr::Interval(Interval {
             value: Box::new(Expr::Value(
-                Value::SingleQuotedString(String::from("5")).with_empty_span(),
+                Value::SingleQuotedString(String::from("5").into()).with_empty_span(),
             )),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(1),

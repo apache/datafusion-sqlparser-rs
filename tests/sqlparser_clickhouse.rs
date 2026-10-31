@@ -58,7 +58,7 @@ fn parse_map_access_expr() {
                         "indexOf",
                         [
                             Expr::Identifier(Ident::new("string_names")),
-                            Expr::value(Value::SingleQuotedString("endpoint".to_string()))
+                            Expr::value(Value::SingleQuotedString("endpoint".to_string().into()))
                         ]
                     ),
                 })],
@@ -75,7 +75,9 @@ fn parse_map_access_expr() {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::value(Value::SingleQuotedString("test".to_string()))),
+                    right: Box::new(Expr::value(Value::SingleQuotedString(
+                        "test".to_string().into()
+                    ))),
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
@@ -86,13 +88,17 @@ fn parse_map_access_expr() {
                                 "indexOf",
                                 [
                                     Expr::Identifier(Ident::new("string_name")),
-                                    Expr::value(Value::SingleQuotedString("app".to_string()))
+                                    Expr::value(Value::SingleQuotedString(
+                                        "app".to_string().into()
+                                    ))
                                 ]
                             ),
                         })],
                     }),
                     op: BinaryOperator::NotEq,
-                    right: Box::new(Expr::value(Value::SingleQuotedString("foo".to_string()))),
+                    right: Box::new(Expr::value(Value::SingleQuotedString(
+                        "foo".to_string().into()
+                    ))),
                 }),
             }),
             group_by: GroupByExpr::Expressions(vec![], vec![]),
@@ -118,8 +124,8 @@ fn parse_array_expr() {
     assert_eq!(
         &Expr::Array(Array {
             elem: vec![
-                Expr::value(Value::SingleQuotedString("1".to_string())),
-                Expr::value(Value::SingleQuotedString("2".to_string())),
+                Expr::value(Value::SingleQuotedString("1".to_string().into())),
+                Expr::value(Value::SingleQuotedString("2".to_string().into())),
             ],
             named: false,
         }),
@@ -1537,7 +1543,7 @@ fn parse_freeze_and_unfreeze_partition() {
         let sql = format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14'");
 
         let expected_partition = Partition::Expr(Expr::Value(
-            Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),
+            Value::SingleQuotedString("2024-08-14".to_string().into()).with_empty_span(),
         ));
         match clickhouse_and_generic().verified_stmt(&sql) {
             Statement::AlterTable(AlterTable { operations, .. }) => {
@@ -1567,7 +1573,7 @@ fn parse_freeze_and_unfreeze_partition() {
             Statement::AlterTable(AlterTable { operations, .. }) => {
                 assert_eq!(operations.len(), 1);
                 let expected_partition = Partition::Expr(Expr::Value(
-                    Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),
+                    Value::SingleQuotedString("2024-08-14".to_string().into()).with_empty_span(),
                 ));
                 let expected_operation = if operation_name == &"FREEZE" {
                     AlterTableOperation::FreezePartition {

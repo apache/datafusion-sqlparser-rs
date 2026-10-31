@@ -367,7 +367,7 @@ pub fn number(n: &str) -> Value {
 
 /// Creates a [Value::SingleQuotedString]
 pub fn single_quoted_string(s: impl Into<String>) -> Value {
-    Value::SingleQuotedString(s.into())
+    Value::SingleQuotedString(QuotedString::from(s.into()))
 }
 
 pub fn table_alias(explicit: bool, name: impl Into<String>) -> Option<TableAlias> {

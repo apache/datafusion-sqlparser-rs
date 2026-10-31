@@ -27,7 +27,7 @@ use core::{
 use bigdecimal::BigDecimal;
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use crate::{ast::Ident, tokenizer::Span};
 #[cfg(feature = "visitor")]
@@ -39,7 +39,7 @@ use sqlparser_derive::{Visit, VisitMut};
 /// ```
 /// # use sqlparser::ast::{Value, ValueWithSpan};
 /// # use sqlparser::tokenizer::{Location, Span};
-/// let value = Value::SingleQuotedString(String::from("endpoint"));
+/// let value = Value::SingleQuotedString(String::from("endpoint").into());
 /// // from line 1, column 1 to line 1, column 7
 /// let span = Span::new(Location::new(1, 1), Location::new(1, 7));
 /// let value_with_span = value.with_span(span);
@@ -51,7 +51,7 @@ use sqlparser_derive::{Visit, VisitMut};
 /// ```
 /// # use sqlparser::ast::{Value, ValueWithSpan};
 /// # use sqlparser::tokenizer::{Location, Span};
-/// let value = Value::SingleQuotedString(String::from("endpoint"));
+/// let value = Value::SingleQuotedString(String::from("endpoint").into());
 /// let value_with_span = value.with_empty_span();
 /// assert_eq!(value_with_span.span, Span::empty());
 /// ```
@@ -60,7 +60,7 @@ use sqlparser_derive::{Visit, VisitMut};
 /// ```
 /// # use sqlparser::ast::{Value, ValueWithSpan};
 /// # use sqlparser::tokenizer::{Location, Span};
-/// let value = Value::SingleQuotedString(String::from("endpoint"));
+/// let value = Value::SingleQuotedString(String::from("endpoint").into());
 /// // converting `Value` to `ValueWithSpan` results in an empty span
 /// let value_with_span: ValueWithSpan = value.into();
 /// assert_eq!(value_with_span.span, Span::empty());
@@ -147,7 +147,7 @@ pub enum Value {
     /// Numeric literal (uses `BigDecimal` when the `bigdecimal` feature is enabled).
     Number(BigDecimal, bool),
     /// 'string value'
-    SingleQuotedString(String),
+    SingleQuotedString(QuotedString),
     /// Dollar-quoted string literal, e.g. `$$...$$` or `$tag$...$tag$` (Postgres syntax).
     DollarQuotedString(DollarQuotedString),
     /// Triple single quoted strings: Example '''abc'''
@@ -165,9 +165,9 @@ pub enum Value {
     /// for more details.
     UnicodeStringLiteral(String),
     /// B'string value'
-    SingleQuotedByteStringLiteral(String),
+    SingleQuotedByteStringLiteral(QuotedString),
     /// B"string value"
-    DoubleQuotedByteStringLiteral(String),
+    DoubleQuotedByteStringLiteral(QuotedString),
     /// Triple single quoted literal with byte string prefix. Example `B'''abc'''`
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
     TripleSingleQuotedByteStringLiteral(String),
@@ -176,10 +176,10 @@ pub enum Value {
     TripleDoubleQuotedByteStringLiteral(String),
     /// Single quoted literal with raw string prefix. Example `R'abc'`
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
-    SingleQuotedRawStringLiteral(String),
+    SingleQuotedRawStringLiteral(QuotedString),
     /// Double quoted literal with raw string prefix. Example `R"abc"`
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
-    DoubleQuotedRawStringLiteral(String),
+    DoubleQuotedRawStringLiteral(QuotedString),
     /// Triple single quoted literal with raw string prefix. Example `R'''abc'''`
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
     TripleSingleQuotedRawStringLiteral(String),
@@ -187,7 +187,7 @@ pub enum Value {
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
     TripleDoubleQuotedRawStringLiteral(String),
     /// N'string value'
-    NationalStringLiteral(String),
+    NationalStringLiteral(QuotedString),
     /// Quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
     QuoteDelimitedStringLiteral(QuoteDelimitedString),
@@ -195,10 +195,10 @@ pub enum Value {
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
     NationalQuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// X'hex value'
-    HexStringLiteral(String),
+    HexStringLiteral(QuotedString),
 
     /// Double quoted string literal, e.g. `"abc"`.
-    DoubleQuotedString(String),
+    DoubleQuotedString(QuotedString),
     /// Boolean value true or false
     Boolean(bool),
     /// `NULL` value
@@ -220,20 +220,20 @@ impl Value {
         match self {
             Value::SingleQuotedString(s)
             | Value::DoubleQuotedString(s)
-            | Value::TripleSingleQuotedString(s)
-            | Value::TripleDoubleQuotedString(s)
             | Value::SingleQuotedByteStringLiteral(s)
             | Value::DoubleQuotedByteStringLiteral(s)
-            | Value::TripleSingleQuotedByteStringLiteral(s)
-            | Value::TripleDoubleQuotedByteStringLiteral(s)
             | Value::SingleQuotedRawStringLiteral(s)
             | Value::DoubleQuotedRawStringLiteral(s)
+            | Value::NationalStringLiteral(s)
+            | Value::HexStringLiteral(s) => Some(s.value.clone()),
+            Value::TripleSingleQuotedString(s)
+            | Value::TripleDoubleQuotedString(s)
+            | Value::TripleSingleQuotedByteStringLiteral(s)
+            | Value::TripleDoubleQuotedByteStringLiteral(s)
             | Value::TripleSingleQuotedRawStringLiteral(s)
             | Value::TripleDoubleQuotedRawStringLiteral(s)
             | Value::EscapedStringLiteral(s)
-            | Value::UnicodeStringLiteral(s)
-            | Value::NationalStringLiteral(s)
-            | Value::HexStringLiteral(s) => Some(s),
+            | Value::UnicodeStringLiteral(s) => Some(s),
             Value::DollarQuotedString(s) => Some(s.value),
             Value::QuoteDelimitedStringLiteral(s) => Some(s.value),
             Value::NationalQuoteDelimitedStringLiteral(s) => Some(s.value),
@@ -252,6 +252,36 @@ impl Value {
     }
 }
 
+/// Prints a quoted string literal's contents between `quote` delimiters,
+/// re-escaping them according to the value's [`QuoteEscaping`]
+fn fmt_quoted_string(f: &mut fmt::Formatter, value: &QuotedString, quote: char) -> fmt::Result {
+    match value.escaping {
+        QuoteEscaping::Raw => write!(f, "{quote}{value}{quote}", value = value.value),
+        QuoteEscaping::Double => {
+            write!(f, "{quote}")?;
+            let mut parts = value.value.split(quote);
+            if let Some(part) = parts.next() {
+                f.write_str(part)?;
+            }
+            for part in parts {
+                write!(f, "{quote}{quote}")?;
+                f.write_str(part)?;
+            }
+            write!(f, "{quote}")
+        }
+        QuoteEscaping::Backslash => {
+            write!(f, "{quote}")?;
+            for ch in value.value.chars() {
+                if ch == quote || ch == '\\' {
+                    f.write_str("\\")?;
+                }
+                write!(f, "{ch}")?;
+            }
+            write!(f, "{quote}")
+        }
+    }
+}
+
 impl fmt::Display for ValueWithSpan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.value)
@@ -262,8 +292,8 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
-            Value::DoubleQuotedString(v) => write!(f, "\"{}\"", escape_double_quote_string(v)),
-            Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::DoubleQuotedString(v) => fmt_quoted_string(f, v, '"'),
+            Value::SingleQuotedString(v) => fmt_quoted_string(f, v, '\''),
             Value::TripleSingleQuotedString(v) => {
                 write!(f, "'''{v}'''")
             }
@@ -273,24 +303,34 @@ impl fmt::Display for Value {
             Value::DollarQuotedString(v) => write!(f, "{v}"),
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::UnicodeStringLiteral(v) => write!(f, "U&'{}'", escape_unicode_string(v)),
-            Value::NationalStringLiteral(v) => write!(f, "N'{}'", escape_single_quote_string(v)),
+            Value::NationalStringLiteral(v) => {
+                write!(f, "N")?;
+                fmt_quoted_string(f, v, '\'')
+            }
             Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
             Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
-            Value::HexStringLiteral(v) => write!(f, "X'{}'", escape_single_quote_string(v)),
+            Value::HexStringLiteral(v) => {
+                write!(f, "X")?;
+                fmt_quoted_string(f, v, '\'')
+            }
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => {
-                write!(f, "B'{}'", escape_single_quote_string(v))
+                write!(f, "B")?;
+                fmt_quoted_string(f, v, '\'')
             }
             Value::DoubleQuotedByteStringLiteral(v) => {
-                write!(f, "B\"{}\"", escape_double_quote_string(v))
+                write!(f, "B")?;
+                fmt_quoted_string(f, v, '"')
             }
             Value::TripleSingleQuotedByteStringLiteral(v) => write!(f, "B'''{v}'''"),
             Value::TripleDoubleQuotedByteStringLiteral(v) => write!(f, r#"B"""{v}""""#),
             Value::SingleQuotedRawStringLiteral(v) => {
-                write!(f, "R'{}'", escape_single_quote_string(v))
+                write!(f, "R")?;
+                fmt_quoted_string(f, v, '\'')
             }
             Value::DoubleQuotedRawStringLiteral(v) => {
-                write!(f, "R\"{}\"", escape_double_quote_string(v))
+                write!(f, "R")?;
+                fmt_quoted_string(f, v, '"')
             }
             Value::TripleSingleQuotedRawStringLiteral(v) => write!(f, "R'''{v}'''"),
             Value::TripleDoubleQuotedRawStringLiteral(v) => write!(f, r#"R"""{v}""""#),
@@ -561,6 +601,107 @@ impl QuoteEscaping {
     }
 }
 
+/// The contents of a quoted string literal and how [`fmt::Display`]
+/// re-escapes the contents when the value is printed back between its
+/// delimiters.
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct QuotedString {
+    /// The literal's contents.
+    pub value: String,
+    /// How the contents are stored, which decides how [`fmt::Display`]
+    /// re-escapes them.
+    pub escaping: QuoteEscaping,
+}
+
+impl From<String> for QuotedString {
+    fn from(value: String) -> Self {
+        Self {
+            value,
+            escaping: QuoteEscaping::default(),
+        }
+    }
+}
+
+impl From<&str> for QuotedString {
+    fn from(value: &str) -> Self {
+        Self {
+            value: String::from(value),
+            escaping: QuoteEscaping::default(),
+        }
+    }
+}
+
+// `Double` and `Backslash` hold decoded contents and differ only in how
+// `fmt::Display` re-escapes them, so they compare as equal
+impl PartialEq for QuotedString {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+            && (self.escaping == QuoteEscaping::Raw) == (other.escaping == QuoteEscaping::Raw)
+    }
+}
+
+impl Eq for QuotedString {}
+
+impl core::hash::Hash for QuotedString {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+        (self.escaping == QuoteEscaping::Raw).hash(state);
+    }
+}
+
+impl PartialOrd for QuotedString {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for QuotedString {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        let is_raw = self.escaping == QuoteEscaping::Raw;
+        let other_is_raw = other.escaping == QuoteEscaping::Raw;
+        self.value
+            .cmp(&other.value)
+            .then_with(|| is_raw.cmp(&other_is_raw))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for QuotedString {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.escaping == QuoteEscaping::Double {
+            serializer.serialize_str(&self.value)
+        } else {
+            let mut state = serializer.serialize_struct("QuotedString", 2)?;
+            state.serialize_field("value", &self.value)?;
+            state.serialize_field("escaping", &self.escaping)?;
+            state.end()
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for QuotedString {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Wire {
+            Plain(String),
+            Struct {
+                value: String,
+                escaping: QuoteEscaping,
+            },
+        }
+        Ok(match Wire::deserialize(deserializer)? {
+            Wire::Plain(value) => Self {
+                value,
+                escaping: QuoteEscaping::default(),
+            },
+            Wire::Struct { value, escaping } => Self { value, escaping },
+        })
+    }
+}
+
 pub struct EscapeQuotedString<'a> {
     string: &'a str,
     quote: char,
@@ -752,11 +893,11 @@ fn test_escape_quoted_string_with_multibyte_quote_char() {
 #[test]
 fn test_hex_string_literal_display_escaping() {
     assert_eq!(
-        Value::HexStringLiteral("'".to_string()).to_string(),
+        Value::HexStringLiteral("'".to_string().into()).to_string(),
         "X''''"
     );
     assert_eq!(
-        Value::HexStringLiteral("it's".to_string()).to_string(),
+        Value::HexStringLiteral("it's".to_string().into()).to_string(),
         "X'it''s'"
     );
 }
@@ -765,35 +906,35 @@ fn test_hex_string_literal_display_escaping() {
 #[test]
 fn test_byte_and_raw_string_literal_display_escaping() {
     assert_eq!(
-        Value::SingleQuotedByteStringLiteral("'".to_string()).to_string(),
+        Value::SingleQuotedByteStringLiteral("'".to_string().into()).to_string(),
         "B''''"
     );
     assert_eq!(
-        Value::SingleQuotedByteStringLiteral("it's".to_string()).to_string(),
+        Value::SingleQuotedByteStringLiteral("it's".to_string().into()).to_string(),
         "B'it''s'"
     );
     assert_eq!(
-        Value::DoubleQuotedByteStringLiteral("\"".to_string()).to_string(),
+        Value::DoubleQuotedByteStringLiteral("\"".to_string().into()).to_string(),
         "B\"\"\"\""
     );
     assert_eq!(
-        Value::DoubleQuotedByteStringLiteral("it\"s".to_string()).to_string(),
+        Value::DoubleQuotedByteStringLiteral("it\"s".to_string().into()).to_string(),
         "B\"it\"\"s\""
     );
     assert_eq!(
-        Value::SingleQuotedRawStringLiteral("'".to_string()).to_string(),
+        Value::SingleQuotedRawStringLiteral("'".to_string().into()).to_string(),
         "R''''"
     );
     assert_eq!(
-        Value::SingleQuotedRawStringLiteral("it's".to_string()).to_string(),
+        Value::SingleQuotedRawStringLiteral("it's".to_string().into()).to_string(),
         "R'it''s'"
     );
     assert_eq!(
-        Value::DoubleQuotedRawStringLiteral("\"".to_string()).to_string(),
+        Value::DoubleQuotedRawStringLiteral("\"".to_string().into()).to_string(),
         "R\"\"\"\""
     );
     assert_eq!(
-        Value::DoubleQuotedRawStringLiteral("it\"s".to_string()).to_string(),
+        Value::DoubleQuotedRawStringLiteral("it\"s".to_string().into()).to_string(),
         "R\"it\"\"s\""
     );
 }

@@ -50,7 +50,7 @@ fn test_databricks_identifiers() {
             .verified_only_select(r#"SELECT "Ä""#)
             .projection[0],
         SelectItem::UnnamedExpr(Expr::Value(
-            (Value::DoubleQuotedString("Ä".to_owned())).with_empty_span()
+            (Value::DoubleQuotedString("Ä".to_owned().into())).with_empty_span()
         ))
     );
 }
@@ -120,8 +120,8 @@ fn test_databricks_lambdas() {
                 call(
                     "array",
                     [
-                        Expr::value(Value::SingleQuotedString("Hello".to_owned())),
-                        Expr::value(Value::SingleQuotedString("World".to_owned()))
+                        Expr::value(Value::SingleQuotedString("Hello".to_owned().into())),
+                        Expr::value(Value::SingleQuotedString("World".to_owned().into()))
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
@@ -188,11 +188,11 @@ fn test_values_clause() {
         explicit_row: false,
         rows: vec![
             Parens::with_empty_span(vec![
-                Expr::Value((Value::DoubleQuotedString("one".to_owned())).with_empty_span()),
+                Expr::Value((Value::DoubleQuotedString("one".to_owned().into())).with_empty_span()),
                 Expr::value(number("1")),
             ]),
             Parens::with_empty_span(vec![
-                Expr::Value((Value::SingleQuotedString("two".to_owned())).with_empty_span()),
+                Expr::Value((Value::SingleQuotedString("two".to_owned().into())).with_empty_span()),
                 Expr::value(number("2")),
             ]),
         ],
@@ -381,7 +381,9 @@ fn parse_databricks_struct_function() {
         SelectItem::UnnamedExpr(Expr::Struct {
             values: vec![
                 Expr::value(number("1")),
-                Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span())
+                Expr::Value(
+                    (Value::SingleQuotedString("foo".to_string().into())).with_empty_span()
+                )
             ],
             fields: vec![]
         })
@@ -398,7 +400,7 @@ fn parse_databricks_struct_function() {
                 },
                 Expr::Named {
                     expr: Expr::Value(
-                        (Value::SingleQuotedString("foo".to_string())).with_empty_span()
+                        (Value::SingleQuotedString("foo".to_string().into())).with_empty_span()
                     )
                     .into(),
                     name: Ident::new("foo")
@@ -418,7 +420,7 @@ fn data_type_timestamp_ntz() {
         Expr::TypedString(TypedString {
             data_type: DataType::TimestampNtz(None),
             value: ValueWithSpan {
-                value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned()),
+                value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned().into()),
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
@@ -773,7 +775,7 @@ fn test_databricks_insert_by_name() {
 #[test]
 fn parse_databricks_query_entry_points() {
     databricks().verified_stmt("CREATE TABLE t (attrs MAP<STRING, ARRAY<INT>>)");
-    databricks().one_statement_parses_to(r#"SELECT 'it\'s'"#, "SELECT 'it''s'");
+    databricks().verified_stmt(r#"SELECT 'it\'s'"#);
     databricks().verified_stmt("SELECT * REPLACE (upper(name) AS name) FROM source");
     databricks().verified_stmt(
         "CREATE VIEW cross_product AS FROM main.raw.left_table, main.raw.right_table",

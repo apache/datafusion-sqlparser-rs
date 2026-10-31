@@ -52,11 +52,23 @@ fn parse_literal_string() {
     let select = dialect.verified_only_select(sql);
     assert_eq!(12, select.projection.len());
     assert_eq!(
-        &Expr::Value(Value::SingleQuotedString("single".into()).with_empty_span()),
+        &Expr::Value(
+            Value::SingleQuotedString(QuotedString {
+                value: "single".into(),
+                escaping: QuoteEscaping::Raw,
+            })
+            .with_empty_span()
+        ),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
-        &Expr::Value(Value::DoubleQuotedString("double".into()).with_empty_span()),
+        &Expr::Value(
+            Value::DoubleQuotedString(QuotedString {
+                value: "double".into(),
+                escaping: QuoteEscaping::Raw,
+            })
+            .with_empty_span()
+        ),
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
@@ -68,7 +80,13 @@ fn parse_literal_string() {
         expr_from_projection(&select.projection[3])
     );
     assert_eq!(
-        &Expr::Value(Value::SingleQuotedString(r#"single\'escaped"#.into()).with_empty_span()),
+        &Expr::Value(
+            Value::SingleQuotedString(QuotedString {
+                value: r#"single\'escaped"#.into(),
+                escaping: QuoteEscaping::Raw,
+            })
+            .with_empty_span()
+        ),
         expr_from_projection(&select.projection[4])
     );
     assert_eq!(
@@ -84,7 +102,13 @@ fn parse_literal_string() {
         expr_from_projection(&select.projection[6])
     );
     assert_eq!(
-        &Expr::Value(Value::DoubleQuotedString(r#"double\"escaped"#.to_string()).with_empty_span()),
+        &Expr::Value(
+            Value::DoubleQuotedString(QuotedString {
+                value: r#"double\"escaped"#.into(),
+                escaping: QuoteEscaping::Raw,
+            })
+            .with_empty_span()
+        ),
         expr_from_projection(&select.projection[7])
     );
     assert_eq!(
@@ -134,26 +158,28 @@ fn parse_byte_literal() {
             assert_eq!(6, select.projection.len());
             assert_eq!(
                 &Expr::Value(
-                    Value::SingleQuotedByteStringLiteral("abc".to_string()).with_empty_span()
+                    Value::SingleQuotedByteStringLiteral("abc".to_string().into())
+                        .with_empty_span()
                 ),
                 expr_from_projection(&select.projection[0])
             );
             assert_eq!(
                 &Expr::Value(
-                    Value::DoubleQuotedByteStringLiteral("abc".to_string()).with_empty_span()
+                    Value::DoubleQuotedByteStringLiteral("abc".to_string().into())
+                        .with_empty_span()
                 ),
                 expr_from_projection(&select.projection[1])
             );
             assert_eq!(
                 &Expr::Value(
-                    Value::SingleQuotedByteStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                    Value::SingleQuotedByteStringLiteral(r"f\(abc,(.*),def\)".to_string().into())
                         .with_empty_span()
                 ),
                 expr_from_projection(&select.projection[2])
             );
             assert_eq!(
                 &Expr::Value(
-                    Value::DoubleQuotedByteStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                    Value::DoubleQuotedByteStringLiteral(r"f\(abc,(.*),def\)".to_string().into())
                         .with_empty_span()
                 ),
                 expr_from_projection(&select.projection[3])
@@ -200,26 +226,26 @@ fn parse_raw_literal() {
             assert_eq!(6, select.projection.len());
             assert_eq!(
                 &Expr::Value(
-                    Value::SingleQuotedRawStringLiteral("abc".to_string()).with_empty_span()
+                    Value::SingleQuotedRawStringLiteral("abc".to_string().into()).with_empty_span()
                 ),
                 expr_from_projection(&select.projection[0])
             );
             assert_eq!(
                 &Expr::Value(
-                    Value::DoubleQuotedRawStringLiteral("abc".to_string()).with_empty_span()
+                    Value::DoubleQuotedRawStringLiteral("abc".to_string().into()).with_empty_span()
                 ),
                 expr_from_projection(&select.projection[1])
             );
             assert_eq!(
                 &Expr::Value(
-                    Value::SingleQuotedRawStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                    Value::SingleQuotedRawStringLiteral(r"f\(abc,(.*),def\)".to_string().into())
                         .with_empty_span()
                 ),
                 expr_from_projection(&select.projection[2])
             );
             assert_eq!(
                 &Expr::Value(
-                    Value::DoubleQuotedRawStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                    Value::DoubleQuotedRawStringLiteral(r"f\(abc,(.*),def\)".to_string().into())
                         .with_empty_span()
                 ),
                 expr_from_projection(&select.projection[3])
@@ -361,9 +387,11 @@ fn parse_create_view_with_options() {
                             vec![SqlOption::KeyValue {
                                 key: Ident::new("description"),
                                 value: Expr::Value(
-                                    Value::DoubleQuotedString("field age".to_string()).with_span(
-                                        Span::new(Location::new(1, 42), Location::new(1, 52))
-                                    )
+                                    Value::DoubleQuotedString("field age".to_string().into())
+                                        .with_span(Span::new(
+                                            Location::new(1, 42),
+                                            Location::new(1, 52)
+                                        ))
                                 ),
                             }]
                         )])),
@@ -386,8 +414,10 @@ fn parse_create_view_with_options() {
                 &SqlOption::KeyValue {
                     key: Ident::new("description"),
                     value: Expr::Value(
-                        Value::DoubleQuotedString("a view that expires in 2 days".to_string())
-                            .with_empty_span()
+                        Value::DoubleQuotedString(
+                            "a view that expires in 2 days".to_string().into()
+                        )
+                        .with_empty_span()
                     ),
                 },
                 &options[2],
@@ -513,9 +543,11 @@ fn parse_create_table_with_options() {
                                 option: ColumnOption::Options(vec![SqlOption::KeyValue {
                                     key: Ident::new("description"),
                                     value: Expr::Value(
-                                        Value::DoubleQuotedString("field x".to_string()).with_span(
-                                            Span::new(Location::new(1, 42), Location::new(1, 52))
-                                        )
+                                        Value::DoubleQuotedString("field x".to_string().into())
+                                            .with_span(Span::new(
+                                                Location::new(1, 42),
+                                                Location::new(1, 52)
+                                            ))
                                     ),
                                 },])
                             },
@@ -529,9 +561,11 @@ fn parse_create_table_with_options() {
                             option: ColumnOption::Options(vec![SqlOption::KeyValue {
                                 key: Ident::new("description"),
                                 value: Expr::Value(
-                                    Value::DoubleQuotedString("field y".to_string()).with_span(
-                                        Span::new(Location::new(1, 42), Location::new(1, 52))
-                                    )
+                                    Value::DoubleQuotedString("field y".to_string().into())
+                                        .with_span(Span::new(
+                                            Location::new(1, 42),
+                                            Location::new(1, 52)
+                                        ))
                                 ),
                             },])
                         }]
@@ -559,11 +593,10 @@ fn parse_create_table_with_options() {
                         SqlOption::KeyValue {
                             key: Ident::new("description"),
                             value: Expr::Value(
-                                Value::DoubleQuotedString("table option description".to_string())
-                                    .with_span(Span::new(
-                                        Location::new(1, 42),
-                                        Location::new(1, 52)
-                                    ))
+                                Value::DoubleQuotedString(
+                                    "table option description".to_string().into()
+                                )
+                                .with_span(Span::new(Location::new(1, 42), Location::new(1, 52)))
                             ),
                         },
                     ])
@@ -1772,7 +1805,7 @@ fn parse_table_time_travel() {
                 args: None,
                 with_hints: vec![],
                 version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
-                    Value::SingleQuotedString(version.clone()).with_empty_span()
+                    Value::SingleQuotedString(version.clone().into()).with_empty_span()
                 ))),
                 partitions: vec![],
                 with_ordinality: false,
@@ -2476,12 +2509,12 @@ fn test_bigquery_trim() {
     assert_eq!(
         &Expr::Trim {
             expr: Box::new(Expr::Value(
-                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+                Value::SingleQuotedString("xyz".to_owned().into()).with_empty_span()
             )),
             trim_where: None,
             trim_what: None,
             trim_characters: Some(vec![Expr::Value(
-                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+                Value::SingleQuotedString("a".to_owned().into()).with_empty_span()
             )]),
         },
         expr_from_projection(only(&select.projection))
@@ -2723,14 +2756,14 @@ fn test_export_data() {
                 SqlOption::KeyValue {
                     key: Ident::new("uri"),
                     value: Expr::Value(
-                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
+                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned().into())
                             .with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
                     key: Ident::new("format"),
                     value: Expr::Value(
-                        Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
+                        Value::SingleQuotedString("PARQUET".to_owned().into()).with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
@@ -2825,14 +2858,14 @@ fn test_export_data() {
                 SqlOption::KeyValue {
                     key: Ident::new("uri"),
                     value: Expr::Value(
-                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
+                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned().into())
                             .with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
                     key: Ident::new("format"),
                     value: Expr::Value(
-                        Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
+                        Value::SingleQuotedString("PARQUET".to_owned().into()).with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
@@ -3014,4 +3047,16 @@ fn test_byte_and_raw_string_quote_escaping() {
         ),
         err
     );
+}
+
+#[test]
+fn decoded_string_values_re_escape_quotes_with_backslash() {
+    // A decoded value that contains a quote is printed with `\'`, because
+    // BigQuery single-quoted strings reject a doubled quote
+    // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#lexical_structure
+    bigquery().one_statement_parses_to(r#"SELECT 'a''b'"#, r"SELECT 'a\'b'");
+    bigquery().verified_stmt(r"SELECT 'a\'b'");
+    bigquery().verified_stmt(r"SELECT 'a\\b'");
+    bigquery().one_statement_parses_to(r#"SELECT "a""b""#, r#"SELECT "a\"b""#);
+    bigquery().verified_stmt(r#"SELECT "a\"b""#);
 }

@@ -1,0 +1,1 @@
+SELECT websearch_to_tsquery('''abc''''def''')

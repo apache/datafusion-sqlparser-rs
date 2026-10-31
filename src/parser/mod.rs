@@ -13004,8 +13004,12 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::NULL => ok_value(Value::Null),
                 Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
-                    Some('"') => ok_value(Value::DoubleQuotedString(w.value)),
-                    Some('\'') => ok_value(Value::SingleQuotedString(w.value)),
+                    Some('"') => ok_value(Value::DoubleQuotedString(
+                        self.quoted_string(w.value, false),
+                    )),
+                    Some('\'') => ok_value(Value::SingleQuotedString(
+                        self.quoted_string(w.value, false),
+                    )),
                     _ => self.expected(
                         "A value?",
                         TokenWithSpan {
@@ -13026,12 +13030,20 @@ impl<'a> Parser<'a> {
             Token::Number(n, l) => {
                 ok_value(Value::Number(Self::parse_number_literal(n, span.start)?, l))
             }
-            Token::SingleQuotedString(ref s) => ok_value(Value::SingleQuotedString(
-                self.maybe_concat_string_literal(s.to_string()),
-            )),
-            Token::DoubleQuotedString(ref s) => ok_value(Value::DoubleQuotedString(
-                self.maybe_concat_string_literal(s.to_string()),
-            )),
+            Token::SingleQuotedString(ref s) => {
+                let literal = self.maybe_concat_string_literal(s.to_string());
+                ok_value(Value::SingleQuotedString(self.quoted_string(
+                    literal,
+                    self.dialect.supports_string_literal_backslash_escape(),
+                )))
+            }
+            Token::DoubleQuotedString(ref s) => {
+                let literal = self.maybe_concat_string_literal(s.to_string());
+                ok_value(Value::DoubleQuotedString(self.quoted_string(
+                    literal,
+                    self.dialect.supports_string_literal_backslash_escape(),
+                )))
+            }
             Token::TripleSingleQuotedString(ref s) => {
                 ok_value(Value::TripleSingleQuotedString(s.to_string()))
             }
@@ -13039,24 +13051,24 @@ impl<'a> Parser<'a> {
                 ok_value(Value::TripleDoubleQuotedString(s.to_string()))
             }
             Token::DollarQuotedString(ref s) => ok_value(Value::DollarQuotedString(s.clone())),
-            Token::SingleQuotedByteStringLiteral(ref s) => {
-                ok_value(Value::SingleQuotedByteStringLiteral(s.clone()))
-            }
-            Token::DoubleQuotedByteStringLiteral(ref s) => {
-                ok_value(Value::DoubleQuotedByteStringLiteral(s.clone()))
-            }
+            Token::SingleQuotedByteStringLiteral(ref s) => ok_value(
+                Value::SingleQuotedByteStringLiteral(self.quoted_string(s.clone(), false)),
+            ),
+            Token::DoubleQuotedByteStringLiteral(ref s) => ok_value(
+                Value::DoubleQuotedByteStringLiteral(self.quoted_string(s.clone(), false)),
+            ),
             Token::TripleSingleQuotedByteStringLiteral(ref s) => {
                 ok_value(Value::TripleSingleQuotedByteStringLiteral(s.clone()))
             }
             Token::TripleDoubleQuotedByteStringLiteral(ref s) => {
                 ok_value(Value::TripleDoubleQuotedByteStringLiteral(s.clone()))
             }
-            Token::SingleQuotedRawStringLiteral(ref s) => {
-                ok_value(Value::SingleQuotedRawStringLiteral(s.clone()))
-            }
-            Token::DoubleQuotedRawStringLiteral(ref s) => {
-                ok_value(Value::DoubleQuotedRawStringLiteral(s.clone()))
-            }
+            Token::SingleQuotedRawStringLiteral(ref s) => ok_value(
+                Value::SingleQuotedRawStringLiteral(self.quoted_string(s.clone(), false)),
+            ),
+            Token::DoubleQuotedRawStringLiteral(ref s) => ok_value(
+                Value::DoubleQuotedRawStringLiteral(self.quoted_string(s.clone(), false)),
+            ),
             Token::TripleSingleQuotedRawStringLiteral(ref s) => {
                 ok_value(Value::TripleSingleQuotedRawStringLiteral(s.clone()))
             }
@@ -13064,7 +13076,10 @@ impl<'a> Parser<'a> {
                 ok_value(Value::TripleDoubleQuotedRawStringLiteral(s.clone()))
             }
             Token::NationalStringLiteral(ref s) => {
-                ok_value(Value::NationalStringLiteral(s.to_string()))
+                ok_value(Value::NationalStringLiteral(self.quoted_string(
+                    s.to_string(),
+                    self.dialect.supports_string_literal_backslash_escape(),
+                )))
             }
             Token::QuoteDelimitedStringLiteral(v) => {
                 ok_value(Value::QuoteDelimitedStringLiteral(v))
@@ -13078,7 +13093,9 @@ impl<'a> Parser<'a> {
             Token::UnicodeStringLiteral(ref s) => {
                 ok_value(Value::UnicodeStringLiteral(s.to_string()))
             }
-            Token::HexStringLiteral(ref s) => ok_value(Value::HexStringLiteral(s.to_string())),
+            Token::HexStringLiteral(ref s) => ok_value(Value::HexStringLiteral(
+                self.quoted_string(s.to_string(), false),
+            )),
             Token::Placeholder(ref s) => ok_value(Value::Placeholder(s.to_string())),
             tok @ Token::Colon | tok @ Token::AtSign => {
                 // 1. Not calling self.parse_identifier(false)?
@@ -13186,13 +13203,21 @@ impl<'a> Parser<'a> {
         let span = next_token.span;
         match next_token.token {
             Token::SingleQuotedString(ref s) => Ok(Expr::Value(
-                Value::SingleQuotedString(s.to_string()).with_span(span),
+                Value::SingleQuotedString(self.quoted_string(
+                    s.to_string(),
+                    self.dialect.supports_string_literal_backslash_escape(),
+                ))
+                .with_span(span),
             )),
             Token::DoubleQuotedString(ref s) => Ok(Expr::Value(
-                Value::DoubleQuotedString(s.to_string()).with_span(span),
+                Value::DoubleQuotedString(self.quoted_string(
+                    s.to_string(),
+                    self.dialect.supports_string_literal_backslash_escape(),
+                ))
+                .with_span(span),
             )),
             Token::HexStringLiteral(ref s) => Ok(Expr::Value(
-                Value::HexStringLiteral(s.to_string()).with_span(span),
+                Value::HexStringLiteral(self.quoted_string(s.to_string(), false)).with_span(span),
             )),
             unexpected => self.expected(
                 "a string value",
@@ -13225,9 +13250,13 @@ impl<'a> Parser<'a> {
                     parser.next_token();
                     Ok(Expr::Value(Value::DollarQuotedString(s).with_span(span)))
                 }
-                _ => Ok(Expr::Value(
-                    Value::SingleQuotedString(parser.parse_literal_string()?).with_span(span),
-                )),
+                _ => {
+                    let body = parser.parse_literal_string()?;
+                    Ok(Expr::Value(
+                        Value::SingleQuotedString(parser.quoted_string(body, false))
+                            .with_span(span),
+                    ))
+                }
             }
         };
 
@@ -14549,6 +14578,28 @@ impl<'a> Parser<'a> {
             QuoteEscaping::Raw
         } else {
             QuoteEscaping::Double
+        }
+    }
+
+    /// The [`QuoteEscaping`] marker for string values parsed from this
+    /// parser's tokens. `backslash_escape` mirrors the tokenizer's decode
+    /// policy for the literal's kind
+    pub(crate) fn string_escaping(&self, backslash_escape: bool) -> QuoteEscaping {
+        if !self.options.unescape {
+            QuoteEscaping::Raw
+        } else if backslash_escape {
+            QuoteEscaping::Backslash
+        } else {
+            QuoteEscaping::Double
+        }
+    }
+
+    /// Wrap parsed string literal contents in a [`QuotedString`] stamped
+    /// with this parser's [`QuoteEscaping`] marker
+    pub(crate) fn quoted_string(&self, value: String, backslash_escape: bool) -> QuotedString {
+        QuotedString {
+            value,
+            escaping: self.string_escaping(backslash_escape),
         }
     }
 

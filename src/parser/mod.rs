@@ -1972,7 +1972,11 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op,
                     expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::MulDivModOp))?,
+                        self.parse_subexpr(
+                            self.dialect.unary_operand_precedence().unwrap_or_else(|| {
+                                self.dialect.prec_value(Precedence::MulDivModOp)
+                            }),
+                        )?,
                     ),
                 })
             }
@@ -2006,7 +2010,13 @@ impl<'a> Parser<'a> {
             }
             Token::Tilde => Ok(Expr::UnaryOp {
                 op: UnaryOperator::BitwiseNot,
-                expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?),
+                expr: Box::new(
+                    self.parse_subexpr(
+                        self.dialect
+                            .unary_operand_precedence()
+                            .unwrap_or_else(|| self.dialect.prec_value(Precedence::PlusMinus)),
+                    )?,
+                ),
             }),
             tok @ Token::Sharp
             | tok @ Token::AtDashAt

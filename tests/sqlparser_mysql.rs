@@ -5247,3 +5247,127 @@ fn parse_key_constraint_index_type_before_columns() {
         );
     }
 }
+
+#[test]
+fn parse_caret_precedence() {
+    fn num(n: &str) -> Expr {
+        Expr::value(number(n))
+    }
+    fn bin(left: Expr, op: BinaryOperator, right: Expr) -> Expr {
+        Expr::BinaryOp {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        }
+    }
+    fn un(op: UnaryOperator, expr: Expr) -> Expr {
+        Expr::UnaryOp {
+            op,
+            expr: Box::new(expr),
+        }
+    }
+    use BinaryOperator::{
+        BitwiseAnd, BitwiseXor, Divide, Modulo, Multiply, MyIntegerDivide, PGBitwiseShiftLeft, Plus,
+    };
+
+    for (sql, expected) in [
+        (
+            "2 ^ 3 * 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Multiply, num("4")),
+        ),
+        (
+            "2 * 3 ^ 4",
+            bin(num("2"), Multiply, bin(num("3"), BitwiseXor, num("4"))),
+        ),
+        (
+            "2 ^ 3 / 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Divide, num("4")),
+        ),
+        (
+            "2 ^ 3 DIV 4",
+            bin(
+                bin(num("2"), BitwiseXor, num("3")),
+                MyIntegerDivide,
+                num("4"),
+            ),
+        ),
+        (
+            "2 DIV 3 ^ 4",
+            bin(
+                num("2"),
+                MyIntegerDivide,
+                bin(num("3"), BitwiseXor, num("4")),
+            ),
+        ),
+        (
+            "2 ^ 3 % 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Modulo, num("4")),
+        ),
+        (
+            "2 ^ 3 + 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), Plus, num("4")),
+        ),
+        (
+            "2 ^ 3 ^ 4",
+            bin(bin(num("2"), BitwiseXor, num("3")), BitwiseXor, num("4")),
+        ),
+        (
+            "2 << 3 ^ 4",
+            bin(
+                num("2"),
+                PGBitwiseShiftLeft,
+                bin(num("3"), BitwiseXor, num("4")),
+            ),
+        ),
+        (
+            "2 & 3 ^ 4",
+            bin(num("2"), BitwiseAnd, bin(num("3"), BitwiseXor, num("4"))),
+        ),
+        (
+            "2 ^ (3 * 4)",
+            bin(
+                num("2"),
+                BitwiseXor,
+                Expr::Nested(Box::new(bin(num("3"), Multiply, num("4")))),
+            ),
+        ),
+        // Unary `-`, `+`, and `~` bind tighter than `^` in MySQL.
+        (
+            "-2 ^ 3",
+            bin(un(UnaryOperator::Minus, num("2")), BitwiseXor, num("3")),
+        ),
+        (
+            "+2 ^ 3",
+            bin(un(UnaryOperator::Plus, num("2")), BitwiseXor, num("3")),
+        ),
+        (
+            "~ 2 ^ 3",
+            bin(
+                un(UnaryOperator::BitwiseNot, num("2")),
+                BitwiseXor,
+                num("3"),
+            ),
+        ),
+        (
+            "-(2 ^ 3)",
+            un(
+                UnaryOperator::Minus,
+                Expr::Nested(Box::new(bin(num("2"), BitwiseXor, num("3")))),
+            ),
+        ),
+        (
+            "-2 * 3",
+            bin(un(UnaryOperator::Minus, num("2")), Multiply, num("3")),
+        ),
+        (
+            "~ 2 * 3",
+            bin(un(UnaryOperator::BitwiseNot, num("2")), Multiply, num("3")),
+        ),
+        (
+            "~ 2 + 3",
+            bin(un(UnaryOperator::BitwiseNot, num("2")), Plus, num("3")),
+        ),
+    ] {
+        assert_eq!(mysql().verified_expr(sql), expected, "{sql}");
+    }
+}

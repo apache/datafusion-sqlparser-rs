@@ -212,13 +212,20 @@ impl Dialect for MySqlDialect {
         true
     }
 
-    /// `&&` binds like `AND`.
+    /// `&&` binds like `AND`, and `^` binds tighter than `*`, `/`, `DIV`, `%`, `MOD`.
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/operator-precedence.html>
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
         match parser.peek_token_ref().token {
+            Token::Caret => Some(Ok(self.prec_value(Precedence::MulDivModOp) + 1)),
             Token::Overlap => Some(Ok(self.prec_value(Precedence::And))),
             _ => None,
         }
+    }
+
+    /// Unary `+`, `-`, and `~` sit one row above `^` in MySQL's precedence table.
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/operator-precedence.html>
+    fn unary_operand_precedence(&self) -> Option<u8> {
+        Some(self.prec_value(Precedence::MulDivModOp) + 2)
     }
 
     /// Deprecated functionality by MySQL but still supported

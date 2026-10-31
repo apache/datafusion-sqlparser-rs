@@ -951,6 +951,15 @@ pub trait Dialect: Debug + Any {
         None
     }
 
+    /// Precedence floor for parsing the operand of a prefix unary `+`,
+    /// `-`, or `~`. Dialects can return a floor above the per-operator
+    /// defaults when those operators bind tighter than other infix
+    /// operators (e.g. unary `~` over MySQL's `^`).
+    fn unary_operand_precedence(&self) -> Option<u8> {
+        // return None to fall back to the default behavior
+        None
+    }
+
     /// Get the precedence of the next token, looking at the full token stream.
     ///
     /// A higher number => higher precedence

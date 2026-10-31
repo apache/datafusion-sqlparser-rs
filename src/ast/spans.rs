@@ -33,12 +33,12 @@ use super::{
     Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
-    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, Cte, Delete,
-    DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias,
-    Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
-    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
-    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
+    Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr,
+    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
+    IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
@@ -47,8 +47,9 @@ use super::{
     RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement,
     Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor,
-    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values,
-    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use,
+    UserMappingUser, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With,
+    WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -399,6 +400,7 @@ impl Spanned for Statement {
             Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateForeignTable(stmt) => stmt.span(),
             Statement::CreateForeignDataWrapper(stmt) => stmt.span(),
+            Statement::CreateUserMapping(stmt) => stmt.span(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {
@@ -2774,6 +2776,23 @@ impl Spanned for OutputClause {
 impl Spanned for comments::CommentWithSpan {
     fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl Spanned for CreateUserMapping {
+    fn span(&self) -> Span {
+        let user = match &self.user {
+            UserMappingUser::Name(name) => name.span,
+            _ => Span::empty(),
+        };
+        Span::union_iter(
+            [user, self.server_name.span].into_iter().chain(
+                self.options
+                    .iter()
+                    .flatten()
+                    .flat_map(|option| [option.key.span, option.value.span]),
+            ),
+        )
     }
 }
 

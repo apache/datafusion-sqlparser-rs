@@ -634,6 +634,7 @@ define_keywords!(
     MANAGEDLOCATION,
     MANIFEST,
     MAP,
+    MAPPING,
     MASKING,
     MATCH,
     MATCHED,

@@ -1105,6 +1105,102 @@ fn parse_create_table_string_column_names() {
 }
 
 #[test]
+fn test_multiword_type_names() {
+    // A SQLite type name is one or more names or strings
+    sqlite().verified_stmt("CREATE TABLE t (a UNSIGNED BIG INT)");
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar baz)");
+    sqlite().verified_stmt("CREATE TABLE t (a 'text')");
+    sqlite().verified_stmt("SELECT CAST(a AS foo bar) FROM t");
+    sqlite().verified_stmt("ALTER TABLE t ADD b foo bar");
+    // Keywords without a dedicated parser arm also form multi-word type names
+    sqlite().verified_stmt("CREATE TABLE t (a NATIVE CHARACTER(70))");
+    sqlite().verified_stmt("CREATE TABLE t (a VARYING CHARACTER(10))");
+    sqlite().verified_stmt("SELECT CAST(x AS VARYING CHARACTER) FROM t");
+    // Column constraints still terminate the type name
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar NOT NULL)");
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar DEFAULT 0)");
+    // Standard constraint keywords are not consumed as type words
+    sqlite().verified_stmt("CREATE TABLE t (a INT PRIMARY KEY)");
+    sqlite().verified_stmt("CREATE TABLE t (a TEXT COLLATE NOCASE)");
+    sqlite().verified_stmt("CREATE TABLE t (a INT GENERATED ALWAYS AS (1))");
+    sqlite().verified_stmt("CREATE TABLE t (a INT AS (1))");
+    // GENERATED is a type word unless ALWAYS follows
+    sqlite().verified_stmt("CREATE TABLE t (a foo GENERATED, b INT)");
+    sqlite().verified_stmt("CREATE TABLE t (a foo GENERATED ALWAYS AS (1))");
+    // PATH is a valid type word, not a terminator
+    sqlite().verified_stmt("CREATE TABLE t (a foo bar PATH)");
+    sqlite().verified_stmt("CREATE TABLE t (a foo PATH bar)");
+    // fully-reserved keywords end the type name
+    for (sql, err) in [
+        (
+            "CREATE TABLE t (a foo AND bar)",
+            "Expected: ',' or ')' after column definition, found: AND",
+        ),
+        (
+            "CREATE TABLE t (a foo bar ON)",
+            "Expected: ',' or ')' after column definition, found: ON",
+        ),
+        (
+            "CREATE TABLE t (a foo bar SELECT)",
+            "Expected: ',' or ')' after column definition, found: SELECT",
+        ),
+        (
+            "CREATE TABLE t (a foo ISNULL, b INT)",
+            "Expected: ',' or ')' after column definition, found: ISNULL",
+        ),
+        (
+            "CREATE TABLE t (a foo INDEXED, b INT)",
+            "Expected: ',' or ')' after column definition, found: INDEXED",
+        ),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string()))
+        );
+    }
+}
+
+#[test]
+fn display_multiword_type_name_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let data_type = DataType::CustomMultiWord(
+        vec![Ident::new("signed"), Ident::new("int")],
+        vec![TypeModifier::Number("1".to_string(), false)],
+    );
+    // A writer that rejects the type name fails before the modifier list
+    let mut writer = RejectingWriter('s');
+    assert_eq!(write!(writer, "{data_type}"), Err(fmt::Error));
+    // A writer that only rejects the parenthesized list fails on the modifiers
+    let mut writer = RejectingWriter('(');
+    assert_eq!(write!(writer, "{data_type}"), Err(fmt::Error));
+}
+
+#[test]
+fn test_multiword_type_names_rejected_by_other_dialects() {
+    // GenericDialect does not support multi-word type names
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("CREATE TABLE t (a foo bar)"),
+        Err(ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: bar".to_string()
+        ))
+    );
+}
+
+#[test]
 fn test_cast_empty_type() {
     // SQLite allows CAST(expr AS) with an empty type name (typetoken can be empty)
     // See https://www.sqlite.org/lang_expr.html
@@ -1748,6 +1844,52 @@ fn parse_left_shift_and_bitwise_and_are_left_associative() {
 }
 
 #[test]
+fn sqlite_type_name_builtin_prefixes() {
+    for type_name in [
+        "INT FOO",
+        "TEXT FOO",
+        "DOUBLE PRECISION FOO",
+        "INT FIRST",
+        "INT INVISIBLE",
+    ] {
+        let sql = format!("CREATE TABLE t (a {type_name})");
+        let Statement::CreateTable(table) = sqlite().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            table.columns[0].data_type,
+            DataType::CustomMultiWord(
+                type_name.split_whitespace().map(Ident::new).collect(),
+                vec![]
+            ),
+        );
+        sqlite().verified_stmt(&format!("SELECT CAST(1 AS {type_name})"));
+        sqlite().verified_stmt(&format!("ALTER TABLE t ADD a {type_name}"));
+    }
+    sqlite().verified_stmt("CREATE TABLE t (a INT FOO(10, 2))");
+    let Statement::CreateTable(table) =
+        sqlite().verified_stmt("CREATE TABLE t (a INT COMMENT 'note')")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        table.columns[0],
+        ColumnDef {
+            name: Ident::new("a"),
+            data_type: DataType::CustomMultiWord(
+                vec![
+                    Ident::new("INT"),
+                    Ident::new("COMMENT"),
+                    Ident::with_quote('\'', "note"),
+                ],
+                vec![],
+            ),
+            options: vec![],
+        },
+    );
+}
+
+#[test]
 fn parse_right_shift_and_bitwise_and_are_left_associative() {
     assert_eq!(
         sqlite().verified_expr("8 >> 1 & 2"),
@@ -1844,5 +1986,85 @@ fn parse_bitwise_shift_precedence_boundaries() {
         ),
     ] {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
+}
+
+#[test]
+fn sqlite_type_name_builtin_parse_errors() {
+    for type_name in ["ENUM FOO", "TIMESTAMP WITH FOO"] {
+        sqlite().verified_stmt(&format!("CREATE TABLE t (a {type_name})"));
+        sqlite().verified_stmt(&format!("SELECT CAST(1 AS {type_name})"));
+        sqlite().verified_stmt(&format!("ALTER TABLE t ADD a {type_name}"));
+    }
+}
+
+#[test]
+fn sqlite_type_name_builtin_prefix_constraint_boundaries() {
+    for (constraint, option) in [
+        ("NOT NULL", ColumnOption::NotNull),
+        ("NULL", ColumnOption::Null),
+        ("DEFAULT 0", ColumnOption::Default(Expr::value(number("0")))),
+        (
+            "COLLATE NOCASE",
+            ColumnOption::Collation(ObjectName::from(vec![Ident::new("NOCASE")])),
+        ),
+    ] {
+        let sql = format!("CREATE TABLE t (a TEXT FOO {constraint})");
+        let Statement::CreateTable(table) = sqlite().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            table.columns[0].data_type,
+            DataType::CustomMultiWord(vec![Ident::new("TEXT"), Ident::new("FOO")], vec![]),
+        );
+        assert_eq!(
+            table.columns[0].options,
+            vec![ColumnOptionDef { name: None, option }],
+        );
+    }
+    sqlite().verified_stmt("CREATE TABLE t (a TEXT FOO PRIMARY KEY)");
+    sqlite().verified_stmt("CREATE TABLE t (a INT FOO GENERATED ALWAYS AS (1), b INT)");
+    sqlite().verified_stmt("CREATE TABLE t (a INT FOO GENERATED, b INT)");
+}
+
+#[test]
+fn sqlite_type_name_untyped_null_constraint() {
+    let Statement::CreateTable(table) = sqlite().verified_stmt("CREATE TABLE t (a NULL, b INT)")
+    else {
+        unreachable!()
+    };
+    assert_eq!(table.columns[0].data_type, DataType::Unspecified);
+    assert_eq!(
+        table.columns[0].options,
+        vec![ColumnOptionDef {
+            name: None,
+            option: ColumnOption::Null,
+        }],
+    );
+    let AlterTableOperation::AddColumn { column_def, .. } =
+        alter_table_op_with_name(sqlite().verified_stmt("ALTER TABLE t ADD a NULL"), "t")
+    else {
+        unreachable!()
+    };
+    assert_eq!(column_def, table.columns[0]);
+    sqlite().verified_stmt(r#"CREATE TABLE t (a "NULL" foo)"#);
+}
+
+#[test]
+fn sqlite_type_name_rejects_words_after_null_constraint() {
+    for (sql, error) in [
+        (
+            "CREATE TABLE t (a NULL foo)",
+            "Expected: ',' or ')' after column definition, found: foo",
+        ),
+        (
+            "ALTER TABLE t ADD a NULL foo",
+            "Expected: end of statement, found: foo",
+        ),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+        );
     }
 }

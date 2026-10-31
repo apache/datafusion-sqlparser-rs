@@ -1862,7 +1862,11 @@ impl<'a> Parser<'a> {
             _ => None,
         };
         let opt_expr = self.maybe_parse(|parser| {
-            match parser.parse_data_type()? {
+            let (data_type, trailing_bracket) = parser.parse_data_type_inner()?;
+            if trailing_bracket.0 {
+                return parser_err!("dummy", loc);
+            }
+            match data_type {
                 DataType::Interval { .. } => parser.parse_interval(),
                 // Custom names need dialect consent, else `NOT 'a'` would read as a typed string.
                 DataType::Custom(name, modifiers)
@@ -1878,7 +1882,7 @@ impl<'a> Parser<'a> {
                         uses_odbc_syntax: false,
                     }))
                 }
-                DataType::Custom(..) => parser_err!("dummy", loc),
+                DataType::Custom(..) | DataType::CustomMultiWord(..) => parser_err!("dummy", loc),
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
                     Ok(Expr::Cast {
@@ -10104,6 +10108,7 @@ impl<'a> Parser<'a> {
                     Keyword::CONSTRAINT
                         | Keyword::PRIMARY
                         | Keyword::NOT
+                        | Keyword::NULL
                         | Keyword::UNIQUE
                         | Keyword::CHECK
                         | Keyword::DEFAULT
@@ -10112,7 +10117,9 @@ impl<'a> Parser<'a> {
                         | Keyword::GENERATED
                         | Keyword::AS
                 ),
-                _ => true, // e.g. comma immediately after column name
+                // A single-quoted string is a valid type name in SQLite's ids grammar.
+                Token::SingleQuotedString(_) => false,
+                _ => true,
             }
         } else {
             false
@@ -13344,10 +13351,46 @@ impl<'a> Parser<'a> {
         Ok(ty)
     }
 
-    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn parse_data_type_helper(
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        if !self.dialect.supports_multiword_type_names() {
+            return self.parse_data_type_inner();
+        }
+
+        let index = self.index;
+        let dedicated_error = match self.try_parse(|parser| parser.parse_data_type_inner()) {
+            Ok(data_type) => {
+                if self.peek_multiword_type_name_part().is_none() {
+                    return Ok(data_type);
+                }
+                self.index = index;
+                None
+            }
+            Err(ParserError::RecursionLimitExceeded) => {
+                return Err(ParserError::RecursionLimitExceeded);
+            }
+            Err(error) => Some(error),
+        };
+
+        self.advance_token();
+        let token = self.get_current_token();
+        let first = match &token.token {
+            Token::Word(word) => word.clone().into_ident(token.span),
+            Token::SingleQuotedString(value) => Ident::with_quote('\'', value.clone()),
+            _ => return self.expected_ref("a data type name", token),
+        };
+        if self.peek_multiword_type_name_part().is_none() {
+            if let Some(error) = dedicated_error {
+                return Err(error);
+            }
+        }
+        self.parse_multiword_type_name(first)
+            .map_err(|error| dedicated_error.unwrap_or(error))
+    }
+
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
+    fn parse_data_type_inner(&mut self) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
 
         let dialect = self.dialect;
@@ -13801,6 +13844,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::SIGNED => {
+                    if self.dialect.supports_multiword_type_names() {
+                        let first = w.clone().into_ident(next_token.span);
+                        return self.parse_multiword_type_name(first);
+                    }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::SignedInteger)
                     } else {
@@ -13808,6 +13855,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::UNSIGNED => {
+                    if self.dialect.supports_multiword_type_names() {
+                        let first = w.clone().into_ident(next_token.span);
+                        return self.parse_multiword_type_name(first);
+                    }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::UnsignedInteger)
                     } else {
@@ -13821,6 +13872,10 @@ impl<'a> Parser<'a> {
                     Ok(DataType::TsQuery)
                 }
                 _ => {
+                    if self.dialect.supports_multiword_type_names() {
+                        let first = w.clone().into_ident(next_token.span);
+                        return self.parse_multiword_type_name(first);
+                    }
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;
                     if let Some(modifiers) = self.parse_optional_type_modifiers()? {
@@ -13830,6 +13885,10 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
+            Token::SingleQuotedString(value) if self.dialect.supports_multiword_type_names() => {
+                let first = Ident::with_quote('\'', value.clone());
+                return self.parse_multiword_type_name(first);
+            }
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
@@ -15009,6 +15068,115 @@ impl<'a> Parser<'a> {
             Ok(Some(modifiers))
         } else {
             Ok(None)
+        }
+    }
+
+    fn peek_multiword_type_name_part(&self) -> Option<&TokenWithSpan> {
+        let peeked = self.peek_token_ref();
+        let is_part = match &peeked.token {
+            Token::Word(w) if w.keyword == Keyword::GENERATED => !matches!(
+                &self.peek_nth_token_ref(1).token,
+                Token::Word(w) if w.keyword == Keyword::ALWAYS
+            ),
+            Token::Word(w) => !matches!(
+                w.keyword,
+                Keyword::ADD
+                    | Keyword::ALL
+                    | Keyword::ALTER
+                    | Keyword::AND
+                    | Keyword::AS
+                    | Keyword::AUTOINCREMENT
+                    | Keyword::BETWEEN
+                    | Keyword::CASE
+                    | Keyword::CHECK
+                    | Keyword::COLLATE
+                    | Keyword::COMMIT
+                    | Keyword::CONSTRAINT
+                    | Keyword::CREATE
+                    | Keyword::CROSS
+                    | Keyword::DEFAULT
+                    | Keyword::DELETE
+                    | Keyword::DEFERRABLE
+                    | Keyword::DISTINCT
+                    | Keyword::DROP
+                    | Keyword::ELSE
+                    | Keyword::ESCAPE
+                    | Keyword::EXCEPT
+                    | Keyword::EXISTS
+                    | Keyword::FOREIGN
+                    | Keyword::FROM
+                    | Keyword::FULL
+                    | Keyword::GROUP
+                    | Keyword::HAVING
+                    | Keyword::IN
+                    | Keyword::INDEX
+                    | Keyword::INDEXED
+                    | Keyword::INNER
+                    | Keyword::INSERT
+                    | Keyword::INTERSECT
+                    | Keyword::INTO
+                    | Keyword::IS
+                    | Keyword::ISNULL
+                    | Keyword::JOIN
+                    | Keyword::LEFT
+                    | Keyword::LIMIT
+                    | Keyword::NATURAL
+                    | Keyword::NOT
+                    | Keyword::NULL
+                    | Keyword::NOTHING
+                    | Keyword::NOTNULL
+                    | Keyword::ON
+                    | Keyword::OR
+                    | Keyword::ORDER
+                    | Keyword::OUTER
+                    | Keyword::PRIMARY
+                    | Keyword::REFERENCES
+                    | Keyword::RETURNING
+                    | Keyword::RIGHT
+                    | Keyword::SELECT
+                    | Keyword::SET
+                    | Keyword::TABLE
+                    | Keyword::THEN
+                    | Keyword::TO
+                    | Keyword::TRANSACTION
+                    | Keyword::UNIQUE
+                    | Keyword::UNION
+                    | Keyword::UPDATE
+                    | Keyword::USING
+                    | Keyword::VALUES
+                    | Keyword::WHEN
+                    | Keyword::WHERE
+            ),
+            Token::SingleQuotedString(_) => true,
+            _ => false,
+        };
+        is_part.then_some(peeked)
+    }
+
+    /// Parse a space-separated multi-word typename per SQLite's `typename` grammar.
+    fn parse_multiword_type_name(
+        &mut self,
+        first: Ident,
+    ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        let mut parts = Vec::with_capacity(4);
+        parts.push(first);
+        while let Some(peeked) = self.peek_multiword_type_name_part() {
+            let next_part = match &peeked.token {
+                Token::Word(word) => word.clone().into_ident(peeked.span),
+                Token::SingleQuotedString(value) => Ident::with_quote('\'', value.clone()),
+                _ => break,
+            };
+            self.advance_token();
+            parts.push(next_part);
+        }
+        let modifiers = self.parse_optional_type_modifiers()?.unwrap_or_default();
+        if parts.len() == 1 {
+            Ok((
+                DataType::Custom(ObjectName::from(vec![parts.remove(0)]), modifiers),
+                false.into(),
+            ))
+        } else {
+            Ok((DataType::CustomMultiWord(parts, modifiers), false.into()))
         }
     }
 

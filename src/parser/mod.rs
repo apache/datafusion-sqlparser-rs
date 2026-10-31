@@ -9334,7 +9334,11 @@ impl<'a> Parser<'a> {
         };
 
         // parse optional column list (schema)
-        let (columns, constraints) = self.parse_columns()?;
+        let (columns, constraints) = if partition_of.is_some() {
+            self.parse_partition_of_columns()?
+        } else {
+            self.parse_columns()?
+        };
         let comment_after_column_def =
             if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
                 let next_token = self.next_token();
@@ -10020,6 +10024,31 @@ impl<'a> Parser<'a> {
 
     /// Parse columns and constraints.
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
+        self.parse_table_elements(Parser::parse_column_def)
+    }
+
+    /// Parse the columns and constraints of a `PARTITION OF` table, whose column entries
+    /// carry no data type.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtable.html>
+    fn parse_partition_of_columns(
+        &mut self,
+    ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
+        self.parse_table_elements(|parser| {
+            let name = parser.parse_identifier()?;
+            let _ = parser.parse_keywords(&[Keyword::WITH, Keyword::OPTIONS]); // [ WITH OPTIONS ]
+            Ok(ColumnDef {
+                name,
+                data_type: DataType::Unspecified,
+                options: parser.parse_column_option_defs()?,
+            })
+        })
+    }
+
+    fn parse_table_elements(
+        &mut self,
+        mut parse_column: impl FnMut(&mut Self) -> Result<ColumnDef, ParserError>,
+    ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
@@ -10030,11 +10059,11 @@ impl<'a> Parser<'a> {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = &self.peek_token_ref().token {
-                columns.push(self.parse_column_def()?);
+                columns.push(parse_column(self)?);
             } else if matches!(&self.peek_token_ref().token, Token::SingleQuotedString(_))
                 && self.dialect.supports_string_literal_column_names()
             {
-                columns.push(self.parse_column_def()?);
+                columns.push(parse_column(self)?);
             } else {
                 return self.expected_ref(
                     "column name or constraint definition",
@@ -10108,29 +10137,32 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_data_type()?
         };
+        Ok(ColumnDef {
+            name: col_name,
+            data_type,
+            options: self.parse_column_option_defs()?,
+        })
+    }
+
+    fn parse_column_option_defs(&mut self) -> Result<Vec<ColumnOptionDef>, ParserError> {
         let mut options = vec![];
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
                 let name = Some(self.parse_identifier()?);
-                if let Some(option) = self.parse_optional_column_option()? {
-                    options.push(ColumnOptionDef { name, option });
-                } else {
+                let Some(option) = self.parse_optional_column_option()? else {
                     return self.expected_ref(
                         "constraint details after CONSTRAINT <name>",
                         self.peek_token_ref(),
                     );
-                }
+                };
+                options.push(ColumnOptionDef { name, option });
             } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
             } else {
                 break;
             };
         }
-        Ok(ColumnDef {
-            name: col_name,
-            data_type,
-            options,
-        })
+        Ok(options)
     }
 
     fn is_column_type_sqlite_unspecified(&mut self) -> bool {

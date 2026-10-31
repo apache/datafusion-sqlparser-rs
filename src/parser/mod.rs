@@ -12173,7 +12173,8 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SET) {
             self.expect_token(&Token::LParen)?;
             let options = self.parse_comma_separated(|parser| {
-                let key = ObjectName::from(parser.parse_identifier()?);
+                let key =
+                    ObjectName::from(parser.parse_period_separated(|p| p.parse_identifier())?);
                 Ok(if parser.consume_token(&Token::Eq) {
                     SqlOption::KeyValue {
                         key,
@@ -12187,7 +12188,7 @@ impl<'a> Parser<'a> {
             AlterViewOperation::SetOptions { options }
         } else if self.parse_keyword(Keyword::RESET) {
             self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_identifier)?;
+            let options = self.parse_comma_separated(|p| p.parse_object_name(false))?;
             self.expect_token(&Token::RParen)?;
             AlterViewOperation::ResetOptions { options }
         } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {

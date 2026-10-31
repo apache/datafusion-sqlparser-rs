@@ -5774,9 +5774,32 @@ fn parse_alter_view_operations() {
         }
     );
     assert_eq!(
-        operation("ALTER VIEW v RESET (security_invoker, check_option)"),
+        operation(
+            "ALTER VIEW v SET (toast.autovacuum_vacuum_threshold = 50, toast.vacuum_truncate)"
+        ),
+        AlterViewOperation::SetOptions {
+            options: vec![
+                SqlOption::KeyValue {
+                    key: ObjectName::from(vec![
+                        Ident::new("toast"),
+                        Ident::new("autovacuum_vacuum_threshold"),
+                    ]),
+                    value: Expr::value(number("50")),
+                },
+                SqlOption::Ident(ObjectName::from(vec![
+                    Ident::new("toast"),
+                    Ident::new("vacuum_truncate"),
+                ])),
+            ],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RESET (security_invoker, toast.autovacuum_enabled)"),
         AlterViewOperation::ResetOptions {
-            options: vec![Ident::new("security_invoker"), Ident::new("check_option")],
+            options: vec![
+                ObjectName::from(vec![Ident::new("security_invoker")]),
+                ObjectName::from(vec![Ident::new("toast"), Ident::new("autovacuum_enabled")]),
+            ],
         }
     );
     assert_eq!(
@@ -5851,6 +5874,14 @@ fn parse_alter_view_operations() {
         ("ALTER VIEW v SET (a", "Expected: ), found: EOF"),
         ("ALTER VIEW v RESET a", "Expected: (, found: a"),
         ("ALTER VIEW v RESET (a b)", "Expected: ), found: b"),
+        (
+            "ALTER VIEW v SET (toast. = 1)",
+            "Expected: identifier, found: =",
+        ),
+        (
+            "ALTER VIEW v RESET (toast.)",
+            "Expected: identifier, found: )",
+        ),
         ("ALTER VIEW v RENAME TO", "Expected: identifier, found: EOF"),
         ("ALTER VIEW v RENAME", "Expected: identifier, found: EOF"),
         (

@@ -12291,3 +12291,254 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_alter_foreign_table() {
+    for sql in [
+        "ALTER FOREIGN TABLE ft ADD COLUMN note TEXT",
+        "ALTER FOREIGN TABLE ft DROP COLUMN IF EXISTS note CASCADE",
+        "ALTER FOREIGN TABLE ft RENAME COLUMN note TO memo",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id TYPE BIGINT",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET DEFAULT 0",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET NOT NULL",
+        "ALTER FOREIGN TABLE ft ADD CONSTRAINT positive CHECK (id > 0) NOT VALID",
+        "ALTER FOREIGN TABLE ft VALIDATE CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft DROP CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft OWNER TO app",
+        "ALTER FOREIGN TABLE ft RENAME TO archive",
+        "ALTER FOREIGN TABLE IF EXISTS ONLY public.ft ADD COLUMN a INT, DROP COLUMN b",
+    ] {
+        let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(alter.table_type, Some(AlterTableType::Foreign));
+    }
+
+    let option = |key: &str, value: &str| CreateServerOption {
+        key: Ident::new(key),
+        value: Ident::with_quote('\'', value),
+    };
+    let sql = "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100', SET batch_size '10', DROP updatable, use_remote_estimate 'true')";
+    let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("fetch_size", "100"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("batch_size", "10")),
+                AlterGenericOption::Drop(Ident::new("updatable")),
+                AlterGenericOption::Add {
+                    option: option("use_remote_estimate", "true"),
+                    add_keyword: false,
+                },
+            ],
+        }]
+    );
+
+    // As written by pg_dump.
+    let stmt = pg_and_generic().one_statement_parses_to(
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (\n    column_name 'remote_id'\n)",
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (column_name 'remote_id')",
+    );
+    let Statement::AlterTable(alter) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::AlterColumn {
+            column_name: Ident::new("id"),
+            op: AlterColumnOperation::GenericOptions {
+                options: vec![AlterGenericOption::Add {
+                    option: option("column_name", "remote_id"),
+                    add_keyword: false,
+                }],
+            },
+        }]
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS (SET column_name 'remote_id', DROP other)",
+    );
+
+    // `ADD`, `SET` and `DROP` before a string literal name a plain option.
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (add 'x', set 'y', drop 'z')")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: ["add", "set", "drop"]
+                .into_iter()
+                .zip(["x", "y", "z"])
+                .map(|(key, value)| AlterGenericOption::Add {
+                    option: option(key, value),
+                    add_keyword: false,
+                })
+                .collect(),
+        }]
+    );
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD add 'x', SET set 'y', DROP drop)")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("add", "x"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("set", "y")),
+                AlterGenericOption::Drop(Ident::new("drop")),
+            ],
+        }]
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP fetch_size '100')",
+            "Expected: ), found: '100'",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (SET fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100'",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ADD fetch_size '100'",
+            "Expected: (, found: ADD",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS column_name 'remote_id'",
+            "Expected: (, found: column_name",
+        ),
+        (
+            "ALTER FOREIGN ft OWNER TO app",
+            "Expected: TABLE, found: ft",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+}
+
+#[test]
+fn display_alter_foreign_table_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt =
+        pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100')");
+    for rejected in ["ALTER FOREIGN TABLE ", "ADD "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_options_errors() {
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS schema_name 'public'",
+            "Expected: (, found: schema_name",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public'",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_foreign_table_rejects_clauses() {
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft ON CLUSTER c ADD COLUMN x INT",
+            "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT SET LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

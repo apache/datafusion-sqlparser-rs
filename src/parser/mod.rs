@@ -21552,16 +21552,18 @@ impl<'a> Parser<'a> {
     fn parse_alter_generic_options(&mut self) -> Result<Vec<AlterGenericOption>, ParserError> {
         self.expect_token(&Token::LParen)?;
         let options = self.parse_comma_separated(|p| {
-            if p.parse_keyword(Keyword::SET) {
-                Ok(AlterGenericOption::Set(p.parse_pg_option()?))
-            } else if p.parse_keyword(Keyword::DROP) {
-                Ok(AlterGenericOption::Drop(p.parse_identifier()?))
-            } else {
-                let add_keyword = p.parse_keyword(Keyword::ADD);
-                Ok(AlterGenericOption::Add {
+            // Before a string literal, `ADD`, `SET` and `DROP` name an option.
+            let action = match p.peek_nth_token_ref(1).token {
+                Token::SingleQuotedString(_) => None,
+                _ => p.parse_one_of_keywords(&[Keyword::ADD, Keyword::SET, Keyword::DROP]),
+            };
+            match action {
+                Some(Keyword::SET) => Ok(AlterGenericOption::Set(p.parse_pg_option()?)),
+                Some(Keyword::DROP) => Ok(AlterGenericOption::Drop(p.parse_identifier()?)),
+                action => Ok(AlterGenericOption::Add {
                     option: p.parse_pg_option()?,
-                    add_keyword,
-                })
+                    add_keyword: action.is_some(),
+                }),
             }
         })?;
         self.expect_token(&Token::RParen)?;

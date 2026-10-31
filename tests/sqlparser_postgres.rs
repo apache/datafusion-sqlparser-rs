@@ -12364,6 +12364,44 @@ fn parse_alter_foreign_table() {
         "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS (SET column_name 'remote_id', DROP other)",
     );
 
+    // `ADD`, `SET` and `DROP` before a string literal name a plain option.
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (add 'x', set 'y', drop 'z')")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: ["add", "set", "drop"]
+                .into_iter()
+                .zip(["x", "y", "z"])
+                .map(|(key, value)| AlterGenericOption::Add {
+                    option: option(key, value),
+                    add_keyword: false,
+                })
+                .collect(),
+        }]
+    );
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD add 'x', SET set 'y', DROP drop)")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("add", "x"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("set", "y")),
+                AlterGenericOption::Drop(Ident::new("drop")),
+            ],
+        }]
+    );
+
     for (sql, expected) in [
         (
             "ALTER FOREIGN TABLE ft OPTIONS (DROP fetch_size '100')",

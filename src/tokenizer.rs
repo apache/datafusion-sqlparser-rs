@@ -113,6 +113,8 @@ pub enum Token {
     UnicodeStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
     HexStringLiteral(String),
+    /// Hexadecimal numeric literal written as `0x...`.
+    HexNumber(String),
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
@@ -315,6 +317,7 @@ impl fmt::Display for Token {
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
             Token::UnicodeStringLiteral(ref s) => write!(f, "U&'{s}'"),
             Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
+            Token::HexNumber(s) => write!(f, "0x{s}"),
             Token::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{s}'"),
             Token::TripleSingleQuotedByteStringLiteral(ref s) => write!(f, "B'''{s}'''"),
             Token::DoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"{s}\""),
@@ -1620,11 +1623,10 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
-                    // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
                         let s2 = self.tokenize_number_part(chars, |ch| ch.is_ascii_hexdigit())?;
-                        return Ok(Some(Token::HexStringLiteral(s2)));
+                        return Ok(Some(Token::HexNumber(s2)));
                     }
 
                     // match one period
@@ -3075,15 +3077,12 @@ mod tests {
             ],
         );
 
-        let hex_string_dialects = all_dialects_where(|dialect| {
+        let hex_number_dialects = all_dialects_where(|dialect| {
             dialect.supports_numeric_literal_underscores()
                 && !dialect.supports_non_decimal_integer_literals()
         });
-        hex_string_dialects.tokenizes_to(
-            "0xFF_FF",
-            vec![Token::HexStringLiteral("FF_FF".to_string())],
-        );
-        for dialect in &hex_string_dialects.dialects {
+        hex_number_dialects.tokenizes_to("0xFF_FF", vec![Token::HexNumber("FF_FF".to_string())]);
+        for dialect in &hex_number_dialects.dialects {
             let err = Tokenizer::new(&**dialect, "SELECT 0x_1")
                 .tokenize()
                 .unwrap_err();

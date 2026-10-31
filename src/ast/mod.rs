@@ -10213,7 +10213,7 @@ impl fmt::Display for DropFunctionOption {
     }
 }
 
-/// Generic function description for DROP FUNCTION and CREATE TRIGGER.
+/// Generic function description for DROP FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

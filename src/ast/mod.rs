@@ -9695,12 +9695,12 @@ impl fmt::Display for CopyOption {
             Format(name) => write!(f, "FORMAT {name}"),
             Freeze(true) => write!(f, "FREEZE"),
             Freeze(false) => write!(f, "FREEZE FALSE"),
-            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
+            Delimiter(char) => write!(f, "DELIMITER '{}'", value::escape_single_quote_char(*char)),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
             Header(true) => write!(f, "HEADER"),
             Header(false) => write!(f, "HEADER FALSE"),
-            Quote(char) => write!(f, "QUOTE '{char}'"),
-            Escape(char) => write!(f, "ESCAPE '{char}'"),
+            Quote(char) => write!(f, "QUOTE '{}'", value::escape_single_quote_char(*char)),
+            Escape(char) => write!(f, "ESCAPE '{}'", value::escape_single_quote_char(*char)),
             ForceQuote(columns) => write!(f, "FORCE_QUOTE ({})", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE_NOT_NULL ({})", display_comma_separated(columns))
@@ -9853,7 +9853,7 @@ impl fmt::Display for CopyLegacyOption {
                 }
                 Ok(())
             }
-            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
+            Delimiter(char) => write!(f, "DELIMITER '{}'", value::escape_single_quote_char(*char)),
             EmptyAsNull => write!(f, "EMPTYASNULL"),
             Encrypted { auto } => write!(f, "ENCRYPTED{}", if *auto { " AUTO" } else { "" }),
             Escape => write!(f, "ESCAPE"),
@@ -10004,7 +10004,7 @@ impl fmt::Display for IamRoleKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             IamRoleKind::Default => write!(f, "DEFAULT"),
-            IamRoleKind::Arn(arn) => write!(f, "'{arn}'"),
+            IamRoleKind::Arn(arn) => write!(f, "'{}'", value::escape_single_quote_string(arn)),
         }
     }
 }
@@ -10033,8 +10033,8 @@ impl fmt::Display for CopyLegacyCsvOption {
         use CopyLegacyCsvOption::*;
         match self {
             Header => write!(f, "HEADER"),
-            Quote(char) => write!(f, "QUOTE '{char}'"),
-            Escape(char) => write!(f, "ESCAPE '{char}'"),
+            Quote(char) => write!(f, "QUOTE '{}'", value::escape_single_quote_char(*char)),
+            Escape(char) => write!(f, "ESCAPE '{}'", value::escape_single_quote_char(*char)),
             ForceQuote(columns) => write!(f, "FORCE QUOTE {}", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE NOT NULL {}", display_comma_separated(columns))

@@ -12291,3 +12291,78 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_copy_option_quoted_chars_round_trip() {
+    let stmt = pg().verified_stmt(
+        "COPY y TO STDOUT (FORMAT CSV, QUOTE '''', ESCAPE '''', DELIMITER '''', NULL 'it''s')",
+    );
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            source: CopySource::Table {
+                table_name: ObjectName::from(vec!["y".into()]),
+                columns: vec![],
+            },
+            to: true,
+            target: CopyTarget::Stdout,
+            options: vec![
+                CopyOption::Format("CSV".into()),
+                CopyOption::Quote('\''),
+                CopyOption::Escape('\''),
+                CopyOption::Delimiter('\''),
+                CopyOption::Null("it's".into()),
+            ],
+            legacy_options: vec![],
+            payload: None,
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY y TO STDOUT DELIMITER '''' CSV QUOTE '''' ESCAPE ''''");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            source: CopySource::Table {
+                table_name: ObjectName::from(vec!["y".into()]),
+                columns: vec![],
+            },
+            to: true,
+            target: CopyTarget::Stdout,
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter('\''),
+                CopyLegacyOption::Csv(vec![
+                    CopyLegacyCsvOption::Quote('\''),
+                    CopyLegacyCsvOption::Escape('\''),
+                ]),
+            ],
+            payload: None,
+        }
+    );
+
+    pg().one_statement_parses_to(
+        "COPY y TO stdout WITH CSV QUOTE '''' DELIMITER '|'",
+        "COPY y TO STDOUT CSV QUOTE '''' DELIMITER '|'",
+    );
+
+    let stmt = pg()
+        .verified_stmt("COPY users TO 'data.csv' IAM_ROLE 'arn:aws:iam::123456789:role/ro''le'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            source: CopySource::Table {
+                table_name: ObjectName::from(vec!["users".into()]),
+                columns: vec![],
+            },
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".into(),
+            },
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::IamRole(IamRoleKind::Arn(
+                "arn:aws:iam::123456789:role/ro'le".into(),
+            ))],
+            payload: None,
+        }
+    );
+}

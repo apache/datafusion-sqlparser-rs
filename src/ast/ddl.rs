@@ -4932,8 +4932,8 @@ pub enum AlterViewOperation {
     /// ALTER VIEW name RESET ( view_option_name [, ... ] )
     /// ```
     ResetOptions {
-        /// Options to reset.
-        options: Vec<Ident>,
+        /// Options to reset, optionally namespaced as in `toast.autovacuum_enabled`.
+        options: Vec<ObjectName>,
     },
 }
 

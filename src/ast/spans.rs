@@ -1193,7 +1193,7 @@ impl Spanned for AlterViewOperation {
                 union_spans(options.iter().map(|i| i.span()))
             }
             AlterViewOperation::ResetOptions { options } => {
-                union_spans(options.iter().map(|i| i.span))
+                union_spans(options.iter().map(|i| i.span()))
             }
         }
     }
@@ -3519,8 +3519,8 @@ SETTINGS update_parallel_mode = 'auto'"#;
             ),
             ("ALTER VIEW v RENAME TO w", "v RENAME TO w"),
             ("ALTER VIEW v SET SCHEMA s", "v SET SCHEMA s"),
-            ("ALTER VIEW v SET (a = 1, b)", "v SET (a = 1, b"),
-            ("ALTER VIEW v RESET (a, b)", "v RESET (a, b"),
+            ("ALTER VIEW v SET (a = 1, t.b)", "v SET (a = 1, t.b"),
+            ("ALTER VIEW v RESET (a, t.b)", "v RESET (a, t.b"),
         ] {
             let test = SpanTest::new(dialect, sql);
             let stmt = &Parser::parse_sql(dialect, sql).unwrap()[0];

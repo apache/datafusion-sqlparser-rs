@@ -6148,17 +6148,9 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.function_body, "RETURN")?;
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
-            } else if self.peek_keywords(&[Keyword::BEGIN, Keyword::ATOMIC]) {
+            } else if let Some(statements) = self.maybe_parse_begin_atomic()? {
                 ensure_not_set(&body.function_body, "BEGIN ATOMIC")?;
-                let begin_token = self.next_token();
-                self.advance_token();
-                let statements = self.parse_statement_list(&[Keyword::END])?;
-                let end_token = self.expect_keyword(Keyword::END)?;
-                body.function_body = Some(CreateFunctionBody::BeginAtomic(BeginEndStatements {
-                    begin_token: AttachedToken(begin_token),
-                    statements,
-                    end_token: AttachedToken(end_token),
-                }));
+                body.function_body = Some(CreateFunctionBody::BeginAtomic(statements));
             } else {
                 break;
             }
@@ -6426,6 +6418,22 @@ impl<'a> Parser<'a> {
         let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
         self.expect_token(&Token::RParen)?;
         Ok((name, args))
+    }
+
+    /// Parses `BEGIN ATOMIC <statements> END` when the next tokens are `BEGIN ATOMIC`.
+    fn maybe_parse_begin_atomic(&mut self) -> Result<Option<BeginEndStatements>, ParserError> {
+        if !self.peek_keywords(&[Keyword::BEGIN, Keyword::ATOMIC]) {
+            return Ok(None);
+        }
+        let begin_token = self.next_token();
+        self.advance_token();
+        let statements = self.parse_statement_list(&[Keyword::END])?;
+        let end_token = self.expect_keyword(Keyword::END)?;
+        Ok(Some(BeginEndStatements {
+            begin_token: AttachedToken(begin_token),
+            statements,
+            end_token: AttachedToken(end_token),
+        }))
     }
 
     fn parse_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {
@@ -21490,9 +21498,13 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.expect_keyword_is(Keyword::AS)?;
-
-        let body = self.parse_conditional_statements(&[Keyword::END])?;
+        let body = match self.maybe_parse_begin_atomic()? {
+            Some(statements) => CreateProcedureBody::BeginAtomic(statements),
+            None => {
+                self.expect_keyword_is(Keyword::AS)?;
+                CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+            }
+        };
 
         Ok(Statement::CreateProcedure {
             name,

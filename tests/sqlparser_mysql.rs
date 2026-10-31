@@ -5247,3 +5247,19 @@ fn parse_key_constraint_index_type_before_columns() {
         );
     }
 }
+
+#[test]
+fn parse_digit_leading_identifiers() {
+    // Verified with MySQL 8.4: anything a number cannot absorb is an identifier.
+    mysql().verified_stmt("SELECT 123abc, 1_a, 1e, 1ea, 0x1_a, 0xg, 0b01z, 100L FROM t");
+    mysql().verified_stmt("SELECT t.1, t.123, t.12e34, t.1col FROM t");
+    mysql().verified_stmt("SELECT 1 AS 1e, 2 AS 123abc");
+    // A float with an exponent ends the number, so what follows is an alias.
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 1000 AS a, 100000 AS x"
+    } else {
+        "SELECT 1e3 AS a, 1e5 AS x"
+    };
+    mysql().one_statement_parses_to("SELECT 1e3a, 1e5x", canonical);
+    mysql().one_statement_parses_to("SELECT 1.5abc", "SELECT 1.5 AS abc");
+}

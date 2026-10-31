@@ -231,6 +231,7 @@ fn generate_derived_dialect(input: &DeriveDialectInput, methods: &[DialectMethod
             use sqlparser::dialect::{BindPlaceholderStyle, Dialect, Precedence};
             use sqlparser::keywords::Keyword;
             use sqlparser::parser::{Parser, ParserError};
+            use sqlparser::tokenizer::Token;
 
             impl Dialect for #name {
                 fn dialect(&self) -> ::core::any::TypeId { #type_id_body }

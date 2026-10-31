@@ -604,6 +604,53 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the identifier characters at `chars`, which start with a digit, form an
+    /// identifier rather than a number. `prev_token` tells a qualified name apart, as `t.1`
+    /// is a column where `1` is a number. Must stay false for anything the number path reads
+    /// as one number, such as `1_000` or `1e3`.
+    ///
+    /// The default is MySQL's rule, verified with MySQL 8.4 and enabled by
+    /// `supports_numeric_prefix`: after a period any run is an identifier (`t.1`, `t.12e34`);
+    /// otherwise digits (`123`), a float with an exponent (`1e3a` is `1e3` followed by `a`)
+    /// and a `0x` hex literal are numbers, and anything else is an identifier (`123abc`,
+    /// `1e`, `0x1_a`). ClickHouse overrides it, since `1e3a` is one identifier there.
+    fn is_digit_leading_identifier(
+        &self,
+        chars: &Peekable<Chars<'_>>,
+        prev_token: Option<&Token>,
+    ) -> bool {
+        if prev_token == Some(&Token::Period) {
+            return true;
+        }
+        let mut chars = chars.clone();
+        let mut digits = 0;
+        let mut leading_zero = false;
+        while let Some(ch) = chars.next_if(|ch| ch.is_ascii_digit()) {
+            leading_zero = digits == 0 && ch == '0';
+            digits += 1;
+        }
+        let is_number = match chars.next_if(|&ch| self.is_identifier_part(ch)) {
+            None => true,
+            Some('e' | 'E') => match chars.peek() {
+                Some(ch) if ch.is_ascii_digit() => true,
+                Some(&('+' | '-')) => {
+                    chars.next();
+                    chars.peek().is_some_and(|ch| ch.is_ascii_digit())
+                }
+                _ => false,
+            },
+            Some('x') if digits == 1 && leading_zero => {
+                chars.next_if(|ch| ch.is_ascii_hexdigit()).is_some()
+                    && chars
+                        .by_ref()
+                        .take_while(|&ch| self.is_identifier_part(ch))
+                        .all(|ch| ch.is_ascii_hexdigit())
+            }
+            Some(_) => false,
+        };
+        !is_number
+    }
+
     /// Returns true if a period directly after an identifier starts a tuple
     /// element access such as `t.1`, instead of the number `.1`.
     fn supports_tuple_element_access(&self) -> bool {

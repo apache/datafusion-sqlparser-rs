@@ -1211,6 +1211,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports compound date and time units
+    /// such as `YEAR_MONTH`, `DAY_HOUR` or `SECOND_MICROSECOND`, e.g. in
+    /// `EXTRACT(YEAR_MONTH FROM d)` or `INTERVAL '1-2' YEAR_MONTH`.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/expressions.html#temporal-intervals)
+    fn supports_compound_date_time_fields(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect allows the `EXTRACT` function to use single quotes in the part being extracted.
     fn allow_extract_single_quotes(&self) -> bool {
         false
@@ -1415,7 +1424,21 @@ pub trait Dialect: Debug + Any {
                 | Keyword::TIMEZONE
                 | Keyword::TIMEZONE_HOUR
                 | Keyword::TIMEZONE_MINUTE
-        )
+        ) || (self.supports_compound_date_time_fields()
+            && matches!(
+                kw,
+                Keyword::SECOND_MICROSECOND
+                    | Keyword::MINUTE_MICROSECOND
+                    | Keyword::MINUTE_SECOND
+                    | Keyword::HOUR_MICROSECOND
+                    | Keyword::HOUR_SECOND
+                    | Keyword::HOUR_MINUTE
+                    | Keyword::DAY_MICROSECOND
+                    | Keyword::DAY_SECOND
+                    | Keyword::DAY_MINUTE
+                    | Keyword::DAY_HOUR
+                    | Keyword::YEAR_MONTH
+            ))
     }
 
     /// Returns true if the dialect supports `EXPLAIN` statements with utility options

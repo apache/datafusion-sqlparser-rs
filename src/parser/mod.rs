@@ -2793,10 +2793,7 @@ impl<'a> Parser<'a> {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
                 None
             } else {
-                Some(Box::new(match &self.peek_token_ref().token {
-                    Token::SingleQuotedString(_) => self.parse_interval()?,
-                    _ => self.parse_expr()?,
-                }))
+                Some(Box::new(self.parse_expr()?))
             };
             if self.parse_keyword(Keyword::PRECEDING) {
                 Ok(WindowFrameBound::Preceding(rows))

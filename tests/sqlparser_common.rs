@@ -22908,3 +22908,43 @@ fn parse_alter_table_reset_options() {
         );
     }
 }
+
+#[test]
+fn parse_window_frame_untyped_string_offset() {
+    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    dialects.verified_stmt(
+        "SELECT sum(x) OVER (ORDER BY f RANGE BETWEEN 'inf' PRECEDING AND '1 day' FOLLOWING) FROM t",
+    );
+    dialects.verified_stmt(
+        "SELECT sum(x) OVER (ORDER BY f ROWS BETWEEN 'hello' PRECEDING AND 10 FOLLOWING) FROM t",
+    );
+
+    let select = dialects.verified_only_select(
+        "SELECT sum(x) OVER (ORDER BY f RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND CURRENT ROW) FROM t",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function { over, .. }) => match over.as_ref() {
+            Some(WindowType::WindowSpec(WindowSpec {
+                window_frame: Some(frame),
+                ..
+            })) => assert_eq!(
+                frame,
+                &WindowFrame {
+                    units: WindowFrameUnits::Range,
+                    start_bound: WindowFrameBound::Preceding(Some(Box::new(Expr::Interval(
+                        Interval {
+                            value: Box::new(Expr::value(Value::SingleQuotedString("1".to_owned()))),
+                            leading_field: Some(DateTimeField::Day),
+                            leading_precision: None,
+                            last_field: None,
+                            fractional_seconds_precision: None,
+                        },
+                    )))),
+                    end_bound: Some(WindowFrameBound::CurrentRow),
+                }
+            ),
+            _ => panic!("expected a window specification"),
+        },
+        _ => panic!("expected a window function"),
+    }
+}

@@ -222,6 +222,12 @@ impl Dialect for MySqlDialect {
         }
     }
 
+    /// Unary `+`, `-`, and `~` sit one row above `^` in MySQL's precedence table.
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/operator-precedence.html>
+    fn unary_operand_precedence(&self) -> Option<u8> {
+        Some(self.prec_value(Precedence::MulDivModOp) + 2)
+    }
+
     /// Deprecated functionality by MySQL but still supported
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html#operator_binary>
     fn supports_binary_kw_as_cast(&self) -> bool {

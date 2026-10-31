@@ -5260,6 +5260,12 @@ fn parse_caret_precedence() {
             right: Box::new(right),
         }
     }
+    fn un(op: UnaryOperator, expr: Expr) -> Expr {
+        Expr::UnaryOp {
+            op,
+            expr: Box::new(expr),
+        }
+    }
     use BinaryOperator::{
         BitwiseAnd, BitwiseXor, Divide, Modulo, Multiply, MyIntegerDivide, PGBitwiseShiftLeft, Plus,
     };
@@ -5324,6 +5330,42 @@ fn parse_caret_precedence() {
                 BitwiseXor,
                 Expr::Nested(Box::new(bin(num("3"), Multiply, num("4")))),
             ),
+        ),
+        // Unary `-`, `+`, and `~` bind tighter than `^` in MySQL.
+        (
+            "-2 ^ 3",
+            bin(un(UnaryOperator::Minus, num("2")), BitwiseXor, num("3")),
+        ),
+        (
+            "+2 ^ 3",
+            bin(un(UnaryOperator::Plus, num("2")), BitwiseXor, num("3")),
+        ),
+        (
+            "~ 2 ^ 3",
+            bin(
+                un(UnaryOperator::BitwiseNot, num("2")),
+                BitwiseXor,
+                num("3"),
+            ),
+        ),
+        (
+            "-(2 ^ 3)",
+            un(
+                UnaryOperator::Minus,
+                Expr::Nested(Box::new(bin(num("2"), BitwiseXor, num("3")))),
+            ),
+        ),
+        (
+            "-2 * 3",
+            bin(un(UnaryOperator::Minus, num("2")), Multiply, num("3")),
+        ),
+        (
+            "~ 2 * 3",
+            bin(un(UnaryOperator::BitwiseNot, num("2")), Multiply, num("3")),
+        ),
+        (
+            "~ 2 + 3",
+            bin(un(UnaryOperator::BitwiseNot, num("2")), Plus, num("3")),
         ),
     ] {
         assert_eq!(mysql().verified_expr(sql), expected, "{sql}");

@@ -1840,6 +1840,7 @@ fn parse_create_table_with_valid_options() {
                             parameters: FunctionArguments::None,
                             args: FunctionArguments::List(
                                 FunctionArgumentList {
+                                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                                     duplicate_treatment: None,
                                     args: vec![
                                         FunctionArg::Unnamed(

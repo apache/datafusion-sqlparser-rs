@@ -11757,6 +11757,8 @@ fn parse_is_boolean() {
         verified_expr(sql)
     );
 
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
+
     let sql = "a IS NORMALIZED";
     assert_eq!(
         IsNormalized {
@@ -11764,7 +11766,7 @@ fn parse_is_boolean() {
             form: None,
             negated: false,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT NORMALIZED";
@@ -11774,7 +11776,7 @@ fn parse_is_boolean() {
             form: None,
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NFKC NORMALIZED";
@@ -11784,7 +11786,7 @@ fn parse_is_boolean() {
             form: Some(NormalizationForm::NFKC),
             negated: false,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT NFKD NORMALIZED";
@@ -11794,19 +11796,19 @@ fn parse_is_boolean() {
             form: Some(NormalizationForm::NFKD),
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS UNKNOWN";
     assert_eq!(
         IsUnknown(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT UNKNOWN";
     assert_eq!(
         IsNotUnknown(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     verified_stmt("SELECT f FROM foo WHERE field IS TRUE");
@@ -11815,14 +11817,14 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
 
-    verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
 
-    verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
     for (sql, found) in [
         ("SELECT f from foo where field is 0", "0"),
@@ -11831,7 +11833,7 @@ fn parse_is_boolean() {
         ("SELECT s, s IS TRIM(' NFKC ') FROM foo", "TRIM"),
     ] {
         assert_eq!(
-            parse_sql_statements(sql),
+            dialects.parse_sql_statements(sql),
             Err(ParserError::ParserError(format!(
                 "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: {found}"
             ))),
@@ -11843,6 +11845,7 @@ fn parse_is_boolean() {
 #[test]
 fn parse_is_json_predicate() {
     use self::Expr::*;
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
 
     // Assert the full AST once for a case that exercises every field.
     let sql = "a IS NOT JSON OBJECT WITHOUT UNIQUE KEYS";
@@ -11853,24 +11856,24 @@ fn parse_is_json_predicate() {
             unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     // The remaining forms only need to round-trip.
-    verified_expr("a IS JSON");
-    verified_expr("a IS NOT JSON");
-    verified_expr("a IS JSON VALUE");
-    verified_expr("a IS JSON SCALAR");
-    verified_expr("a IS JSON ARRAY");
-    verified_expr("a IS JSON OBJECT");
-    verified_expr("a IS JSON WITH UNIQUE KEYS");
-    verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
+    dialects.verified_expr("a IS JSON");
+    dialects.verified_expr("a IS NOT JSON");
+    dialects.verified_expr("a IS JSON VALUE");
+    dialects.verified_expr("a IS JSON SCALAR");
+    dialects.verified_expr("a IS JSON ARRAY");
+    dialects.verified_expr("a IS JSON OBJECT");
+    dialects.verified_expr("a IS JSON WITH UNIQUE KEYS");
+    dialects.verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
 
-    all_dialects().expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
-    all_dialects().expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
+    dialects.expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
+    dialects.expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
 
     assert_matches!(
-        verified_expr("NOT a IS JSON"),
+        dialects.verified_expr("NOT a IS JSON"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             expr
@@ -11880,7 +11883,7 @@ fn parse_is_json_predicate() {
 
 #[test]
 fn parse_is_json_predicate_invalid() {
-    let dialects = all_dialects();
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
 
     for (sql, err) in [
         (

@@ -4157,10 +4157,6 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsFalse(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::FALSE]) {
                         Ok(Expr::IsNotFalse(Box::new(expr)))
-                    } else if self.parse_keywords(&[Keyword::UNKNOWN]) {
-                        Ok(Expr::IsUnknown(Box::new(expr)))
-                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {
-                        Ok(Expr::IsNotUnknown(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
                         // The right operand binds no more loosely than `IS`
                         // itself, so that e.g. `a IS DISTINCT FROM b AND c`
@@ -4171,6 +4167,24 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_subexpr(precedence)?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.dialect.supports_is_operator() {
+                        let op = if self.parse_keyword(Keyword::NOT) {
+                            BinaryOperator::IsNot
+                        } else {
+                            BinaryOperator::Is
+                        };
+                        // SQLite gives `IS` the same precedence as `=` (https://www.sqlite.org/lang_expr.html).
+                        Ok(Expr::BinaryOp {
+                            left: Box::new(expr),
+                            op,
+                            right: Box::new(
+                                self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?,
+                            ),
+                        })
+                    } else if self.parse_keywords(&[Keyword::UNKNOWN]) {
+                        Ok(Expr::IsUnknown(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {
+                        Ok(Expr::IsNotUnknown(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::JSON) {
                         self.parse_is_json_predicate(expr, false)
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::JSON]) {

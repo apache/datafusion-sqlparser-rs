@@ -1902,6 +1902,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports binary `IS` and `IS NOT` operators.
+    ///
+    /// Their right operand is any expression, so `IS UNKNOWN`, `IS JSON` and
+    /// `IS NORMALIZED` are not parsed as predicates.
+    fn supports_is_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect allows an optional `SIGNED` suffix after integer data types.
     ///
     /// Example:

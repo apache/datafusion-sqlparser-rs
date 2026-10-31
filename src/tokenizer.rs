@@ -1606,11 +1606,25 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::Number(s, false)));
                     }
 
-                    if s == "0" && self.dialect.supports_non_decimal_integer_literals() {
+                    // `0x` is a radix prefix in dialects that read non-decimal
+                    // integers and in the hex-only dialects such as SQLite,
+                    // where `0o` and `0b` are not prefixes at all.
+                    if s == "0"
+                        && (self.dialect.supports_non_decimal_integer_literals()
+                            || self.dialect.supports_hex_integer_literals())
+                    {
                         let radix = match chars.peek() {
                             Some('x' | 'X') => Some((16, "a hexadecimal")),
-                            Some('o' | 'O') => Some((8, "an octal")),
-                            Some('b' | 'B') => Some((2, "a binary")),
+                            Some('o' | 'O')
+                                if self.dialect.supports_non_decimal_integer_literals() =>
+                            {
+                                Some((8, "an octal"))
+                            }
+                            Some('b' | 'B')
+                                if self.dialect.supports_non_decimal_integer_literals() =>
+                            {
+                                Some((2, "a binary"))
+                            }
                             _ => None,
                         };
                         if let Some((radix, name)) = radix {
@@ -2326,8 +2340,12 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<Token, TokenizerError> {
         let mut s = String::from('0');
         s.extend(chars.next());
-        // An underscore may directly follow the prefix, as in `0x_1F`.
-        if chars.peek() == Some(&'_') && self.dialect.supports_numeric_literal_underscores() {
+        // An underscore may directly follow the prefix, as in `0x_1F`, in
+        // PostgreSQL but not in SQLite.
+        if chars.peek() == Some(&'_')
+            && self.dialect.supports_numeric_literal_underscores()
+            && self.dialect.supports_non_decimal_integer_literals()
+        {
             chars.next();
             s.push('_');
         }
@@ -3078,6 +3096,7 @@ mod tests {
         let hex_string_dialects = all_dialects_where(|dialect| {
             dialect.supports_numeric_literal_underscores()
                 && !dialect.supports_non_decimal_integer_literals()
+                && !dialect.supports_hex_integer_literals()
         });
         hex_string_dialects.tokenizes_to(
             "0xFF_FF",
@@ -3105,6 +3124,39 @@ mod tests {
                 let err = Tokenizer::new(&**dialect, sql).tokenize().unwrap_err();
                 assert_eq!("Unexpected character '_'", err.message);
             }
+        }
+    }
+
+    #[test]
+    fn tokenize_sqlite_hex_integer_literals() {
+        let dialect = SQLiteDialect {};
+        for sql in ["0x20", "0X1F", "0xFF_FF", "0x1_2", "0x7fffffffffffffff"] {
+            let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+            assert_eq!(vec![Token::Number(sql.to_string(), false)], tokens, "{sql}");
+        }
+
+        // `0o` is not a radix prefix in SQLite, so `0o17` stays a zero and a word.
+        let tokens = Tokenizer::new(&dialect, "SELECT 0o17").tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("0".to_string(), false),
+            Token::make_word("o17", None),
+        ];
+        compare(expected, tokens);
+
+        for (sql, message) in [
+            ("SELECT 0x", "Expected a hexadecimal digit after '0x'"),
+            ("SELECT 0X", "Expected a hexadecimal digit after '0X'"),
+            ("SELECT 0xg", "Expected a hexadecimal digit after '0x'"),
+            ("SELECT 0x_", "Unexpected character '_'"),
+            ("SELECT 0x_1", "Unexpected character '_'"),
+            ("SELECT 0x_FF", "Unexpected character '_'"),
+            ("SELECT 0xFF_", "Unexpected character '_'"),
+            ("SELECT 0x1_", "Unexpected character '_'"),
+        ] {
+            let err = Tokenizer::new(&dialect, sql).tokenize().unwrap_err();
+            assert_eq!(message, err.message, "{sql}");
         }
     }
 

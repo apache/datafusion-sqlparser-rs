@@ -1846,3 +1846,47 @@ fn parse_bitwise_shift_precedence_boundaries() {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
     }
 }
+
+#[test]
+fn parse_hex_integer_literals() {
+    let sql = "SELECT 0x20, 0X1F, 0x7fffffffffffffff";
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 32, 31, 9223372036854775807"
+    } else {
+        sql
+    };
+    let select = match sqlite().one_statement_parses_to(sql, canonical) {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => select,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+    for item in &select.projection {
+        assert!(
+            matches!(
+                item,
+                SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+                    value: Value::Number(_, false),
+                    ..
+                }))
+            ),
+            "{item:?}"
+        );
+    }
+
+    // `x'20'` without a leading zero is a hex string, and `0o17` is a zero with
+    // an alias because SQLite has no octal prefix.
+    sqlite().one_statement_parses_to("SELECT x'20'", "SELECT X'20'");
+    sqlite().one_statement_parses_to("SELECT 0o17", "SELECT 0 AS o17");
+
+    for (sql, message) in [
+        ("SELECT 0x", "Expected a hexadecimal digit after '0x'"),
+        ("SELECT 0Xg", "Expected a hexadecimal digit after '0X'"),
+        ("SELECT 0x_FF", "Unexpected character '_'"),
+        ("SELECT 0xFF_", "Unexpected character '_'"),
+    ] {
+        let err = sqlite().parse_sql_statements(sql).unwrap_err().to_string();
+        assert!(err.contains(message), "{sql}: {err}");
+    }
+}

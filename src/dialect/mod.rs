@@ -622,6 +622,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect reads `0x`/`0X` hexadecimal literals as
+    /// integer constants, e.g. `0x1F`, which then parse as numbers instead
+    /// of `0x` hexadecimal strings.
+    fn supports_hex_integer_literals(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports specifying null treatment
     /// as part of a window function's parameter list as opposed
     /// to after the parameter list.

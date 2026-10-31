@@ -171,6 +171,12 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    /// SQLite reads `0x`/`0X` literals as 64-bit integer constants.
+    /// See: <https://www.sqlite.org/lang_expr.html#hexint>
+    fn supports_hex_integer_literals(&self) -> bool {
+        true
+    }
+
     fn supports_double_eq_assignment(&self) -> bool {
         true
     }

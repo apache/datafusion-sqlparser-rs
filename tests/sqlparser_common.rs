@@ -23106,3 +23106,16 @@ fn parse_alter_table_reset_options() {
         );
     }
 }
+
+#[test]
+fn parse_delete_limit_dialect_gated() {
+    let sql = "DELETE FROM customers LIMIT 100";
+    all_dialects_where(|d| d.supports_delete_limit()).verified_stmt(sql);
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_delete_limit()).parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: LIMIT".to_string()
+        ))
+    );
+}

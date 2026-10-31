@@ -713,6 +713,17 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `LIMIT` in `DELETE` statements.
+    ///
+    /// ```sql
+    /// DELETE FROM foo LIMIT 10;
+    /// ```
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/delete.html>
+    /// and <https://www.sqlite.org/lang_delete.html>
+    fn supports_delete_limit(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports an `EXCEPT` clause following a
     /// wildcard in a select list.
     ///

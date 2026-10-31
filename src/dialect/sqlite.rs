@@ -151,6 +151,11 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    /// See: <https://www.sqlite.org/lang_delete.html>
+    fn supports_delete_limit(&self) -> bool {
+        true
+    }
+
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         true
     }

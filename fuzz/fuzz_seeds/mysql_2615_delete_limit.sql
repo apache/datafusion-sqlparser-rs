@@ -1,0 +1,1 @@
+DELETE FROM customers LIMIT 100

@@ -15233,7 +15233,7 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-        let limit = if self.parse_keyword(Keyword::LIMIT) {
+        let limit = if self.dialect.supports_delete_limit() && self.parse_keyword(Keyword::LIMIT) {
             self.parse_limit()?
         } else {
             None

@@ -560,6 +560,16 @@ pub enum AlterTableOperation {
         /// Parenthesized options supplied to `SET (...)`.
         options: Vec<SqlOption>,
     },
+    /// Parenthesized `RESET` of storage parameters.
+    ///
+    /// ```sql
+    /// RESET ( storage_parameter [, ... ] )
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    ResetOptions {
+        /// Parameters to reset, optionally namespaced as in `toast.autovacuum_enabled`.
+        options: Vec<ObjectName>,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -1121,6 +1131,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
+            }
+            AlterTableOperation::ResetOptions { options } => {
+                write!(f, "RESET ({})", display_comma_separated(options))
             }
         }
     }

@@ -1312,6 +1312,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
             }
+            AlterTableOperation::ResetOptions { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
         }
     }
 }

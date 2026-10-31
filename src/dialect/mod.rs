@@ -1348,6 +1348,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect accept an option named without a value,
+    /// e.g. `CREATE VIEW v WITH (security_barrier) AS SELECT 1`?
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-STORAGE-PARAMETERS)
+    fn supports_sql_option_without_value(&self) -> bool {
+        false
+    }
+
     /// Whether `INTERVAL` expressions require units (called "qualifiers" in the ANSI SQL spec) to be specified,
     /// e.g. `INTERVAL 1 DAY` vs `INTERVAL 1`.
     ///

@@ -402,6 +402,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_sql_option_without_value(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-explain.html>
     fn supports_explain_with_utility_options(&self) -> bool {
         true

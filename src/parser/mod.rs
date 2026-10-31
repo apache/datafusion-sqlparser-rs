@@ -11091,6 +11091,11 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 let name = self.parse_identifier()?;
+                if self.dialect.supports_sql_option_without_value()
+                    && matches!(self.peek_token_ref().token, Token::Comma | Token::RParen)
+                {
+                    return Ok(SqlOption::Ident(name));
+                }
                 self.expect_token(&Token::Eq)?;
                 let value = self.parse_expr()?;
 
@@ -11698,6 +11703,11 @@ impl<'a> Parser<'a> {
             AlterTableOperation::SetLogged
         } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
             AlterTableOperation::SetUnlogged
+        } else if self.parse_keyword(Keyword::RESET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+            self.expect_token(&Token::RParen)?;
+            AlterTableOperation::ResetOptions { options }
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

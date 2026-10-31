@@ -9122,9 +9122,9 @@ fn parse_create_text_search() {
         )
     );
 
-    // CREATE options are key-value pairs in PostgreSQL syntax.
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
+        all_dialects_where(|d| !d.supports_sql_option_without_value())
+            .parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
             .unwrap_err(),
         ParserError::ParserError("Expected: =, found: )".to_string())
     );
@@ -11706,5 +11706,66 @@ fn parse_interval_followed_by_alias() {
         pg().parse_sql_statements("SELECT 1 WHERE x > INTERVAL '1' WEEK")
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: WEEK".to_string())
+    );
+}
+
+#[test]
+fn parse_storage_parameters_without_value() {
+    let dialects = all_dialects_where(|d| d.supports_sql_option_without_value());
+    let bare = SqlOption::Ident(Ident::new("security_barrier"));
+    let key_value = SqlOption::KeyValue {
+        key: Ident::new("security_invoker"),
+        value: Expr::Value(Value::Boolean(true).with_empty_span()),
+    };
+
+    match dialects
+        .verified_stmt("CREATE VIEW v WITH (security_invoker = true, security_barrier) AS SELECT 1")
+    {
+        Statement::CreateView(CreateView { options, .. }) => assert_eq!(
+            options,
+            CreateTableOptions::With(vec![key_value.clone(), bare.clone()])
+        ),
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt("CREATE TABLE t (a INT) WITH (security_barrier)") {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            assert_eq!(table_options, CreateTableOptions::With(vec![bare.clone()]))
+        }
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt("ALTER TABLE t SET (security_barrier, security_invoker = true)") {
+        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
+            operations,
+            [AlterTableOperation::SetOptionsParens {
+                options: vec![bare, key_value],
+            }]
+        ),
+        _ => unreachable!(),
+    }
+    dialects.verified_stmt("CREATE MATERIALIZED VIEW m WITH (autovacuum_enabled) AS SELECT 1");
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (fillfactor 70)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: 70".to_string())
+    );
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_sql_option_without_value())
+            .parse_sql_statements("ALTER TABLE t SET (autovacuum_enabled)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: )".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (fillfactor =)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER TABLE t SET TBLPROPERTIES (fillfactor 70)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: 70".to_string())
     );
 }

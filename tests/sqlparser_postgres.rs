@@ -12291,3 +12291,46 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_qualified_wildcard_cast() {
+    let name = |s: &str| ObjectName::from(s.split('.').map(Ident::new).collect::<Vec<_>>());
+    let cast = |prefix: &str| Expr::Cast {
+        kind: CastKind::DoubleColon,
+        expr: Box::new(Expr::QualifiedWildcard(
+            name(prefix),
+            AttachedToken::empty(),
+        )),
+        data_type: DataType::Custom(name(prefix), vec![]),
+        format: None,
+    };
+
+    assert_eq!(
+        pg().verified_only_select("SELECT t.*::t AS t FROM t")
+            .projection,
+        vec![SelectItem::ExprWithAlias {
+            expr: cast("t"),
+            alias: Ident::new("t"),
+        }]
+    );
+    assert_eq!(
+        pg().verified_only_select("SELECT s.t.*::s.t, t.* FROM s.t")
+            .projection,
+        vec![
+            SelectItem::UnnamedExpr(cast("s.t")),
+            SelectItem::QualifiedWildcard(
+                SelectItemQualifiedWildcardKind::ObjectName(name("t")),
+                WildcardAdditionalOptions::default(),
+            ),
+        ]
+    );
+    pg().verified_stmt("UPDATE t SET a = 1 RETURNING t.*::t AS t");
+    pg().verified_stmt("SELECT f(t.*::t) FROM t");
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT t.*::, 1 FROM t")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: a data type name, found: ,"
+    );
+}

@@ -4278,6 +4278,9 @@ impl<'a> Parser<'a> {
                 Keyword::NOTNULL if dialect.supports_notnull_operator() => {
                     Ok(Expr::IsNotNull(Box::new(expr)))
                 }
+                Keyword::ISNULL if dialect.supports_isnull_operator() => {
+                    Ok(Expr::IsNull(Box::new(expr)))
+                }
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {
                         self.expect_token(&Token::LParen)?;

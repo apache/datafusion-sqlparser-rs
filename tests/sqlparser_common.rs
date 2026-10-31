@@ -19905,6 +19905,47 @@ fn parse_notnull() {
 }
 
 #[test]
+fn parse_isnull() {
+    // Some dialects support the postfix `x ISNULL` operator while others
+    // consider `x ISNULL` like `x AS ISNULL` and thus consider `ISNULL` an alias for x.
+    let isnull_unsupported_dialects = all_dialects_except(|d| d.supports_isnull_operator());
+    let _ = isnull_unsupported_dialects
+        .verified_only_select_with_canonical("SELECT NULL ISNULL", "SELECT NULL AS ISNULL");
+    isnull_unsupported_dialects.verified_stmt("SELECT isnull FROM t");
+
+    // Supported dialects consider `x ISNULL` as an alias for `x IS NULL`
+    let isnull_supported_dialects = all_dialects_where(|d| d.supports_isnull_operator());
+    let _ = isnull_supported_dialects.expr_parses_to("x ISNULL", "x IS NULL");
+    isnull_supported_dialects
+        .one_statement_parses_to("SELECT a ISNULL FROM t", "SELECT a IS NULL FROM t");
+    isnull_supported_dialects.one_statement_parses_to(
+        "SELECT a ISNULL AND b ISNULL FROM t",
+        "SELECT a IS NULL AND b IS NULL FROM t",
+    );
+    isnull_supported_dialects.one_statement_parses_to(
+        "SELECT * FROM t WHERE a ISNULL",
+        "SELECT * FROM t WHERE a IS NULL",
+    );
+    isnull_supported_dialects.one_statement_parses_to(
+        "SELECT CASE WHEN a ISNULL THEN 1 ELSE 2 END FROM t",
+        "SELECT CASE WHEN a IS NULL THEN 1 ELSE 2 END FROM t",
+    );
+
+    // For dialects which support it, `NOT NULL ISNULL` should
+    // parse as `(NOT (NULL IS NULL))`
+    assert_matches!(
+        isnull_supported_dialects.expr_parses_to("NOT NULL ISNULL", "NOT NULL IS NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+
+    // for unsupported dialects, parsing should stop at `NOT NULL`
+    isnull_unsupported_dialects.expr_parses_to("NOT NULL ISNULL", "NOT NULL");
+}
+
+#[test]
 fn parse_odbc_time_date_timestamp() {
     // Supported statements
     let sql_d = "SELECT {d '2025-07-17'}, category_name FROM categories";

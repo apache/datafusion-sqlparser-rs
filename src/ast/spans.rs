@@ -35,8 +35,8 @@ use super::{
     ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget,
     ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateRule,
     CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping, Cte, Delete, DoUpdate,
-    ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch,
-    ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
+    DropRule, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias,
+    Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
     FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
     IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
@@ -491,6 +491,7 @@ impl Spanned for Statement {
             Statement::AlterTrigger(trigger) => trigger.span(),
             Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
+            Statement::DropRule(rule) => rule.span(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowCatalogs { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
@@ -546,6 +547,12 @@ impl Spanned for AlterTriggerOperation {
             Self::Rename { new_name } => new_name.span,
             Self::DependsOnExtension { extension_name, .. } => extension_name.span(),
         }
+    }
+}
+
+impl Spanned for DropRule {
+    fn span(&self) -> Span {
+        self.name.span.union(&self.table_name.span())
     }
 }
 

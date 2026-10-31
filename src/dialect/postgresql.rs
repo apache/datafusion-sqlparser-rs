@@ -618,4 +618,9 @@ impl Dialect for PostgreSqlDialect {
     fn supports_table_inheritance_markers(&self) -> bool {
         true
     }
+
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
+    fn supports_column_generic_options(&self) -> bool {
+        true
+    }
 }

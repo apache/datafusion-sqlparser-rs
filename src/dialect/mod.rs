@@ -1624,6 +1624,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `OPTIONS ( option 'value' [, ...] )`
+    /// in a column definition.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
+    fn supports_column_generic_options(&self) -> bool {
+        false
+    }
     /// Returns true if the specified keyword is reserved and cannot be
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {

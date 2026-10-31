@@ -894,6 +894,11 @@ impl Spanned for ColumnOption {
             ColumnOption::OnUpdate(expr) => expr.span(),
             ColumnOption::Generated { .. } => Span::empty(),
             ColumnOption::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
+            ColumnOption::GenericOptions(options) => union_spans(
+                options
+                    .iter()
+                    .map(|option| option.key.span.union(&option.value.span)),
+            ),
             ColumnOption::Identity(..) => Span::empty(),
             ColumnOption::OnConflict(..) => Span::empty(),
             ColumnOption::Policy(..) => Span::empty(),

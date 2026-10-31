@@ -10362,6 +10362,12 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::OnUpdate(expr)))
         } else if self.parse_keyword(Keyword::GENERATED) {
             self.parse_optional_column_option_generated()
+        } else if self.dialect.supports_column_generic_options()
+            && self.peek_keyword(Keyword::OPTIONS)
+        {
+            Ok(self
+                .parse_pg_options_clause()?
+                .map(ColumnOption::GenericOptions))
         } else if dialect_of!(self is BigQueryDialect | GenericDialect)
             && self.parse_keyword(Keyword::OPTIONS)
         {
@@ -21522,7 +21528,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `CREATE FOREIGN TABLE` statement.
     ///
-    /// Per-column `OPTIONS ( ... )` and the `PARTITION OF` form are not parsed yet.
+    /// The `PARTITION OF` form is not parsed yet.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
     pub fn parse_create_foreign_table(&mut self) -> Result<CreateForeignTable, ParserError> {

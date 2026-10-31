@@ -16382,19 +16382,18 @@ impl<'a> Parser<'a> {
 
     /// Parse `CREATE TABLE x AS TABLE y`
     pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
-        let first_name = self.parse_identifier()?;
-        if self.consume_token(&Token::Period) {
-            let second_name = self.parse_identifier()?;
-            Ok(Table {
-                table_name: Some(second_name),
-                schema_name: Some(first_name),
-            })
+        let max_parts = if self.dialect.supports_multipart_table_query_name() {
+            usize::MAX
         } else {
-            Ok(Table {
-                table_name: Some(first_name),
-                schema_name: None,
-            })
+            2
+        };
+        let mut parts = vec![self.parse_identifier()?];
+        while parts.len() < max_parts && self.consume_token(&Token::Period) {
+            parts.push(self.parse_identifier()?);
         }
+        Ok(Table {
+            name: Some(ObjectName::from(parts)),
+        })
     }
 
     /// Parse a `SET ROLE` statement. Expects SET to be consumed already.

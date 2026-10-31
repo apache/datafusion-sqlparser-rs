@@ -29,16 +29,17 @@ use crate::tokenizer::Span;
 
 use super::{
     comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, AlterTrigger, AlterTriggerOperation, Analyze, Array,
-    Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
-    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
-    ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
-    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
-    Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
-    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    AlterIndexOperation, AlterTableOperation, AlterTrigger, AlterTriggerOperation, AlterView,
+    AlterViewOperation, Analyze, Array, Assignment, AssignmentTarget, AttachedToken,
+    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
+    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget,
+    ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateRule,
+    CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping, Cte, Delete, DoUpdate,
+    ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch,
+    ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
+    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
+    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
@@ -410,17 +411,7 @@ impl Spanned for Statement {
             Statement::CreateTextSearch(create_text_search) => create_text_search.span(),
             Statement::AlterTable(alter_table) => alter_table.span(),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
-            Statement::AlterView {
-                name,
-                columns,
-                query,
-                with_options,
-            } => union_spans(
-                core::iter::once(name.span())
-                    .chain(columns.iter().map(|i| i.span))
-                    .chain(core::iter::once(query.span()))
-                    .chain(with_options.iter().map(|i| i.span())),
-            ),
+            Statement::AlterView(alter_view) => alter_view.span(),
             // These statements need to be implemented
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
@@ -1160,6 +1151,50 @@ impl Spanned for CreateTableOptions {
             }
             CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
+        }
+    }
+}
+
+impl Spanned for AlterView {
+    fn span(&self) -> Span {
+        self.name.span().union(&self.operation.span())
+    }
+}
+
+/// # partial span
+///
+/// Missing spans:
+/// - [AlterViewOperation::OwnerTo]
+impl Spanned for AlterViewOperation {
+    fn span(&self) -> Span {
+        match self {
+            AlterViewOperation::As {
+                columns,
+                query,
+                with_options,
+            } => union_spans(
+                columns
+                    .iter()
+                    .map(|i| i.span)
+                    .chain(core::iter::once(query.span()))
+                    .chain(with_options.iter().map(|i| i.span())),
+            ),
+            AlterViewOperation::AlterColumn { column_name, op } => {
+                column_name.span.union(&op.span())
+            }
+            AlterViewOperation::OwnerTo(_) => Span::empty(),
+            AlterViewOperation::RenameColumn {
+                old_column_name,
+                new_column_name,
+            } => old_column_name.span.union(&new_column_name.span),
+            AlterViewOperation::RenameTo { new_name } => new_name.span(),
+            AlterViewOperation::SetSchema { schema_name } => schema_name.span(),
+            AlterViewOperation::SetOptions { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
+            AlterViewOperation::ResetOptions { options } => {
+                union_spans(options.iter().map(|i| i.span))
+            }
         }
     }
 }
@@ -3463,5 +3498,33 @@ SETTINGS update_parallel_mode = 'auto'"#;
             test.get_source(options[0].span()),
             "toast.autovacuum_enabled = false"
         );
+    }
+
+    #[test]
+    fn test_alter_view_spans() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            (
+                "ALTER VIEW v (a) WITH (k = 1) AS SELECT 1",
+                "v (a) WITH (k = 1) AS SELECT 1",
+            ),
+            (
+                "ALTER VIEW v ALTER COLUMN c SET DEFAULT 1",
+                "v ALTER COLUMN c SET DEFAULT 1",
+            ),
+            ("ALTER VIEW IF EXISTS s.v OWNER TO o", "s.v"),
+            (
+                "ALTER VIEW v RENAME COLUMN a TO b",
+                "v RENAME COLUMN a TO b",
+            ),
+            ("ALTER VIEW v RENAME TO w", "v RENAME TO w"),
+            ("ALTER VIEW v SET SCHEMA s", "v SET SCHEMA s"),
+            ("ALTER VIEW v SET (a = 1, b)", "v SET (a = 1, b"),
+            ("ALTER VIEW v RESET (a, b)", "v RESET (a, b"),
+        ] {
+            let test = SpanTest::new(dialect, sql);
+            let stmt = &Parser::parse_sql(dialect, sql).unwrap()[0];
+            assert_eq!(test.get_source(stmt.span()), expected, "{sql}");
+        }
     }
 }

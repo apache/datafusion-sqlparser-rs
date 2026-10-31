@@ -19274,27 +19274,13 @@ impl<'a> Parser<'a> {
     ) -> Result<AlterDefaultPrivileges, ParserError> {
         // `FOR USER` is a synonym of `FOR ROLE` and is normalised to it.
         let mut options = Vec::new();
-        let mut for_roles = false;
-        let mut in_schemas = false;
         loop {
             if self.parse_keyword(Keyword::FOR) {
-                if for_roles {
-                    return Err(ParserError::ParserError(
-                        "FOR ROLE specified more than once".to_string(),
-                    ));
-                }
                 self.expect_one_of_keywords(&[Keyword::ROLE, Keyword::USER])?;
-                for_roles = true;
                 options.push(DefaultPrivilegesOption::ForRole(
                     self.parse_comma_separated(|p| p.parse_identifier())?,
                 ));
             } else if self.parse_keywords(&[Keyword::IN, Keyword::SCHEMA]) {
-                if in_schemas {
-                    return Err(ParserError::ParserError(
-                        "IN SCHEMA specified more than once".to_string(),
-                    ));
-                }
-                in_schemas = true;
                 options.push(DefaultPrivilegesOption::InSchema(
                     self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 ));

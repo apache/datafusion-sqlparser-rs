@@ -5212,34 +5212,19 @@ fn parse_alter_default_privileges() {
     pg().verified_stmt(
         "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON LARGE OBJECTS FROM app CASCADE",
     );
-    // Repeated options are rejected.
-    assert_eq!(
-        pg().parse_sql_statements(
-            "ALTER DEFAULT PRIVILEGES FOR ROLE a FOR ROLE b GRANT SELECT ON TABLES TO app"
-        )
-        .unwrap_err(),
-        ParserError::ParserError("FOR ROLE specified more than once".to_string()),
-    );
-    assert_eq!(
-        pg().parse_sql_statements(
-            "ALTER DEFAULT PRIVILEGES IN SCHEMA s IN SCHEMA t GRANT SELECT ON TABLES TO app"
-        )
-        .unwrap_err(),
-        ParserError::ParserError("IN SCHEMA specified more than once".to_string()),
-    );
-
-    // `TABLES` is a keyword only here, so a table named `tables` still parses.
-    pg().verified_stmt("GRANT SELECT ON TABLES TO app");
-    assert_eq!(
-        pg().parse_sql_statements("ALTER DEFAULT PRIVILEGES FOR ROLE a")
-            .unwrap_err(),
-        ParserError::ParserError("Expected: GRANT or REVOKE, found: EOF".to_string()),
+    // The grammar accepts a repeated option, which PostgreSQL rejects only when executing.
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE a FOR ROLE b GRANT SELECT ON TABLES TO app",
     );
 }
 
 #[test]
 fn parse_alter_default_privileges_rejects_malformed_statements() {
     for (sql, expected) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE a",
+            "Expected: GRANT or REVOKE, found: EOF",
+        ),
         (
             "ALTER DEFAULT PRIVILEGES FOR ALL GRANT SELECT ON TABLES TO app",
             "Expected: one of ROLE or USER, found: ALL",

@@ -2232,3 +2232,45 @@ fn sqlite_type_name_rejects_words_after_null_constraint() {
         );
     }
 }
+
+#[test]
+fn sqlite_type_name_single_quoted_name() {
+    sqlite().verified_stmt("CREATE TABLE t (a 'FOO')");
+    sqlite().verified_stmt("CREATE TABLE t (a 'FOO' BAR)");
+}
+
+#[test]
+fn sqlite_type_name_rejects_dangling_default() {
+    assert_eq!(
+        sqlite().parse_sql_statements("CREATE TABLE t (a FOO BAR DEFAULT)"),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: )".to_string()
+        )),
+    );
+}
+
+#[test]
+fn sqlite_type_name_rejects_invalid_modifiers() {
+    for sql in [
+        "CREATE TABLE t (a FOO BAR (x -))",
+        "CREATE TABLE t (a 'FOO' BAR (x -))",
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: type modifiers, found: -".to_string()
+            )),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn sqlite_multiword_type_name_recursion_limit() {
+    let dialect = SQLiteDialect {};
+    let result = sqlparser::parser::Parser::new(&dialect)
+        .with_recursion_limit(1)
+        .try_with_sql("CREATE TABLE t (a FOO BAR)")
+        .and_then(|mut parser| parser.parse_statements());
+    assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
+}

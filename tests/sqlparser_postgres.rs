@@ -12291,3 +12291,52 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_typed_interval_literal_preserves_precision() {
+    // `INTERVAL (p) '<value>'` literals keep the precision, see issue #2763.
+    let typed_interval = |precision: u64, value: &str| {
+        Expr::TypedString(TypedString {
+            data_type: DataType::Interval {
+                fields: None,
+                precision: Some(precision),
+            },
+            value: Value::SingleQuotedString(value.to_string()).with_empty_span(),
+            uses_odbc_syntax: false,
+        })
+    };
+    assert_eq!(
+        pg().run_parser_method("interval(2) '1 day 01:23:45.6789'", |parser| parser
+            .parse_expr())
+            .unwrap(),
+        typed_interval(2, "1 day 01:23:45.6789")
+    );
+    assert_eq!(
+        pg().run_parser_method("INTERVAL (3) '1.23456 seconds'", |parser| parser
+            .parse_expr())
+            .unwrap(),
+        typed_interval(3, "1.23456 seconds")
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "SELECT interval(2) '1 day 01:23:45.6789'",
+        "SELECT INTERVAL(2) '1 day 01:23:45.6789'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "SELECT INTERVAL (3) '1.23456 seconds'",
+        "SELECT INTERVAL(3) '1.23456 seconds'",
+    );
+
+    // Untyped literals keep their shape.
+    pg_and_generic().verified_stmt("SELECT INTERVAL '1 day'");
+    pg_and_generic().verified_stmt("SELECT INTERVAL '1' DAY");
+
+    // A precision without a value literal keeps its existing fallback shape.
+    pg_and_generic().one_statement_parses_to("SELECT interval(2)", "SELECT INTERVAL (2)");
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT INTERVAL (3) '1.23456 seconds' 'extra'")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: 'extra'".to_string())
+    );
+}

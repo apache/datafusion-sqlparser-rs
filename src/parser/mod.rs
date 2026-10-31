@@ -1863,7 +1863,18 @@ impl<'a> Parser<'a> {
         };
         let opt_expr = self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
-                DataType::Interval { .. } => parser.parse_interval(),
+                // `INTERVAL [FIELDS] (p) '...'` keeps its type options on the literal.
+                DataType::Interval { fields, precision } => {
+                    if fields.is_none() && precision.is_none() {
+                        parser.parse_interval()
+                    } else {
+                        Ok(Expr::TypedString(TypedString {
+                            data_type: DataType::Interval { fields, precision },
+                            value: parser.parse_value()?,
+                            uses_odbc_syntax: false,
+                        }))
+                    }
+                }
                 // Custom names need dialect consent, else `NOT 'a'` would read as a typed string.
                 DataType::Custom(name, modifiers)
                     if modifiers.is_empty()

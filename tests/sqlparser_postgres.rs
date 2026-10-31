@@ -11857,3 +11857,150 @@ fn parse_storage_parameters_without_value() {
         ParserError::ParserError("Expected: =, found: 70".to_string())
     );
 }
+
+#[test]
+fn parse_table_inheritance_markers() {
+    fn assert_relation(
+        relation: &TableFactor,
+        expected_name: &str,
+        expected_alias: Option<&str>,
+        expected_inheritance: Option<TableInheritance>,
+    ) {
+        match relation {
+            TableFactor::Table {
+                name,
+                alias,
+                inheritance,
+                ..
+            } => {
+                assert_eq!(name.to_string(), expected_name);
+                assert_eq!(
+                    alias.as_ref().map(|a| a.name.value.as_str()),
+                    expected_alias
+                );
+                assert_eq!(*inheritance, expected_inheritance);
+            }
+            other => panic!("expected a table, got {other:?}"),
+        }
+    }
+
+    let only = Some(TableInheritance::Only {
+        parenthesized: false,
+    });
+    let only_parenthesized = Some(TableInheritance::Only {
+        parenthesized: true,
+    });
+    let descendants = Some(TableInheritance::IncludeDescendants);
+
+    for (sql, name, alias, inheritance) in [
+        ("SELECT * FROM ONLY t", "t", None, only),
+        ("SELECT * FROM ONLY t AS x", "t", Some("x"), only),
+        ("SELECT * FROM ONLY (t)", "t", None, only_parenthesized),
+        (
+            "SELECT * FROM ONLY (app.t) x",
+            "app.t",
+            Some("x"),
+            only_parenthesized,
+        ),
+        ("SELECT * FROM t *", "t", None, descendants),
+        (
+            "SELECT * FROM app.t * AS x",
+            "app.t",
+            Some("x"),
+            descendants,
+        ),
+        ("SELECT * FROM \"only\"", "\"only\"", None, None),
+    ] {
+        let select = pg_and_generic().verified_only_select(sql);
+        assert_relation(&select.from[0].relation, name, alias, inheritance);
+    }
+
+    let select =
+        pg_and_generic().verified_only_select("SELECT * FROM ONLY a JOIN b * ON a.id = b.id");
+    assert_relation(&select.from[0].relation, "a", None, only);
+    assert_relation(&select.from[0].joins[0].relation, "b", None, descendants);
+
+    for (sql, inheritance) in [
+        ("UPDATE ONLY t SET id = 1", only),
+        ("UPDATE ONLY (t) SET id = 1", only_parenthesized),
+        ("UPDATE t * SET id = 1", descendants),
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::Update(Update { table, .. }) => {
+                assert_relation(&table.relation, "t", None, inheritance)
+            }
+            other => panic!("expected an update, got {other:?}"),
+        }
+    }
+
+    for (sql, inheritance) in [
+        ("DELETE FROM ONLY t", only),
+        ("DELETE FROM ONLY (t)", only_parenthesized),
+        ("DELETE FROM t *", descendants),
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::Delete(Delete {
+                from: FromTable::WithFromKeyword(from),
+                ..
+            }) => assert_relation(&from[0].relation, "t", None, inheritance),
+            other => panic!("expected a delete, got {other:?}"),
+        }
+    }
+
+    pg_and_generic().one_statement_parses_to("SELECT * FROM t*", "SELECT * FROM t *");
+    pg_and_generic().one_statement_parses_to("SELECT * FROM ONLY(t)", "SELECT * FROM ONLY (t)");
+    pg_and_generic().one_statement_parses_to("UPDATE t* SET id = 1", "UPDATE t * SET id = 1");
+    pg_and_generic().one_statement_parses_to("DELETE FROM t*", "DELETE FROM t *");
+
+    for sql in [
+        "SELECT * FROM ONLY",
+        "SELECT * FROM ONLY t *",
+        "SELECT * FROM ONLY (t *)",
+        "SELECT * FROM ONLY (t",
+        "SELECT * FROM ONLY ()",
+    ] {
+        assert!(pg_and_generic().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+
+    let other_dialects = all_dialects_where(|d| !d.supports_table_inheritance_markers());
+    for sql in [
+        "SELECT * FROM t *",
+        "UPDATE t * SET id = 1",
+        "DELETE FROM t *",
+    ] {
+        for dialect in &other_dialects.dialects {
+            assert!(
+                Parser::parse_sql(dialect.as_ref(), sql).is_err(),
+                "{sql} with {dialect:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn display_table_inheritance_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for (sql, rejected) in [
+        ("SELECT * FROM ONLY (t)", "ONLY ("),
+        ("SELECT * FROM ONLY t", "ONLY "),
+        ("SELECT * FROM t *", " *"),
+        ("SELECT * FROM t", "t"),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{sql}");
+    }
+}

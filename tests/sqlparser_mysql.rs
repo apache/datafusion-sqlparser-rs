@@ -2805,6 +2805,7 @@ fn parse_update_with_joins() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2818,6 +2819,7 @@ fn parse_update_with_joins() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {

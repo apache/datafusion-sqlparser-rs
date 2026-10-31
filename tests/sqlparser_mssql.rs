@@ -1745,7 +1745,7 @@ fn parse_create_table_with_valid_options() {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
                         span: Span::empty(),
-                    },
+                    }.into(),
                     value: Expr::Identifier(Ident {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
@@ -1824,7 +1824,7 @@ fn parse_create_table_with_valid_options() {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
                         span: Span::empty(),
-                    },
+                    }.into(),
                     value: Expr::Function(
                         Function {
                             name: ObjectName::from(
@@ -1875,7 +1875,7 @@ fn parse_create_table_with_valid_options() {
                         },
                     ),
                 },
-                SqlOption::Ident("HEAP".into()),
+                SqlOption::Ident(ObjectName::from(vec![Ident::new("HEAP")])),
             ],
          ),
     ];

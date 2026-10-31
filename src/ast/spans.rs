@@ -1102,8 +1102,8 @@ impl Spanned for SqlOption {
     fn span(&self) -> Span {
         match self {
             SqlOption::Clustered(table_options_clustered) => table_options_clustered.span(),
-            SqlOption::Ident(ident) => ident.span,
-            SqlOption::KeyValue { key, value } => key.span.union(&value.span()),
+            SqlOption::Ident(ident) => ident.span(),
+            SqlOption::KeyValue { key, value } => key.span().union(&value.span()),
             SqlOption::Partition {
                 column_name,
                 range_direction: _,
@@ -3445,5 +3445,23 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let expr = test.0.parse_expr().unwrap();
             assert_eq!(test.get_source(expr.span()), expected, "{sql}");
         }
+    }
+
+    #[test]
+    fn test_namespaced_storage_parameter_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)";
+        let mut test = SpanTest::new(dialect, sql);
+        let options = match test.0.parse_statement().unwrap() {
+            Statement::CreateTable(crate::ast::CreateTable {
+                table_options: crate::ast::CreateTableOptions::With(options),
+                ..
+            }) => options,
+            stmt => panic!("expected CREATE TABLE WITH, got {stmt:?}"),
+        };
+        assert_eq!(
+            test.get_source(options[0].span()),
+            "toast.autovacuum_enabled = false"
+        );
     }
 }

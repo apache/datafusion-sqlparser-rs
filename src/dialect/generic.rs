@@ -141,6 +141,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_sql_option_without_value(&self) -> bool {
+        true
+    }
+
     fn supports_explain_with_utility_options(&self) -> bool {
         true
     }
@@ -326,6 +330,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_table_partitions(&self) -> bool {
+        true
+    }
+
+    fn supports_table_inheritance_markers(&self) -> bool {
         true
     }
 

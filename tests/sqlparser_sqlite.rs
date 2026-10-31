@@ -391,6 +391,27 @@ fn test_placeholder() {
 }
 
 #[test]
+fn parse_colon_does_not_start_json_access() {
+    // SQLite rejects `SELECT c:se` (`near ":se": syntax error`); no `:` traversal.
+    for sql in ["SELECT c:se", "SELECT a:b FROM t"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: end of statement, found: :".to_string()
+            ))
+        );
+    }
+
+    let ast = sqlite().verified_only_select("SELECT :xxx");
+    assert_eq!(
+        ast.projection[0],
+        UnnamedExpr(Expr::Value(
+            (Value::Placeholder(":xxx".into())).with_empty_span()
+        )),
+    );
+}
+
+#[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
     if let Statement::CreateTable(CreateTable {
@@ -686,6 +707,138 @@ fn test_glob_operator() {
             "Expected: an expression, found: EOF".to_string()
         ))
     );
+}
+
+#[test]
+fn sqlite_is_operators() {
+    for (sql, op) in [
+        ("a IS b", BinaryOperator::Is),
+        ("a IS NOT b", BinaryOperator::IsNot),
+    ] {
+        assert_eq!(
+            sqlite().verified_expr(sql),
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }
+        );
+    }
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b + c"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Is,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Identifier(Ident::new("c"))),
+            }),
+        }
+    );
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b AND c IS NOT d"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Is,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("c"))),
+                op: BinaryOperator::IsNot,
+                right: Box::new(Expr::Identifier(Ident::new("d"))),
+            }),
+        }
+    );
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b = c"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Is,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("c"))),
+        }
+    );
+
+    match sqlite().verified_expr("a IS b IN (1)") {
+        Expr::In {
+            expr,
+            target: InTarget::List(list),
+            negated,
+            global,
+        } => {
+            assert!(!negated);
+            assert!(!global);
+            assert_eq!(
+                *expr,
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("a"))),
+                    op: BinaryOperator::Is,
+                    right: Box::new(Expr::Identifier(Ident::new("b"))),
+                }
+            );
+            assert_eq!(list.len(), 1);
+            assert!(matches!(
+                list[0],
+                Expr::Value(ValueWithSpan {
+                    value: Value::Number(_, _),
+                    ..
+                })
+            ));
+        }
+        other => panic!("expected InList on top, got {other:?}"),
+    }
+
+    // A dangling right-hand side is rejected
+    for sql in ["SELECT a IS", "SELECT a IS NOT"] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(
+                "Expected: an expression, found: EOF".to_string()
+            ))
+        );
+    }
+}
+
+#[test]
+fn sqlite_is_operator_keyword_operands() {
+    // SQLite has no `IS UNKNOWN`, `IS JSON` or `IS NORMALIZED` predicate.
+    for right in ["json('{}')", "json", "unknown", "normalized", "nfc"] {
+        for (op, not) in [(BinaryOperator::Is, ""), (BinaryOperator::IsNot, "NOT ")] {
+            let sql = format!("a IS {not}{right}");
+            assert_eq!(
+                sqlite().verified_expr(&sql),
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("a"))),
+                    op,
+                    right: Box::new(sqlite().verified_expr(right)),
+                },
+                "{sql}"
+            );
+        }
+    }
+    sqlite().verified_stmt("SELECT a IS json('{}'), a IS NOT json('{}') FROM t");
+
+    for (sql, found) in [
+        ("SELECT a FROM t WHERE a IS NFC NORMALIZED", "NORMALIZED"),
+        ("SELECT a FROM t WHERE a IS NOT JSON OBJECT", "OBJECT"),
+    ] {
+        assert_eq!(
+            sqlite().parse_sql_statements(sql),
+            Err(ParserError::ParserError(format!(
+                "Expected: end of statement, found: {found}"
+            ))),
+            "{sql}"
+        );
+    }
 }
 
 #[test]
@@ -1845,4 +1998,15 @@ fn parse_bitwise_shift_precedence_boundaries() {
     ] {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
     }
+}
+
+#[test]
+fn parse_create_table_string_literal_column_with_dangling_constraint_name() {
+    assert_eq!(
+        sqlite()
+            .parse_sql_statements("CREATE TABLE t ('a' CONSTRAINT c)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: constraint details after CONSTRAINT <name>, found: )"
+    );
 }

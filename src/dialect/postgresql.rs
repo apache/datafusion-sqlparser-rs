@@ -338,7 +338,7 @@ impl Dialect for PostgreSqlDialect {
             | Token::ShiftLeft
             | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
             // lowest prec to prevent it from turning into a binary op
-            Token::Colon => Some(Ok(self.prec_unknown())),
+            Token::Colon | Token::Assignment => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }
@@ -348,6 +348,10 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_group_by_expr(&self) -> bool {
+        true
+    }
+
+    fn supports_drop_group(&self) -> bool {
         true
     }
 
@@ -395,6 +399,10 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_create_index_with_clause(&self) -> bool {
+        true
+    }
+
+    fn supports_sql_option_without_value(&self) -> bool {
         true
     }
 
@@ -462,6 +470,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/current/sql-syntax-calling-funcs.html#SQL-SYNTAX-CALLING-FUNCS-NAMED>
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        true
+    }
+
     /// Return true if the dialect supports empty projections in SELECT statements
     ///
     /// Example
@@ -487,6 +500,11 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
+
+    /// See: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-CONSTANTS-NUMERIC>
+    fn supports_non_decimal_integer_literals(&self) -> bool {
         true
     }
 
@@ -528,6 +546,19 @@ impl Dialect for PostgreSqlDialect {
     /// [Postgres]: https://www.postgresql.org/docs/17/datatype-datetime.html
     fn supports_interval_options(&self) -> bool {
         true
+    }
+
+    /// See `opt_interval` in <https://github.com/postgres/postgres/blob/master/src/backend/parser/gram.y>
+    fn is_interval_qualifier(&self, kw: Keyword) -> bool {
+        matches!(
+            kw,
+            Keyword::YEAR
+                | Keyword::MONTH
+                | Keyword::DAY
+                | Keyword::HOUR
+                | Keyword::MINUTE
+                | Keyword::SECOND
+        )
     }
 
     fn supports_insert_table_alias(&self) -> bool {
@@ -580,6 +611,11 @@ impl Dialect for PostgreSqlDialect {
 
     /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
     fn supports_attach_partition_of(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM>
+    fn supports_table_inheritance_markers(&self) -> bool {
         true
     }
 }

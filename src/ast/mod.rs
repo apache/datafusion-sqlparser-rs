@@ -71,25 +71,27 @@ pub use self::ddl::{
     AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterTableType,
     AlterTextSearch, AlterTextSearchOperation, AlterTextSearchOption, AlterTrigger,
     AlterTriggerOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateAggregate, CreateAggregateArgs, CreateAggregateOption,
-    CreateCollation, CreateCollationDefinition, CreateConnector, CreateDomain, CreateExtension,
-    CreateForeignDataWrapper, CreateForeignTable, CreateFunction, CreateIndex, CreateOperator,
-    CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateRule, CreateRuleAction, CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch,
-    CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior,
-    DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropTrigger, ForValues, ForeignDataWrapperRoutineClause,
-    FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
-    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
-    OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
-    Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
+    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, AlterView, AlterViewOperation,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateAggregate, CreateAggregateArgs,
+    CreateAggregateOption, CreateCollation, CreateCollationDefinition, CreateConnector,
+    CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable, CreateFunction,
+    CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
+    CreatePolicyCommand, CreatePolicyType, CreateRule, CreateRuleAction, CreateRuleDoKind,
+    CreateRuleEvent, CreateTable, CreateTextSearch, CreateTrigger, CreateUserMapping, CreateView,
+    Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction,
+    DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy,
+    DropTrigger, ForValues, ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
+    OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition,
+    PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
+    SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
     TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, UserMappingUser, ViewColumnDef,
+    WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -112,8 +114,8 @@ pub use self::query::{
     SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SelectModifiers,
     SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias,
     TableAliasColumnDef, TableFactor, TableFunctionArgs, TableIndexDirective,
-    TableIndexHintForClause, TableIndexHintType, TableIndexHints, TableIndexType, TableSample,
-    TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
+    TableIndexHintForClause, TableIndexHintType, TableIndexHints, TableIndexType, TableInheritance,
+    TableSample, TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
     TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier, TableSampleUnit, TableVersion,
     TableWithJoins, Top, TopQuantity, UpdateTableFromKind, ValueTableMode, Values,
     WildcardAdditionalOptions, With, WithFill, XmlNamespaceDefinition, XmlPassingArgument,
@@ -3847,6 +3849,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
     CreateForeignDataWrapper(CreateForeignDataWrapper),
     /// ```sql
+    /// CREATE USER MAPPING
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createusermapping.html)
+    CreateUserMapping(CreateUserMapping),
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
@@ -3906,17 +3913,7 @@ pub enum Statement {
     /// ```sql
     /// ALTER VIEW
     /// ```
-    AlterView {
-        /// View name being altered.
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        /// Optional new column list for the view.
-        columns: Vec<Ident>,
-        /// Replacement query for the view definition.
-        query: Box<Query>,
-        /// Additional WITH options for the view.
-        with_options: Vec<SqlOption>,
-    },
+    AlterView(AlterView),
     /// ```sql
     /// ALTER FUNCTION
     /// ALTER AGGREGATE
@@ -5729,6 +5726,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
             Statement::CreateForeignDataWrapper(stmt) => write!(f, "{stmt}"),
+            Statement::CreateUserMapping(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateRule(rule) => write!(f, "{rule}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
@@ -5743,21 +5741,7 @@ impl fmt::Display for Statement {
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
             }
-            Statement::AlterView {
-                name,
-                columns,
-                query,
-                with_options,
-            } => {
-                write!(f, "ALTER VIEW {name}")?;
-                if !with_options.is_empty() {
-                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
-                }
-                if !columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(columns))?;
-                }
-                write!(f, " AS {query}")
-            }
+            Statement::AlterView(alter_view) => write!(f, "{alter_view}"),
             Statement::AlterFunction(alter_function) => write!(f, "{alter_function}"),
             Statement::AlterType(AlterType { name, operation }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
@@ -7779,6 +7763,16 @@ pub enum GrantObjects {
         /// The target schema names.
         schemas: Vec<ObjectName>,
     },
+    /// Grant privileges on `ALL PROCEDURES IN SCHEMA <schema_name> [, ...]`
+    AllProceduresInSchema {
+        /// The target schema names.
+        schemas: Vec<ObjectName>,
+    },
+    /// Grant privileges on `ALL ROUTINES IN SCHEMA <schema_name> [, ...]`
+    AllRoutinesInSchema {
+        /// The target schema names.
+        schemas: Vec<ObjectName>,
+    },
     /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
     FutureSchemasInDatabase {
         /// The target database names.
@@ -7847,6 +7841,13 @@ pub enum GrantObjects {
     /// For example:
     /// `GRANT EXECUTE ON FUNCTION foo(p_id uuid), bar() TO role1`
     Functions(Vec<FunctionDesc>),
+    /// Grant privileges on routines, which name functions and procedures alike.
+    ///
+    /// For example:
+    /// `GRANT EXECUTE ON ROUTINE foo(p_id uuid), bar() TO role1`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-grant.html)
+    Routines(Vec<FunctionDesc>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -7912,6 +7913,20 @@ impl fmt::Display for GrantObjects {
                 write!(
                     f,
                     "ALL FUNCTIONS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllProceduresInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL PROCEDURES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllRoutinesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL ROUTINES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }
@@ -7983,6 +7998,9 @@ impl fmt::Display for GrantObjects {
             }
             GrantObjects::Functions(functions) => {
                 write!(f, "FUNCTION {}", display_comma_separated(functions))
+            }
+            GrantObjects::Routines(routines) => {
+                write!(f, "ROUTINE {}", display_comma_separated(routines))
             }
         }
     }
@@ -8778,6 +8796,8 @@ pub enum ObjectType {
     Database,
     /// A role.
     Role,
+    /// A user group.
+    Group,
     /// A sequence.
     Sequence,
     /// A stage.
@@ -8804,6 +8824,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Schema => "SCHEMA",
             ObjectType::Database => "DATABASE",
             ObjectType::Role => "ROLE",
+            ObjectType::Group => "GROUP",
             ObjectType::Sequence => "SEQUENCE",
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",
@@ -9104,16 +9125,18 @@ pub enum SqlOption {
     ///
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TableOptions>
     Clustered(TableOptionsClustered),
-    /// Single identifier options, e.g. `HEAP` for MSSQL.
+    /// Option name without a value, e.g. `HEAP` for MSSQL or a PostgreSQL storage
+    /// parameter. The name may be namespaced, e.g. `toast.autovacuum_enabled`.
     ///
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TableOptions>
-    Ident(Ident),
+    Ident(ObjectName),
     /// Any option that consists of a key value pair where the value is an expression. e.g.
     ///
     ///   WITH(DISTRIBUTION = ROUND_ROBIN)
+    ///   WITH (toast.autovacuum_enabled = false)
     KeyValue {
-        /// The option key identifier.
-        key: Ident,
+        /// The option key.
+        key: ObjectName,
         /// The expression value for the option.
         value: Expr,
     },
@@ -10506,6 +10529,10 @@ pub enum CreateFunctionBody {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
     Return(Expr),
+    /// SQL-standard function body enclosed by `BEGIN ATOMIC` and `END`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    BeginAtomic(BeginEndStatements),
 
     /// Function body expression using the 'AS RETURN' keywords
     ///
@@ -12598,6 +12625,12 @@ impl From<AlterType> for Statement {
 impl From<AlterCollation> for Statement {
     fn from(a: AlterCollation) -> Self {
         Self::AlterCollation(a)
+    }
+}
+
+impl From<AlterView> for Statement {
+    fn from(a: AlterView) -> Self {
+        Self::AlterView(a)
     }
 }
 

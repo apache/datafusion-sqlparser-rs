@@ -5247,3 +5247,8 @@ fn parse_key_constraint_index_type_before_columns() {
         );
     }
 }
+
+#[test]
+fn parse_string_introducer_with_hex_number() {
+    mysql().verified_stmt("SELECT _x 0x10");
+}

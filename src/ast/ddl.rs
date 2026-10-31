@@ -4945,11 +4945,11 @@ impl fmt::Display for AlterViewOperation {
                 query,
                 with_options,
             } => {
-                if !with_options.is_empty() {
-                    write!(f, "WITH ({}) ", display_comma_separated(with_options))?;
-                }
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
+                }
+                if !with_options.is_empty() {
+                    write!(f, "WITH ({}) ", display_comma_separated(with_options))?;
                 }
                 write!(f, "AS {query}")
             }

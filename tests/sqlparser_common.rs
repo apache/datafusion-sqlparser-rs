@@ -5714,6 +5714,8 @@ fn parse_alter_view_with_options() {
         }
         _ => unreachable!(),
     }
+
+    verified_stmt("ALTER VIEW v (a) WITH (x = 1) AS SELECT 1");
 }
 
 #[test]
@@ -5737,6 +5739,182 @@ fn parse_alter_view_with_columns() {
             assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_view_operations() {
+    let operation = |sql: &str| match verified_stmt(sql) {
+        Statement::AlterView(AlterView { operation, .. }) => operation,
+        stmt => panic!("Expected ALTER VIEW, got {stmt:?}"),
+    };
+
+    assert_eq!(
+        verified_stmt("ALTER VIEW IF EXISTS s.v OWNER TO o"),
+        Statement::AlterView(AlterView {
+            name: ObjectName::from(vec![Ident::new("s"), Ident::new("v")]),
+            if_exists: true,
+            operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("o"))),
+        })
+    );
+    assert_eq!(
+        operation("ALTER VIEW v OWNER TO CURRENT_USER"),
+        AlterViewOperation::OwnerTo(Owner::CurrentUser)
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET (check_option = 'local', security_barrier)"),
+        AlterViewOperation::SetOptions {
+            options: vec![
+                SqlOption::KeyValue {
+                    key: ObjectName::from(vec![Ident::new("check_option")]),
+                    value: Expr::Value(Value::SingleQuotedString("local".into()).with_empty_span()),
+                },
+                SqlOption::Ident(ObjectName::from(vec![Ident::new("security_barrier")])),
+            ],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RESET (security_invoker, check_option)"),
+        AlterViewOperation::ResetOptions {
+            options: vec![Ident::new("security_invoker"), Ident::new("check_option")],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c SET DEFAULT 1"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::SetDefault {
+                value: Expr::value(number("1")),
+            },
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c DROP DEFAULT"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::DropDefault,
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME COLUMN a TO b"),
+        AlterViewOperation::RenameColumn {
+            old_column_name: Ident::new("a"),
+            new_column_name: Ident::new("b"),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME TO w"),
+        AlterViewOperation::RenameTo {
+            new_name: ObjectName::from(vec![Ident::new("w")]),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET SCHEMA s"),
+        AlterViewOperation::SetSchema {
+            schema_name: ObjectName::from(vec![Ident::new("s")]),
+        }
+    );
+
+    one_statement_parses_to(
+        "ALTER VIEW v ALTER c DROP DEFAULT",
+        "ALTER VIEW v ALTER COLUMN c DROP DEFAULT",
+    );
+    one_statement_parses_to(
+        "ALTER VIEW v RENAME a TO b",
+        "ALTER VIEW v RENAME COLUMN a TO b",
+    );
+
+    for (sql, expected) in [
+        ("ALTER VIEW 123", "Expected: identifier, found: 123"),
+        ("ALTER VIEW v SET ()", "Expected: identifier, found: )"),
+        ("ALTER VIEW IF v OWNER TO o", "Expected: AS, found: v"),
+        ("ALTER VIEW v RESET (a = 1)", "Expected: ), found: ="),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET NOT NULL",
+            "Expected: SET DEFAULT or DROP DEFAULT after ALTER COLUMN, found: SET",
+        ),
+        ("ALTER VIEW v RENAME COLUMN a", "Expected: TO, found: EOF"),
+        (
+            "ALTER VIEW v OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. \
+             sql parser error: Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER VIEW v SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v SET a", "Expected: (, found: a"),
+        (
+            "ALTER VIEW v SET (a = )",
+            "Expected: an expression, found: )",
+        ),
+        ("ALTER VIEW v SET (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v RESET a", "Expected: (, found: a"),
+        ("ALTER VIEW v RESET (a b)", "Expected: ), found: b"),
+        ("ALTER VIEW v RENAME TO", "Expected: identifier, found: EOF"),
+        ("ALTER VIEW v RENAME", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v RENAME COLUMN a TO",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v ALTER", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET DEFAULT",
+            "Expected: an expression, found: EOF",
+        ),
+        ("ALTER VIEW v (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v WITH (a", "Expected: =, found: EOF"),
+        ("ALTER VIEW v WITH (a = 1)", "Expected: AS, found: EOF"),
+        (
+            "ALTER VIEW v AS",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_trailing_commas())
+            .parse_sql_statements("ALTER VIEW v RESET (a, )")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string()),
+    );
+}
+
+#[test]
+fn display_alter_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let with_options = verified_stmt("ALTER VIEW IF EXISTS v WITH (x = 1) AS SELECT 1");
+    for rejected in ["ALTER VIEW ", "IF EXISTS ", "WITH ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{with_options}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+
+    let columns = verified_stmt("ALTER VIEW IF EXISTS v (zeta) AS SELECT 1");
+    for rejected in ["ALTER VIEW ", "IF EXISTS ", "("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{columns}"), Err(fmt::Error), "{rejected:?}");
     }
 }
 

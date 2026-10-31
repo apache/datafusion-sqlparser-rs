@@ -10321,6 +10321,7 @@ impl<'a> Parser<'a> {
                 CheckConstraint {
                     name: None, // Column-level check constraints don't have names
                     expr: Box::new(expr),
+                    parenthesized: true,
                     no_inherit,
                     enforced,
                 }
@@ -10659,7 +10660,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an optional table constraint (e.g. `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK`).
+    /// Parse an optional table constraint (e.g. `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK`, `ASSUME`).
     pub fn parse_optional_table_constraint(
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
@@ -10792,9 +10793,18 @@ impl<'a> Parser<'a> {
                 ))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
-                self.expect_token(&Token::LParen)?;
-                let expr = Box::new(self.parse_expr()?);
-                self.expect_token(&Token::RParen)?;
+                let (expr, parenthesized) =
+                    if self.dialect.supports_unparenthesized_check_constraint() {
+                        match self.parse_expr()? {
+                            Expr::Nested(expr) => (expr, true),
+                            expr => (Box::new(expr), false),
+                        }
+                    } else {
+                        self.expect_token(&Token::LParen)?;
+                        let expr = Box::new(self.parse_expr()?);
+                        self.expect_token(&Token::RParen)?;
+                        (expr, true)
+                    };
                 let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
                 let enforced = if self.parse_keyword(Keyword::ENFORCED) {
@@ -10809,8 +10819,30 @@ impl<'a> Parser<'a> {
                     CheckConstraint {
                         name,
                         expr,
+                        parenthesized,
                         no_inherit,
                         enforced,
+                    }
+                    .into(),
+                ))
+            }
+            Token::Word(w)
+                if w.keyword == Keyword::ASSUME && self.dialect.supports_assume_constraint() =>
+            {
+                let Some(identifier) = name else {
+                    self.prev_token();
+                    return Ok(None);
+                };
+                let (expr, parenthesized) = match self.parse_expr()? {
+                    Expr::Nested(expr) => (expr, true),
+                    expr => (Box::new(expr), false),
+                };
+
+                Ok(Some(
+                    AssumeConstraint {
+                        name: identifier,
+                        expr,
+                        parenthesized,
                     }
                     .into(),
                 ))

@@ -8138,7 +8138,7 @@ fn parse_create_operator() {
 
     for op_symbol in &[
         "-", "*", "/", "<", ">", "=", "<=", ">=", "<>", "~", "!", "@", "#", "%", "^", "&", "|",
-        "<<", ">>", "&&",
+        "<<", ">>", "&&", "<|",
     ] {
         assert_eq!(
             pg().verified_stmt(&format!("CREATE OPERATOR {op_symbol} (FUNCTION = f)")),
@@ -8152,6 +8152,11 @@ fn parse_create_operator() {
             })
         );
     }
+
+    pg().one_statement_parses_to(
+        "CREATE OPERATOR <| (PROCEDURE = int8lt, LEFTARG = bigint, RIGHTARG = bigint)",
+        "CREATE OPERATOR <| (PROCEDURE = int8lt, LEFTARG = BIGINT, RIGHTARG = BIGINT)",
+    );
 
     pg().one_statement_parses_to(
         "CREATE OPERATOR != (FUNCTION = func)",
@@ -8285,6 +8290,12 @@ fn parse_drop_operator() {
             }
         }
     }
+
+    // The two-character `<|` is one operator name only in dialects that read custom operators.
+    pg().one_statement_parses_to(
+        "DROP OPERATOR <|(bigint, bigint)",
+        "DROP OPERATOR <| (BIGINT, BIGINT)",
+    );
 
     // Test DROP OPERATOR with schema-qualified operator name
     let sql = "DROP OPERATOR myschema.@@ (TEXT, TEXT)";

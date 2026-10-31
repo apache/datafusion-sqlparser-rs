@@ -18296,13 +18296,32 @@ fn test_geometric_binary_operators() {
     ));
 
     // Does not extend below?
-    let sql = "box '((0,0),(3,3))' |&> box '((0,0),(2,2))'";
+    let sql = "box '((3,4),(5,5))' |&> box '((0,0),(2,2))'";
     assert!(matches!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::BinaryOp {
             op: BinaryOperator::PipeAndGt,
             ..
         }
+    ));
+}
+
+#[test]
+fn test_lt_pipe_binary_operator() {
+    // The three-character geometric operator keeps its token.
+    all_dialects_where(|d| d.supports_geometric_types()).verified_stmt("SELECT 1 <<| 2");
+
+    // The two-character `<|` is a custom operator where both of its characters
+    // are custom operator parts.
+    let dialects =
+        all_dialects_where(|d| d.is_custom_operator_part('<') && d.is_custom_operator_part('|'));
+    dialects.verified_stmt("SELECT 1 <| 2");
+    assert!(matches!(
+        dialects.verified_expr("1 <| 2"),
+        Expr::BinaryOp {
+            op: BinaryOperator::Custom(op),
+            ..
+        } if op == "<|"
     ));
 }
 

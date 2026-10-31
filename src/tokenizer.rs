@@ -1881,9 +1881,6 @@ impl<'a> Tokenizer<'a> {
                                 _ => self.start_binop(chars, "<=", Token::LtEq),
                             }
                         }
-                        Some('|') if self.dialect.supports_geometric_types() => {
-                            self.consume_for_binop(chars, "<<|", Token::ShiftLeftVerticalBar)
-                        }
                         Some('>') => self.consume_for_binop(chars, "<>", Token::Neq),
                         Some('<') if self.dialect.supports_geometric_types() => {
                             chars.next(); // consume
@@ -2935,7 +2932,7 @@ mod tests {
     use super::*;
     use crate::dialect::{
         BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect,
-        PostgreSqlDialect, SQLiteDialect,
+        PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
     };
     use crate::test_utils::{all_dialects, all_dialects_except, all_dialects_where};
     use core::fmt::Debug;
@@ -5166,5 +5163,57 @@ mod tests {
                 "{sql}"
             );
         }
+    }
+
+    #[test]
+    fn tokenize_lt_pipe_operator() {
+        // `<|` is not a geometric operator. PostgreSQL reads it as a custom operator.
+        let tokens = Tokenizer::new(&PostgreSqlDialect {}, "SELECT 1 <| 2")
+            .tokenize()
+            .unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
+            Token::CustomBinaryOperator("<|".to_string()),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("2".to_string(), false),
+        ];
+        compare(expected, tokens);
+
+        // Redshift does not read custom operators, so the two operators stay separate.
+        let tokens = Tokenizer::new(&RedshiftSqlDialect {}, "SELECT 1 <| 2")
+            .tokenize()
+            .unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
+            Token::Lt,
+            Token::Pipe,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("2".to_string(), false),
+        ];
+        compare(expected, tokens);
+
+        let assert_shift_left_vertical_bar = |dialect: &dyn Dialect| {
+            let tokens = Tokenizer::new(dialect, "SELECT 1 <<| 2")
+                .tokenize()
+                .unwrap();
+            let expected = vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+                Token::Whitespace(Whitespace::Space),
+                Token::ShiftLeftVerticalBar,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("2".to_string(), false),
+            ];
+            compare(expected, tokens);
+        };
+        assert_shift_left_vertical_bar(&PostgreSqlDialect {});
+        assert_shift_left_vertical_bar(&RedshiftSqlDialect {});
     }
 }

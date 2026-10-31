@@ -758,6 +758,7 @@ fn test_duckdb_union_datatype() {
             clone: Default::default(),
             comment: Default::default(),
             on_commit: Default::default(),
+            tablespace: Default::default(),
             on_cluster: Default::default(),
             primary_key: Default::default(),
             order_by: Default::default(),

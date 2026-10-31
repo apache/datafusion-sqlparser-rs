@@ -7453,6 +7453,7 @@ fn parse_trigger_related_functions() {
             clone: None,
             comment: None,
             on_commit: None,
+            tablespace: None,
             on_cluster: None,
             primary_key: None,
             order_by: None,
@@ -12290,4 +12291,116 @@ fn parse_create_table_partition_of_untyped_columns() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_create_table_inherits_with_clause_order() {
+    let sql = "CREATE TABLE m2 (CHECK (x > 0)) INHERITS (m) WITH (autovacuum_enabled = off)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            inherits,
+            table_options,
+            tablespace,
+            ..
+        }) => {
+            assert_eq_vec(&["m"], &inherits.as_ref().unwrap()[0].0);
+            assert!(matches!(table_options, CreateTableOptions::With(_)));
+            assert!(tablespace.is_none());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_by_tablespace_clause_order() {
+    let sql = "CREATE TABLE p (a INT) PARTITION BY LIST(a) TABLESPACE ts";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            partition_by,
+            tablespace,
+            ..
+        }) => {
+            assert!(partition_by.is_some());
+            assert_eq!(
+                tablespace,
+                Some(TablespaceOption {
+                    name: "ts".to_string(),
+                    storage: None,
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_inherits_partition_with_on_commit_tablespace_clause_order() {
+    let sql = "CREATE TABLE t (a INT) INHERITS (m) PARTITION BY LIST(a) WITH (autovacuum_enabled = off) ON COMMIT DROP TABLESPACE ts";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            inherits,
+            partition_by,
+            table_options,
+            on_commit,
+            tablespace,
+            ..
+        }) => {
+            assert_eq_vec(&["m"], &inherits.as_ref().unwrap()[0].0);
+            assert!(partition_by.is_some());
+            assert!(matches!(table_options, CreateTableOptions::With(_)));
+            assert!(matches!(on_commit, Some(OnCommit::Drop)));
+            assert_eq!(
+                tablespace,
+                Some(TablespaceOption {
+                    name: "ts".to_string(),
+                    storage: None,
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_before_partition_by_clause_order() {
+    pg_and_generic().one_statement_parses_to(
+        "CREATE TABLE t (a INT) INHERITS (m) WITH (autovacuum_enabled = off) PARTITION BY LIST(a) ON COMMIT DROP TABLESPACE ts",
+        "CREATE TABLE t (a INT) INHERITS (m) PARTITION BY LIST(a) WITH (autovacuum_enabled = off) ON COMMIT DROP TABLESPACE ts",
+    );
+}
+
+#[test]
+fn parse_create_table_as_tablespace_clause_order() {
+    let sql = "CREATE TABLE t TABLESPACE ts AS SELECT a FROM t2";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            query, tablespace, ..
+        }) => {
+            assert!(query.is_some());
+            assert_eq!(
+                tablespace,
+                Some(TablespaceOption {
+                    name: "ts".to_string(),
+                    storage: None,
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_tablespace_clause_order_errors() {
+    assert!(matches!(
+        pg_and_generic().parse_sql_statements("CREATE TABLE t (a INT) TABLESPACE"),
+        Err(ParserError::ParserError(_))
+    ));
+    assert!(matches!(
+        pg_and_generic().parse_sql_statements("CREATE TABLE t (a INT) TABLESPACE ts STORAGE"),
+        Err(ParserError::ParserError(_))
+    ));
+    assert!(matches!(
+        pg_and_generic().parse_sql_statements("CREATE TABLE t (a INT) ON COMMIT DROP TABLESPACE"),
+        Err(ParserError::ParserError(_))
+    ));
 }

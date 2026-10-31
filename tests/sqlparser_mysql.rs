@@ -1086,11 +1086,14 @@ fn parse_create_table_multiple_options_order_independent() {
 fn parse_create_table_with_all_table_options() {
     let sql =
         "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT = 123 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci INSERT_METHOD = FIRST KEY_BLOCK_SIZE = 8 ROW_FORMAT = DYNAMIC DATA DIRECTORY = '/var/lib/mysql/data' INDEX DIRECTORY = '/var/lib/mysql/index' PACK_KEYS = 1 STATS_AUTO_RECALC = 1 STATS_PERSISTENT = 0 STATS_SAMPLE_PAGES = 128 DELAY_KEY_WRITE = 1 COMPRESSION = 'ZLIB' ENCRYPTION = 'Y' MAX_ROWS = 10000 MIN_ROWS = 10 AUTOEXTEND_SIZE = 64 AVG_ROW_LENGTH = 128 CHECKSUM = 1 CONNECTION = 'mysql://localhost' ENGINE_ATTRIBUTE = 'primary' PASSWORD = 'secure_password' SECONDARY_ENGINE_ATTRIBUTE = 'secondary_attr' START TRANSACTION TABLESPACE my_tablespace STORAGE DISK UNION = (table1, table2, table3)";
+    let rendered =
+        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT = 123 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci INSERT_METHOD = FIRST KEY_BLOCK_SIZE = 8 ROW_FORMAT = DYNAMIC DATA DIRECTORY = '/var/lib/mysql/data' INDEX DIRECTORY = '/var/lib/mysql/index' PACK_KEYS = 1 STATS_AUTO_RECALC = 1 STATS_PERSISTENT = 0 STATS_SAMPLE_PAGES = 128 DELAY_KEY_WRITE = 1 COMPRESSION = 'ZLIB' ENCRYPTION = 'Y' MAX_ROWS = 10000 MIN_ROWS = 10 AUTOEXTEND_SIZE = 64 AVG_ROW_LENGTH = 128 CHECKSUM = 1 CONNECTION = 'mysql://localhost' ENGINE_ATTRIBUTE = 'primary' PASSWORD = 'secure_password' SECONDARY_ENGINE_ATTRIBUTE = 'secondary_attr' START TRANSACTION UNION = (table1, table2, table3) TABLESPACE my_tablespace STORAGE DISK";
 
-    match mysql().verified_stmt(sql) {
+    match mysql().one_statement_parses_to(sql, rendered) {
         Statement::CreateTable(CreateTable {
             name,
             table_options,
+            tablespace,
             ..
         }) => {
             assert_eq!(name, vec![Ident::new("foo".to_owned())].into());
@@ -1199,11 +1202,12 @@ fn parse_create_table_with_all_table_options() {
             assert!(plain_options.contains(&SqlOption::Ident(
                 Ident::new("START TRANSACTION".to_owned()).into()
             )));
-            assert!(
-                plain_options.contains(&SqlOption::TableSpace(TablespaceOption {
+            assert_eq!(
+                tablespace,
+                Some(TablespaceOption {
                     name: "my_tablespace".to_string(),
                     storage: Some(StorageType::Disk),
-                }))
+                })
             );
 
             assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(

@@ -9405,6 +9405,11 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let mut tablespace = create_table_config.tablespace;
+        if tablespace.is_none() {
+            tablespace = self.parse_optional_tablespace_option()?;
+        }
+
         // Redshift: BACKUP YES|NO
         let backup = if self.parse_keyword(Keyword::BACKUP) {
             let keyword = self.expect_one_of_keywords(&[Keyword::YES, Keyword::NO])?;
@@ -9476,6 +9481,7 @@ impl<'a> Parser<'a> {
             .comment_after_column_def(comment_after_column_def)
             .order_by(order_by)
             .on_commit(on_commit)
+            .tablespace(tablespace)
             .on_cluster(on_cluster)
             .clustered_by(clustered_by)
             .partition_by(partition_by)
@@ -9705,6 +9711,16 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let partition_by_dialect =
+            dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect);
+        // PostgreSQL orders `PARTITION BY` before `WITH (...)`.
+        let mut partition_by =
+            if partition_by_dialect && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+                Some(Box::new(self.parse_expr()?))
+            } else {
+                None
+            };
+
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_options(Keyword::WITH)?;
         if !with_options.is_empty() {
@@ -9715,13 +9731,12 @@ impl<'a> Parser<'a> {
         if !table_properties.is_empty() {
             table_options = CreateTableOptions::TableProperties(table_properties);
         }
-        let partition_by = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
+        if partition_by.is_none()
+            && partition_by_dialect
             && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
         {
-            Some(Box::new(self.parse_expr()?))
-        } else {
-            None
-        };
+            partition_by = Some(Box::new(self.parse_expr()?));
+        }
 
         let mut cluster_by = None;
         if dialect_of!(self is BigQueryDialect | GenericDialect) {
@@ -9739,8 +9754,19 @@ impl<'a> Parser<'a> {
             };
         }
 
+        let mut tablespace = None;
         if !dialect_of!(self is HiveDialect) && table_options == CreateTableOptions::None {
             let plain_options = self.parse_plain_options()?;
+            let plain_options: Vec<SqlOption> = plain_options
+                .into_iter()
+                .filter_map(|option| match option {
+                    SqlOption::TableSpace(option) => {
+                        tablespace = Some(option);
+                        None
+                    }
+                    other => Some(other),
+                })
+                .collect();
             if !plain_options.is_empty() {
                 table_options = CreateTableOptions::Plain(plain_options)
             }
@@ -9751,6 +9777,7 @@ impl<'a> Parser<'a> {
             cluster_by,
             inherits,
             table_options,
+            tablespace,
         })
     }
 
@@ -9814,40 +9841,8 @@ impl<'a> Parser<'a> {
         }
 
         // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
-        if self.parse_keywords(&[Keyword::TABLESPACE]) {
-            let _ = self.consume_token(&Token::Eq);
-            let value = self.next_token();
-
-            let tablespace = match value.token {
-                Token::Word(Word { value: name, .. }) | Token::SingleQuotedString(name) => {
-                    let storage = match self.parse_keyword(Keyword::STORAGE) {
-                        true => {
-                            let _ = self.consume_token(&Token::Eq);
-                            let storage_token = self.next_token();
-                            match &storage_token.token {
-                                Token::Word(w) => match w.value.to_uppercase().as_str() {
-                                    "DISK" => Some(StorageType::Disk),
-                                    "MEMORY" => Some(StorageType::Memory),
-                                    _ => self
-                                        .expected("Storage type (DISK or MEMORY)", storage_token)?,
-                                },
-                                _ => self.expected("Token::Word", storage_token)?,
-                            }
-                        }
-                        false => None,
-                    };
-
-                    Ok(Some(SqlOption::TableSpace(TablespaceOption {
-                        name,
-                        storage,
-                    })))
-                }
-                _ => {
-                    return self.expected("Token::Word", value)?;
-                }
-            };
-
-            return tablespace;
+        if let Some(option) = self.parse_optional_tablespace_option()? {
+            return Ok(Some(SqlOption::TableSpace(option)));
         }
 
         // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
@@ -9950,6 +9945,45 @@ impl<'a> Parser<'a> {
             key: key.into(),
             value,
         }))
+    }
+
+    /// Parse the `TABLESPACE` clause, returning the parsed option when present.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/create-table.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
+    fn parse_optional_tablespace_option(
+        &mut self,
+    ) -> Result<Option<TablespaceOption>, ParserError> {
+        if !self.parse_keywords(&[Keyword::TABLESPACE]) {
+            return Ok(None);
+        }
+        let _ = self.consume_token(&Token::Eq);
+        let value = self.next_token();
+
+        match value.token {
+            Token::Word(Word { value: name, .. }) | Token::SingleQuotedString(name) => {
+                let storage = match self.parse_keyword(Keyword::STORAGE) {
+                    true => {
+                        let _ = self.consume_token(&Token::Eq);
+                        let storage_token = self.next_token();
+                        match &storage_token.token {
+                            Token::Word(w) => match w.value.to_uppercase().as_str() {
+                                "DISK" => Some(StorageType::Disk),
+                                "MEMORY" => Some(StorageType::Memory),
+                                _ => {
+                                    self.expected("Storage type (DISK or MEMORY)", storage_token)?
+                                }
+                            },
+                            _ => self.expected("Token::Word", storage_token)?,
+                        }
+                    }
+                    false => None,
+                };
+
+                Ok(Some(TablespaceOption { name, storage }))
+            }
+            _ => self.expected("Token::Word", value)?,
+        }
     }
 
     /// Parse plain options.

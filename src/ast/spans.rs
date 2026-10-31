@@ -616,6 +616,7 @@ impl Spanned for CreateTable {
             clone,
             comment: _, // todo, no span
             on_commit: _,
+            tablespace: _,   // todo, no span
             on_cluster: _,   // todo, clickhouse specific
             primary_key: _,  // todo, clickhouse specific
             order_by: _,     // todo, clickhouse specific

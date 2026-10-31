@@ -29,7 +29,8 @@ use crate::ast::{
     DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
     InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
     RowAccessPolicy, SqliteTableOptions, Statement, StorageLifecyclePolicy,
-    StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WithData, WrappedCollection,
+    StorageSerializationPolicy, TableConstraint, TableVersion, TablespaceOption, Tag, WithData,
+    WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -115,6 +116,8 @@ pub struct CreateTableBuilder {
     pub comment: Option<CommentDef>,
     /// Optional `ON COMMIT` behavior.
     pub on_commit: Option<OnCommit>,
+    /// Optional `TABLESPACE` clause.
+    pub tablespace: Option<TablespaceOption>,
     /// Optional cluster identifier.
     pub on_cluster: Option<Ident>,
     /// Optional primary key expression.
@@ -223,6 +226,7 @@ impl CreateTableBuilder {
             version: None,
             comment: None,
             on_commit: None,
+            tablespace: None,
             on_cluster: None,
             primary_key: None,
             order_by: None,
@@ -382,6 +386,11 @@ impl CreateTableBuilder {
     /// Set `ON COMMIT` behavior for temporary tables.
     pub fn on_commit(mut self, on_commit: Option<OnCommit>) -> Self {
         self.on_commit = on_commit;
+        self
+    }
+    /// Set the `TABLESPACE` clause.
+    pub fn tablespace(mut self, tablespace: Option<TablespaceOption>) -> Self {
+        self.tablespace = tablespace;
         self
     }
     /// Set cluster identifier for the table.
@@ -617,6 +626,7 @@ impl CreateTableBuilder {
             version: self.version,
             comment: self.comment,
             on_commit: self.on_commit,
+            tablespace: self.tablespace,
             on_cluster: self.on_cluster,
             primary_key: self.primary_key,
             order_by: self.order_by,
@@ -702,6 +712,7 @@ impl From<CreateTable> for CreateTableBuilder {
             version: table.version,
             comment: table.comment,
             on_commit: table.on_commit,
+            tablespace: table.tablespace,
             on_cluster: table.on_cluster,
             primary_key: table.primary_key,
             order_by: table.order_by,
@@ -751,6 +762,7 @@ pub(crate) struct CreateTableConfiguration {
     pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
     pub inherits: Option<Vec<ObjectName>>,
     pub table_options: CreateTableOptions,
+    pub tablespace: Option<TablespaceOption>,
 }
 
 #[cfg(test)]

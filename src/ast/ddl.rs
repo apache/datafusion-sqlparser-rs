@@ -49,9 +49,9 @@ use crate::ast::{
     HiveRowFormat, HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName,
     OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query,
     RefreshModeKind, ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, Statement,
-    StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    StorageLifecyclePolicy, StorageSerializationPolicy, StorageType, TableVersion,
+    TablespaceOption, Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
+    TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3086,6 +3086,10 @@ pub struct CreateTable {
     /// ClickHouse "ON COMMIT" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
     pub on_commit: Option<OnCommit>,
+    /// `TABLESPACE` clause.
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    pub tablespace: Option<TablespaceOption>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
     pub on_cluster: Option<Ident>,
@@ -3391,8 +3395,7 @@ impl fmt::Display for CreateTable {
         }
 
         match &self.table_options {
-            options @ CreateTableOptions::With(_)
-            | options @ CreateTableOptions::Plain(_)
+            options @ CreateTableOptions::Plain(_)
             | options @ CreateTableOptions::TableProperties(_) => write!(f, " {options}")?,
             _ => (),
         }
@@ -3408,6 +3411,9 @@ impl fmt::Display for CreateTable {
         }
         if let Some(partition_by) = self.partition_by.as_ref() {
             write!(f, " PARTITION BY {partition_by}")?;
+        }
+        if let options @ CreateTableOptions::With(_) = &self.table_options {
+            write!(f, " {options}")?;
         }
         if let Some(cluster_by) = self.cluster_by.as_ref() {
             write!(f, " CLUSTER BY {cluster_by}")?;
@@ -3525,6 +3531,14 @@ impl fmt::Display for CreateTable {
                 None => "",
             };
             write!(f, " {on_commit}")?;
+        }
+        if let Some(TablespaceOption { name, storage }) = &self.tablespace {
+            write!(f, " TABLESPACE {name}")?;
+            match storage {
+                Some(StorageType::Disk) => f.write_str(" STORAGE DISK")?,
+                Some(StorageType::Memory) => f.write_str(" STORAGE MEMORY")?,
+                None => (),
+            }
         }
         if let Some(backup) = self.backup {
             write!(f, " BACKUP {}", if backup { "YES" } else { "NO" })?;

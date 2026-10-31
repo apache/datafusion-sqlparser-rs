@@ -45,12 +45,12 @@ use super::{
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
     OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
     Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement,
-    Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor,
-    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use,
-    UserMappingUser, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With,
-    WithFill,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RefreshMaterializedView,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -525,6 +525,7 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::RefreshMaterializedView(refresh) => refresh.span(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
     }
@@ -936,6 +937,12 @@ impl Spanned for Analyze {
                 )
                 .chain(self.columns.iter().map(|i| i.span)),
         )
+    }
+}
+
+impl Spanned for RefreshMaterializedView {
+    fn span(&self) -> Span {
+        self.name.span()
     }
 }
 

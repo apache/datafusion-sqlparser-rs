@@ -23106,3 +23106,97 @@ fn parse_alter_table_reset_options() {
         );
     }
 }
+
+#[test]
+fn parse_refresh_materialized_view() {
+    let sql = "REFRESH MATERIALIZED VIEW CONCURRENTLY app.m WITH NO DATA";
+    assert_eq!(
+        Parser::parse_sql(&GenericDialect {}, sql).unwrap()[0].span(),
+        Span::new(Location::new(1, 40), Location::new(1, 45))
+    );
+    match verified_stmt(sql) {
+        Statement::RefreshMaterializedView(RefreshMaterializedView {
+            concurrently,
+            name,
+            with_data,
+        }) => {
+            assert!(concurrently);
+            assert_eq!(
+                name,
+                ObjectName::from(vec![Ident::new("app"), Ident::new("m")])
+            );
+            assert_eq!(with_data, Some(false));
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+    match verified_stmt("REFRESH MATERIALIZED VIEW m") {
+        Statement::RefreshMaterializedView(RefreshMaterializedView {
+            concurrently,
+            with_data,
+            ..
+        }) => {
+            assert!(!concurrently);
+            assert_eq!(with_data, None);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+    match verified_stmt("REFRESH MATERIALIZED VIEW m WITH DATA") {
+        Statement::RefreshMaterializedView(RefreshMaterializedView { with_data, .. }) => {
+            assert_eq!(with_data, Some(true));
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "REFRESH MATERIALIZED VIEW",
+            "Expected: identifier, found: EOF",
+        ),
+        ("REFRESH VIEW m", "Expected: MATERIALIZED, found: VIEW"),
+        (
+            "REFRESH MATERIALIZED VIEW m WITH",
+            "Expected: end of statement, found: WITH",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_refresh_materialized_view() {
+    let stmts = all_dialects().parse_sql_statements("REFRESH MATERIALIZED VIEW app.m");
+    let mut relations = vec![];
+    let _ = visit_relations(&stmts.unwrap(), |relation| {
+        relations.push(relation.to_string());
+        core::ops::ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(relations, vec!["app.m"]);
+}
+
+#[test]
+fn display_refresh_materialized_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = verified_stmt("REFRESH MATERIALIZED VIEW CONCURRENTLY app.m WITH NO DATA");
+    for rejected in ["REFRESH", "CONCURRENTLY", "app", "NO DATA"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
+}

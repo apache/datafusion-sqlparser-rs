@@ -5113,6 +5113,13 @@ pub enum Statement {
     /// ```
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reset.html)
     Reset(ResetStatement),
+    /// Replace the contents of a materialized view.
+    ///
+    /// ```sql
+    /// REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] name [ WITH [ NO ] DATA ]
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html)
+    RefreshMaterializedView(RefreshMaterializedView),
 }
 
 impl From<Analyze> for Statement {
@@ -6589,6 +6596,7 @@ impl fmt::Display for Statement {
             Statement::Vacuum(s) => write!(f, "{s}"),
             Statement::AlterUser(s) => write!(f, "{s}"),
             Statement::Reset(s) => write!(f, "{s}"),
+            Statement::RefreshMaterializedView(s) => write!(f, "{s}"),
         }
     }
 }
@@ -12364,6 +12372,37 @@ pub struct ResetStatement {
     pub reset: Reset,
 }
 
+/// `REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] name [ WITH [ NO ] DATA ]`
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RefreshMaterializedView {
+    /// Whether `CONCURRENTLY` was specified.
+    pub concurrently: bool,
+    /// Name of the materialized view.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// `Some(true)` for `WITH DATA`, `Some(false)` for `WITH NO DATA`.
+    pub with_data: Option<bool>,
+}
+
+impl fmt::Display for RefreshMaterializedView {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("REFRESH MATERIALIZED VIEW ")?;
+        if self.concurrently {
+            f.write_str("CONCURRENTLY ")?;
+        }
+        write!(f, "{}", self.name)?;
+        match self.with_data {
+            Some(true) => f.write_str(" WITH DATA"),
+            Some(false) => f.write_str(" WITH NO DATA"),
+            None => Ok(()),
+        }
+    }
+}
+
 /// Query optimizer hints are optionally supported comments after the
 /// `SELECT`, `INSERT`, `UPDATE`, `REPLACE`, `MERGE`, and `DELETE` keywords in
 /// the corresponding statements.
@@ -12793,6 +12832,12 @@ impl From<VacuumStatement> for Statement {
 impl From<ResetStatement> for Statement {
     fn from(r: ResetStatement) -> Self {
         Self::Reset(r)
+    }
+}
+
+impl From<RefreshMaterializedView> for Statement {
+    fn from(r: RefreshMaterializedView) -> Self {
+        Self::RefreshMaterializedView(r)
     }
 }
 

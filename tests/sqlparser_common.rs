@@ -5257,13 +5257,13 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ],
@@ -5514,7 +5514,8 @@ fn parse_alter_table() {
                         value: "classification".to_string(),
                         quote_style: Some('\''),
                         span: Span::empty(),
-                    },
+                    }
+                    .into(),
                     value: Expr::Value(
                         (Value::SingleQuotedString("parquet".to_string())).with_empty_span()
                     ),
@@ -5535,7 +5536,8 @@ fn parse_alter_table() {
                             value: "autovacuum_vacuum_scale_factor".to_string(),
                             quote_style: None,
                             span: Span::empty(),
-                        },
+                        }
+                        .into(),
                         value: Expr::Value(test_utils::number("0.01").with_empty_span()),
                     },
                     SqlOption::KeyValue {
@@ -5543,7 +5545,8 @@ fn parse_alter_table() {
                             value: "autovacuum_vacuum_threshold".to_string(),
                             quote_style: None,
                             span: Span::empty(),
-                        },
+                        }
+                        .into(),
                         value: Expr::Value(test_utils::number("500").with_empty_span()),
                     }
                 ],
@@ -5665,13 +5668,18 @@ fn parse_alter_index() {
 fn parse_alter_view() {
     let sql = "ALTER VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterView {
             name,
-            columns,
-            query,
-            with_options,
-        } => {
+            if_exists,
+            operation:
+                AlterViewOperation::As {
+                    columns,
+                    query,
+                    with_options,
+                },
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
+            assert!(!if_exists);
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert_eq!(with_options, vec![]);
@@ -5684,17 +5692,20 @@ fn parse_alter_view() {
 fn parse_alter_view_with_options() {
     let sql = "ALTER VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::AlterView { with_options, .. } => {
+        Statement::AlterView(AlterView {
+            operation: AlterViewOperation::As { with_options, .. },
+            ..
+        }) => {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ],
@@ -5703,24 +5714,207 @@ fn parse_alter_view_with_options() {
         }
         _ => unreachable!(),
     }
+
+    verified_stmt("ALTER VIEW v (a) WITH (x = 1) AS SELECT 1");
 }
 
 #[test]
 fn parse_alter_view_with_columns() {
     let sql = "ALTER VIEW v (has, cols) AS SELECT 1, 2";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterView {
             name,
-            columns,
-            query,
-            with_options,
-        } => {
+            if_exists,
+            operation:
+                AlterViewOperation::As {
+                    columns,
+                    query,
+                    with_options,
+                },
+        }) => {
             assert_eq!("v", name.to_string());
+            assert!(!if_exists);
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_view_operations() {
+    let operation = |sql: &str| match verified_stmt(sql) {
+        Statement::AlterView(AlterView { operation, .. }) => operation,
+        stmt => panic!("Expected ALTER VIEW, got {stmt:?}"),
+    };
+
+    assert_eq!(
+        verified_stmt("ALTER VIEW IF EXISTS s.v OWNER TO o"),
+        Statement::AlterView(AlterView {
+            name: ObjectName::from(vec![Ident::new("s"), Ident::new("v")]),
+            if_exists: true,
+            operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("o"))),
+        })
+    );
+    assert_eq!(
+        operation("ALTER VIEW v OWNER TO CURRENT_USER"),
+        AlterViewOperation::OwnerTo(Owner::CurrentUser)
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET (check_option = 'local', security_barrier)"),
+        AlterViewOperation::SetOptions {
+            options: vec![
+                SqlOption::KeyValue {
+                    key: ObjectName::from(vec![Ident::new("check_option")]),
+                    value: Expr::Value(Value::SingleQuotedString("local".into()).with_empty_span()),
+                },
+                SqlOption::Ident(ObjectName::from(vec![Ident::new("security_barrier")])),
+            ],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RESET (security_invoker, check_option)"),
+        AlterViewOperation::ResetOptions {
+            options: vec![Ident::new("security_invoker"), Ident::new("check_option")],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c SET DEFAULT 1"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::SetDefault {
+                value: Expr::value(number("1")),
+            },
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c DROP DEFAULT"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::DropDefault,
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME COLUMN a TO b"),
+        AlterViewOperation::RenameColumn {
+            old_column_name: Ident::new("a"),
+            new_column_name: Ident::new("b"),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME TO w"),
+        AlterViewOperation::RenameTo {
+            new_name: ObjectName::from(vec![Ident::new("w")]),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET SCHEMA s"),
+        AlterViewOperation::SetSchema {
+            schema_name: ObjectName::from(vec![Ident::new("s")]),
+        }
+    );
+
+    one_statement_parses_to(
+        "ALTER VIEW v ALTER c DROP DEFAULT",
+        "ALTER VIEW v ALTER COLUMN c DROP DEFAULT",
+    );
+    one_statement_parses_to(
+        "ALTER VIEW v RENAME a TO b",
+        "ALTER VIEW v RENAME COLUMN a TO b",
+    );
+
+    for (sql, expected) in [
+        ("ALTER VIEW 123", "Expected: identifier, found: 123"),
+        ("ALTER VIEW v SET ()", "Expected: identifier, found: )"),
+        ("ALTER VIEW IF v OWNER TO o", "Expected: AS, found: v"),
+        ("ALTER VIEW v RESET (a = 1)", "Expected: ), found: ="),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET NOT NULL",
+            "Expected: SET DEFAULT or DROP DEFAULT after ALTER COLUMN, found: SET",
+        ),
+        ("ALTER VIEW v RENAME COLUMN a", "Expected: TO, found: EOF"),
+        (
+            "ALTER VIEW v OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. \
+             sql parser error: Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER VIEW v SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v SET a", "Expected: (, found: a"),
+        (
+            "ALTER VIEW v SET (a = )",
+            "Expected: an expression, found: )",
+        ),
+        ("ALTER VIEW v SET (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v RESET a", "Expected: (, found: a"),
+        ("ALTER VIEW v RESET (a b)", "Expected: ), found: b"),
+        ("ALTER VIEW v RENAME TO", "Expected: identifier, found: EOF"),
+        ("ALTER VIEW v RENAME", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v RENAME COLUMN a TO",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v ALTER", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET DEFAULT",
+            "Expected: an expression, found: EOF",
+        ),
+        ("ALTER VIEW v (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v WITH (a", "Expected: =, found: EOF"),
+        ("ALTER VIEW v WITH (a = 1)", "Expected: AS, found: EOF"),
+        (
+            "ALTER VIEW v AS",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_trailing_commas())
+            .parse_sql_statements("ALTER VIEW v RESET (a, )")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string()),
+    );
+}
+
+#[test]
+fn display_alter_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let with_options = verified_stmt("ALTER VIEW IF EXISTS v WITH (x = 1) AS SELECT 1");
+    for rejected in ["ALTER VIEW ", "IF EXISTS ", "WITH ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{with_options}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+
+    let columns = verified_stmt("ALTER VIEW IF EXISTS v (zeta) AS SELECT 1");
+    for rejected in ["ALTER VIEW ", "IF EXISTS ", "("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{columns}"), Err(fmt::Error), "{rejected:?}");
     }
 }
 
@@ -9241,13 +9435,13 @@ fn parse_create_view_with_options() {
             assert_eq!(
                 CreateTableOptions::With(vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ]),
@@ -11757,6 +11951,8 @@ fn parse_is_boolean() {
         verified_expr(sql)
     );
 
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
+
     let sql = "a IS NORMALIZED";
     assert_eq!(
         IsNormalized {
@@ -11764,7 +11960,7 @@ fn parse_is_boolean() {
             form: None,
             negated: false,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT NORMALIZED";
@@ -11774,7 +11970,7 @@ fn parse_is_boolean() {
             form: None,
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NFKC NORMALIZED";
@@ -11784,7 +11980,7 @@ fn parse_is_boolean() {
             form: Some(NormalizationForm::NFKC),
             negated: false,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT NFKD NORMALIZED";
@@ -11794,19 +11990,19 @@ fn parse_is_boolean() {
             form: Some(NormalizationForm::NFKD),
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS UNKNOWN";
     assert_eq!(
         IsUnknown(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT UNKNOWN";
     assert_eq!(
         IsNotUnknown(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     verified_stmt("SELECT f FROM foo WHERE field IS TRUE");
@@ -11815,14 +12011,14 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
 
-    verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
 
-    verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
     for (sql, found) in [
         ("SELECT f from foo where field is 0", "0"),
@@ -11831,7 +12027,7 @@ fn parse_is_boolean() {
         ("SELECT s, s IS TRIM(' NFKC ') FROM foo", "TRIM"),
     ] {
         assert_eq!(
-            parse_sql_statements(sql),
+            dialects.parse_sql_statements(sql),
             Err(ParserError::ParserError(format!(
                 "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: {found}"
             ))),
@@ -11843,6 +12039,7 @@ fn parse_is_boolean() {
 #[test]
 fn parse_is_json_predicate() {
     use self::Expr::*;
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
 
     // Assert the full AST once for a case that exercises every field.
     let sql = "a IS NOT JSON OBJECT WITHOUT UNIQUE KEYS";
@@ -11853,24 +12050,24 @@ fn parse_is_json_predicate() {
             unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     // The remaining forms only need to round-trip.
-    verified_expr("a IS JSON");
-    verified_expr("a IS NOT JSON");
-    verified_expr("a IS JSON VALUE");
-    verified_expr("a IS JSON SCALAR");
-    verified_expr("a IS JSON ARRAY");
-    verified_expr("a IS JSON OBJECT");
-    verified_expr("a IS JSON WITH UNIQUE KEYS");
-    verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
+    dialects.verified_expr("a IS JSON");
+    dialects.verified_expr("a IS NOT JSON");
+    dialects.verified_expr("a IS JSON VALUE");
+    dialects.verified_expr("a IS JSON SCALAR");
+    dialects.verified_expr("a IS JSON ARRAY");
+    dialects.verified_expr("a IS JSON OBJECT");
+    dialects.verified_expr("a IS JSON WITH UNIQUE KEYS");
+    dialects.verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
 
-    all_dialects().expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
-    all_dialects().expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
+    dialects.expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
+    dialects.expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
 
     assert_matches!(
-        verified_expr("NOT a IS JSON"),
+        dialects.verified_expr("NOT a IS JSON"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             expr
@@ -11880,7 +12077,7 @@ fn parse_is_json_predicate() {
 
 #[test]
 fn parse_is_json_predicate_invalid() {
-    let dialects = all_dialects();
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
 
     for (sql, err) in [
         (
@@ -12043,11 +12240,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").into(),
                     value: Expr::Value((Value::SingleQuotedString("V1".into())).with_empty_span()),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").into(),
                     value: Expr::value(number("0.88")),
                 },
             ],
@@ -12068,11 +12265,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").into(),
                     value: Expr::Value((Value::SingleQuotedString("V1".into())).with_empty_span()),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").into(),
                     value: Expr::value(number("0.88")),
                 },
             ],
@@ -12093,11 +12290,11 @@ fn parse_cache_table() {
             has_as: true,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").into(),
                     value: Expr::Value((Value::SingleQuotedString("V1".into())).with_empty_span()),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").into(),
                     value: Expr::value(number("0.88")),
                 },
             ],
@@ -13656,7 +13853,8 @@ fn parse_unload() {
                     value: "format".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                },
+                }
+                .into(),
                 value: Expr::Value(
                     (Value::SingleQuotedString("AVRO".to_string())).with_empty_span()
                 )
@@ -15907,13 +16105,13 @@ fn test_create_connector() {
                 with_dcproperties,
                 Some(vec![
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "user"),
+                        key: Ident::with_quote('\'', "user").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("root".to_string())).with_empty_span()
                         )
                     },
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "password"),
+                        key: Ident::with_quote('\'', "password").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("password".to_string())).with_empty_span()
                         )
@@ -15978,13 +16176,13 @@ fn test_alter_connector() {
                 properties,
                 Some(vec![
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "user"),
+                        key: Ident::with_quote('\'', "user").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("root".to_string())).with_empty_span()
                         )
                     },
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "password"),
+                        key: Ident::with_quote('\'', "password").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("password".to_string())).with_empty_span()
                         )
@@ -22142,7 +22340,7 @@ fn parse_cache_table_options_without_flag() {
                 table_name: ObjectName::from(vec![Ident::new("t")]),
                 has_as,
                 options: vec![SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "k"),
+                    key: Ident::with_quote('\'', "k").into(),
                     value: Expr::Value(Value::SingleQuotedString("v".into()).with_empty_span()),
                 }],
                 query,

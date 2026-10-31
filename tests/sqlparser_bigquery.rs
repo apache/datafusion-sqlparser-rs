@@ -359,7 +359,7 @@ fn parse_create_view_with_options() {
                         data_type: None,
                         options: Some(ColumnOptions::CommaSeparated(vec![ColumnOption::Options(
                             vec![SqlOption::KeyValue {
-                                key: Ident::new("description"),
+                                key: Ident::new("description").into(),
                                 value: Expr::Value(
                                     Value::DoubleQuotedString("field age".to_string()).with_span(
                                         Span::new(Location::new(1, 42), Location::new(1, 52))
@@ -384,7 +384,7 @@ fn parse_create_view_with_options() {
             };
             assert_eq!(
                 &SqlOption::KeyValue {
-                    key: Ident::new("description"),
+                    key: Ident::new("description").into(),
                     value: Expr::Value(
                         Value::DoubleQuotedString("a view that expires in 2 days".to_string())
                             .with_empty_span()
@@ -511,7 +511,7 @@ fn parse_create_table_with_options() {
                             ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::Options(vec![SqlOption::KeyValue {
-                                    key: Ident::new("description"),
+                                    key: Ident::new("description").into(),
                                     value: Expr::Value(
                                         Value::DoubleQuotedString("field x".to_string()).with_span(
                                             Span::new(Location::new(1, 42), Location::new(1, 52))
@@ -527,7 +527,7 @@ fn parse_create_table_with_options() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Options(vec![SqlOption::KeyValue {
-                                key: Ident::new("description"),
+                                key: Ident::new("description").into(),
                                 value: Expr::Value(
                                     Value::DoubleQuotedString("field y".to_string()).with_span(
                                         Span::new(Location::new(1, 42), Location::new(1, 52))
@@ -548,7 +548,7 @@ fn parse_create_table_with_options() {
                     ])),
                     CreateTableOptions::Options(vec![
                         SqlOption::KeyValue {
-                            key: Ident::new("partition_expiration_days"),
+                            key: Ident::new("partition_expiration_days").into(),
                             value: Expr::Value(
                                 number("1").with_span(Span::new(
                                     Location::new(1, 42),
@@ -557,7 +557,7 @@ fn parse_create_table_with_options() {
                             ),
                         },
                         SqlOption::KeyValue {
-                            key: Ident::new("description"),
+                            key: Ident::new("description").into(),
                             value: Expr::Value(
                                 Value::DoubleQuotedString("table option description".to_string())
                                     .with_span(Span::new(
@@ -2342,7 +2342,7 @@ fn test_bigquery_create_function() {
                 number("42").with_empty_span()
             ))),
             options: Some(vec![SqlOption::KeyValue {
-                key: Ident::new("x"),
+                key: Ident::new("x").into(),
                 value: Expr::Value(Value::SingleQuotedString("y".into()).with_empty_span()),
             }]),
             behavior: None,
@@ -2710,20 +2710,20 @@ fn test_export_data() {
         Statement::ExportData(ExportData {
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("uri"),
+                    key: Ident::new("uri").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
                             .with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("format"),
+                    key: Ident::new("format").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("overwrite"),
+                    key: Ident::new("overwrite").into(),
                     value: Expr::Value(Value::Boolean(true).with_empty_span()),
                 },
             ],
@@ -2812,20 +2812,20 @@ fn test_export_data() {
         Statement::ExportData(ExportData {
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("uri"),
+                    key: Ident::new("uri").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
                             .with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("format"),
+                    key: Ident::new("format").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
                     ),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("overwrite"),
+                    key: Ident::new("overwrite").into(),
                     value: Expr::Value(Value::Boolean(true).with_empty_span()),
                 },
             ],

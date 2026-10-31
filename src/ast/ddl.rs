@@ -4849,6 +4849,142 @@ impl Spanned for AlterCollation {
     }
 }
 
+/// `ALTER VIEW` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterView {
+    /// View name being altered.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Whether `IF EXISTS` was specified.
+    pub if_exists: bool,
+    /// The operation to perform on the view.
+    pub operation: AlterViewOperation,
+}
+
+/// Operations supported by `ALTER VIEW`.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterview.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterViewOperation {
+    /// Replace the view definition.
+    ///
+    /// ```sql
+    /// ALTER VIEW name [ (columns) ] [ WITH (options) ] AS query
+    /// ```
+    ///
+    /// See [MySQL](https://dev.mysql.com/doc/refman/8.4/en/alter-view.html)
+    As {
+        /// Optional new column list for the view.
+        columns: Vec<Ident>,
+        /// Replacement query for the view definition.
+        query: Box<Query>,
+        /// Additional `WITH` options for the view.
+        with_options: Vec<SqlOption>,
+    },
+    /// ```sql
+    /// ALTER VIEW name ALTER [ COLUMN ] column_name { SET DEFAULT expression | DROP DEFAULT }
+    /// ```
+    AlterColumn {
+        /// The column to alter.
+        column_name: Ident,
+        /// Either [`AlterColumnOperation::SetDefault`] or [`AlterColumnOperation::DropDefault`].
+        op: AlterColumnOperation,
+    },
+    /// ```sql
+    /// ALTER VIEW name OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }
+    /// ```
+    OwnerTo(Owner),
+    /// ```sql
+    /// ALTER VIEW name RENAME [ COLUMN ] column_name TO new_column_name
+    /// ```
+    RenameColumn {
+        /// Existing column name.
+        old_column_name: Ident,
+        /// New column name.
+        new_column_name: Ident,
+    },
+    /// ```sql
+    /// ALTER VIEW name RENAME TO new_name
+    /// ```
+    RenameTo {
+        /// New view name.
+        new_name: ObjectName,
+    },
+    /// ```sql
+    /// ALTER VIEW name SET SCHEMA new_schema
+    /// ```
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
+    /// ```sql
+    /// ALTER VIEW name SET ( view_option_name [ = view_option_value ] [, ... ] )
+    /// ```
+    SetOptions {
+        /// Options to set, [`SqlOption::Ident`] when no value is given.
+        options: Vec<SqlOption>,
+    },
+    /// ```sql
+    /// ALTER VIEW name RESET ( view_option_name [, ... ] )
+    /// ```
+    ResetOptions {
+        /// Options to reset.
+        options: Vec<Ident>,
+    },
+}
+
+impl fmt::Display for AlterViewOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterViewOperation::As {
+                columns,
+                query,
+                with_options,
+            } => {
+                if !columns.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(columns))?;
+                }
+                if !with_options.is_empty() {
+                    write!(f, "WITH ({}) ", display_comma_separated(with_options))?;
+                }
+                write!(f, "AS {query}")
+            }
+            AlterViewOperation::AlterColumn { column_name, op } => {
+                write!(f, "ALTER COLUMN {column_name} {op}")
+            }
+            AlterViewOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterViewOperation::RenameColumn {
+                old_column_name,
+                new_column_name,
+            } => write!(f, "RENAME COLUMN {old_column_name} TO {new_column_name}"),
+            AlterViewOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+            AlterViewOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterViewOperation::SetOptions { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
+            }
+            AlterViewOperation::ResetOptions { options } => {
+                write!(f, "RESET ({})", display_comma_separated(options))
+            }
+        }
+    }
+}
+
+impl fmt::Display for AlterView {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER VIEW ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{} {}", self.name, self.operation)
+    }
+}
+
 /// Table type for ALTER TABLE statements.
 /// Used to distinguish between regular tables, Iceberg tables, and Dynamic tables.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -6647,5 +6783,80 @@ impl Spanned for CreateForeignDataWrapper {
                         .flat_map(|option| [option.key.span, option.value.span]),
                 ),
         )
+    }
+}
+
+/// The user of a `CREATE USER MAPPING` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserMappingUser {
+    /// A role name.
+    Name(Ident),
+    /// `USER`, the current user.
+    User,
+    /// `CURRENT_ROLE`
+    CurrentRole,
+    /// `CURRENT_USER`
+    CurrentUser,
+    /// `SESSION_USER`
+    SessionUser,
+    /// `PUBLIC`, every role without a mapping of its own.
+    Public,
+}
+
+impl fmt::Display for UserMappingUser {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserMappingUser::Name(name) => write!(f, "{name}"),
+            UserMappingUser::User => f.write_str("USER"),
+            UserMappingUser::CurrentRole => f.write_str("CURRENT_ROLE"),
+            UserMappingUser::CurrentUser => f.write_str("CURRENT_USER"),
+            UserMappingUser::SessionUser => f.write_str("SESSION_USER"),
+            UserMappingUser::Public => f.write_str("PUBLIC"),
+        }
+    }
+}
+
+/// A `CREATE USER MAPPING` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createusermapping.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateUserMapping {
+    /// Whether `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// The user the mapping is for.
+    pub user: UserMappingUser,
+    /// The `SERVER server_name` clause.
+    pub server_name: Ident,
+    /// Optional `OPTIONS (key 'value', ...)` clause.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateUserMapping {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CREATE USER MAPPING {if_not_exists}FOR {user} SERVER {server_name}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            user = self.user,
+            server_name = self.server_name,
+        )?;
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateUserMapping> for crate::ast::Statement {
+    fn from(v: CreateUserMapping) -> Self {
+        crate::ast::Statement::CreateUserMapping(v)
     }
 }

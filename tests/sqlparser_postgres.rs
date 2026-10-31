@@ -497,15 +497,15 @@ fn parse_create_table_with_defaults() {
                 with_options,
                 vec![
                     SqlOption::KeyValue {
-                        key: "fillfactor".into(),
+                        key: Ident::new("fillfactor").into(),
                         value: Expr::value(number("20"))
                     },
                     SqlOption::KeyValue {
-                        key: "user_catalog_table".into(),
+                        key: Ident::new("user_catalog_table").into(),
                         value: Expr::Value((Value::Boolean(true)).with_empty_span())
                     },
                     SqlOption::KeyValue {
-                        key: "autovacuum_vacuum_threshold".into(),
+                        key: Ident::new("autovacuum_vacuum_threshold").into(),
                         value: Expr::value(number("100"))
                     },
                 ]
@@ -1080,11 +1080,11 @@ fn parse_create_collation() {
             name: ObjectName::from(vec![Ident::new("test3")]),
             definition: CreateCollationDefinition::Options(vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("provider"),
+                    key: Ident::new("provider").into(),
                     value: Expr::Identifier(Ident::new("icu")),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("lc_collate"),
+                    key: Ident::new("lc_collate").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("en_US.utf8".to_string()).with_empty_span(),
                     ),
@@ -1112,11 +1112,11 @@ fn parse_create_collation() {
             name: ObjectName::from(vec![Ident::new("testx")]),
             definition: CreateCollationDefinition::Options(vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("provider"),
+                    key: Ident::new("provider").into(),
                     value: Expr::Identifier(Ident::new("icu")),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("locale"),
+                    key: Ident::new("locale").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("nonsense-nowhere".to_string()).with_empty_span(),
                     ),
@@ -6868,13 +6868,13 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ],
@@ -11800,9 +11800,9 @@ fn parse_interval_followed_by_alias() {
 #[test]
 fn parse_storage_parameters_without_value() {
     let dialects = all_dialects_where(|d| d.supports_sql_option_without_value());
-    let bare = SqlOption::Ident(Ident::new("security_barrier"));
+    let bare = SqlOption::Ident(Ident::new("security_barrier").into());
     let key_value = SqlOption::KeyValue {
-        key: Ident::new("security_invoker"),
+        key: Ident::new("security_invoker").into(),
         value: Expr::Value(Value::Boolean(true).with_empty_span()),
     };
 
@@ -11855,6 +11855,45 @@ fn parse_storage_parameters_without_value() {
             .parse_sql_statements("ALTER TABLE t SET TBLPROPERTIES (fillfactor 70)")
             .unwrap_err(),
         ParserError::ParserError("Expected: =, found: 70".to_string())
+    );
+}
+
+#[test]
+fn parse_namespaced_storage_parameters() {
+    let expected = vec![SqlOption::KeyValue {
+        key: ObjectName::from(vec![Ident::new("toast"), Ident::new("autovacuum_enabled")]),
+        value: Expr::Value(Value::Boolean(false).with_empty_span()),
+    }];
+
+    match pg().verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)") {
+        Statement::CreateTable(CreateTable {
+            table_options: CreateTableOptions::With(options),
+            ..
+        }) => assert_eq!(options, expected),
+        _ => unreachable!(),
+    }
+
+    match alter_table_op(
+        pg().verified_stmt("ALTER TABLE tab SET (toast.autovacuum_enabled = false)"),
+    ) {
+        AlterTableOperation::SetOptionsParens { options } => assert_eq!(options, expected),
+        _ => unreachable!(),
+    }
+
+    match pg().verified_stmt(
+        "CREATE MATERIALIZED VIEW m WITH (toast.autovacuum_enabled = false) AS SELECT 1",
+    ) {
+        Statement::CreateView(create_view) => {
+            assert_eq!(create_view.options, CreateTableOptions::With(expected))
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE t (a INT) WITH (toast. = false)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: ="
     );
 }
 
@@ -12002,5 +12041,253 @@ fn display_table_inheritance_propagates_write_errors() {
         let stmt = pg_and_generic().verified_stmt(sql);
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{sql}");
+    }
+}
+
+#[test]
+fn parse_create_user_mapping() {
+    let sql =
+        r#"CREATE USER MAPPING FOR app SERVER s OPTIONS ("user" 'remote', password 'secret')"#;
+    let Statement::CreateUserMapping(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt,
+        CreateUserMapping {
+            if_not_exists: false,
+            user: UserMappingUser::Name(Ident::new("app")),
+            server_name: Ident::new("s"),
+            options: Some(vec![
+                CreateServerOption {
+                    key: Ident::with_quote('"', "user"),
+                    value: Ident::with_quote('\'', "remote"),
+                },
+                CreateServerOption {
+                    key: Ident::new("password"),
+                    value: Ident::with_quote('\'', "secret"),
+                },
+            ]),
+        }
+    );
+
+    for (sql, user) in [
+        (
+            "CREATE USER MAPPING IF NOT EXISTS FOR USER SERVER s",
+            UserMappingUser::User,
+        ),
+        (
+            "CREATE USER MAPPING FOR CURRENT_ROLE SERVER s",
+            UserMappingUser::CurrentRole,
+        ),
+        (
+            "CREATE USER MAPPING FOR CURRENT_USER SERVER s",
+            UserMappingUser::CurrentUser,
+        ),
+        (
+            "CREATE USER MAPPING FOR SESSION_USER SERVER s",
+            UserMappingUser::SessionUser,
+        ),
+        (
+            "CREATE USER MAPPING FOR PUBLIC SERVER s",
+            UserMappingUser::Public,
+        ),
+    ] {
+        let Statement::CreateUserMapping(stmt) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(stmt.user, user);
+    }
+    // As written by pg_dump.
+    pg_and_generic().one_statement_parses_to(
+        "CREATE USER MAPPING FOR public SERVER s",
+        "CREATE USER MAPPING FOR PUBLIC SERVER s",
+    );
+
+    // A user named `mapping`.
+    assert!(matches!(
+        pg_and_generic().verified_stmt("CREATE USER mapping"),
+        Statement::CreateUser(_)
+    ));
+
+    for (sql, expected) in [
+        (
+            "CREATE USER MAPPING FOR app",
+            "Expected: SERVER, found: EOF",
+        ),
+        (
+            "CREATE USER MAPPING FOR",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE USER MAPPING FOR app SERVER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE USER MAPPING IF NOT EXISTS app SERVER s",
+            "Expected: FOR, found: app",
+        ),
+        (
+            "CREATE USER MAPPING FOR app SERVER s OPTIONS (password)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE OR REPLACE USER MAPPING FOR app SERVER s",
+            "CREATE USER MAPPING does not accept this modifier",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_create_user_mapping_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE USER MAPPING FOR app SERVER s OPTIONS (password 'secret')");
+    for rejected in ["CREATE USER MAPPING ", " OPTIONS ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_namespaced_storage_parameters_without_value() {
+    let dialects = all_dialects_where(|d| d.supports_sql_option_without_value());
+    let bare = SqlOption::Ident(ObjectName::from(vec![
+        Ident::new("toast"),
+        Ident::new("autovacuum_enabled"),
+    ]));
+
+    match dialects.verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled)") {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            assert_eq!(table_options, CreateTableOptions::With(vec![bare.clone()]))
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER TABLE t SET (toast.autovacuum_enabled, fillfactor = 70)") {
+        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
+            operations,
+            [AlterTableOperation::SetOptionsParens {
+                options: vec![
+                    bare,
+                    SqlOption::KeyValue {
+                        key: ObjectName::from(vec![Ident::new("fillfactor")]),
+                        value: Expr::value(number("70")),
+                    },
+                ],
+            }]
+        ),
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (toast.)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
+}
+
+#[test]
+fn parse_create_table_partition_of_untyped_columns() {
+    let column = |name: &str, options: Vec<ColumnOptionDef>| ColumnDef {
+        name: Ident::new(name),
+        data_type: DataType::Unspecified,
+        options,
+    };
+    let option = |option| ColumnOptionDef { name: None, option };
+    let create_table = |sql: &str| match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => create_table,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+
+    assert_eq!(
+        create_table(
+            "CREATE TABLE part PARTITION OF root (id NOT NULL, note DEFAULT 'x', flag) DEFAULT"
+        )
+        .columns,
+        vec![
+            column("id", vec![option(ColumnOption::NotNull)]),
+            column(
+                "note",
+                vec![option(ColumnOption::Default(Expr::value(
+                    Value::SingleQuotedString("x".to_string())
+                )))]
+            ),
+            column("flag", vec![]),
+        ]
+    );
+
+    let stmt = create_table(
+        "CREATE TABLE part PARTITION OF root (id CONSTRAINT id_present NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1)",
+    );
+    assert_eq!(
+        stmt.columns,
+        vec![column(
+            "id",
+            vec![ColumnOptionDef {
+                name: Some(Ident::new("id_present")),
+                option: ColumnOption::NotNull,
+            }]
+        )]
+    );
+    assert_eq!(stmt.constraints.len(), 1);
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE TABLE part PARTITION OF root (id WITH OPTIONS NOT NULL, flag WITH OPTIONS) DEFAULT",
+        "CREATE TABLE part PARTITION OF root (id NOT NULL, flag) DEFAULT",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE TABLE part PARTITION OF root (id INT) DEFAULT",
+            "Expected: ',' or ')' after column definition, found: INT",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id WITH NOT NULL) DEFAULT",
+            "Expected: ',' or ')' after column definition, found: WITH",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id CONSTRAINT c) DEFAULT",
+            "Expected: constraint details after CONSTRAINT <name>, found: )",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id CONSTRAINT c COLLATE) DEFAULT",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (42) DEFAULT",
+            "Expected: column name or constraint definition, found: 42",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
     }
 }

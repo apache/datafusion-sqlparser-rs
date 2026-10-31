@@ -4158,10 +4158,6 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsFalse(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::FALSE]) {
                         Ok(Expr::IsNotFalse(Box::new(expr)))
-                    } else if self.parse_keywords(&[Keyword::UNKNOWN]) {
-                        Ok(Expr::IsUnknown(Box::new(expr)))
-                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {
-                        Ok(Expr::IsNotUnknown(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
                         // The right operand binds no more loosely than `IS`
                         // itself, so that e.g. `a IS DISTINCT FROM b AND c`
@@ -4172,6 +4168,24 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_subexpr(precedence)?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.dialect.supports_is_operator() {
+                        let op = if self.parse_keyword(Keyword::NOT) {
+                            BinaryOperator::IsNot
+                        } else {
+                            BinaryOperator::Is
+                        };
+                        // SQLite gives `IS` the same precedence as `=` (https://www.sqlite.org/lang_expr.html).
+                        Ok(Expr::BinaryOp {
+                            left: Box::new(expr),
+                            op,
+                            right: Box::new(
+                                self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?,
+                            ),
+                        })
+                    } else if self.parse_keywords(&[Keyword::UNKNOWN]) {
+                        Ok(Expr::IsUnknown(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {
+                        Ok(Expr::IsNotUnknown(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::JSON) {
                         self.parse_is_json_predicate(expr, false)
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::JSON]) {
@@ -5521,6 +5535,24 @@ impl<'a> Parser<'a> {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
+        } else if self.peek_keywords(&[Keyword::USER, Keyword::MAPPING, Keyword::FOR])
+            || self.peek_keywords(&[
+                Keyword::USER,
+                Keyword::MAPPING,
+                Keyword::IF,
+                Keyword::NOT,
+                Keyword::EXISTS,
+            ])
+        {
+            if has_modifier {
+                return parser_err!(
+                    "CREATE USER MAPPING does not accept this modifier",
+                    modifier_loc
+                );
+            }
+            self.advance_token(); // USER
+            self.advance_token(); // MAPPING
+            self.parse_create_user_mapping().map(Into::into)
         } else if self.parse_keyword(Keyword::USER) {
             self.parse_create_user(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::AGGREGATE) {
@@ -9303,7 +9335,11 @@ impl<'a> Parser<'a> {
         };
 
         // parse optional column list (schema)
-        let (columns, constraints) = self.parse_columns()?;
+        let (columns, constraints) = if partition_of.is_some() {
+            self.parse_partition_of_columns()?
+        } else {
+            self.parse_columns()?
+        };
         let comment_after_column_def =
             if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
                 let next_token = self.next_token();
@@ -9723,7 +9759,9 @@ impl<'a> Parser<'a> {
         // Single parameter option
         // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
         if self.parse_keywords(&[Keyword::START, Keyword::TRANSACTION]) {
-            return Ok(Some(SqlOption::Ident(Ident::new("START TRANSACTION"))));
+            return Ok(Some(SqlOption::Ident(
+                Ident::new("START TRANSACTION").into(),
+            )));
         }
 
         // Custom option
@@ -9909,7 +9947,10 @@ impl<'a> Parser<'a> {
             None => Expr::Identifier(self.parse_identifier()?),
         };
 
-        Ok(Some(SqlOption::KeyValue { key, value }))
+        Ok(Some(SqlOption::KeyValue {
+            key: key.into(),
+            value,
+        }))
     }
 
     /// Parse plain options.
@@ -9984,6 +10025,31 @@ impl<'a> Parser<'a> {
 
     /// Parse columns and constraints.
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
+        self.parse_table_elements(Parser::parse_column_def)
+    }
+
+    /// Parse the columns and constraints of a `PARTITION OF` table, whose column entries
+    /// carry no data type.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtable.html>
+    fn parse_partition_of_columns(
+        &mut self,
+    ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
+        self.parse_table_elements(|parser| {
+            let name = parser.parse_identifier()?;
+            let _ = parser.parse_keywords(&[Keyword::WITH, Keyword::OPTIONS]); // [ WITH OPTIONS ]
+            Ok(ColumnDef {
+                name,
+                data_type: DataType::Unspecified,
+                options: parser.parse_column_option_defs()?,
+            })
+        })
+    }
+
+    fn parse_table_elements(
+        &mut self,
+        mut parse_column: impl FnMut(&mut Self) -> Result<ColumnDef, ParserError>,
+    ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
@@ -9994,11 +10060,11 @@ impl<'a> Parser<'a> {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = &self.peek_token_ref().token {
-                columns.push(self.parse_column_def()?);
+                columns.push(parse_column(self)?);
             } else if matches!(&self.peek_token_ref().token, Token::SingleQuotedString(_))
                 && self.dialect.supports_string_literal_column_names()
             {
-                columns.push(self.parse_column_def()?);
+                columns.push(parse_column(self)?);
             } else {
                 return self.expected_ref(
                     "column name or constraint definition",
@@ -10072,29 +10138,32 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_data_type()?
         };
+        Ok(ColumnDef {
+            name: col_name,
+            data_type,
+            options: self.parse_column_option_defs()?,
+        })
+    }
+
+    fn parse_column_option_defs(&mut self) -> Result<Vec<ColumnOptionDef>, ParserError> {
         let mut options = vec![];
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
                 let name = Some(self.parse_identifier()?);
-                if let Some(option) = self.parse_optional_column_option()? {
-                    options.push(ColumnOptionDef { name, option });
-                } else {
+                let Some(option) = self.parse_optional_column_option()? else {
                     return self.expected_ref(
                         "constraint details after CONSTRAINT <name>",
                         self.peek_token_ref(),
                     );
-                }
+                };
+                options.push(ColumnOptionDef { name, option });
             } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
             } else {
                 break;
             };
         }
-        Ok(ColumnDef {
-            name: col_name,
-            data_type,
-            options,
-        })
+        Ok(options)
     }
 
     fn is_column_type_sqlite_unspecified(&mut self) -> bool {
@@ -11084,7 +11153,7 @@ impl<'a> Parser<'a> {
 
         match &self.peek_token_ref().token {
             Token::Word(w) if w.keyword == Keyword::HEAP && is_mssql => {
-                Ok(SqlOption::Ident(self.parse_identifier()?))
+                Ok(SqlOption::Ident(ObjectName::from(self.parse_identifier()?)))
             }
             Token::Word(w) if w.keyword == Keyword::PARTITION && is_mssql => {
                 self.parse_option_partition()
@@ -11093,7 +11162,7 @@ impl<'a> Parser<'a> {
                 self.parse_option_clustered()
             }
             _ => {
-                let name = self.parse_identifier()?;
+                let name = ObjectName::from(self.parse_period_separated(|p| p.parse_identifier())?);
                 if self.dialect.supports_sql_option_without_value()
                     && matches!(self.peek_token_ref().token, Token::Comma | Token::RParen)
                 {
@@ -12093,20 +12162,80 @@ impl<'a> Parser<'a> {
 
     /// Parse an `ALTER VIEW` statement.
     pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
 
-        let with_options = self.parse_options(Keyword::WITH)?;
+        let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterViewOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterViewOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(|parser| {
+                let key = ObjectName::from(parser.parse_identifier()?);
+                Ok(if parser.consume_token(&Token::Eq) {
+                    SqlOption::KeyValue {
+                        key,
+                        value: parser.parse_expr()?,
+                    }
+                } else {
+                    SqlOption::Ident(key)
+                })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            AlterViewOperation::SetOptions { options }
+        } else if self.parse_keyword(Keyword::RESET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_identifier)?;
+            self.expect_token(&Token::RParen)?;
+            AlterViewOperation::ResetOptions { options }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterViewOperation::RenameTo {
+                new_name: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keyword(Keyword::RENAME) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let old_column_name = self.parse_identifier()?;
+            self.expect_keyword_is(Keyword::TO)?;
+            AlterViewOperation::RenameColumn {
+                old_column_name,
+                new_column_name: self.parse_identifier()?,
+            }
+        } else if self.parse_keyword(Keyword::ALTER) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let column_name = self.parse_identifier()?;
+            let op = if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
+                AlterColumnOperation::SetDefault {
+                    value: self.parse_expr()?,
+                }
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
+                AlterColumnOperation::DropDefault
+            } else {
+                return self.expected_ref(
+                    "SET DEFAULT or DROP DEFAULT after ALTER COLUMN",
+                    self.peek_token_ref(),
+                );
+            };
+            AlterViewOperation::AlterColumn { column_name, op }
+        } else {
+            let columns = self.parse_parenthesized_column_list(Optional, false)?;
+            let with_options = self.parse_options(Keyword::WITH)?;
+            self.expect_keyword_is(Keyword::AS)?;
+            AlterViewOperation::As {
+                columns,
+                query: self.parse_query()?,
+                with_options,
+            }
+        };
 
-        self.expect_keyword_is(Keyword::AS)?;
-        let query = self.parse_query()?;
-
-        Ok(Statement::AlterView {
+        Ok(AlterView {
             name,
-            columns,
-            query,
-            with_options,
-        })
+            if_exists,
+            operation,
+        }
+        .into())
     }
 
     /// Parse a [Statement::AlterType]
@@ -21455,6 +21584,38 @@ impl<'a> Parser<'a> {
         Ok(CreateForeignDataWrapper {
             name,
             routines,
+            options,
+        })
+    }
+
+    /// Parse a `CREATE USER MAPPING` statement, after `CREATE USER MAPPING`.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+    pub fn parse_create_user_mapping(&mut self) -> Result<CreateUserMapping, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        self.expect_keyword_is(Keyword::FOR)?;
+        let user = match self.parse_one_of_keywords(&[
+            Keyword::USER,
+            Keyword::CURRENT_ROLE,
+            Keyword::CURRENT_USER,
+            Keyword::SESSION_USER,
+            Keyword::PUBLIC,
+        ]) {
+            Some(Keyword::USER) => UserMappingUser::User,
+            Some(Keyword::CURRENT_ROLE) => UserMappingUser::CurrentRole,
+            Some(Keyword::CURRENT_USER) => UserMappingUser::CurrentUser,
+            Some(Keyword::SESSION_USER) => UserMappingUser::SessionUser,
+            Some(Keyword::PUBLIC) => UserMappingUser::Public,
+            _ => UserMappingUser::Name(self.parse_identifier()?),
+        };
+        self.expect_keyword_is(Keyword::SERVER)?;
+        let server_name = self.parse_identifier()?;
+        let options = self.parse_pg_options_clause()?;
+
+        Ok(CreateUserMapping {
+            if_not_exists,
+            user,
+            server_name,
             options,
         })
     }

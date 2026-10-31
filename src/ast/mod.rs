@@ -9501,7 +9501,7 @@ impl fmt::Display for ShowStatementFilter {
         use ShowStatementFilter::*;
         match self {
             Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
-            ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
+            ILike(pattern) => write!(f, "ILIKE '{}'", value::escape_single_quote_string(pattern)),
             Where(expr) => write!(f, "WHERE {expr}"),
             NoKeyword(pattern) => write!(f, "'{}'", value::escape_single_quote_string(pattern)),
         }

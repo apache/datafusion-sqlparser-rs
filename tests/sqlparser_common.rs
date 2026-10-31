@@ -16547,8 +16547,13 @@ fn test_show_dbs_schemas_tables_views() {
     // LIKE option (infix/suffix)
     let stmts = vec![
         "SHOW CATALOGS LIKE '%abc'",
+        "SHOW CATALOGS ILIKE '%abc'",
         "SHOW DATABASES LIKE '%abc'",
+        "SHOW DATABASES ILIKE '%abc'",
         "SHOW SCHEMAS LIKE '%abc'",
+        "SHOW SCHEMAS ILIKE '%abc'",
+        "SHOW DATABASES LIKE 'a''b'",
+        "SHOW DATABASES ILIKE 'a''b'",
     ];
     for stmt in stmts {
         all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt(stmt);

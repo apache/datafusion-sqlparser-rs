@@ -2367,3 +2367,9 @@ fn parse_create_table_engine_name_quoting() {
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
     clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
 }
+
+#[test]
+fn test_show_databases_tables_ilike() {
+    clickhouse().verified_stmt("SHOW DATABASES ILIKE '%DE%'");
+    clickhouse().verified_stmt("SHOW TABLES ILIKE '%abc%'");
+}

@@ -8899,29 +8899,31 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
 
-        let (schema, version, cascade) = if self.parse_keyword(Keyword::WITH) {
-            let schema = if self.parse_keyword(Keyword::SCHEMA) {
-                Some(self.parse_identifier()?)
-            } else {
-                None
+        let with_keyword = self.parse_keyword(Keyword::WITH);
+        let mut schema = None;
+        let mut version = None;
+        let mut cascade = false;
+        loop {
+            let loc = self.peek_token_ref().span.start;
+            let Some(keyword) =
+                self.parse_one_of_keywords(&[Keyword::SCHEMA, Keyword::VERSION, Keyword::CASCADE])
+            else {
+                break;
             };
-
-            let version = if self.parse_keyword(Keyword::VERSION) {
-                Some(self.parse_identifier()?)
-            } else {
-                None
+            let already_set = match keyword {
+                Keyword::SCHEMA => schema.replace(self.parse_identifier()?).is_some(),
+                Keyword::VERSION => version.replace(self.parse_identifier()?).is_some(),
+                _ => core::mem::replace(&mut cascade, true),
             };
-
-            let cascade = self.parse_keyword(Keyword::CASCADE);
-
-            (schema, version, cascade)
-        } else {
-            (None, None, false)
-        };
+            if already_set {
+                return parser_err!(format!("{keyword:?} specified more than once"), loc);
+            }
+        }
 
         Ok(CreateExtension {
             name,
             if_not_exists,
+            with_keyword,
             schema,
             version,
             cascade,

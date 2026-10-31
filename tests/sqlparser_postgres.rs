@@ -886,6 +886,94 @@ fn parse_create_extension() {
     pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH VERSION version CASCADE");
     pg_and_generic()
         .verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name VERSION version");
+
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name SCHEMA schema_name");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name VERSION version");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name CASCADE");
+    pg_and_generic().verified_stmt(
+        "CREATE EXTENSION IF NOT EXISTS extension_name SCHEMA schema_name VERSION version CASCADE",
+    );
+    pg_and_generic().verified_stmt("CREATE EXTENSION \"uuid-ossp\" VERSION '1.1'");
+    pg_and_generic().one_statement_parses_to(
+        "CREATE EXTENSION pgcrypto WITH VERSION '1.3' SCHEMA exts",
+        "CREATE EXTENSION pgcrypto WITH SCHEMA exts VERSION '1.3'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE EXTENSION pgcrypto CASCADE SCHEMA exts",
+        "CREATE EXTENSION pgcrypto SCHEMA exts CASCADE",
+    );
+
+    for sql in [
+        "CREATE EXTENSION extension_name WITH SCHEMA schema_name",
+        "CREATE EXTENSION extension_name SCHEMA schema_name",
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::CreateExtension(CreateExtension { schema, .. }) => {
+                assert_eq!(schema, Some(Ident::new("schema_name")));
+            }
+            other => panic!("unexpected statement: {other:?}"),
+        }
+    }
+
+    for (sql, error) in [
+        (
+            "CREATE EXTENSION extension_name WITH WITH SCHEMA schema_name",
+            "Expected: end of statement, found: WITH",
+        ),
+        ("CREATE EXTENSION", "Expected: identifier, found: EOF"),
+        (
+            "CREATE EXTENSION e SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE EXTENSION e VERSION",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+    for (sql, keyword) in [
+        ("CREATE EXTENSION e SCHEMA a SCHEMA b", "SCHEMA"),
+        ("CREATE EXTENSION e VERSION a CASCADE VERSION b", "VERSION"),
+        (
+            "CREATE EXTENSION e WITH CASCADE SCHEMA a CASCADE",
+            "CASCADE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("{keyword} specified more than once")),
+        );
+    }
+}
+
+#[test]
+fn display_create_extension_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement =
+        pg_and_generic().verified_stmt("CREATE EXTENSION e WITH SCHEMA s VERSION v CASCADE");
+    for rejected in ["CREATE", "WITH", "SCHEMA", "VERSION", "CASCADE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
 }
 
 #[test]

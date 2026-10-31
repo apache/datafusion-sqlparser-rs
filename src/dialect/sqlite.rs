@@ -169,6 +169,12 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    /// SQLite supports `ISNULL` as an alias for `IS NULL`
+    /// See: <https://www.sqlite.org/lang_expr.html>
+    fn supports_isnull_operator(&self) -> bool {
+        true
+    }
+
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
@@ -294,6 +300,7 @@ impl Dialect for SQLiteDialect {
                 | Keyword::INTERSECT
                 | Keyword::INTO
                 | Keyword::IS
+                | Keyword::ISNULL
                 | Keyword::JOIN
                 | Keyword::LIMIT
                 | Keyword::NOT

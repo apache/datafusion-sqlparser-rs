@@ -187,6 +187,7 @@ const TYPE_FUNC_NAME_KEYWORDS: &[Keyword] = &[
     Keyword::ILIKE,
     Keyword::INNER,
     Keyword::IS,
+    Keyword::ISNULL,
     Keyword::JOIN,
     Keyword::LEFT,
     Keyword::LIKE,
@@ -538,6 +539,12 @@ impl Dialect for PostgreSqlDialect {
     /// Postgres supports `NOTNULL` as an alias for `IS NOT NULL`
     /// See: <https://www.postgresql.org/docs/17/functions-comparison.html>
     fn supports_notnull_operator(&self) -> bool {
+        true
+    }
+
+    /// Postgres supports `ISNULL` as an alias for `IS NULL`
+    /// See: <https://www.postgresql.org/docs/current/functions-comparison.html>
+    fn supports_isnull_operator(&self) -> bool {
         true
     }
 

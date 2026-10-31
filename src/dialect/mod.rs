@@ -1019,6 +1019,9 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::NOTNULL && self.supports_notnull_operator() => {
                 Ok(p!(Is))
             }
+            Token::Word(w) if w.keyword == Keyword::ISNULL && self.supports_isnull_operator() => {
+                Ok(p!(Is))
+            }
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
             Token::Word(w) if w.keyword == Keyword::GLOBAL && self.supports_global_in() => {
                 match (
@@ -1907,6 +1910,12 @@ pub trait Dialect: Debug + Any {
     /// Their right operand is any expression, so `IS UNKNOWN`, `IS JSON` and
     /// `IS NORMALIZED` are not parsed as predicates.
     fn supports_is_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `x ISNULL`
+    /// operator expression.
+    fn supports_isnull_operator(&self) -> bool {
         false
     }
 

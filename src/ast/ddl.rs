@@ -4910,6 +4910,79 @@ impl Spanned for AlterCollation {
     }
 }
 
+/// `ALTER SERVER` statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterserver.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterServer {
+    /// Name of the server being altered.
+    pub name: Ident,
+    /// The operation to perform on the server.
+    pub operation: AlterServerOperation,
+}
+
+/// Operations supported by `ALTER SERVER`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterServerOperation {
+    /// Change the server version, its options, or both.
+    ///
+    /// ```sql
+    /// ALTER SERVER name [ VERSION 'new_version' ] [ OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] ) ]
+    /// ```
+    Update {
+        /// The new version, `NULL` included.
+        version: Option<ValueWithSpan>,
+        /// The option changes, in source order.
+        options: Option<Vec<AlterGenericOption>>,
+    },
+    /// Change the server owner.
+    ///
+    /// ```sql
+    /// ALTER SERVER name OWNER TO role_name
+    /// ```
+    OwnerTo(Owner),
+    /// Rename the server.
+    ///
+    /// ```sql
+    /// ALTER SERVER name RENAME TO new_name
+    /// ```
+    RenameTo {
+        /// New server name.
+        new_name: Ident,
+    },
+}
+
+impl fmt::Display for AlterServerOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterServerOperation::Update { version, options } => {
+                if let Some(version) = version {
+                    write!(f, "VERSION {version}")?;
+                    if options.is_some() {
+                        f.write_str(" ")?;
+                    }
+                }
+                if let Some(options) = options {
+                    write!(f, "OPTIONS ({})", display_comma_separated(options))?;
+                }
+                Ok(())
+            }
+            AlterServerOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterServerOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+        }
+    }
+}
+
+impl fmt::Display for AlterServer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER SERVER {} {}", self.name, self.operation)
+    }
+}
+
 /// Table type for ALTER TABLE statements.
 /// Used to distinguish between regular tables, Iceberg tables, and Dynamic tables.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

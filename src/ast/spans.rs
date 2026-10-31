@@ -29,17 +29,17 @@ use crate::tokenizer::Span;
 
 use super::{
     comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterGenericOption, AlterIndexOperation, AlterTableOperation, AlterTrigger,
-    AlterTriggerOperation, Analyze, Array, Assignment, AssignmentTarget, AttachedToken,
-    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget,
-    ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateRule,
-    CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping, Cte, Delete, DoUpdate,
-    ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch,
-    ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
-    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
-    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    AlterGenericOption, AlterIndexOperation, AlterServer, AlterServerOperation,
+    AlterTableOperation, AlterTrigger, AlterTriggerOperation, Analyze, Array, Assignment,
+    AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
+    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
+    ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
+    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
+    Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr,
+    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
+    IfStatement, IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
@@ -426,6 +426,7 @@ impl Spanned for Statement {
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterCollation { .. } => Span::empty(),
+            Statement::AlterServer(alter_server) => alter_server.span(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
@@ -2811,6 +2812,23 @@ impl Spanned for CreateUserMapping {
                     .flat_map(|option| [option.key.span, option.value.span]),
             ),
         )
+    }
+}
+
+impl Spanned for AlterServer {
+    fn span(&self) -> Span {
+        let operation = match &self.operation {
+            AlterServerOperation::Update { version, options } => Span::union_iter(
+                version
+                    .iter()
+                    .map(|version| version.span)
+                    .chain(options.iter().flatten().map(|option| option.span())),
+            ),
+            AlterServerOperation::OwnerTo(Owner::Ident(owner)) => owner.span,
+            AlterServerOperation::OwnerTo(_) => Span::empty(),
+            AlterServerOperation::RenameTo { new_name } => new_name.span,
+        };
+        self.name.span.union(&operation)
     }
 }
 

@@ -11868,6 +11868,7 @@ impl<'a> Parser<'a> {
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::TRIGGER => self.parse_alter_trigger().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
+            Keyword::SERVER => self.parse_alter_server().map(Into::into),
             Keyword::USER if self.dialect.supports_alter_user_as_alter_role() => {
                 self.parse_alter_role()
             }
@@ -11875,7 +11876,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or SERVER or USER or OPERATOR",
                     self.peek_token_ref(),
                 )
             }
@@ -12245,6 +12246,40 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterCollation { name, operation })
+    }
+
+    /// Parse a [Statement::AlterServer].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterserver.html)
+    pub fn parse_alter_server(&mut self) -> Result<AlterServer, ParserError> {
+        let name = self.parse_identifier()?;
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterServerOperation::RenameTo {
+                new_name: self.parse_identifier()?,
+            }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterServerOperation::OwnerTo(self.parse_owner()?)
+        } else {
+            let version = if self.parse_keyword(Keyword::VERSION) {
+                Some(self.parse_value()?)
+            } else {
+                None
+            };
+            let options = if self.parse_keyword(Keyword::OPTIONS) {
+                Some(self.parse_alter_generic_options()?)
+            } else {
+                None
+            };
+            if version.is_none() && options.is_none() {
+                return self.expected_ref(
+                    "VERSION, OPTIONS, OWNER TO, or RENAME TO after ALTER SERVER",
+                    self.peek_token_ref(),
+                );
+            }
+            AlterServerOperation::Update { version, options }
+        };
+
+        Ok(AlterServer { name, operation })
     }
 
     /// Parse a [Statement::AlterOperator]

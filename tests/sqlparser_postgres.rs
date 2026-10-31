@@ -12459,3 +12459,115 @@ fn parse_alter_foreign_table_rejects_clauses() {
         );
     }
 }
+
+#[test]
+fn parse_alter_server() {
+    let sql = "ALTER SERVER s VERSION NULL OPTIONS (ADD host 'db', SET port '5432', DROP dbname)";
+    let Statement::AlterServer(alter) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(alter.name, Ident::new("s"));
+    let AlterServerOperation::Update { version, options } = alter.operation else {
+        unreachable!()
+    };
+    assert_eq!(version.map(|version| version.value), Some(Value::Null));
+    assert_eq!(
+        options,
+        Some(vec![
+            AlterGenericOption::Add {
+                option: CreateServerOption {
+                    key: Ident::new("host"),
+                    value: Ident::with_quote('\'', "db"),
+                },
+                add_keyword: true,
+            },
+            AlterGenericOption::Set(CreateServerOption {
+                key: Ident::new("port"),
+                value: Ident::with_quote('\'', "5432"),
+            }),
+            AlterGenericOption::Drop(Ident::new("dbname")),
+        ])
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER SERVER s OWNER TO postgres"),
+        Statement::AlterServer(AlterServer {
+            name: Ident::new("s"),
+            operation: AlterServerOperation::OwnerTo(Owner::Ident(Ident::new("postgres"))),
+        })
+    );
+    for sql in [
+        "ALTER SERVER s VERSION '2.0'",
+        "ALTER SERVER s OPTIONS (host 'db')",
+        "ALTER SERVER s OWNER TO CURRENT_USER",
+        "ALTER SERVER s RENAME TO s2",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER SERVER s",
+            "Expected: VERSION, OPTIONS, OWNER TO, or RENAME TO after ALTER SERVER, found: EOF",
+        ),
+        (
+            "ALTER SERVER s OPTIONS (port '1') VERSION '4'",
+            "Expected: end of statement, found: VERSION",
+        ),
+        (
+            "ALTER SERVER public.s OWNER TO app",
+            "Expected: VERSION, OPTIONS, OWNER TO, or RENAME TO after ALTER SERVER, found: .",
+        ),
+        ("ALTER SERVER", "Expected: identifier, found: EOF"),
+        ("ALTER SERVER s RENAME TO", "Expected: identifier, found: EOF"),
+        (
+            "ALTER SERVER s OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF",
+        ),
+        ("ALTER SERVER s VERSION", "Expected: a value, found: EOF"),
+        (
+            "ALTER SERVER s OPTIONS (ADD host)",
+            "Expected: identifier, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_server_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let Statement::AlterServer(alter) =
+        pg_and_generic().verified_stmt("ALTER SERVER s VERSION '1' OPTIONS (ADD host 'db')")
+    else {
+        unreachable!()
+    };
+    for rejected in ["VERSION ", " ", "OPTIONS ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{}", alter.operation),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+}

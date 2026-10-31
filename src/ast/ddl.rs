@@ -6221,13 +6221,13 @@ impl fmt::Display for DropPolicy {
 
 impl From<CreatePolicy> for crate::ast::Statement {
     fn from(v: CreatePolicy) -> Self {
-        crate::ast::Statement::CreatePolicy(v)
+        crate::ast::Statement::CreatePolicy(Box::new(v))
     }
 }
 
 impl From<DropPolicy> for crate::ast::Statement {
     fn from(v: DropPolicy) -> Self {
-        crate::ast::Statement::DropPolicy(v)
+        crate::ast::Statement::DropPolicy(Box::new(v))
     }
 }
 
@@ -6264,7 +6264,7 @@ impl fmt::Display for AlterPolicy {
 
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
-        crate::ast::Statement::AlterPolicy(v)
+        crate::ast::Statement::AlterPolicy(Box::new(v))
     }
 }
 
@@ -6303,7 +6303,7 @@ impl fmt::Display for AlterTrigger {
 
 impl From<AlterTrigger> for crate::ast::Statement {
     fn from(v: AlterTrigger) -> Self {
-        crate::ast::Statement::AlterTrigger(v)
+        crate::ast::Statement::AlterTrigger(Box::new(v))
     }
 }
 
@@ -6443,7 +6443,7 @@ impl fmt::Display for CreateRuleAction {
 
 impl From<CreateRule> for crate::ast::Statement {
     fn from(v: CreateRule) -> Self {
-        crate::ast::Statement::CreateRule(v)
+        crate::ast::Statement::CreateRule(Box::new(v))
     }
 }
 
@@ -6560,7 +6560,7 @@ impl fmt::Display for CreateForeignDataWrapper {
 
 impl From<CreateForeignTable> for crate::ast::Statement {
     fn from(v: CreateForeignTable) -> Self {
-        crate::ast::Statement::CreateForeignTable(v)
+        crate::ast::Statement::CreateForeignTable(Box::new(v))
     }
 }
 
@@ -6647,7 +6647,7 @@ pub enum CreateAggregateArgs {
 
 impl From<CreateAggregate> for crate::ast::Statement {
     fn from(v: CreateAggregate) -> Self {
-        crate::ast::Statement::CreateAggregate(v)
+        crate::ast::Statement::CreateAggregate(Box::new(v))
     }
 }
 
@@ -6763,7 +6763,7 @@ impl fmt::Display for AggregateModifyKind {
 
 impl From<CreateForeignDataWrapper> for crate::ast::Statement {
     fn from(v: CreateForeignDataWrapper) -> Self {
-        crate::ast::Statement::CreateForeignDataWrapper(v)
+        crate::ast::Statement::CreateForeignDataWrapper(Box::new(v))
     }
 }
 
@@ -6857,6 +6857,6 @@ impl fmt::Display for CreateUserMapping {
 
 impl From<CreateUserMapping> for crate::ast::Statement {
     fn from(v: CreateUserMapping) -> Self {
-        crate::ast::Statement::CreateUserMapping(v)
+        crate::ast::Statement::CreateUserMapping(Box::new(v))
     }
 }

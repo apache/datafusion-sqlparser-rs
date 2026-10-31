@@ -2908,6 +2908,10 @@ pub struct CreateIndex {
     pub using: Option<IndexType>,
     /// columns included in the index
     pub columns: Vec<IndexColumn>,
+    /// whether this is a `CREATE VECTOR INDEX`
+    pub vector: bool,
+    /// whether the statement is `CREATE OR REPLACE`
+    pub or_replace: bool,
     /// whether the index is unique
     pub unique: bool,
     /// whether the index is created concurrently
@@ -2920,10 +2924,16 @@ pub struct CreateIndex {
     pub if_not_exists: bool,
     /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub include: Vec<Ident>,
+    /// `STORING(...)` clause (covering columns on a `CREATE VECTOR INDEX`)
+    pub storing: Vec<Ident>,
     /// NULLS DISTINCT / NOT DISTINCT clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub nulls_distinct: Option<bool>,
     /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub with: Vec<Expr>,
+    /// `ON <filegroup>` clause: <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-vector-index-transact-sql>
+    pub filegroup: Option<Ident>,
+    /// `OPTIONS(...)` clause, e.g. on `CREATE VECTOR INDEX`
+    pub options: Vec<SqlOption>,
     /// WHERE clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub predicate: Option<Expr>,
     /// Index options: <https://www.postgresql.org/docs/current/sql-createindex.html>
@@ -2941,8 +2951,10 @@ impl fmt::Display for CreateIndex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CREATE {unique}INDEX {concurrently}{async_}{if_not_exists}",
+            "CREATE {or_replace}{unique}{vector}INDEX {concurrently}{async_}{if_not_exists}",
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             unique = if self.unique { "UNIQUE " } else { "" },
+            vector = if self.vector { "VECTOR " } else { "" },
             concurrently = if self.concurrently {
                 "CONCURRENTLY "
             } else {
@@ -2966,6 +2978,9 @@ impl fmt::Display for CreateIndex {
         if !self.include.is_empty() {
             write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
         }
+        if !self.storing.is_empty() {
+            write!(f, " STORING({})", display_comma_separated(&self.storing))?;
+        }
         if let Some(value) = self.nulls_distinct {
             if value {
                 write!(f, " NULLS DISTINCT")?;
@@ -2975,6 +2990,12 @@ impl fmt::Display for CreateIndex {
         }
         if !self.with.is_empty() {
             write!(f, " WITH ({})", display_comma_separated(&self.with))?;
+        }
+        if let Some(filegroup) = &self.filegroup {
+            write!(f, " ON {filegroup}")?;
+        }
+        if !self.options.is_empty() {
+            write!(f, " OPTIONS({})", display_comma_separated(&self.options))?;
         }
         if let Some(predicate) = &self.predicate {
             write!(f, " WHERE {predicate}")?;

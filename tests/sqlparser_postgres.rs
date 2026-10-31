@@ -11800,9 +11800,9 @@ fn parse_interval_followed_by_alias() {
 #[test]
 fn parse_storage_parameters_without_value() {
     let dialects = all_dialects_where(|d| d.supports_sql_option_without_value());
-    let bare = SqlOption::Ident(Ident::new("security_barrier"));
+    let bare = SqlOption::Ident(Ident::new("security_barrier").into());
     let key_value = SqlOption::KeyValue {
-        key: Ident::new("security_invoker"),
+        key: Ident::new("security_invoker").into(),
         value: Expr::Value(Value::Boolean(true).with_empty_span()),
     };
 
@@ -11855,6 +11855,10 @@ fn parse_storage_parameters_without_value() {
             .parse_sql_statements("ALTER TABLE t SET TBLPROPERTIES (fillfactor 70)")
             .unwrap_err(),
         ParserError::ParserError("Expected: =, found: 70".to_string())
+    );
+}
+
+#[test]
 fn parse_namespaced_storage_parameters() {
     let expected = vec![SqlOption::KeyValue {
         key: ObjectName::from(vec![Ident::new("toast"), Ident::new("autovacuum_enabled")]),
@@ -12164,4 +12168,43 @@ fn display_create_user_mapping_propagates_formatter_errors() {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
+}
+
+#[test]
+fn parse_namespaced_storage_parameters_without_value() {
+    let dialects = all_dialects_where(|d| d.supports_sql_option_without_value());
+    let bare = SqlOption::Ident(ObjectName::from(vec![
+        Ident::new("toast"),
+        Ident::new("autovacuum_enabled"),
+    ]));
+
+    match dialects.verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled)") {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            assert_eq!(table_options, CreateTableOptions::With(vec![bare.clone()]))
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER TABLE t SET (toast.autovacuum_enabled, fillfactor = 70)") {
+        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
+            operations,
+            [AlterTableOperation::SetOptionsParens {
+                options: vec![
+                    bare,
+                    SqlOption::KeyValue {
+                        key: ObjectName::from(vec![Ident::new("fillfactor")]),
+                        value: Expr::value(number("70")),
+                    },
+                ],
+            }]
+        ),
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (toast.)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
 }

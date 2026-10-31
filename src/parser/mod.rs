@@ -9740,7 +9740,9 @@ impl<'a> Parser<'a> {
         // Single parameter option
         // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
         if self.parse_keywords(&[Keyword::START, Keyword::TRANSACTION]) {
-            return Ok(Some(SqlOption::Ident(Ident::new("START TRANSACTION"))));
+            return Ok(Some(SqlOption::Ident(
+                Ident::new("START TRANSACTION").into(),
+            )));
         }
 
         // Custom option
@@ -11104,7 +11106,7 @@ impl<'a> Parser<'a> {
 
         match &self.peek_token_ref().token {
             Token::Word(w) if w.keyword == Keyword::HEAP && is_mssql => {
-                Ok(SqlOption::Ident(self.parse_identifier()?))
+                Ok(SqlOption::Ident(ObjectName::from(self.parse_identifier()?)))
             }
             Token::Word(w) if w.keyword == Keyword::PARTITION && is_mssql => {
                 self.parse_option_partition()
@@ -11113,20 +11115,16 @@ impl<'a> Parser<'a> {
                 self.parse_option_clustered()
             }
             _ => {
-                let name = self.parse_identifier()?;
+                let name = ObjectName::from(self.parse_period_separated(|p| p.parse_identifier())?);
                 if self.dialect.supports_sql_option_without_value()
                     && matches!(self.peek_token_ref().token, Token::Comma | Token::RParen)
                 {
                     return Ok(SqlOption::Ident(name));
                 }
-                let mut key = vec![name];
-                while self.consume_token(&Token::Period) {
-                    key.push(self.parse_identifier()?);
-                }
                 self.expect_token(&Token::Eq)?;
                 let value = self.parse_expr()?;
 
-                Ok(SqlOption::KeyValue { key: key.into(), value })
+                Ok(SqlOption::KeyValue { key: name, value })
             }
         }
     }

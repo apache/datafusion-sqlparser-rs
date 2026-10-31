@@ -1196,9 +1196,9 @@ fn parse_create_table_with_all_table_options() {
                 key: Ident::new("SECONDARY_ENGINE_ATTRIBUTE").into(),
                 value: Expr::value(Value::SingleQuotedString("secondary_attr".to_owned()))
             }));
-            assert!(plain_options.contains(&SqlOption::Ident(Ident::new(
-                "START TRANSACTION".to_owned()
-            ))));
+            assert!(plain_options.contains(&SqlOption::Ident(
+                Ident::new("START TRANSACTION".to_owned()).into()
+            )));
             assert!(
                 plain_options.contains(&SqlOption::TableSpace(TablespaceOption {
                     name: "my_tablespace".to_string(),

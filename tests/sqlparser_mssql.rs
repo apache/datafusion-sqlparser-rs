@@ -1875,7 +1875,7 @@ fn parse_create_table_with_valid_options() {
                         },
                     ),
                 },
-                SqlOption::Ident("HEAP".into()),
+                SqlOption::Ident(ObjectName::from(vec![Ident::new("HEAP")])),
             ],
          ),
     ];

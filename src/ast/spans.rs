@@ -1102,7 +1102,7 @@ impl Spanned for SqlOption {
     fn span(&self) -> Span {
         match self {
             SqlOption::Clustered(table_options_clustered) => table_options_clustered.span(),
-            SqlOption::Ident(ident) => ident.span,
+            SqlOption::Ident(ident) => ident.span(),
             SqlOption::KeyValue { key, value } => key.span().union(&value.span()),
             SqlOption::Partition {
                 column_name,

@@ -538,6 +538,29 @@ impl fmt::Display for NormalizationForm {
     }
 }
 
+/// How the content of a quoted identifier or string is stored, and how
+/// [`fmt::Display`] re-escapes the content when it is printed back between
+/// its delimiters.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum QuoteEscaping {
+    /// The value is decoded and each occurrence of the closing delimiter is doubled.
+    #[default]
+    Double,
+    /// The value is decoded and the quote and backslash characters are backslash-escaped.
+    Backslash,
+    /// The value is the source spelling between the delimiters and is printed verbatim.
+    Raw,
+}
+
+impl QuoteEscaping {
+    #[cfg(feature = "serde")]
+    pub(crate) fn is_double(&self) -> bool {
+        matches!(self, Self::Double)
+    }
+}
+
 pub struct EscapeQuotedString<'a> {
     string: &'a str,
     quote: char,

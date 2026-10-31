@@ -1378,7 +1378,7 @@ impl<'a> Parser<'a> {
                 if self.peek_token_ref().token == Token::Period =>
             {
                 let mut id_parts: Vec<Ident> = vec![match t {
-                    Token::Word(w) => w.into_ident(next_token.span),
+                    Token::Word(w) => self.word_ident(w, next_token.span),
                     Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
                     _ => {
                         return Err(ParserError::ParserError(
@@ -1390,7 +1390,7 @@ impl<'a> Parser<'a> {
                 while self.consume_token(&Token::Period) {
                     let next_token = self.next_token();
                     match next_token.token {
-                        Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
+                        Token::Word(w) => id_parts.push(self.word_ident(w, next_token.span)),
                         Token::SingleQuotedString(s) => {
                             // SQLite has single-quoted identifiers
                             id_parts.push(Ident::with_quote('\'', s))
@@ -1596,7 +1596,7 @@ impl<'a> Parser<'a> {
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
                 {
                     Ok(Some(Expr::Function(Function {
-                        name: ObjectName::from(vec![w.to_ident(w_span)]),
+                        name: ObjectName::from(vec![self.word_ident_ref(w, w_span)]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
@@ -1611,7 +1611,7 @@ impl<'a> Parser<'a> {
             | Keyword::CURRENT_DATE
             | Keyword::LOCALTIME
             | Keyword::LOCALTIMESTAMP => {
-                Ok(Some(self.parse_time_functions(ObjectName::from(vec![w.to_ident(w_span)]))?))
+                Ok(Some(self.parse_time_functions(ObjectName::from(vec![self.word_ident_ref(w, w_span)]))?))
             }
             Keyword::CASE => Ok(Some(self.parse_case_expr()?)),
             Keyword::CONVERT => Ok(Some(self.parse_convert_expr(false)?)),
@@ -1636,7 +1636,7 @@ impl<'a> Parser<'a> {
             Keyword::CEIL => Ok(Some(self.parse_ceil_floor_expr(true)?)),
             Keyword::FLOOR => Ok(Some(self.parse_ceil_floor_expr(false)?)),
             Keyword::POSITION if self.peek_token_ref().token == Token::LParen => {
-                Ok(Some(self.parse_position_expr(w.to_ident(w_span))?))
+                Ok(Some(self.parse_position_expr(self.word_ident_ref(w, w_span))?))
             }
             Keyword::SUBSTR | Keyword::SUBSTRING => {
                 self.prev_token();
@@ -1658,7 +1658,7 @@ impl<'a> Parser<'a> {
                     let query = self.parse_query()?;
                     self.expect_token(&Token::RParen)?;
                     Ok(Some(Expr::Function(Function {
-                        name: ObjectName::from(vec![w.to_ident(w_span)]),
+                        name: ObjectName::from(vec![self.word_ident_ref(w, w_span)]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
@@ -1690,7 +1690,7 @@ impl<'a> Parser<'a> {
                 self.maybe_parse(|parser| {
                     let function_name = parser.parse_object_name(false)?;
                     parser.parse_function(function_name).map(|function| Expr::Prefixed {
-                        prefix: w.to_ident(w_span),
+                        prefix: parser.word_ident_ref(w, w_span),
                         value: Box::new(function),
                     })
                 })
@@ -1730,7 +1730,7 @@ impl<'a> Parser<'a> {
         let is_outer_join = self.peek_outer_join_operator();
         match &self.peek_token_ref().token {
             Token::LParen if !is_outer_join => {
-                let id_parts = vec![w.to_ident(w_span)];
+                let id_parts = vec![self.word_ident_ref(w, w_span)];
                 self.parse_function(ObjectName::from(id_parts))
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
@@ -1740,7 +1740,7 @@ impl<'a> Parser<'a> {
                 if w.value.starts_with('_') =>
             {
                 Ok(Expr::Prefixed {
-                    prefix: w.to_ident(w_span),
+                    prefix: self.word_ident_ref(w, w_span),
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
@@ -1751,7 +1751,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(LambdaFunctionParameter {
-                        name: w.to_ident(w_span),
+                        name: self.word_ident_ref(w, w_span),
                         data_type: None,
                     }),
                     body: Box::new(self.parse_expr()?),
@@ -1769,14 +1769,14 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(LambdaFunctionParameter {
-                        name: w.to_ident(w_span),
+                        name: self.word_ident_ref(w, w_span),
                         data_type: Some(data_type),
                     }),
                     body: Box::new(self.parse_expr()?),
                     syntax: LambdaSyntax::Arrow,
                 }))
             }
-            _ => Ok(Expr::Identifier(w.to_ident(w_span))),
+            _ => Ok(Expr::Identifier(self.word_ident_ref(w, w_span))),
         }
     }
 
@@ -6485,7 +6485,7 @@ impl<'a> Parser<'a> {
 
             // We ensure that the token is a `Word` token, and not other special tokens.
             match token.token {
-                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                Token::Word(word) => name = Some(self.word_ident(word, token.span)),
                 _ => return self.expected("a name or type", token),
             }
 
@@ -6547,7 +6547,7 @@ impl<'a> Parser<'a> {
         if let Some(next_data_type) = self.maybe_parse(parse_data_type_for_aggregate_arg)? {
             let token = self.token_at(data_type_idx).clone();
             match token.token {
-                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                Token::Word(word) => name = Some(self.word_ident(word, token.span)),
                 _ => return self.expected("a name or type", token),
             }
 
@@ -9780,7 +9780,7 @@ impl<'a> Parser<'a> {
                     Ok(Some(SqlOption::NamedParenthesizedList(
                         NamedParenthesizedList {
                             key: Ident::new("ENGINE"),
-                            name: Some(w.into_ident(value.span)),
+                            name: Some(self.word_ident(w, value.span)),
                             values: parameters,
                         },
                     )))
@@ -13090,7 +13090,9 @@ impl<'a> Parser<'a> {
                 //    without any whitespace in between
                 let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
                 let ident = match next_token.token {
-                    Token::Word(w) if w.quote_style.is_none() => Ok(w.into_ident(next_token.span)),
+                    Token::Word(w) if w.quote_style.is_none() => {
+                        Ok(self.word_ident(w, next_token.span))
+                    }
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
@@ -14140,13 +14142,13 @@ impl<'a> Parser<'a> {
                 if reserved_kwds.is_some()
                     && (after_as || reserved_kwds.is_some_and(|x| !x.contains(&w.keyword))) =>
             {
-                Ok(Some(w.into_ident(next_token.span)))
+                Ok(Some(self.word_ident(w, next_token.span)))
             }
             // Accepts a keyword as alias based on the caller's context, such as to what SQL element
             // this word is a potential alias of using the validator call-back. This allows for
             // dialect-specific logic.
             Token::Word(w) if validator(after_as, &w.keyword, self) => {
-                Ok(Some(w.into_ident(next_token.span)))
+                Ok(Some(self.word_ident(w, next_token.span)))
             }
             Token::SingleQuotedString(s)
                 if match kind {
@@ -14361,6 +14363,7 @@ impl<'a> Parser<'a> {
                     parts.push(ObjectNamePart::Identifier(Ident {
                         value: Token::Mul.to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::default(),
                         span,
                     }));
                 } else if dialect_of!(self is BigQueryDialect) && in_table_clause {
@@ -14416,6 +14419,7 @@ impl<'a> Parser<'a> {
                             ObjectNamePart::Identifier(Ident {
                                 value: value.into(),
                                 quote_style: ident.quote_style,
+                                escaping: ident.escaping,
                                 span: ident.span,
                             })
                         })
@@ -14435,7 +14439,7 @@ impl<'a> Parser<'a> {
             let token = self.peek_token_ref();
             match &token.token {
                 Token::Word(w) => {
-                    idents.push(w.to_ident(token.span));
+                    idents.push(self.word_ident_ref(w, token.span));
                 }
                 Token::EOF | Token::Eq | Token::SemiColon | Token::VerticalBarRightAngleBracket => {
                     break
@@ -14492,7 +14496,7 @@ impl<'a> Parser<'a> {
         // expecting at least one word for identifier
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) => idents.push(w.into_ident(next_token.span)),
+            Token::Word(w) => idents.push(self.word_ident(w, next_token.span)),
             Token::EOF => {
                 return Err(ParserError::ParserError(
                     "Empty input when parsing identifier".to_string(),
@@ -14512,7 +14516,7 @@ impl<'a> Parser<'a> {
                 Token::Period => {
                     let next_token = self.next_token();
                     match next_token.token {
-                        Token::Word(w) => idents.push(w.into_ident(next_token.span)),
+                        Token::Word(w) => idents.push(self.word_ident(w, next_token.span)),
                         Token::EOF => {
                             return Err(ParserError::ParserError(
                                 "Trailing period in identifier".to_string(),
@@ -14537,16 +14541,45 @@ impl<'a> Parser<'a> {
         Ok(idents)
     }
 
+    /// The [`QuoteEscaping`] marker for identifiers parsed from this parser's
+    /// tokens. A quoted identifier parsed with `with_unescape(false)` keeps
+    /// its source spelling and must be printed verbatim
+    pub(crate) fn ident_escaping(&self, quoted: bool) -> QuoteEscaping {
+        if quoted && !self.options.unescape {
+            QuoteEscaping::Raw
+        } else {
+            QuoteEscaping::Double
+        }
+    }
+
+    /// Convert a word token into an [`Ident`] stamped with this parser's
+    /// [`QuoteEscaping`] marker
+    pub(crate) fn word_ident(&self, w: Word, span: Span) -> Ident {
+        let escaping = self.ident_escaping(w.quote_style.is_some());
+        w.into_ident(span, escaping)
+    }
+
+    /// Convert a reference to a word token into an [`Ident`] stamped with
+    /// this parser's [`QuoteEscaping`] marker
+    pub(crate) fn word_ident_ref(&self, w: &Word, span: Span) -> Ident {
+        let escaping = self.ident_escaping(w.quote_style.is_some());
+        w.to_ident(span, escaping)
+    }
+
     /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) => Ok(w.into_ident(next_token.span)),
+            Token::Word(w) => Ok(self.word_ident(w, next_token.span)),
             Token::SingleQuotedString(s) => {
-                Ok(Ident::with_quote_and_span('\'', next_token.span, s))
+                let mut ident = Ident::with_quote_and_span('\'', next_token.span, s);
+                ident.escaping = self.ident_escaping(true);
+                Ok(ident)
             }
             Token::DoubleQuotedString(s) => {
-                Ok(Ident::with_quote_and_span('\"', next_token.span, s))
+                let mut ident = Ident::with_quote_and_span('\"', next_token.span, s);
+                ident.escaping = self.ident_escaping(true);
+                Ok(ident)
             }
             _ => self.expected("identifier", next_token),
         }
@@ -14567,7 +14600,8 @@ impl<'a> Parser<'a> {
             Token::Word(w) => {
                 let quote_style_is_none = w.quote_style.is_none();
                 let mut requires_whitespace = false;
-                let mut ident = w.into_ident(self.next_token().span);
+                let next_token = self.next_token();
+                let mut ident = self.word_ident(w, next_token.span);
                 if quote_style_is_none {
                     while matches!(self.peek_token_no_skip().token, Token::Minus) {
                         self.next_token();
@@ -15008,9 +15042,10 @@ impl<'a> Parser<'a> {
             loop {
                 let next_token = self.next_token();
                 match next_token.token {
-                    Token::Word(w) => {
-                        modifiers.push(TypeModifier::Identifier(w.to_ident(next_token.span)))
-                    }
+                    Token::Word(w) => modifiers.push(TypeModifier::Identifier(w.to_ident(
+                        next_token.span,
+                        self.ident_escaping(w.quote_style.is_some()),
+                    ))),
                     Token::Number(n, long) => modifiers.push(TypeModifier::Number(n, long)),
                     Token::SingleQuotedString(s) => modifiers.push(TypeModifier::String(s)),
 
@@ -22335,10 +22370,11 @@ impl Word {
     /// If you can consume the `Word`, prefer [`into_ident`](Self::into_ident) instead
     /// to avoid cloning.
     #[inline]
-    pub fn to_ident(&self, span: Span) -> Ident {
+    pub fn to_ident(&self, span: Span, escaping: QuoteEscaping) -> Ident {
         Ident {
             value: self.value.clone(),
             quote_style: self.quote_style,
+            escaping,
             span,
         }
     }
@@ -22347,10 +22383,11 @@ impl Word {
     ///
     /// This avoids cloning the string value. If you need to keep the original
     /// `Word`, use [`to_ident`](Self::to_ident) instead.
-    pub fn into_ident(self, span: Span) -> Ident {
+    pub fn into_ident(self, span: Span, escaping: QuoteEscaping) -> Ident {
         Ident {
             value: self.value,
             quote_style: self.quote_style,
+            escaping,
             span,
         }
     }
@@ -23006,16 +23043,19 @@ mod tests {
             Ident {
                 value: "CATALOG".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::default(),
                 span: Span::empty(),
             },
             Ident {
                 value: "F(o)o. \"bar".to_string(),
                 quote_style: Some('"'),
+                escaping: QuoteEscaping::default(),
                 span: Span::empty(),
             },
             Ident {
                 value: "table".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::default(),
                 span: Span::empty(),
             },
         ];
@@ -23029,11 +23069,13 @@ mod tests {
             Ident {
                 value: "CATALOG".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::default(),
                 span: Span::empty(),
             },
             Ident {
                 value: "table".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::default(),
                 span: Span::empty(),
             },
         ];

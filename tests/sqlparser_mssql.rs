@@ -31,7 +31,7 @@ use sqlparser::ast::DataType::{Int, Text, Varbinary};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, MsSqlDialect};
+use sqlparser::dialect::{GenericDialect, MsSqlDialect, SQLiteDialect};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
 #[test]
@@ -182,6 +182,7 @@ fn parse_create_procedure() {
                     name: Ident {
                         value: "@foo".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     data_type: DataType::Int(None),
@@ -192,6 +193,7 @@ fn parse_create_procedure() {
                     name: Ident {
                         value: "@bar".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
@@ -205,6 +207,7 @@ fn parse_create_procedure() {
             name: ObjectName::from(vec![Ident {
                 value: "test".into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             }]),
             language: None,
@@ -519,6 +522,7 @@ fn parse_mssql_openjson() {
                             name: Ident {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
@@ -574,6 +578,7 @@ fn parse_mssql_openjson() {
                             name: Ident {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
@@ -629,6 +634,7 @@ fn parse_mssql_openjson() {
                             name: Ident {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
@@ -794,6 +800,7 @@ fn parse_mssql_create_role() {
                 Some(ObjectName::from(vec![Ident {
                     value: "helena".into(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }]))
             );
@@ -811,12 +818,14 @@ fn parse_alter_role() {
             name: Ident {
                 value: "old_name".into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }
             },
@@ -830,12 +839,14 @@ fn parse_alter_role() {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::AddMember {
                 member_name: Ident {
                     value: "new_member".into(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }
             },
@@ -849,12 +860,14 @@ fn parse_alter_role() {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::DropMember {
                 member_name: Ident {
                     value: "old_member".into(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }
             },
@@ -1315,6 +1328,7 @@ fn parse_substring_in_select() {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             })),
                             substring_from: Some(Box::new(Expr::Value(
@@ -1332,6 +1346,7 @@ fn parse_substring_in_select() {
                             relation: table_from_name(ObjectName::from(vec![Ident {
                                 value: "test".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             }])),
                             joins: vec![]
@@ -1379,6 +1394,7 @@ fn parse_mssql_declare() {
                     names: vec![Ident {
                         value: "@foo".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }],
                     data_type: None,
@@ -1394,6 +1410,7 @@ fn parse_mssql_declare() {
                     names: vec![Ident {
                         value: "@bar".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }],
                     data_type: Some(Int(None)),
@@ -1409,6 +1426,7 @@ fn parse_mssql_declare() {
                     names: vec![Ident {
                         value: "@baz".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }],
                     data_type: Some(Text),
@@ -1744,11 +1762,13 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     value: Expr::Identifier(Ident {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })
                 },
@@ -1793,6 +1813,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_a".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             },
                             asc: Some(true),
@@ -1801,6 +1822,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_b".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             },
                             asc: Some(false),
@@ -1809,6 +1831,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_c".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             },
                             asc: None,
@@ -1823,6 +1846,7 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     value: Expr::Function(
@@ -1832,6 +1856,7 @@ fn parse_create_table_with_valid_options() {
                                     Ident {
                                         value: "HASH".to_string(),
                                         quote_style: None,
+                                        escaping: QuoteEscaping::Double,
                                         span: Span::empty(),
                                     },
                                 ],
@@ -1848,6 +1873,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_a".to_string(),
                                                         quote_style: None,
+                                                        escaping: QuoteEscaping::Double,
                                                         span: Span::empty(),
                                                     },
                                                 ),
@@ -1859,6 +1885,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_b".to_string(),
                                                         quote_style: None,
+                                                        escaping: QuoteEscaping::Double,
                                                         span: Span::empty(),
                                                     },
                                                 ),
@@ -1896,6 +1923,7 @@ fn parse_create_table_with_valid_options() {
                 name: ObjectName::from(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },],),
                 columns: vec![
@@ -1903,6 +1931,7 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_a".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
@@ -1912,6 +1941,7 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_b".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
@@ -1921,6 +1951,7 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_c".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
@@ -2095,12 +2126,14 @@ fn parse_create_table_with_identity_column() {
                 name: ObjectName::from(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },],),
                 columns: vec![ColumnDef {
                     name: Ident {
                         value: "columnA".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     data_type: Int(None,),
@@ -2344,6 +2377,7 @@ fn parse_mssql_varbinary_max_length() {
                 ObjectName::from(vec![Ident {
                     value: "example".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }])
             );
@@ -2369,6 +2403,7 @@ fn parse_mssql_varbinary_max_length() {
                 ObjectName::from(vec![Ident {
                     value: "example".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }])
             );
@@ -2409,6 +2444,10 @@ fn tsql() -> TestedDialects {
 
 fn ms_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
+}
+
+fn ms_and_sqlite() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(SQLiteDialect {})])
 }
 
 #[test]
@@ -2972,4 +3011,47 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().one_statement_parses_to("SELECT 1 [PRINT]", "SELECT 1 AS [PRINT]");
     ms().verified_stmt("SELECT * FROM t [PRINT]");
     ms().verified_stmt("SELECT * FROM t AS [PRINT]");
+}
+
+#[test]
+fn parse_bracket_identifier_with_escaped_closing_bracket() {
+    // A `]` inside a bracket-quoted identifier is escaped by doubling it, so
+    // `[a]]b]` denotes the identifier `a]b`
+    // https://learn.microsoft.com/en-us/sql/relational-databases/databases/database-identifiers
+    let select = ms().verified_only_select("SELECT [a]]b]");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a]b")),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    // Consecutive `]` in the value are each escaped, so `a]]b` stays `a]]b`
+    let select = ms().verified_only_select("SELECT [a]]]]b]");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a]]b")),
+        expr_from_projection(&select.projection[0]),
+    );
+}
+
+#[test]
+fn bracket_identifier_display_round_trips() {
+    // Serializing a bracket identifier must produce SQL that parses back to the
+    // same identifier. Checked exhaustively over values of length 0..=5 built
+    // from `]`, `"`, an ordinary character and a multi-byte one
+    let mut values = vec!["".to_string()];
+    for _ in 0..5 {
+        values = values
+            .iter()
+            .flat_map(|v| [']', '"', 'a', 'é'].map(|c| format!("{v}{c}")))
+            .collect();
+    }
+    for value in &values {
+        let ident = Ident::with_quote('[', value.as_str());
+        let sql = format!("SELECT {ident}");
+        let select = ms_and_sqlite().verified_only_select(&sql);
+        assert_eq!(
+            &Expr::Identifier(ident),
+            expr_from_projection(&select.projection[0]),
+            "{sql} did not round trip",
+        );
+    }
 }

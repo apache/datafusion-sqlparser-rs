@@ -1608,6 +1608,7 @@ fn parse_select_with_date_column_name() {
         &Expr::Identifier(Ident {
             value: "date".into(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }),
         expr_from_projection(only(&select.projection)),
@@ -2339,6 +2340,7 @@ fn parse_null_like() {
             alias: Ident {
                 value: "col_null".to_owned(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
         },
@@ -2356,6 +2358,7 @@ fn parse_null_like() {
             alias: Ident {
                 value: "null_col".to_owned(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
         },
@@ -4051,6 +4054,7 @@ fn parse_listagg() {
                     expr: Expr::Identifier(Ident {
                         value: "id".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
@@ -4063,6 +4067,7 @@ fn parse_listagg() {
                     expr: Expr::Identifier(Ident {
                         value: "username".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
@@ -5513,6 +5518,7 @@ fn parse_alter_table() {
                     key: Ident {
                         value: "classification".to_string(),
                         quote_style: Some('\''),
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     value: Expr::Value(
@@ -5534,6 +5540,7 @@ fn parse_alter_table() {
                         key: Ident {
                             value: "autovacuum_vacuum_scale_factor".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         },
                         value: Expr::Value(test_utils::number("0.01").with_empty_span()),
@@ -5542,6 +5549,7 @@ fn parse_alter_table() {
                         key: Ident {
                             value: "autovacuum_vacuum_threshold".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         },
                         value: Expr::Value(test_utils::number("500").with_empty_span()),
@@ -6634,6 +6642,7 @@ fn test_parse_named_window() {
                     name: ObjectName::from(vec![Ident {
                         value: "MIN".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }]),
                     uses_odbc_syntax: false,
@@ -6644,6 +6653,7 @@ fn test_parse_named_window() {
                             Expr::Identifier(Ident {
                                 value: "c12".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             }),
                         ))],
@@ -6654,6 +6664,7 @@ fn test_parse_named_window() {
                     over: Some(WindowType::NamedWindow(Ident {
                         value: "window1".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })),
                     within_group: vec![],
@@ -6661,6 +6672,7 @@ fn test_parse_named_window() {
                 alias: Ident {
                     value: "min1".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
             },
@@ -6669,6 +6681,7 @@ fn test_parse_named_window() {
                     name: ObjectName::from(vec![Ident {
                         value: "MAX".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }]),
                     uses_odbc_syntax: false,
@@ -6679,6 +6692,7 @@ fn test_parse_named_window() {
                             Expr::Identifier(Ident {
                                 value: "c12".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             }),
                         ))],
@@ -6689,6 +6703,7 @@ fn test_parse_named_window() {
                     over: Some(WindowType::NamedWindow(Ident {
                         value: "window2".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })),
                     within_group: vec![],
@@ -6696,6 +6711,7 @@ fn test_parse_named_window() {
                 alias: Ident {
                     value: "max1".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
             },
@@ -6706,6 +6722,7 @@ fn test_parse_named_window() {
             relation: table_from_name(ObjectName::from(vec![Ident {
                 value: "aggregate_test_100".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             }])),
             joins: vec![],
@@ -6723,6 +6740,7 @@ fn test_parse_named_window() {
                 Ident {
                     value: "window1".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
                 NamedWindowExpr::WindowSpec(WindowSpec {
@@ -6732,6 +6750,7 @@ fn test_parse_named_window() {
                         expr: Expr::Identifier(Ident {
                             value: "C12".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         }),
                         options: OrderByOptions {
@@ -6747,6 +6766,7 @@ fn test_parse_named_window() {
                 Ident {
                     value: "window2".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
                 NamedWindowExpr::WindowSpec(WindowSpec {
@@ -6754,6 +6774,7 @@ fn test_parse_named_window() {
                     partition_by: vec![Expr::Identifier(Ident {
                         value: "C11".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })],
                     order_by: vec![],
@@ -7348,6 +7369,7 @@ fn interval_disallow_interval_expr_gt() {
             right: Box::new(Expr::Identifier(Ident {
                 value: "x".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             })),
         }
@@ -7447,6 +7469,7 @@ fn parse_interval_and_or_xor() {
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
                 value: "col".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             }))],
             exclude: None,
@@ -7455,6 +7478,7 @@ fn parse_interval_and_or_xor() {
                 relation: table_from_name(ObjectName::from(vec![Ident {
                     value: "test".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }])),
                 joins: vec![],
@@ -7466,6 +7490,7 @@ fn parse_interval_and_or_xor() {
                     left: Box::new(Expr::Identifier(Ident {
                         value: "d3_date".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })),
                     op: BinaryOperator::Gt,
@@ -7473,6 +7498,7 @@ fn parse_interval_and_or_xor() {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "d1_date".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })),
                         op: BinaryOperator::Plus,
@@ -7492,6 +7518,7 @@ fn parse_interval_and_or_xor() {
                     left: Box::new(Expr::Identifier(Ident {
                         value: "d2_date".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })),
                     op: BinaryOperator::Gt,
@@ -7499,6 +7526,7 @@ fn parse_interval_and_or_xor() {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "d1_date".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })),
                         op: BinaryOperator::Plus,
@@ -7593,6 +7621,7 @@ fn parse_at_timezone() {
             alias: Ident {
                 value: "hour".to_string(),
                 quote_style: Some('"'),
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
         },
@@ -8702,6 +8731,7 @@ fn parse_recursive_cte() {
             name: Ident {
                 value: "nums".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
             columns: vec![TableAliasColumnDef::from_name("val")],
@@ -9902,6 +9932,7 @@ fn lateral_function() {
             relation: table_from_name(ObjectName::from(vec![Ident {
                 value: "customer".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             }])),
             joins: vec![Join {
@@ -10676,11 +10707,13 @@ fn parse_grant() {
                                 Ident {
                                     value: "shape".into(),
                                     quote_style: None,
+                                    escaping: QuoteEscaping::Double,
                                     span: Span::empty(),
                                 },
                                 Ident {
                                     value: "size".into(),
                                     quote_style: None,
+                                    escaping: QuoteEscaping::Double,
                                     span: Span::empty(),
                                 },
                             ])
@@ -11378,6 +11411,7 @@ fn test_lock_table() {
         ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }])
     );
@@ -11393,6 +11427,7 @@ fn test_lock_table() {
         ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }])
     );
@@ -11408,6 +11443,7 @@ fn test_lock_table() {
         ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }])
     );
@@ -11419,6 +11455,7 @@ fn test_lock_table() {
         ObjectName::from(vec![Ident {
             value: "student".to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }])
     );
@@ -11437,6 +11474,7 @@ fn test_lock_nonblock() {
         ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }])
     );
@@ -11452,6 +11490,7 @@ fn test_lock_nonblock() {
         ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }])
     );
@@ -12498,6 +12537,7 @@ fn parse_pivot_table() {
                 name: Ident {
                     value: "p".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
                 columns: vec![
@@ -13445,11 +13485,13 @@ fn parse_execute_stored_procedure() {
             Ident {
                 value: "my_schema".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
             Ident {
                 value: "my_stored_procedure".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
         ])),
@@ -13649,12 +13691,14 @@ fn parse_unload() {
             to: Ident {
                 value: "s3://...".to_string(),
                 quote_style: Some('\''),
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             },
             with: vec![SqlOption::KeyValue {
                 key: Ident {
                     value: "format".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
                 value: Expr::Value(
@@ -15301,6 +15345,7 @@ fn test_extract_seconds_single_quote_ok() {
             field: DateTimeField::Custom(Ident {
                 value: "seconds".to_string(),
                 quote_style: Some('\''),
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             }),
             syntax: ExtractSyntax::From,
@@ -16594,6 +16639,7 @@ fn test_load_extension() {
                 Ident {
                     value: "filename".to_string(),
                     quote_style: Some('\''),
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
                 extension_name
@@ -17860,6 +17906,7 @@ fn test_select_from_first() {
                     relation: table_from_name(ObjectName::from(vec![Ident {
                         value: "capitals".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }])),
                     joins: vec![],
@@ -17911,6 +17958,7 @@ fn test_select_from_first_with_cte() {
         relation: table_from_name(ObjectName::from(vec![Ident {
             value: "test".to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         }])),
         joins: vec![],
@@ -19358,6 +19406,7 @@ fn parse_create_procedure_with_language() {
                 Some(Ident {
                     value: "sql".into(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span {
                         start: Location::empty(),
                         end: Location::empty()
@@ -19392,6 +19441,7 @@ fn parse_create_procedure_with_parameter_modes() {
                         name: Ident {
                             value: "a".into(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: fake_span,
                         },
                         data_type: DataType::Integer(None),
@@ -19402,6 +19452,7 @@ fn parse_create_procedure_with_parameter_modes() {
                         name: Ident {
                             value: "b".into(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: fake_span,
                         },
                         data_type: DataType::Text,
@@ -19412,6 +19463,7 @@ fn parse_create_procedure_with_parameter_modes() {
                         name: Ident {
                             value: "c".into(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: fake_span,
                         },
                         data_type: DataType::Timestamp(None, TimezoneInfo::None),
@@ -19422,6 +19474,7 @@ fn parse_create_procedure_with_parameter_modes() {
                         name: Ident {
                             value: "d".into(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: fake_span,
                         },
                         data_type: DataType::Bool,
@@ -20674,6 +20727,7 @@ fn test_parse_set_session_authorization() {
             kind: SetSessionAuthorizationParamKind::User(Ident {
                 value: "username".to_string(),
                 quote_style: Some('\''),
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             }),
         }))
@@ -22907,4 +22961,79 @@ fn parse_alter_table_reset_options() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_quoted_identifier_with_doubled_delimiter() {
+    // A delimiter inside a quoted identifier is escaped by doubling it, so
+    // eight double quotes denote the identifier whose value is three
+    // https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
+    let eight_quote_ident = "SELECT \"\"\"\"\"\"\"\"";
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('"'));
+    dialects.verified_stmt(eight_quote_ident);
+    dialects.verified_stmt(r#"SELECT "a""b" FROM t"#);
+    let select = dialects.verified_only_select(eight_quote_ident);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('"', "\"\"\"")),
+        expr_from_projection(&select.projection[0]),
+    );
+    // an unterminated quoted identifier still fails
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT \"\"\""),
+        Err(ParserError::TokenizerError(
+            "Expected close delimiter '\"' before EOF. at Line: 1, Column: 8".to_string()
+        )),
+    );
+}
+
+#[test]
+fn parse_backtick_identifier_with_doubled_backtick() {
+    // A backtick inside a backtick-quoted identifier is escaped by doubling it,
+    // so `` `a``b` `` denotes the identifier ``a`b``
+    // https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('`'));
+    dialects.verified_stmt("SELECT `a``b`");
+    let select = dialects.verified_only_select("SELECT `a``b`");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('`', "a`b")),
+        expr_from_projection(&select.projection[0]),
+    );
+    // the displayed identifier doubles the backtick inside its value
+    assert_eq!(select.to_string(), "SELECT `a``b`");
+}
+
+#[test]
+fn quoted_identifiers_print_verbatim_without_unescape() {
+    // With `with_unescape(false)` the tokenizer keeps the source spelling, so
+    // `Display` prints quoted identifiers verbatim instead of re-escaping
+    let options = ParserOptions::new().with_unescape(false);
+    let select = TestedDialects::new_with_options(
+        vec![
+            Box::new(PostgreSqlDialect {}),
+            Box::new(SQLiteDialect {}),
+            Box::new(GenericDialect {}),
+        ],
+        options.clone(),
+    )
+    .verified_only_select(r#"SELECT "a""b""#);
+    assert_eq!(
+        &Expr::Identifier(Ident {
+            value: "a\"\"b".to_string(),
+            quote_style: Some('"'),
+            escaping: QuoteEscaping::Raw,
+            span: Span::empty(),
+        }),
+        expr_from_projection(&select.projection[0]),
+    );
+    let select = TestedDialects::new_with_options(vec![Box::new(MsSqlDialect {})], options)
+        .verified_only_select("SELECT [a]]b]");
+    assert_eq!(
+        &Expr::Identifier(Ident {
+            value: "a]]b".to_string(),
+            quote_style: Some('['),
+            escaping: QuoteEscaping::Raw,
+            span: Span::empty(),
+        }),
+        expr_from_projection(&select.projection[0]),
+    );
 }

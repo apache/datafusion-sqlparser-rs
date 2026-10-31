@@ -128,7 +128,7 @@ pub use self::trigger::{
 
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, QuoteDelimitedString, TrimWhereField, Value, ValueWithSpan,
+    NormalizationForm, QuoteDelimitedString, QuoteEscaping, TrimWhereField, Value, ValueWithSpan,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -258,6 +258,13 @@ pub struct Ident {
     /// The starting quote if any. Valid quote characters are the single quote,
     /// double quote, backtick, and opening square bracket.
     pub quote_style: Option<char>,
+    /// How the value is stored, which decides how [`fmt::Display`] re-escapes
+    /// it. Ignored when `quote_style` is `None`.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "QuoteEscaping::is_double")
+    )]
+    pub escaping: QuoteEscaping,
     /// The span of the identifier in the original SQL string.
     pub span: Span,
 }
@@ -267,11 +274,12 @@ impl PartialEq for Ident {
         let Ident {
             value,
             quote_style,
+            escaping,
             // exhaustiveness check; we ignore spans in comparisons
             span: _,
         } = self;
 
-        value == &other.value && quote_style == &other.quote_style
+        value == &other.value && quote_style == &other.quote_style && escaping == &other.escaping
     }
 }
 
@@ -280,12 +288,14 @@ impl core::hash::Hash for Ident {
         let Ident {
             value,
             quote_style,
+            escaping,
             // exhaustiveness check; we ignore spans in hashes
             span: _,
         } = self;
 
         value.hash(state);
         quote_style.hash(state);
+        escaping.hash(state);
     }
 }
 
@@ -302,6 +312,7 @@ impl Ord for Ident {
         let Ident {
             value,
             quote_style,
+            escaping,
             // exhaustiveness check; we ignore spans in ordering
             span: _,
         } = self;
@@ -309,14 +320,16 @@ impl Ord for Ident {
         let Ident {
             value: other_value,
             quote_style: other_quote_style,
+            escaping: other_escaping,
             // exhaustiveness check; we ignore spans in ordering
             span: _,
         } = other;
 
-        // First compare by value, then by quote_style
+        // First compare by value, then by quote_style, then by escaping
         value
             .cmp(other_value)
             .then_with(|| quote_style.cmp(other_quote_style))
+            .then_with(|| escaping.cmp(other_escaping))
     }
 }
 
@@ -329,6 +342,7 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: None,
+            escaping: QuoteEscaping::default(),
             span: Span::empty(),
         }
     }
@@ -343,6 +357,7 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: Some(quote),
+            escaping: QuoteEscaping::default(),
             span: Span::empty(),
         }
     }
@@ -355,6 +370,7 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: None,
+            escaping: QuoteEscaping::default(),
             span,
         }
     }
@@ -368,6 +384,7 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: Some(quote),
+            escaping: QuoteEscaping::default(),
             span,
         }
     }
@@ -378,6 +395,7 @@ impl From<&str> for Ident {
         Ident {
             value: value.to_string(),
             quote_style: None,
+            escaping: QuoteEscaping::default(),
             span: Span::empty(),
         }
     }
@@ -387,20 +405,47 @@ pub(crate) fn fmt_ident(
     f: &mut fmt::Formatter,
     value: &str,
     quote_style: Option<char>,
+    escaping: QuoteEscaping,
 ) -> fmt::Result {
     match quote_style {
-        Some('[') => write!(f, "[{value}]"),
-        Some(q) => {
-            let escaped = value::escape_quoted_string(value, q);
-            write!(f, "{q}{escaped}{q}")
-        }
         None => f.write_str(value),
+        Some(quote) => {
+            let close = match quote {
+                '[' => ']',
+                _ => quote,
+            };
+            match escaping {
+                QuoteEscaping::Raw => write!(f, "{quote}{value}{close}"),
+                QuoteEscaping::Double => {
+                    write!(f, "{quote}")?;
+                    let mut parts = value.split(close);
+                    if let Some(part) = parts.next() {
+                        f.write_str(part)?;
+                    }
+                    for part in parts {
+                        write!(f, "{close}{close}")?;
+                        f.write_str(part)?;
+                    }
+                    write!(f, "{close}")
+                }
+                QuoteEscaping::Backslash => {
+                    write!(f, "{quote}")?;
+                    for ch in value.chars() {
+                        if ch == quote || ch == '\\' {
+                            f.write_str("\\")?;
+                        }
+                        write!(f, "{ch}")?;
+                    }
+                    write!(f, "{close}")
+                }
+            }
+        }
     }
 }
 
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt_ident(f, &self.value, self.quote_style)
+        fmt_ident(f, &self.value, self.quote_style, self.escaping)
     }
 }
 

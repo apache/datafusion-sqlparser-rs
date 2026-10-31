@@ -282,6 +282,7 @@ fn test_select_union_by_name() {
                     relation: table_from_name(ObjectName::from(vec![Ident {
                         value: "capitals".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }])),
                     joins: vec![],
@@ -315,6 +316,7 @@ fn test_select_union_by_name() {
                     relation: table_from_name(ObjectName::from(vec![Ident {
                         value: "weather".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }])),
                     joins: vec![],
@@ -348,6 +350,7 @@ fn test_duckdb_install() {
             extension_name: Ident {
                 value: "tpch".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty()
             }
         }
@@ -362,6 +365,7 @@ fn test_duckdb_load_extension() {
             extension_name: Ident {
                 value: "my_extension".to_string(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty()
             }
         },

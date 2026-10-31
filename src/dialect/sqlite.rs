@@ -375,7 +375,7 @@ fn parse_type_with_numeric_modifiers(parser: &mut Parser) -> Option<DataType> {
             .collect();
         (
             DataType::Custom(
-                ObjectName::from(word.clone().into_ident(first.span)),
+                ObjectName::from(parser.word_ident(word.clone(), first.span)),
                 modifiers,
             ),
             nth + 2,

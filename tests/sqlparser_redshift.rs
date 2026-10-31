@@ -34,6 +34,7 @@ fn test_square_brackets_over_db_schema_table_name() {
         SelectItem::UnnamedExpr(Expr::Identifier(Ident {
             value: "col1".to_string(),
             quote_style: Some('['),
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         })),
     );
@@ -44,11 +45,13 @@ fn test_square_brackets_over_db_schema_table_name() {
                 Ident {
                     value: "test_schema".to_string(),
                     quote_style: Some('['),
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
                 Ident {
                     value: "test_table".to_string(),
                     quote_style: Some('['),
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }
             ])),
@@ -76,6 +79,7 @@ fn test_double_quotes_over_db_schema_table_name() {
         SelectItem::UnnamedExpr(Expr::Identifier(Ident {
             value: "col1".to_string(),
             quote_style: Some('"'),
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         })),
     );
@@ -86,11 +90,13 @@ fn test_double_quotes_over_db_schema_table_name() {
                 Ident {
                     value: "test_schema".to_string(),
                     quote_style: Some('"'),
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 },
                 Ident {
                     value: "test_table".to_string(),
                     quote_style: Some('"'),
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }
             ])),
@@ -322,12 +328,31 @@ fn test_parse_select_numbered_columns() {
 
 #[test]
 fn test_parse_nested_quoted_identifier() {
-    redshift().verified_stmt(r#"SELECT 1 AS ["1"] FROM a"#);
-    redshift().verified_stmt(r#"SELECT 1 AS ["[="] FROM a"#);
-    redshift().verified_stmt(r#"SELECT 1 AS ["=]"] FROM a"#);
-    redshift().verified_stmt(r#"SELECT 1 AS ["a[b]"] FROM a"#);
+    // The nested form `["foo"]` keeps no brackets in the identifier value, so
+    // it is stored as `foo` quoted with `"` and rendered as `"foo"`
+    // https://docs.aws.amazon.com/redshift/latest/dg/r_names.html
+    redshift().one_statement_parses_to(r#"SELECT 1 AS ["1"] FROM a"#, r#"SELECT 1 AS "1" FROM a"#);
+    redshift()
+        .one_statement_parses_to(r#"SELECT 1 AS ["[="] FROM a"#, r#"SELECT 1 AS "[=" FROM a"#);
+    redshift()
+        .one_statement_parses_to(r#"SELECT 1 AS ["=]"] FROM a"#, r#"SELECT 1 AS "=]" FROM a"#);
+    redshift().one_statement_parses_to(
+        r#"SELECT 1 AS ["a[b]"] FROM a"#,
+        r#"SELECT 1 AS "a[b]" FROM a"#,
+    );
     // trim spaces
-    redshift().one_statement_parses_to(r#"SELECT 1 AS [ " 1 " ]"#, r#"SELECT 1 AS [" 1 "]"#);
+    redshift().one_statement_parses_to(r#"SELECT 1 AS [ " 1 " ]"#, r#"SELECT 1 AS " 1 ""#);
+    // the inner identifier keeps its decoded value and double-quote escaping
+    let select = redshift().verified_only_select_with_canonical(
+        r#"SELECT 1 AS ["a""b"] FROM a"#,
+        r#"SELECT 1 AS "a""b" FROM a"#,
+    );
+    match &select.projection[0] {
+        SelectItem::ExprWithAlias { alias, .. } => {
+            assert_eq!(*alias, Ident::with_quote('"', "a\"b"))
+        }
+        _ => panic!("expected aliased projection"),
+    }
     // invalid query
     assert_eq!(
         redshift().parse_sql_statements(r#"SELECT 1 AS ["1]"#),

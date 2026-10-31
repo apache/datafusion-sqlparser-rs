@@ -16,6 +16,7 @@
 // under the License.
 
 use criterion::{criterion_group, criterion_main, Criterion};
+use sqlparser::ast::QuoteEscaping;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
@@ -105,7 +106,7 @@ fn word_to_ident(c: &mut Criterion) {
     group.bench_function("clone_into_ident_100x", |b| {
         b.iter(|| {
             for w in &words {
-                std::hint::black_box(w.clone().into_ident(span));
+                std::hint::black_box(w.clone().into_ident(span, QuoteEscaping::default()));
             }
         });
     });
@@ -114,7 +115,7 @@ fn word_to_ident(c: &mut Criterion) {
     group.bench_function("to_ident_100x", |b| {
         b.iter(|| {
             for w in &words {
-                std::hint::black_box(w.to_ident(span));
+                std::hint::black_box(w.to_ident(span, QuoteEscaping::default()));
             }
         });
     });

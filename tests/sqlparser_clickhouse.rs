@@ -50,6 +50,7 @@ fn parse_map_access_expr() {
                 root: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 })),
                 access_chain: vec![AccessExpr::Subscript(Subscript::Index {
@@ -934,6 +935,7 @@ fn parse_create_view_with_fields_data_types() {
                             ObjectName::from(vec![Ident {
                                 value: "int".into(),
                                 quote_style: Some('"'),
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             }]),
                             vec![]
@@ -946,6 +948,7 @@ fn parse_create_view_with_fields_data_types() {
                             ObjectName::from(vec![Ident {
                                 value: "String".into(),
                                 quote_style: Some('"'),
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             }]),
                             vec![]

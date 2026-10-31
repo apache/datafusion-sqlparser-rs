@@ -116,8 +116,8 @@
 //! 1. Adding new fields to existing pattern matches.
 //! 2. Filling in the proper span information when constructing AST nodes.
 //!
-//! For example, since `Ident` now stores a `Span`, to construct an `Ident` you
-//! must provide now provide one:
+//! For example, since `Ident` now stores a `Span` and an escape-mode marker, to
+//! construct an `Ident` you must provide both:
 //!
 //! Previously:
 //! ```text
@@ -130,16 +130,18 @@
 //! Now
 //! ```rust
 //! # use sqlparser::ast::Ident;
+//! # use sqlparser::ast::QuoteEscaping;
 //! # use sqlparser::tokenizer::Span;
 //! Ident {
 //!     value: "name".into(),
 //!     quote_style: None,
+//!     escaping: QuoteEscaping::Double,
 //!     span: Span::empty(),
 //! };
 //! ```
 //!
 //! Similarly, when pattern matching on `Ident`, you must now account for the
-//! `span` field.
+//! `span` and `escaping` fields.
 //!
 //! #### Misc.
 //! - [`TokenWithLocation`] stores a full `Span`, rather than just a source location.

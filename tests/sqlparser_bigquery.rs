@@ -775,11 +775,13 @@ fn parse_typed_struct_syntax_bigquery() {
                     Ident {
                         value: "t".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     Ident {
                         value: "str_col".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                 ]),
@@ -789,6 +791,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     field_name: Some(Ident {
                         value: "x".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     field_type: DataType::Int64,
@@ -798,6 +801,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     field_name: Some(Ident {
                         value: "y".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     field_type: DataType::String(None),
@@ -812,6 +816,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Identifier(Ident {
                 value: "nested_col".into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             })],
             fields: vec![
@@ -847,6 +852,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Identifier(Ident {
                 value: "nested_col".into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             })],
             fields: vec![
@@ -1148,11 +1154,13 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     Ident {
                         value: "t".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     Ident {
                         value: "str_col".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                 ]),
@@ -1162,6 +1170,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     field_name: Some(Ident {
                         value: "x".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     field_type: DataType::Int64,
@@ -1171,6 +1180,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     field_name: Some(Ident {
                         value: "y".into(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     field_type: DataType::String(None),
@@ -1189,6 +1199,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::Identifier(Ident {
                 value: "nested_col".into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             })],
             fields: vec![

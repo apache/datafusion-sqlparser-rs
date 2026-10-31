@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{DollarQuotedString, QuoteDelimitedString};
+use crate::ast::{DollarQuotedString, QuoteDelimitedString, QuoteEscaping};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
@@ -480,7 +480,7 @@ pub struct Word {
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        crate::ast::fmt_ident(f, &self.value, self.quote_style)
+        crate::ast::fmt_ident(f, &self.value, self.quote_style, QuoteEscaping::default())
     }
 }
 
@@ -1533,7 +1533,6 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::make_word_owned(word, Some(quote_start))));
                     };
 
-                    let mut word = vec![];
                     let quote_end = Word::matching_end_quote(quote_start);
                     let nested_quote_end = Word::matching_end_quote(nested_quote_start);
                     let error_loc = chars.location();
@@ -1546,9 +1545,9 @@ impl<'a> Tokenizer<'a> {
                             format!("Expected nested delimiter '{nested_quote_start}' before EOF."),
                         );
                     }
-                    word.push(nested_quote_start.into());
-                    word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
-                    word.push(nested_quote_end.into());
+                    // The nested form `["foo"]` keeps no brackets in the identifier
+                    // value, so the inner name is stored quoted with the nested quote
+                    let word = self.tokenize_quoted_identifier(nested_quote_end, chars)?;
                     peeking_take_while(chars, |ch| ch.is_whitespace());
                     if chars.peek() != Some(&quote_end) {
                         return self.tokenizer_error(
@@ -1558,10 +1557,7 @@ impl<'a> Tokenizer<'a> {
                     }
                     chars.next(); // skip close delimiter
 
-                    Ok(Some(Token::make_word_owned(
-                        word.concat(),
-                        Some(quote_start),
-                    )))
+                    Ok(Some(Token::make_word_owned(word, Some(nested_quote_start))))
                 }
                 // numbers and period
                 '0'..='9' | '.' => {

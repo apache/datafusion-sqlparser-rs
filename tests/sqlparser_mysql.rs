@@ -153,17 +153,20 @@ fn parse_flush() {
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`'),
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }
                 ]),
                 ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }])
             ]
@@ -193,17 +196,20 @@ fn parse_flush() {
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`'),
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }
                 ]),
                 ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }])
             ]
@@ -222,17 +228,20 @@ fn parse_flush() {
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     },
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`'),
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }
                 ]),
                 ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }])
             ]
@@ -1479,6 +1488,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted ` identifier".into(),
                     quote_style: Some('`'),
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }))],
                 exclude: None,
@@ -1536,6 +1546,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted `` identifier".into(),
                     quote_style: Some('`'),
+                    escaping: QuoteEscaping::Raw,
                     span: Span::empty(),
                 }))],
                 exclude: None,
@@ -1585,6 +1596,7 @@ fn parse_escaped_backticks_with_escape() {
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "`quoted identifier`".into(),
                     quote_style: Some('`'),
+                    escaping: QuoteEscaping::Double,
                     span: Span::empty(),
                 }))],
                 exclude: None,
@@ -1638,6 +1650,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "``quoted identifier``".into(),
                     quote_style: Some('`'),
+                    escaping: QuoteEscaping::Raw,
                     span: Span::empty(),
                 }))],
                 exclude: None,
@@ -2876,6 +2889,7 @@ fn parse_update_with_order_by() {
                     expr: Expr::Identifier(Ident {
                         value: "foo".to_owned(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
@@ -2903,6 +2917,7 @@ fn parse_update_with_order_by_and_limit() {
                     expr: Expr::Identifier(Ident {
                         value: "foo".to_owned(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
@@ -2929,6 +2944,7 @@ fn parse_delete_with_order_by() {
                     expr: Expr::Identifier(Ident {
                         value: "id".to_owned(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
@@ -3013,6 +3029,7 @@ fn parse_alter_table_add_column() {
                     column_position: Some(MySQLColumnPosition::After(Ident {
                         value: String::from("foo"),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })),
                 },]
@@ -3061,6 +3078,7 @@ fn parse_alter_table_add_columns() {
                         column_position: Some(MySQLColumnPosition::After(Ident {
                             value: String::from("foo"),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })),
                     },
@@ -3134,6 +3152,7 @@ fn parse_alter_table_change_column() {
         column_position: Some(MySQLColumnPosition::After(Ident {
             value: String::from("foo"),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         })),
     };
@@ -3174,6 +3193,7 @@ fn parse_alter_table_change_column_with_column_position() {
         column_position: Some(MySQLColumnPosition::After(Ident {
             value: String::from("total_count"),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         })),
     };
@@ -3231,6 +3251,7 @@ fn parse_alter_table_modify_column() {
         column_position: Some(MySQLColumnPosition::After(Ident {
             value: String::from("foo"),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         })),
     };
@@ -3378,6 +3399,7 @@ fn parse_alter_table_modify_column_with_column_position() {
         column_position: Some(MySQLColumnPosition::After(Ident {
             value: String::from("total_count"),
             quote_style: None,
+            escaping: QuoteEscaping::Double,
             span: Span::empty(),
         })),
     };
@@ -3419,6 +3441,7 @@ fn parse_substring_in_select() {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             })),
                             substring_from: Some(Box::new(Expr::Value(
@@ -3436,6 +3459,7 @@ fn parse_substring_in_select() {
                             relation: table_from_name(ObjectName::from(vec![Ident {
                                 value: "test".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             }])),
                             joins: vec![]
@@ -4494,12 +4518,14 @@ fn test_variable_assignment_using_colon_equal() {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "@price".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })),
                         op: BinaryOperator::Assignment,
                         right: Box::new(Expr::Identifier(Ident {
                             value: "price".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })),
                     }),
@@ -4507,6 +4533,7 @@ fn test_variable_assignment_using_colon_equal() {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "@tax".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })),
                         op: BinaryOperator::Assignment,
@@ -4514,6 +4541,7 @@ fn test_variable_assignment_using_colon_equal() {
                             left: Box::new(Expr::Identifier(Ident {
                                 value: "price".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             })),
                             op: BinaryOperator::Multiply,
@@ -4531,6 +4559,7 @@ fn test_variable_assignment_using_colon_equal() {
                     left: Box::new(Expr::Identifier(Ident {
                         value: "id".to_string(),
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: Span::empty(),
                     })),
                     op: BinaryOperator::Eq,
@@ -4554,6 +4583,7 @@ fn test_variable_assignment_using_colon_equal() {
                         ObjectNamePart::Identifier(Ident {
                             value: "price".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })
                     ])),
@@ -4561,6 +4591,7 @@ fn test_variable_assignment_using_colon_equal() {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "@new_price".to_string(),
                             quote_style: None,
+                            escaping: QuoteEscaping::Double,
                             span: Span::empty(),
                         })),
                         op: BinaryOperator::Assignment,
@@ -4568,6 +4599,7 @@ fn test_variable_assignment_using_colon_equal() {
                             left: Box::new(Expr::Identifier(Ident {
                                 value: "price".to_string(),
                                 quote_style: None,
+                                escaping: QuoteEscaping::Double,
                                 span: Span::empty(),
                             })),
                             op: BinaryOperator::Multiply,
@@ -5246,4 +5278,27 @@ fn parse_key_constraint_index_type_before_columns() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_backtick_identifier_with_doubled_backtick() {
+    // A backtick inside a backtick-quoted identifier is escaped by doubling it,
+    // so `` `a``b` `` denotes the identifier ``a`b``
+    // https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
+    let select = mysql().verified_only_select("SELECT `a``b`");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('`', "a`b")),
+        expr_from_projection(&select.projection[0]),
+    );
+
+    // the displayed identifier doubles the backtick inside its value
+    assert_eq!(select.to_string(), "SELECT `a``b`");
+
+    // an unterminated backtick-quoted identifier fails
+    assert_eq!(
+        mysql().parse_sql_statements(r"SELECT `a"),
+        Err(ParserError::TokenizerError(
+            "Expected close delimiter '`' before EOF. at Line: 1, Column: 8".to_string()
+        )),
+    );
 }

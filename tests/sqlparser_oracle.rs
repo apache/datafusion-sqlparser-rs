@@ -22,8 +22,9 @@ use pretty_assertions::assert_eq;
 
 use sqlparser::{
     ast::{
-        BinaryOperator, Expr, Ident, Insert, ObjectName, Query, QuoteDelimitedString, SetExpr,
-        Statement, TableAliasWithoutColumns, TableObject, Value, ValueWithSpan,
+        BinaryOperator, Expr, Ident, Insert, ObjectName, Query, QuoteDelimitedString,
+        QuoteEscaping, SetExpr, Statement, TableAliasWithoutColumns, TableObject, Value,
+        ValueWithSpan,
     },
     dialect::OracleDialect,
     parser::ParserError,
@@ -435,6 +436,7 @@ fn test_insert_with_table_alias() {
                     alias: Ident {
                         value: table_alias,
                         quote_style: None,
+                        escaping: QuoteEscaping::Double,
                         span: _
                     }
                 }),
@@ -444,6 +446,7 @@ fn test_insert_with_table_alias() {
             && table_name == &ObjectName::from(vec![Ident {
                 value: exp_table_name.into(),
                 quote_style: None,
+                escaping: QuoteEscaping::Double,
                 span: Span::empty(),
             }])
         ));

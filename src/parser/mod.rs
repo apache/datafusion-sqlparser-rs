@@ -4222,9 +4222,8 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     let negated = self.parse_keyword(Keyword::NOT);
                     let regexp = self.parse_keyword(Keyword::REGEXP);
-                    let rlike = self.parse_keyword(Keyword::RLIKE);
-                    let null = if !self.in_column_definition_state() {
-                        self.parse_keyword(Keyword::NULL)
+                    let rlike = if !regexp {
+                        self.parse_keyword(Keyword::RLIKE)
                     } else {
                         false
                     };
@@ -4237,7 +4236,10 @@ impl<'a> Parser<'a> {
                             ),
                             regexp,
                         })
-                    } else if negated && null {
+                    } else if negated
+                        && !self.in_column_definition_state()
+                        && self.parse_keyword(Keyword::NULL)
+                    {
                         Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated, false)

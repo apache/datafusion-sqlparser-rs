@@ -3491,9 +3491,24 @@ fn parse_rlike_and_regexp() {
         "SELECT 1 WHERE 'a' REGEXP '^a$'",
         "SELECT 1 WHERE 'a' NOT RLIKE '^a$'",
         "SELECT 1 WHERE 'a' NOT REGEXP '^a$'",
+        "SELECT 'abc' REGEXP NULL",
+        "SELECT a RLIKE NULL FROM t",
+        "SELECT a NOT REGEXP NULL OR b FROM t",
+        "SELECT a NOT RLIKE NULL FROM t",
     ] {
         mysql_and_generic().verified_only_select(s);
     }
+
+    let select = mysql().verified_only_select("SELECT 'abc' REGEXP NULL");
+    assert_matches!(
+        &select.projection[0],
+        SelectItem::UnnamedExpr(Expr::RLike {
+            negated: false,
+            regexp: true,
+            pattern,
+            ..
+        }) if matches!(**pattern, Expr::Value(ValueWithSpan { value: Value::Null, .. }))
+    );
 }
 
 #[test]

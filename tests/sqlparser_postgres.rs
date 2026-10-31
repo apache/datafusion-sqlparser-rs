@@ -12291,3 +12291,87 @@ fn parse_create_table_partition_of_untyped_columns() {
         );
     }
 }
+
+#[test]
+fn parse_alter_materialized_view() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW IF EXISTS s.m OWNER TO alice"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("s"), Ident::new("m")]),
+            if_exists: true,
+            operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("alice"))),
+        })
+    );
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m SET (fillfactor = 70)"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("m")]),
+            if_exists: false,
+            operation: AlterViewOperation::SetOptions {
+                options: vec![SqlOption::KeyValue {
+                    key: ObjectName::from(vec![Ident::new("fillfactor")]),
+                    value: Expr::value(number("70")),
+                }],
+            },
+        })
+    );
+    for sql in [
+        "ALTER MATERIALIZED VIEW m RESET (fillfactor, autovacuum_enabled)",
+        "ALTER MATERIALIZED VIEW m RENAME TO m2",
+        "ALTER MATERIALIZED VIEW m RENAME COLUMN a TO b",
+        "ALTER MATERIALIZED VIEW m SET SCHEMA s",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m ALTER COLUMN c SET DEFAULT 1"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("m")]),
+            if_exists: false,
+            operation: AlterViewOperation::AlterColumn {
+                column_name: Ident::new("c"),
+                op: AlterColumnOperation::SetDefault {
+                    value: Expr::value(number("1")),
+                },
+            },
+        })
+    );
+    pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m ALTER COLUMN c DROP DEFAULT");
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("ALTER MATERIALIZED m OWNER TO alice")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: VIEW, found: m".to_string())
+    );
+}
+
+#[test]
+fn display_alter_materialized_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let materialized = pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m RENAME TO m2");
+    for rejected in ["ALTER ", "MATERIALIZED ", "VIEW "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{materialized}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+}

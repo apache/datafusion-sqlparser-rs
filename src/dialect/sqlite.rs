@@ -177,6 +177,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_sqlite_variable_syntax(&self) -> bool {
+        true
+    }
+
     fn supports_double_eq_assignment(&self) -> bool {
         true
     }

@@ -1400,6 +1400,8 @@ impl<'a> Parser<'a> {
                             // in staged data queries like: SELECT t.$1 FROM @stage t
                             id_parts.push(Ident::new(s))
                         }
+                        // `t.*::t` casts the whole row and is parsed as an expression.
+                        Token::Mul if self.peek_token_ref().token == Token::DoubleColon => break,
                         Token::Mul => {
                             return Ok(Expr::QualifiedWildcard(
                                 ObjectName::from(id_parts),

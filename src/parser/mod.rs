@@ -12206,11 +12206,6 @@ impl<'a> Parser<'a> {
                 old_column_name,
                 new_column_name: self.parse_identifier()?,
             }
-        } else if materialized {
-            return self.expected_ref(
-                "OWNER TO, RENAME, SET or RESET after ALTER MATERIALIZED VIEW",
-                self.peek_token_ref(),
-            );
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN);
             let column_name = self.parse_identifier()?;

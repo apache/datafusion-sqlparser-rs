@@ -511,6 +511,16 @@ fn parse_create_table_with_map_column_comment() {
     );
 }
 
+#[test]
+fn test_field_access_on_digit_prefixed_identifier() {
+    // The space before `1te_sk` keeps `.1` from being lexed as a number,
+    // which previously reparsed as a different statement. See
+    // https://github.com/apache/datafusion-sqlparser-rs/issues/2589
+    hive().one_statement_parses_to("SELECT [dbo]. 1te_sk = 1", "SELECT [dbo] . 1te_sk = 1");
+    hive().verified_stmt("SELECT [dbo] . 1te_sk");
+    hive().verified_stmt("SELECT dbo.1te_sk");
+}
+
 fn hive() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {})])
 }

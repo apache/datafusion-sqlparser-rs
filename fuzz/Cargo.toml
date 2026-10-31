@@ -29,6 +29,7 @@ libfuzzer-sys = "0.4"
 libsqlite3-sys = { version = "0.39", features = ["bundled"], optional = true }
 pg_query = { version = "6.2", optional = true }
 libduckdb-sys = { version = "1.10505.0", features = ["bundled", "json"], optional = true }
+clickhouse-lexer-sys = { version = "0.1", optional = true }
 serde_json = { version = "1", optional = true }
 sqlparser = { path = ".." }
 
@@ -37,6 +38,7 @@ sqlparser = { path = ".." }
 sqlite = ["dep:libsqlite3-sys"]
 postgres = ["dep:pg_query"]
 duckdb = ["dep:libduckdb-sys", "dep:serde_json"]
+clickhouse = ["dep:clickhouse-lexer-sys"]
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -76,6 +78,14 @@ bench = false
 name = "fuzz_duckdb_accepts"
 path = "fuzz_targets/fuzz_duckdb_accepts.rs"
 required-features = ["duckdb"]
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_clickhouse_lexes"
+path = "fuzz_targets/fuzz_clickhouse_lexes.rs"
+required-features = ["clickhouse"]
 test = false
 doc = false
 bench = false

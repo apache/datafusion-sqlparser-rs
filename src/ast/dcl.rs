@@ -39,6 +39,7 @@ use crate::tokenizer::Span;
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RoleKeyword {
     /// `ROLE`, the general role object in both PostgreSQL and Redshift.
     Role,
@@ -62,6 +63,7 @@ impl fmt::Display for RoleKeyword {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RoleOption {
     /// Enable or disable BYPASSRLS.
     BypassRLS(bool),
@@ -137,6 +139,7 @@ impl fmt::Display for RoleOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SetConfigValue {
     /// Use the default value.
     Default,
@@ -152,6 +155,7 @@ pub enum SetConfigValue {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ResetConfig {
     /// Reset all configuration parameters.
     ALL,
@@ -163,6 +167,7 @@ pub enum ResetConfig {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterRoleOperation {
     /// Generic
     RenameRole {
@@ -263,6 +268,7 @@ impl fmt::Display for AlterRoleOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Use {
     /// Switch to the given catalog (e.g. `USE CATALOG ...`).
     Catalog(ObjectName),
@@ -305,6 +311,7 @@ impl fmt::Display for Use {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SecondaryRoles {
     /// Use all secondary roles.
     All,
@@ -329,6 +336,7 @@ impl fmt::Display for SecondaryRoles {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateRole {
     /// Whether the statement was spelled `CREATE ROLE` or `CREATE GROUP`.
     pub keyword: RoleKeyword,
@@ -459,6 +467,7 @@ impl Spanned for CreateRole {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Grant {
     /// Privileges being granted.
     pub privileges: Privileges,
@@ -515,6 +524,7 @@ impl From<Grant> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Revoke {
     /// Whether `GRANT OPTION FOR` is present, withdrawing the right to grant
     /// the privileges rather than the privileges themselves.
@@ -566,6 +576,7 @@ impl From<Revoke> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RevokeRole {
     /// The option named in `OPTION FOR`, such as `ADMIN`, withdrawn while the membership stays.
     pub option_for: Option<Ident>,
@@ -613,6 +624,7 @@ impl From<RevokeRole> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct GrantRole {
     /// Roles whose membership is granted.
     pub roles: Vec<Ident>,
@@ -652,6 +664,7 @@ impl From<GrantRole> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RoleGrantOption {
     /// The option name, such as `ADMIN`, `INHERIT` or `SET`.
     pub name: Ident,
@@ -669,6 +682,7 @@ impl fmt::Display for RoleGrantOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RoleGrantOptionValue {
     /// `OPTION`, equivalent to `TRUE`.
     Option,

@@ -251,6 +251,26 @@ fn parse_flush_preserves_keyword_table_names() {
 }
 
 #[test]
+fn parse_flush_tables_followed_by_statement() {
+    for sql in [
+        "FLUSH TABLES; SELECT 1",
+        "FLUSH TABLES t1, t2; SELECT 1",
+        "FLUSH TABLES WITH READ LOCK; SELECT 1",
+        "FLUSH TABLES t1, t2 WITH READ LOCK; SELECT 1",
+        "FLUSH TABLES t1, t2 FOR EXPORT; SELECT 1",
+    ] {
+        let stmts = mysql_and_generic().parse_sql_statements(sql).unwrap();
+        assert_eq!(
+            stmts.len(),
+            2,
+            "Failed to parse multiple statements for: {sql}"
+        );
+        assert!(matches!(stmts[0], Statement::Flush { .. }));
+        assert!(matches!(stmts[1], Statement::Query { .. }));
+    }
+}
+
+#[test]
 fn parse_show_columns() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),

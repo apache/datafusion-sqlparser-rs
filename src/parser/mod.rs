@@ -1097,16 +1097,17 @@ impl<'a> Parser<'a> {
             FlushType::Logs
         } else if self.parse_keywords(&[Keyword::TABLES]) {
             loop {
-                let next_token = self.next_token();
+                let next_token = self.peek_token();
                 match &next_token.token {
                     Token::Word(w) if w.keyword == Keyword::WITH => {
+                        self.advance_token();
                         read_lock = self.parse_keywords(&[Keyword::READ, Keyword::LOCK]);
                     }
                     Token::Word(w) if w.keyword == Keyword::FOR => {
+                        self.advance_token();
                         export = self.parse_keyword(Keyword::EXPORT);
                     }
-                    Token::Word(_) => {
-                        self.prev_token();
+                    Token::Word(_) if tables.is_empty() && !read_lock && !export => {
                         tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
                     }
                     _ => break,

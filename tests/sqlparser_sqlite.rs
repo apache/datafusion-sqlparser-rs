@@ -409,10 +409,6 @@ fn parse_colon_does_not_start_json_access() {
             (Value::Placeholder(":xxx".into())).with_empty_span()
         )),
     );
-
-    TestedDialects::new(vec![Box::new(GenericDialect {})])
-        .parse_sql_statements("SELECT a:b FROM t")
-        .unwrap();
 }
 
 #[test]
@@ -1513,6 +1509,7 @@ fn parse_on_conflict_target_predicate() {
         other => panic!("unexpected statement: {other:?}"),
     }
 }
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

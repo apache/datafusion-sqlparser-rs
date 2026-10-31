@@ -2808,12 +2808,43 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse one element of a `GROUPING SETS` list.
+    ///
+    /// An element is a parenthesized expression list, a nested `ROLLUP`, `CUBE`, or
+    /// `GROUPING SETS` construct, or a single bare expression.
+    fn parse_grouping_set_element(&mut self) -> Result<Vec<Expr>, ParserError> {
+        if self.peek_token_ref().token == Token::LParen {
+            self.parse_tuple(true, true)
+        } else if self.dialect.supports_group_by_expr() && self.peek_grouping_set_construct() {
+            Ok(vec![self.parse_group_by_expr()?])
+        } else {
+            Ok(vec![self.parse_expr()?])
+        }
+    }
+
+    /// Returns true when the next tokens start a nested `ROLLUP`, `CUBE`, or `GROUPING SETS` construct.
+    fn peek_grouping_set_construct(&self) -> bool {
+        let Token::Word(word) = &self.peek_token_ref().token else {
+            return false;
+        };
+        match word.keyword {
+            // Without the open paren, `rollup` and `cube` are unreserved
+            // identifiers in PostgreSQL, e.g. `GROUP BY GROUPING SETS (rollup)`
+            Keyword::ROLLUP | Keyword::CUBE => self.peek_nth_token_ref(1).token == Token::LParen,
+            Keyword::GROUPING => matches!(
+                &self.peek_nth_token_ref(1).token,
+                Token::Word(next) if next.keyword == Keyword::SETS
+            ),
+            _ => false,
+        }
+    }
+
     /// Parse a group by expr. Group by expr can be one of group sets, roll up, cube, or simple expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
         if self.dialect.supports_group_by_expr() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                let result = self.parse_comma_separated(Parser::parse_grouping_set_element)?;
                 self.expect_token(&Token::RParen)?;
                 Ok(Expr::GroupingSets(result))
             } else if self.parse_keyword(Keyword::CUBE) {
@@ -14186,13 +14217,7 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| {
-                    if p.peek_token_ref().token == Token::LParen {
-                        p.parse_tuple(true, true)
-                    } else {
-                        Ok(vec![p.parse_expr()?])
-                    }
-                })?;
+                let result = self.parse_comma_separated(Parser::parse_grouping_set_element)?;
                 self.expect_token(&Token::RParen)?;
                 modifiers.push(GroupByWithModifier::GroupingSets(Expr::GroupingSets(
                     result,

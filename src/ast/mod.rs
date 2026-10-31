@@ -2141,7 +2141,18 @@ impl fmt::Display for Expr {
                 for set in sets {
                     write!(f, "{sep}")?;
                     sep = ", ";
-                    write!(f, "({})", display_comma_separated(set))?;
+                    if set.len() == 1
+                        && matches!(
+                            &set[0],
+                            Expr::Rollup(_) | Expr::Cube(_) | Expr::GroupingSets(_)
+                        )
+                    {
+                        // A nested construct is a grouping set on its own, unlike the
+                        // parenthesized expression lists it may contain
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
                 }
                 write!(f, ")")
             }

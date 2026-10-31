@@ -22908,3 +22908,68 @@ fn parse_alter_table_reset_options() {
         );
     }
 }
+
+#[test]
+fn test_group_by_grouping_sets_nested_constructs() {
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS (rollup(a, b), a)",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS (ROLLUP (a, b), (a))",
+    );
+
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS (cube(a), (a))",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS (CUBE (a), (a))",
+    );
+
+    all_dialects_where(|d| d.supports_group_by_expr()).verified_stmt(
+        "SELECT a, b, c FROM t GROUP BY GROUPING SETS (ROLLUP (a), CUBE (b), GROUPING SETS ((c)))",
+    );
+
+    // Without the open paren, `rollup` is an unreserved identifier, not a ROLLUP construct
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a FROM t GROUP BY GROUPING SETS (rollup, (a))",
+        "SELECT a FROM t GROUP BY GROUPING SETS ((rollup), (a))",
+    );
+}
+
+#[test]
+fn test_group_by_grouping_sets_nested_constructs_ast() {
+    let sql = "SELECT a, b FROM t GROUP BY GROUPING SETS (rollup(a, b), (a), ())";
+    let canonical = "SELECT a, b FROM t GROUP BY GROUPING SETS (ROLLUP (a, b), (a), ())";
+    match all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(sql, canonical)
+    {
+        Statement::Query(query) => {
+            let group_by = &query.body.as_select().unwrap().group_by;
+            assert_eq!(
+                group_by,
+                &GroupByExpr::Expressions(
+                    vec![Expr::GroupingSets(vec![
+                        vec![Expr::Rollup(vec![
+                            vec![Expr::Identifier(Ident::new("a"))],
+                            vec![Expr::Identifier(Ident::new("b"))]
+                        ])],
+                        vec![Expr::Identifier(Ident::new("a"))],
+                        vec![]
+                    ])],
+                    vec![]
+                )
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_group_by_grouping_sets_nested_constructs_errors() {
+    for sql in [
+        "SELECT a FROM t GROUP BY GROUPING SETS (rollup(), (a))",
+        "SELECT a FROM t GROUP BY GROUPING SETS (cube(), (a))",
+    ] {
+        assert!(
+            all_dialects_where(|d| d.supports_group_by_expr())
+                .parse_sql_statements(sql)
+                .is_err(),
+            "{sql}"
+        );
+    }
+}

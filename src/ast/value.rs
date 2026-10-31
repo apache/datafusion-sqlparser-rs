@@ -545,57 +545,48 @@ pub struct EscapeQuotedString<'a> {
 
 impl fmt::Display for EscapeQuotedString<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // EscapeQuotedString doesn't know which mode of escape was
-        // chosen by the user. So this code must to correctly display
-        // strings without knowing if the strings are already escaped
-        // or not.
-        //
-        // If the quote symbol in the string is repeated twice, OR, if
-        // the quote symbol is after backslash, display all the chars
-        // without any escape. However, if the quote symbol is used
-        // just between usual chars, `fmt()` should display it twice."
-        //
-        // The following table has examples
-        //
-        // | original query | mode      | AST Node                                           | serialized   |
-        // | -------------  | --------- | -------------------------------------------------- | ------------ |
-        // | `"A""B""A"`    | no-escape | `DoubleQuotedString(String::from("A\"\"B\"\"A"))`  | `"A""B""A"`  |
-        // | `"A""B""A"`    | default   | `DoubleQuotedString(String::from("A\"B\"A"))`      | `"A""B""A"`  |
-        // | `"A\"B\"A"`    | no-escape | `DoubleQuotedString(String::from("A\\\"B\\\"A"))`  | `"A\"B\"A"`  |
-        // | `"A\"B\"A"`    | default   | `DoubleQuotedString(String::from("A\"B\"A"))`      | `"A""B""A"`  |
+        // `string` may hold the raw text of the literal (when parsing with
+        // unescape disabled), in which case every delimiter in it is already
+        // escaped and must be written verbatim. Otherwise the value is
+        // decoded and every delimiter must be doubled. A delimiter counts as
+        // escaped when it is preceded by an odd-length run of backslashes
+        // (e.g. `\'`) or when it forms a doubled delimiter pair with an
+        // adjacent delimiter (e.g. `''`). A delimiter after an even-length
+        // backslash run is *not* escaped (e.g. in `\\'` the backslash is
+        // the escaped character).
         let quote = self.quote;
-        let mut previous_char = char::default();
-        let mut start_idx = 0;
-        let mut peekable_chars = self.string.char_indices().peekable();
-        while let Some(&(idx, ch)) = peekable_chars.peek() {
-            match ch {
-                char if char == quote => {
-                    if previous_char == '\\' {
-                        // the quote is already escaped with a backslash, skip
-                        peekable_chars.next();
-                        continue;
-                    }
-                    peekable_chars.next();
-                    match peekable_chars.peek() {
-                        Some((_, c)) if *c == quote => {
-                            // the quote is already escaped with another quote, skip
-                            peekable_chars.next();
-                        }
-                        _ => {
-                            // The quote is not escaped.
-                            // Including idx in the range, so the quote at idx will be printed twice:
-                            // in this call to write_str() and in the next one.
-                            let end_idx = idx + ch.len_utf8();
-                            f.write_str(&self.string[start_idx..end_idx])?;
-                            start_idx = idx;
-                        }
-                    }
-                }
-                _ => {
-                    peekable_chars.next();
-                }
+        let chars: Vec<char> = self.string.chars().collect();
+        let mut all_escaped = true;
+        for (i, &ch) in chars.iter().enumerate() {
+            if ch != quote {
+                continue;
             }
-            previous_char = ch;
+            let backslashes = chars[..i].iter().rev().take_while(|&&c| c == '\\').count();
+            if backslashes % 2 == 1 {
+                continue;
+            }
+            let pair_before = i > 0 && chars[i - 1] == quote;
+            let pair_after = chars.get(i + 1) == Some(&quote);
+            if !pair_before && !pair_after {
+                all_escaped = false;
+                break;
+            }
+        }
+
+        if all_escaped {
+            return f.write_str(self.string);
+        }
+
+        let mut start_idx = 0;
+        for (idx, ch) in self.string.char_indices() {
+            if ch != quote {
+                continue;
+            }
+            // Including idx in the range, so the delimiter at idx will be
+            // printed twice: in this call to write_str() and in the next one.
+            let end_idx = idx + ch.len_utf8();
+            f.write_str(&self.string[start_idx..end_idx])?;
+            start_idx = idx;
         }
         f.write_str(&self.string[start_idx..])?;
         Ok(())
@@ -772,5 +763,35 @@ fn test_byte_and_raw_string_literal_display_escaping() {
     assert_eq!(
         Value::DoubleQuotedRawStringLiteral("it\"s".to_string()).to_string(),
         "R\"it\"\"s\""
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn test_escape_quoted_string_backslash_parity() {
+    // A delimiter after an odd-length backslash run is already escaped and is
+    // written verbatim (this also preserves raw values produced when parsing
+    // with unescape disabled).
+    assert_eq!(
+        Value::SingleQuotedString(r#"a\'b"#.to_string()).to_string(),
+        r#"'a\'b'"#
+    );
+    // A delimiter after an even-length backslash run is not escaped: the
+    // backslash is the escaped character. The delimiter must be doubled or
+    // the serialized form terminates the literal early.
+    assert_eq!(
+        Value::SingleQuotedString(r#"a\\'b"#.to_string()).to_string(),
+        r#"'a\\''b'"#
+    );
+    // A bare delimiter anywhere makes the value a decoded one, so every
+    // delimiter is doubled.
+    assert_eq!(
+        Value::SingleQuotedString(r#"a\'b'c"#.to_string()).to_string(),
+        r#"'a\''b''c'"#
+    );
+    // A doubled delimiter pair is already escaped.
+    assert_eq!(
+        Value::SingleQuotedString("a''b".to_string()).to_string(),
+        "'a''b'"
     );
 }

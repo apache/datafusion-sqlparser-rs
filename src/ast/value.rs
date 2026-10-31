@@ -613,6 +613,24 @@ pub fn escape_single_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\'')
 }
 
+pub struct EscapeSingleQuoteChar(char);
+
+impl fmt::Display for EscapeSingleQuoteChar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0 == '\'' {
+            f.write_str("''")
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
+/// Convenience wrapper for escaping a single character for a single-quoted
+/// literal (`'`).
+pub fn escape_single_quote_char(c: char) -> EscapeSingleQuoteChar {
+    EscapeSingleQuoteChar(c)
+}
+
 /// Convenience wrapper for escaping strings for double-quoted literals (`").`
 pub fn escape_double_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\"')

@@ -19722,8 +19722,81 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single function argument, handling named and unnamed variants.
+    /// Parse a named, positional, or `VARIADIC` function argument.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
+        if self.dialect.supports_variadic_function_argument()
+            && self.peek_keyword(Keyword::VARIADIC)
+        {
+            if !self.dialect.is_reserved_for_identifier(Keyword::VARIADIC) {
+                let index = self.index;
+                if let Some(arg) = self.maybe_parse(|p| p.parse_plain_function_args())? {
+                    if self.peek_ends_function_arg() {
+                        return Ok(arg);
+                    }
+                    self.index = index;
+                }
+            }
+
+            let loc = self.peek_token_ref().span.start;
+            self.advance_token();
+            let arg = self.parse_plain_function_args()?;
+            let carries_wildcard = matches!(
+                &arg,
+                FunctionArg::Unnamed(arg)
+                | FunctionArg::Named { arg, .. }
+                | FunctionArg::ExprNamed { arg, .. }
+                    if !matches!(arg, FunctionArgExpr::Expr(_))
+            );
+            if carries_wildcard {
+                return parser_err!("A VARIADIC argument cannot be a wildcard", loc);
+            }
+            return Ok(FunctionArg::Variadic(Box::new(arg)));
+        }
+        self.parse_plain_function_args()
+    }
+
+    fn parse_function_arg_in_list(
+        &mut self,
+        first_variadic_location: &mut Option<Location>,
+    ) -> Result<FunctionArg, ParserError> {
+        let loc = self.peek_token_ref().span.start;
+        let arg = self.parse_function_args()?;
+        if let Some(loc) = *first_variadic_location {
+            return parser_err!(
+                "A VARIADIC argument must be the last function argument",
+                loc
+            );
+        }
+        if matches!(arg, FunctionArg::Variadic(_)) {
+            *first_variadic_location = Some(loc);
+        }
+        Ok(arg)
+    }
+
+    /// Whether the next tokens end a plain argument before a delimiter or function clause.
+    fn peek_ends_function_arg(&self) -> bool {
+        let word = match &self.peek_token_ref().token {
+            Token::Comma | Token::RParen | Token::EOF => return true,
+            Token::Word(word) => word,
+            _ => return false,
+        };
+        let next = &self.peek_nth_token_ref(1).token;
+        let next_is = |keyword| matches!(next, Token::Word(next) if next.keyword == keyword);
+        match word.keyword {
+            Keyword::ORDER => next_is(Keyword::BY),
+            Keyword::IGNORE | Keyword::RESPECT => next_is(Keyword::NULLS),
+            Keyword::ON => next_is(Keyword::OVERFLOW),
+            Keyword::ABSENT | Keyword::NULL => next_is(Keyword::ON),
+            Keyword::HAVING => next_is(Keyword::MIN) || next_is(Keyword::MAX),
+            Keyword::LIMIT | Keyword::RETURNING | Keyword::SEPARATOR | Keyword::WHERE => {
+                !matches!(next, Token::Comma | Token::RParen)
+            }
+            _ => false,
+        }
+    }
+
+    /// Parse a named or positional argument without a `VARIADIC` marker.
+    fn parse_plain_function_args(&mut self) -> Result<FunctionArg, ParserError> {
         // Parse the argument expression once, then check for a named-arg
         // operator. Parsing it speculatively and re-parsing on the unnamed
         // path is O(2^depth) on nested calls like `CAST(CASE (CAST(CASE (…`.
@@ -19847,7 +19920,10 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {
-            let args = self.parse_comma_separated(Parser::parse_function_args)?;
+            let mut first_variadic_location = None;
+            let args = self.parse_comma_separated(|p| {
+                p.parse_function_arg_in_list(&mut first_variadic_location)
+            })?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }
@@ -19861,11 +19937,12 @@ impl<'a> Parser<'a> {
             });
         }
         let mut args = vec![];
+        let mut first_variadic_location = None;
         let settings = loop {
             if let Some(settings) = self.parse_settings()? {
                 break Some(settings);
             }
-            args.push(self.parse_function_args()?);
+            args.push(self.parse_function_arg_in_list(&mut first_variadic_location)?);
             if self.is_parse_comma_separated_end() {
                 break None;
             }
@@ -19905,15 +19982,26 @@ impl<'a> Parser<'a> {
             });
         }
 
+        let loc = self.peek_token_ref().span.start;
         let duplicate_treatment = self.parse_duplicate_treatment()?;
+        let mut first_variadic_location = None;
         let args = if duplicate_treatment != Some(DuplicateTreatment::Distinct)
             && self.dialect.supports_aggregate_order_by_with_empty_args()
             && self.peek_keywords(&[Keyword::ORDER, Keyword::BY])
         {
             vec![]
         } else {
-            self.parse_comma_separated(Parser::parse_function_args)?
+            self.parse_comma_separated(|p| {
+                p.parse_function_arg_in_list(&mut first_variadic_location)
+            })?
         };
+
+        if duplicate_treatment.is_some() && matches!(args.last(), Some(FunctionArg::Variadic(_))) {
+            return parser_err!(
+                "A VARIADIC argument cannot be combined with DISTINCT or ALL",
+                loc
+            );
+        }
 
         if self.parse_keyword(Keyword::WHERE) {
             clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));

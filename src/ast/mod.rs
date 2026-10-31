@@ -8199,6 +8199,8 @@ pub enum FunctionArg {
     },
     /// An unnamed argument (positional), given by expression or wildcard.
     Unnamed(FunctionArgExpr),
+    /// A final argument prefixed with PostgreSQL's [`VARIADIC`](https://www.postgresql.org/docs/current/xfunc-sql.html#XFUNC-SQL-VARIADIC-FUNCTIONS) marker.
+    Variadic(Box<FunctionArg>),
 }
 
 impl fmt::Display for FunctionArg {
@@ -8215,6 +8217,7 @@ impl fmt::Display for FunctionArg {
                 operator,
             } => fmt_named_function_arg(f, name, operator, arg),
             FunctionArg::Unnamed(unnamed_arg) => write!(f, "{unnamed_arg}"),
+            FunctionArg::Variadic(arg) => write!(f, "VARIADIC {arg}"),
         }
     }
 }

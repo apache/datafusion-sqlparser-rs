@@ -4835,6 +4835,15 @@ fn test_create_database() {
             "{sql}"
         );
     }
+    let stmts = snowflake()
+        .parse_sql_statements("CREATE DATABASE my_db; SELECT 1")
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+
+    let copy_stmts = snowflake()
+        .parse_sql_statements("COPY INTO my_table FROM @my_stage; SELECT 1")
+        .unwrap();
+    assert_eq!(copy_stmts.len(), 2);
 }
 
 #[test]

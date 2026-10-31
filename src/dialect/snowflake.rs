@@ -1150,71 +1150,84 @@ pub fn parse_create_database(
         .if_not_exists(if_not_exists);
 
     loop {
-        let next_token = parser.next_token();
-        match &next_token.token {
+        let peeked_token = parser.peek_token();
+        match &peeked_token.token {
             Token::Word(word) => match word.keyword {
                 Keyword::CLONE => {
+                    parser.advance_token();
                     builder = builder.clone_clause(Some(parser.parse_object_name(false)?));
                 }
                 Keyword::DATA_RETENTION_TIME_IN_DAYS => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder =
                         builder.data_retention_time_in_days(Some(parser.parse_literal_uint()?));
                 }
                 Keyword::MAX_DATA_EXTENSION_TIME_IN_DAYS => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder =
                         builder.max_data_extension_time_in_days(Some(parser.parse_literal_uint()?));
                 }
                 Keyword::EXTERNAL_VOLUME => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder = builder.external_volume(Some(parser.parse_literal_string()?));
                 }
                 Keyword::CATALOG => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder = builder.catalog(Some(parser.parse_literal_string()?));
                 }
                 Keyword::REPLACE_INVALID_CHARACTERS => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder =
                         builder.replace_invalid_characters(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::DEFAULT_DDL_COLLATION => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder = builder.default_ddl_collation(Some(parser.parse_literal_string()?));
                 }
                 Keyword::STORAGE_SERIALIZATION_POLICY => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     let policy = parse_storage_serialization_policy(parser)?;
                     builder = builder.storage_serialization_policy(Some(policy));
                 }
                 Keyword::COMMENT => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder = builder.comment(Some(parser.parse_literal_string()?));
                 }
                 Keyword::CATALOG_SYNC => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder = builder.catalog_sync(Some(parser.parse_literal_string()?));
                 }
                 Keyword::CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     builder = builder.catalog_sync_namespace_flatten_delimiter(Some(
                         parser.parse_literal_string()?,
                     ));
                 }
                 Keyword::CATALOG_SYNC_NAMESPACE_MODE => {
+                    parser.advance_token();
                     parser.expect_token(&Token::Eq)?;
                     let mode =
                         match parser.parse_one_of_keywords(&[Keyword::NEST, Keyword::FLATTEN]) {
                             Some(Keyword::NEST) => CatalogSyncNamespaceMode::Nest,
                             Some(Keyword::FLATTEN) => CatalogSyncNamespaceMode::Flatten,
                             _ => {
-                                return parser.expected("NEST or FLATTEN", next_token);
+                                return parser.expected("NEST or FLATTEN", peeked_token);
                             }
                         };
                     builder = builder.catalog_sync_namespace_mode(Some(mode));
                 }
                 Keyword::WITH => {
+                    parser.advance_token();
                     if parser.parse_keyword(Keyword::TAG) {
                         parser.expect_token(&Token::LParen)?;
                         let tags = parser.parse_comma_separated(Parser::parse_tag)?;
@@ -1231,13 +1244,12 @@ pub fn parse_create_database(
                         parser.expect_token(&Token::RParen)?;
                         builder = builder.with_contacts(Some(contacts));
                     } else {
-                        return parser.expected("TAG or CONTACT", next_token);
+                        return parser.expected("TAG or CONTACT", peeked_token);
                     }
                 }
-                _ => return parser.expected("end of statement", next_token),
+                _ => break,
             },
-            Token::SemiColon | Token::EOF => break,
-            _ => return parser.expected("end of statement", next_token),
+            _ => break,
         }
     }
     Ok(builder.build())
@@ -1526,16 +1538,20 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             parser.expect_token(&Token::Eq)?;
             copy_options = parser.parse_key_value_options(true, &[])?.options;
         } else {
-            match parser.next_token().token {
+            let peeked_token = parser.peek_token();
+            match peeked_token.token {
                 Token::SemiColon | Token::EOF => break,
-                Token::Comma => continue,
+                Token::Comma => {
+                    parser.advance_token();
+                    continue;
+                }
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
-                Token::Word(key) => copy_options.push(parser.parse_key_value_option(&key)?),
-                _ => {
-                    return parser
-                        .expected_ref("another copy option, ; or EOF'", parser.peek_token_ref())
+                Token::Word(key) => {
+                    parser.advance_token();
+                    copy_options.push(parser.parse_key_value_option(&key)?);
                 }
+                _ => break,
             }
         }
     }

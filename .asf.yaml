@@ -49,7 +49,6 @@ github:
           - "test (stable)"
           - "test (beta)"
           - "test (nightly)"
-          - "coverage"
           - "Release Audit Tool (RAT)"
 
   # GitHub merge queue settings for `main`.

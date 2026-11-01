@@ -3745,6 +3745,33 @@ impl fmt::Display for CreateDomain {
     }
 }
 
+/// A domain constraint, as added by `ALTER DOMAIN ... ADD`.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdomain.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DomainConstraint {
+    /// `[ CONSTRAINT <name> ] NOT NULL`
+    NotNull {
+        /// Optional constraint name.
+        name: Option<Ident>,
+    },
+    /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
+    Check(CheckConstraint),
+}
+
+impl fmt::Display for DomainConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DomainConstraint::NotNull { name } => {
+                write!(f, "{}NOT NULL", display_constraint_name(name))
+            }
+            DomainConstraint::Check(check) => write!(f, "{check}"),
+        }
+    }
+}
+
 /// The return type of a `CREATE FUNCTION` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4849,6 +4876,130 @@ impl fmt::Display for AlterCollation {
 impl Spanned for AlterCollation {
     fn span(&self) -> Span {
         Span::empty()
+    }
+}
+
+/// `ALTER DOMAIN` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdomain.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterDomain {
+    /// Name of the domain being altered.
+    pub name: ObjectName,
+    /// The operation to perform on the domain.
+    pub operation: AlterDomainOperation,
+}
+
+/// Operations supported by `ALTER DOMAIN`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterDomainOperation {
+    /// `SET DEFAULT <expr>`
+    SetDefault {
+        /// New default value.
+        default: Expr,
+    },
+    /// `DROP DEFAULT`
+    DropDefault,
+    /// `SET NOT NULL`
+    SetNotNull,
+    /// `DROP NOT NULL`
+    DropNotNull,
+    /// `ADD <domain_constraint> [ NOT VALID ]`
+    AddConstraint {
+        /// The constraint to add.
+        constraint: DomainConstraint,
+        /// Whether `NOT VALID` was specified.
+        not_valid: bool,
+    },
+    /// `DROP CONSTRAINT [ IF EXISTS ] <name> [ RESTRICT | CASCADE ]`
+    DropConstraint {
+        /// Whether `IF EXISTS` was specified.
+        if_exists: bool,
+        /// Name of the constraint to drop.
+        name: Ident,
+        /// `RESTRICT` or `CASCADE` behavior.
+        drop_behavior: Option<DropBehavior>,
+    },
+    /// `RENAME CONSTRAINT <old_name> TO <new_name>`
+    RenameConstraint {
+        /// Existing constraint name.
+        old_name: Ident,
+        /// New constraint name.
+        new_name: Ident,
+    },
+    /// `VALIDATE CONSTRAINT <name>`
+    ValidateConstraint {
+        /// Name of the constraint to validate.
+        name: Ident,
+    },
+    /// `OWNER TO <role>`
+    OwnerTo(Owner),
+    /// `RENAME TO <new_name>`
+    RenameTo {
+        /// New domain name.
+        new_name: Ident,
+    },
+    /// `SET SCHEMA <schema_name>`
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
+}
+
+impl fmt::Display for AlterDomainOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterDomainOperation::SetDefault { default } => write!(f, "SET DEFAULT {default}"),
+            AlterDomainOperation::DropDefault => write!(f, "DROP DEFAULT"),
+            AlterDomainOperation::SetNotNull => write!(f, "SET NOT NULL"),
+            AlterDomainOperation::DropNotNull => write!(f, "DROP NOT NULL"),
+            AlterDomainOperation::AddConstraint {
+                constraint,
+                not_valid,
+            } => {
+                write!(f, "ADD {constraint}")?;
+                if *not_valid {
+                    write!(f, " NOT VALID")?;
+                }
+                Ok(())
+            }
+            AlterDomainOperation::DropConstraint {
+                if_exists,
+                name,
+                drop_behavior,
+            } => {
+                write!(f, "DROP CONSTRAINT ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{name}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            AlterDomainOperation::RenameConstraint { old_name, new_name } => {
+                write!(f, "RENAME CONSTRAINT {old_name} TO {new_name}")
+            }
+            AlterDomainOperation::ValidateConstraint { name } => {
+                write!(f, "VALIDATE CONSTRAINT {name}")
+            }
+            AlterDomainOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterDomainOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+            AlterDomainOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+        }
+    }
+}
+
+impl fmt::Display for AlterDomain {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER DOMAIN {} {}", self.name, self.operation)
     }
 }
 

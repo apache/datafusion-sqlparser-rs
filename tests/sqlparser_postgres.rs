@@ -12522,3 +12522,160 @@ fn parse_column_generic_options() {
         );
     }
 }
+
+#[test]
+fn parse_alter_domain() {
+    let ident = |name: &str| Ident::new(name);
+    let positive = |name: Option<Ident>| {
+        DomainConstraint::Check(CheckConstraint {
+            name,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(ident("VALUE"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::value(number("0"))),
+            }),
+            no_inherit: false,
+            enforced: None,
+        })
+    };
+
+    for (sql, operation) in [
+        (
+            "ALTER DOMAIN d1 SET DEFAULT 0",
+            AlterDomainOperation::SetDefault {
+                default: Expr::value(number("0")),
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 DROP DEFAULT",
+            AlterDomainOperation::DropDefault,
+        ),
+        (
+            "ALTER DOMAIN d1 SET NOT NULL",
+            AlterDomainOperation::SetNotNull,
+        ),
+        (
+            "ALTER DOMAIN d1 DROP NOT NULL",
+            AlterDomainOperation::DropNotNull,
+        ),
+        (
+            "ALTER DOMAIN d1 ADD CONSTRAINT positive CHECK (VALUE > 0) NOT VALID",
+            AlterDomainOperation::AddConstraint {
+                constraint: positive(Some(ident("positive"))),
+                not_valid: true,
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 ADD CONSTRAINT nn NOT NULL",
+            AlterDomainOperation::AddConstraint {
+                constraint: DomainConstraint::NotNull {
+                    name: Some(ident("nn")),
+                },
+                not_valid: false,
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 ADD NOT NULL",
+            AlterDomainOperation::AddConstraint {
+                constraint: DomainConstraint::NotNull { name: None },
+                not_valid: false,
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 ADD CHECK (VALUE > 0)",
+            AlterDomainOperation::AddConstraint {
+                constraint: positive(None),
+                not_valid: false,
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 DROP CONSTRAINT IF EXISTS pos CASCADE",
+            AlterDomainOperation::DropConstraint {
+                if_exists: true,
+                name: ident("pos"),
+                drop_behavior: Some(DropBehavior::Cascade),
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 DROP CONSTRAINT pos",
+            AlterDomainOperation::DropConstraint {
+                if_exists: false,
+                name: ident("pos"),
+                drop_behavior: None,
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 RENAME CONSTRAINT positive TO pos",
+            AlterDomainOperation::RenameConstraint {
+                old_name: ident("positive"),
+                new_name: ident("pos"),
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 VALIDATE CONSTRAINT positive",
+            AlterDomainOperation::ValidateConstraint {
+                name: ident("positive"),
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 OWNER TO dom_owner",
+            AlterDomainOperation::OwnerTo(Owner::Ident(ident("dom_owner"))),
+        ),
+        (
+            "ALTER DOMAIN d1 OWNER TO CURRENT_USER",
+            AlterDomainOperation::OwnerTo(Owner::CurrentUser),
+        ),
+        (
+            "ALTER DOMAIN d1 RENAME TO span",
+            AlterDomainOperation::RenameTo {
+                new_name: ident("span"),
+            },
+        ),
+        (
+            "ALTER DOMAIN d1 SET SCHEMA s2",
+            AlterDomainOperation::SetSchema {
+                schema_name: ObjectName::from(vec![ident("s2")]),
+            },
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().verified_stmt(sql),
+            Statement::AlterDomain(AlterDomain {
+                name: ObjectName::from(vec![ident("d1")]),
+                operation,
+            }),
+            "{sql}"
+        );
+    }
+
+    pg_and_generic().verified_stmt("ALTER DOMAIN s2.span SET DEFAULT INTERVAL '1 day'");
+
+    for (sql, expected) in [
+        (
+            "ALTER DOMAIN d1",
+            "Expected: SET, DROP, ADD, RENAME, VALIDATE, or OWNER TO after ALTER DOMAIN, found: EOF",
+        ),
+        (
+            "ALTER DOMAIN d1 SET NULL",
+            "Expected: SET, DROP, ADD, RENAME, VALIDATE, or OWNER TO after ALTER DOMAIN, found: SET",
+        ),
+        (
+            "ALTER DOMAIN d1 ADD NOT VALID",
+            "Expected: NOT NULL or CHECK, found: NOT",
+        ),
+        (
+            "ALTER DOMAIN d1 ADD PRIMARY KEY (VALUE)",
+            "Expected: NOT NULL or CHECK, found: PRIMARY",
+        ),
+        (
+            "ALTER DOMAIN d1 RENAME CONSTRAINT a b",
+            "Expected: TO, found: b",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

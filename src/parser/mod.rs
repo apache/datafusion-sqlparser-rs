@@ -10829,28 +10829,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
-                self.expect_token(&Token::LParen)?;
-                let expr = Box::new(self.parse_expr()?);
-                self.expect_token(&Token::RParen)?;
-                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
-
-                let enforced = if self.parse_keyword(Keyword::ENFORCED) {
-                    Some(true)
-                } else if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
-                    Some(false)
-                } else {
-                    None
-                };
-
-                Ok(Some(
-                    CheckConstraint {
-                        name,
-                        expr,
-                        no_inherit,
-                        enforced,
-                    }
-                    .into(),
-                ))
+                Ok(Some(self.parse_check_constraint_body(name)?.into()))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
@@ -10933,6 +10912,50 @@ impl<'a> Parser<'a> {
                     Ok(None)
                 }
             }
+        }
+    }
+
+    /// Parses the `(<expr>) [NO INHERIT] [[NOT] ENFORCED]` that follows `CHECK`.
+    fn parse_check_constraint_body(
+        &mut self,
+        name: Option<Ident>,
+    ) -> Result<CheckConstraint, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::RParen)?;
+        let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
+
+        let enforced = if self.parse_keyword(Keyword::ENFORCED) {
+            Some(true)
+        } else if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
+            Some(false)
+        } else {
+            None
+        };
+
+        Ok(CheckConstraint {
+            name,
+            expr,
+            no_inherit,
+            enforced,
+        })
+    }
+
+    /// Parses `[ CONSTRAINT <name> ] { NOT NULL | CHECK (<expr>) }`.
+    fn parse_domain_constraint(&mut self) -> Result<DomainConstraint, ParserError> {
+        let name = if self.parse_keyword(Keyword::CONSTRAINT) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+            Ok(DomainConstraint::NotNull { name })
+        } else if self.parse_keyword(Keyword::CHECK) {
+            Ok(DomainConstraint::Check(
+                self.parse_check_constraint_body(name)?,
+            ))
+        } else {
+            self.expected_ref("NOT NULL or CHECK", self.peek_token_ref())
         }
     }
 
@@ -11891,6 +11914,7 @@ impl<'a> Parser<'a> {
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
+            Keyword::DOMAIN => self.parse_alter_domain().map(Into::into),
             Keyword::TABLE => self.parse_alter_table(false),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
@@ -11936,7 +11960,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or TYPE or COLLATION or DOMAIN or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
                     self.peek_token_ref(),
                 )
             }
@@ -12352,6 +12376,63 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterCollation { name, operation })
+    }
+
+    /// Parse a [Statement::AlterDomain].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterdomain.html)
+    pub fn parse_alter_domain(&mut self) -> Result<AlterDomain, ParserError> {
+        let name = self.parse_object_name(false)?;
+        let operation = if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
+            AlterDomainOperation::SetDefault {
+                default: self.parse_expr()?,
+            }
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
+            AlterDomainOperation::DropDefault
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::NOT, Keyword::NULL]) {
+            AlterDomainOperation::SetNotNull
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::NOT, Keyword::NULL]) {
+            AlterDomainOperation::DropNotNull
+        } else if self.parse_keyword(Keyword::ADD) {
+            AlterDomainOperation::AddConstraint {
+                constraint: self.parse_domain_constraint()?,
+                not_valid: self.parse_keywords(&[Keyword::NOT, Keyword::VALID]),
+            }
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::CONSTRAINT]) {
+            AlterDomainOperation::DropConstraint {
+                if_exists: self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]),
+                name: self.parse_identifier()?,
+                drop_behavior: self.parse_optional_drop_behavior(),
+            }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::CONSTRAINT]) {
+            let old_name = self.parse_identifier()?;
+            self.expect_keyword_is(Keyword::TO)?;
+            AlterDomainOperation::RenameConstraint {
+                old_name,
+                new_name: self.parse_identifier()?,
+            }
+        } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
+            AlterDomainOperation::ValidateConstraint {
+                name: self.parse_identifier()?,
+            }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterDomainOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterDomainOperation::RenameTo {
+                new_name: self.parse_identifier()?,
+            }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterDomainOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else {
+            return self.expected_ref(
+                "SET, DROP, ADD, RENAME, VALIDATE, or OWNER TO after ALTER DOMAIN",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(AlterDomain { name, operation })
     }
 
     /// Parse a [Statement::AlterOperator]

@@ -5118,8 +5118,6 @@ fn parse_create_table_as() {
     }
 
     // BigQuery allows specifying table schema in CTAS
-    // ANSI SQL and PostgreSQL let you only specify the list of columns
-    // (without data types) in a CTAS, but we have yet to support that.
     let dialects = all_dialects_where(|d| d.supports_create_table_multi_schema_info_sources());
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
     match dialects.verified_stmt(sql) {
@@ -23409,5 +23407,59 @@ fn display_create_procedure_begin_atomic_propagates_write_errors() {
     for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_create_table_as_column_names() {
+    let dialects = all_dialects_where(|d| d.supports_create_table_as_column_names());
+
+    let sql = "CREATE TABLE cn (a, b) AS SELECT id, iv FROM t2 WITH NO DATA";
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            columns,
+            constraints,
+            query,
+            ..
+        }) => {
+            let column = |name| ColumnDef {
+                name: Ident::new(name),
+                data_type: DataType::Unspecified,
+                options: vec![],
+            };
+            assert_eq!(columns, vec![column("a"), column("b")]);
+            assert!(constraints.is_empty());
+            assert_eq!(
+                query,
+                Some(Box::new(verified_query("SELECT id, iv FROM t2")))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    dialects.verified_stmt("CREATE TABLE cn (a) AS SELECT 1, 2");
+    dialects.verified_stmt("CREATE TABLE cn (a, b, c) AS SELECT 1, 2");
+    dialects.verified_stmt("CREATE TEMPORARY TABLE cn (a, b) ON COMMIT DROP AS SELECT 1, 2");
+    dialects.verified_stmt("CREATE TABLE cn (a INT, b INT) AS SELECT 1, 2");
+
+    for (sql, error) in [
+        (
+            "CREATE TABLE cn (a, b)",
+            "Expected: AS after column names, found: EOF",
+        ),
+        (
+            "CREATE TABLE cn (a, b INT) AS SELECT 1, 2",
+            "Expected: a data type name, found: ,",
+        ),
+        (
+            "CREATE TABLE cn ('a') AS SELECT 1",
+            "Expected: column name or constraint definition, found: 'a'",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
     }
 }

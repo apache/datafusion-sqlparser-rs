@@ -9364,8 +9364,18 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let ctas_columns =
+            if partition_of.is_none() && self.dialect.supports_create_table_as_column_names() {
+                self.maybe_parse(|parser| parser.parse_create_table_as_columns())?
+            } else {
+                None
+            };
+        let has_ctas_columns = ctas_columns.is_some();
+
         // parse optional column list (schema)
-        let (columns, constraints) = if partition_of.is_some() {
+        let (columns, constraints) = if let Some(columns) = ctas_columns {
+            (columns, vec![])
+        } else if partition_of.is_some() {
             self.parse_partition_of_columns()?
         } else {
             self.parse_columns()?
@@ -9478,6 +9488,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        if has_ctas_columns && query.is_none() {
+            return self.expected_ref("AS after column names", self.peek_token_ref());
+        }
 
         // `WITH DATA` clause only applies if there is a query body.
         let with_data = if query.is_some() {
@@ -10072,6 +10086,29 @@ impl<'a> Parser<'a> {
                 name,
                 data_type: DataType::Unspecified,
                 options: parser.parse_column_option_defs()?,
+            })
+        })
+    }
+
+    /// Parse the column names of `CREATE TABLE t (a, b) AS query`, which carry no data type.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtableas.html>
+    fn parse_create_table_as_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.parse_parenthesized_column_list_inner(Mandatory, false, |parser| {
+            let is_column_name = match &parser.peek_token_ref().token {
+                Token::Word(_) => true,
+                Token::SingleQuotedString(_) => {
+                    parser.dialect.supports_string_literal_column_names()
+                }
+                _ => false,
+            };
+            if !is_column_name {
+                return parser.expected_ref("column name", parser.peek_token_ref());
+            }
+            Ok(ColumnDef {
+                name: parser.parse_identifier()?,
+                data_type: DataType::Unspecified,
+                options: vec![],
             })
         })
     }

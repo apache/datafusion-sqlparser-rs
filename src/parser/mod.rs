@@ -9364,17 +9364,17 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let ctas_columns =
-            if partition_of.is_none() && self.dialect.supports_create_table_as_column_names() {
-                self.maybe_parse(|parser| parser.parse_create_table_as_columns())?
-            } else {
-                None
-            };
-        let has_ctas_columns = ctas_columns.is_some();
+        // A list whose first entry is a bare name is the column names of `CREATE TABLE ... AS`.
+        let ctas_columns = partition_of.is_none()
+            && self.dialect.supports_create_table_as_column_names()
+            && matches!(
+                self.peek_tokens_ref().map(|token| &token.token),
+                [Token::LParen, Token::Word(_), Token::Comma | Token::RParen]
+            );
 
         // parse optional column list (schema)
-        let (columns, constraints) = if let Some(columns) = ctas_columns {
-            (columns, vec![])
+        let (columns, constraints) = if ctas_columns {
+            (self.parse_create_table_as_columns()?, vec![])
         } else if partition_of.is_some() {
             self.parse_partition_of_columns()?
         } else {
@@ -9489,7 +9489,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        if has_ctas_columns && query.is_none() {
+        if ctas_columns && query.is_none() {
             return self.expected_ref("AS after column names", self.peek_token_ref());
         }
 
@@ -10095,21 +10095,15 @@ impl<'a> Parser<'a> {
     /// See <https://www.postgresql.org/docs/current/sql-createtableas.html>
     fn parse_create_table_as_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
         self.parse_parenthesized_column_list_inner(Mandatory, false, |parser| {
-            let is_column_name = match &parser.peek_token_ref().token {
-                Token::Word(_) => true,
-                Token::SingleQuotedString(_) => {
-                    parser.dialect.supports_string_literal_column_names()
-                }
-                _ => false,
-            };
-            if !is_column_name {
-                return parser.expected_ref("column name", parser.peek_token_ref());
+            let next_token = parser.next_token();
+            match next_token.token {
+                Token::Word(word) => Ok(ColumnDef {
+                    name: word.into_ident(next_token.span),
+                    data_type: DataType::Unspecified,
+                    options: vec![],
+                }),
+                _ => parser.expected("column name", next_token),
             }
-            Ok(ColumnDef {
-                name: parser.parse_identifier()?,
-                data_type: DataType::Unspecified,
-                options: vec![],
-            })
         })
     }
 

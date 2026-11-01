@@ -23449,7 +23449,15 @@ fn parse_create_table_as_column_names() {
         ),
         (
             "CREATE TABLE cn (a, b INT) AS SELECT 1, 2",
-            "Expected: a data type name, found: ,",
+            "Expected: ), found: INT",
+        ),
+        (
+            "CREATE TABLE cn (a INT, b) AS SELECT 1, 2",
+            "Expected: a data type name, found: )",
+        ),
+        (
+            "CREATE TABLE cn (a, 1) AS SELECT 1, 2",
+            "Expected: column name, found: 1",
         ),
         (
             "CREATE TABLE cn ('a') AS SELECT 1",

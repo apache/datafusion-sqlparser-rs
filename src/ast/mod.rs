@@ -3922,7 +3922,7 @@ pub enum Statement {
         operation: AlterIndexOperation,
     },
     /// ```sql
-    /// ALTER VIEW
+    /// ALTER [ MATERIALIZED ] VIEW
     /// ```
     AlterView(AlterView),
     /// ```sql

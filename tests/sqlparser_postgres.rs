@@ -12837,6 +12837,10 @@ fn parse_create_domain_nullability() {
             "Expected: NOT NULL, NULL, or CHECK, found: EOF",
         ),
         (
+            "CREATE DOMAIN q2 AS INT DEFAULT",
+            "Expected: an expression, found: EOF",
+        ),
+        (
             "CREATE DOMAIN q2 AS INT PRIMARY KEY",
             "Expected: end of statement, found: PRIMARY",
         ),

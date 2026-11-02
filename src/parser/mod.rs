@@ -7415,13 +7415,21 @@ impl<'a> Parser<'a> {
             None
         };
         let default = if self.parse_keyword(Keyword::DEFAULT) {
-            Some(self.parse_expr()?)
+            Some(self.with_state(ColumnDefinition, |parser| parser.parse_expr())?)
         } else {
             None
         };
         let mut constraints = Vec::new();
-        while let Some(constraint) = self.parse_optional_table_constraint()? {
-            constraints.push(constraint);
+        while self
+            .peek_one_of_keywords(&[
+                Keyword::CONSTRAINT,
+                Keyword::NOT,
+                Keyword::NULL,
+                Keyword::CHECK,
+            ])
+            .is_some()
+        {
+            constraints.push(self.parse_domain_constraint(true)?);
         }
 
         Ok(CreateDomain {
@@ -10941,8 +10949,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parses `[ CONSTRAINT <name> ] { NOT NULL | CHECK (<expr>) }`.
-    fn parse_domain_constraint(&mut self) -> Result<DomainConstraint, ParserError> {
+    /// Parses `[ CONSTRAINT <name> ] { NOT NULL | NULL | CHECK (<expr>) }`,
+    /// where `NULL` is accepted only if `allow_null` is set.
+    fn parse_domain_constraint(
+        &mut self,
+        allow_null: bool,
+    ) -> Result<DomainConstraint, ParserError> {
         let name = if self.parse_keyword(Keyword::CONSTRAINT) {
             Some(self.parse_identifier()?)
         } else {
@@ -10950,10 +10962,14 @@ impl<'a> Parser<'a> {
         };
         if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
             Ok(DomainConstraint::NotNull { name })
+        } else if allow_null && self.parse_keyword(Keyword::NULL) {
+            Ok(DomainConstraint::Null { name })
         } else if self.parse_keyword(Keyword::CHECK) {
             Ok(DomainConstraint::Check(
                 self.parse_check_constraint_body(name)?,
             ))
+        } else if allow_null {
+            self.expected_ref("NOT NULL, NULL, or CHECK", self.peek_token_ref())
         } else {
             self.expected_ref("NOT NULL or CHECK", self.peek_token_ref())
         }
@@ -12395,7 +12411,7 @@ impl<'a> Parser<'a> {
             AlterDomainOperation::DropNotNull
         } else if self.parse_keyword(Keyword::ADD) {
             AlterDomainOperation::AddConstraint {
-                constraint: self.parse_domain_constraint()?,
+                constraint: self.parse_domain_constraint(false)?,
                 not_valid: self.parse_keywords(&[Keyword::NOT, Keyword::VALID]),
             }
         } else if self.parse_keywords(&[Keyword::DROP, Keyword::CONSTRAINT]) {

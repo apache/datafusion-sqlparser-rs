@@ -12772,3 +12772,83 @@ fn display_alter_domain_propagates_write_errors() {
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
     }
 }
+
+#[test]
+fn parse_create_domain_nullability() {
+    let positive = || {
+        DomainConstraint::Check(CheckConstraint {
+            name: None,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::value(number("0"))),
+            }),
+            no_inherit: false,
+            enforced: None,
+        })
+    };
+
+    for (sql, constraints) in [
+        (
+            "CREATE DOMAIN q2 AS INT NOT NULL",
+            vec![DomainConstraint::NotNull { name: None }],
+        ),
+        (
+            "CREATE DOMAIN q2 AS INT NULL",
+            vec![DomainConstraint::Null { name: None }],
+        ),
+        (
+            "CREATE DOMAIN q2 AS INT CONSTRAINT nn NOT NULL CHECK (VALUE > 0)",
+            vec![
+                DomainConstraint::NotNull {
+                    name: Some(Ident::new("nn")),
+                },
+                positive(),
+            ],
+        ),
+        (
+            "CREATE DOMAIN q2 AS INT CHECK (VALUE > 0) CONSTRAINT n NULL",
+            vec![
+                positive(),
+                DomainConstraint::Null {
+                    name: Some(Ident::new("n")),
+                },
+            ],
+        ),
+    ] {
+        assert_eq!(
+            pg().verified_stmt(sql),
+            Statement::CreateDomain(CreateDomain {
+                name: ObjectName::from(vec![Ident::new("q2")]),
+                data_type: DataType::Int(None),
+                collation: None,
+                default: None,
+                constraints,
+            }),
+            "{sql}"
+        );
+    }
+
+    pg().verified_stmt("CREATE DOMAIN q2 AS INT DEFAULT 0 NOT NULL");
+
+    for (sql, expected) in [
+        (
+            "CREATE DOMAIN q2 AS INT CONSTRAINT nn",
+            "Expected: NOT NULL, NULL, or CHECK, found: EOF",
+        ),
+        (
+            "CREATE DOMAIN q2 AS INT PRIMARY KEY",
+            "Expected: end of statement, found: PRIMARY",
+        ),
+        (
+            "ALTER DOMAIN q2 ADD NULL",
+            "Expected: NOT NULL or CHECK, found: NULL",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

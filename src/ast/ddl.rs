@@ -41,15 +41,15 @@ use crate::ast::{
         CheckConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint,
         UniqueConstraint,
     },
-    ArgMode, AttachedToken, BeginEndStatements, CommentDef, ConditionalStatements,
+    ArgMode, Assignment, AttachedToken, BeginEndStatements, CommentDef, ConditionalStatements,
     CreateFunctionBody, CreateFunctionUsing, CreateServerOption, CreateTableLikeKind,
     CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior,
     FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc, FunctionDeterminismSpecifier,
     FunctionParallel, FunctionSecurity, HiveDistributionStyle, HiveFormat, HiveIOFormat,
     HiveRowFormat, HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName,
     OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query,
-    RefreshModeKind, ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, Statement,
-    StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
+    RefreshModeKind, ResetConfig, RowAccessPolicy, SequenceOptions, Setting, Spanned, SqlOption,
+    Statement, StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
     TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
     WrappedCollection,
 };
@@ -189,6 +189,22 @@ pub enum AlterTableOperation {
         name: Ident,
         /// Optional partition name to operate on.
         partition: Option<Ident>,
+    },
+    /// ClickHouse `DELETE [IN PARTITION ...] WHERE ...`.
+    Delete {
+        /// Empty when `IN PARTITION` is omitted.
+        partitions: Vec<Partition>,
+        /// Mandatory `WHERE` predicate.
+        selection: Expr,
+    },
+    /// ClickHouse `UPDATE ... [IN PARTITION ...] WHERE ...`.
+    Update {
+        /// Column assignments, without a `SET` keyword.
+        assignments: Vec<Assignment>,
+        /// Empty when `IN PARTITION` is omitted.
+        partitions: Vec<Partition>,
+        /// Mandatory `WHERE` predicate.
+        selection: Expr,
     },
     /// `DISABLE ROW LEVEL SECURITY`
     ///
@@ -883,6 +899,35 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")
+            }
+            AlterTableOperation::Delete {
+                partitions,
+                selection,
+            }
+            | AlterTableOperation::Update {
+                partitions,
+                selection,
+                ..
+            } => {
+                if let AlterTableOperation::Update { assignments, .. } = self {
+                    write!(f, "UPDATE {}", display_comma_separated(assignments))?;
+                } else {
+                    write!(f, "DELETE")?;
+                }
+                if !partitions.is_empty() {
+                    write!(f, " IN PARTITION ")?;
+                    for (i, partition) in partitions.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        match partition {
+                            Partition::Identifier(id) => write!(f, "ID {id}")?,
+                            Partition::Expr(expr) => write!(f, "{expr}")?,
+                            _ => write!(f, "{partition}")?,
+                        }
+                    }
+                }
+                write!(f, " WHERE {selection}")
             }
             AlterTableOperation::DisableRowLevelSecurity => {
                 write!(f, "DISABLE ROW LEVEL SECURITY")
@@ -5098,6 +5143,8 @@ pub struct AlterTable {
     /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
     pub on_cluster: Option<Ident>,
+    /// ClickHouse query-level `SETTINGS` (not table settings).
+    pub settings: Option<Vec<Setting>>,
     /// Table type: None for regular tables, Some(AlterTableType) for Iceberg or Dynamic tables
     pub table_type: Option<AlterTableType>,
     /// Token that represents the end of the statement (semicolon or EOF)
@@ -5127,6 +5174,9 @@ impl fmt::Display for AlterTable {
         write!(f, "{}", display_comma_separated(&self.operations))?;
         if let Some(loc) = &self.location {
             write!(f, " {loc}")?
+        }
+        if let Some(settings) = &self.settings {
+            write!(f, " SETTINGS {}", display_comma_separated(settings))?;
         }
         Ok(())
     }

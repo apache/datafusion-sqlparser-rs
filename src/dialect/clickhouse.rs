@@ -215,6 +215,10 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    fn supports_alter_table_mutations(&self) -> bool {
+        true
+    }
+
     /// See <https://clickhouse.com/docs/sql-reference/data-types/tuple#addressing-tuple-elements>
     fn supports_tuple_element_access(&self) -> bool {
         true

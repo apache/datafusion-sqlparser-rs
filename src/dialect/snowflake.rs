@@ -812,6 +812,7 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
         operations: vec![operation],
         location: None,
         on_cluster: None,
+        settings: None,
         table_type: Some(AlterTableType::Dynamic),
         end_token: AttachedToken(end_token),
     }))
@@ -854,6 +855,7 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
         operations: vec![operation],
         location: None,
         on_cluster: None,
+        settings: None,
         table_type: Some(AlterTableType::External),
         end_token: AttachedToken(end_token),
     }))

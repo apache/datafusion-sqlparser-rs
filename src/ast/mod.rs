@@ -3828,7 +3828,7 @@ pub enum Statement {
     /// ```
     AlterIndex(Box<AlterIndex>),
     /// ```sql
-    /// ALTER VIEW
+    /// ALTER [ MATERIALIZED ] VIEW
     /// ```
     AlterView(Box<AlterView>),
     /// ```sql

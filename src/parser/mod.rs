@@ -8324,15 +8324,15 @@ impl<'a> Parser<'a> {
     }
 
     /// ```sql
-    /// DROP DOMAIN [ IF EXISTS ] name [ CASCADE | RESTRICT ]
+    /// DROP DOMAIN [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     fn parse_drop_domain(&mut self) -> Result<DropDomain, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let name = self.parse_object_name(false)?;
+        let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
         let drop_behavior = self.parse_optional_drop_behavior();
         Ok(DropDomain {
             if_exists,
-            name,
+            names,
             drop_behavior,
         })
     }

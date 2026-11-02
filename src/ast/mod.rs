@@ -58,40 +58,41 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo, TypeModifier,
 };
 pub use self::dcl::{
-    AlterRoleOperation, CreateRole, Grant, GrantRole, ResetConfig, Revoke, RevokeRole,
-    RoleGrantOption, RoleGrantOptionValue, RoleKeyword, RoleOption, SecondaryRoles, SetConfigValue,
-    Use,
+    AlterDefaultPrivileges, AlterDefaultPrivilegesOperation, AlterRoleOperation, CreateRole,
+    DefaultPrivilegesObjectType, DefaultPrivilegesOption, Grant, GrantRole, ResetConfig, Revoke,
+    RevokeRole, RoleGrantOption, RoleGrantOptionValue, RoleKeyword, RoleOption, SecondaryRoles,
+    SetConfigValue, Use,
 };
 pub use self::ddl::{
     AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,
     AlterConnectorOwner, AlterFunction, AlterFunctionAction, AlterFunctionKind,
-    AlterFunctionOperation, AlterIndexOperation, AlterOperator, AlterOperatorClass,
-    AlterOperatorClassOperation, AlterOperatorFamily, AlterOperatorFamilyOperation,
-    AlterOperatorOperation, AlterPolicy, AlterPolicyOperation, AlterSchema, AlterSchemaOperation,
-    AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterTableType,
-    AlterTextSearch, AlterTextSearchOperation, AlterTextSearchOption, AlterTrigger,
-    AlterTriggerOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, AlterView, AlterViewOperation,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateAggregate, CreateAggregateArgs,
-    CreateAggregateOption, CreateCollation, CreateCollationDefinition, CreateConnector,
-    CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable, CreateFunction,
-    CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
-    CreatePolicyCommand, CreatePolicyType, CreateRule, CreateRuleAction, CreateRuleDoKind,
-    CreateRuleEvent, CreateTable, CreateTextSearch, CreateTrigger, CreateUserMapping, CreateView,
-    Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction,
-    DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy,
-    DropRule, DropTrigger, ForValues, ForeignDataWrapperRoutineClause, FunctionReturnType,
-    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
-    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
-    OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
-    Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
-    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, UserMappingUser, ViewColumnDef,
-    WithData,
+    AlterFunctionOperation, AlterGenericOption, AlterIndexOperation, AlterOperator,
+    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
+    AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
+    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
+    AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
+    AlterTextSearchOption, AlterTrigger, AlterTriggerOperation, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    AlterView, AlterViewOperation, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef,
+    ColumnOptions, ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateAggregate,
+    CreateAggregateArgs, CreateAggregateOption, CreateCollation, CreateCollationDefinition,
+    CreateConnector, CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable,
+    CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily,
+    CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateRule, CreateRuleAction,
+    CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch, CreateTrigger,
+    CreateUserMapping, CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior,
+    DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
+    DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
+    ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
+    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
+    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, SqliteTableOption,
+    SqliteTableOptions, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
+    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -209,6 +210,16 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
     // We manually insert semicolon for the last statement,
     // since display_separated doesn't handle that case.
     write!(f, ";")
+}
+
+/// Writes ` BEGIN ATOMIC <statements> END`.
+fn format_begin_atomic(f: &mut fmt::Formatter, statements: &[Statement]) -> fmt::Result {
+    write!(f, " BEGIN ATOMIC")?;
+    if !statements.is_empty() {
+        write!(f, " ")?;
+        format_statement_list(f, statements)?;
+    }
+    write!(f, " END")
 }
 
 /// A item `T` enclosed in a pair of parentheses
@@ -4586,8 +4597,8 @@ pub enum Statement {
         params: Option<Vec<ProcedureParam>>,
         /// Optional language identifier.
         language: Option<Ident>,
-        /// Procedure body statements.
-        body: ConditionalStatements,
+        /// Procedure body.
+        body: CreateProcedureBody,
     },
     /// ```sql
     /// CREATE MACRO
@@ -4690,6 +4701,10 @@ pub enum Statement {
     /// REVOKE roles FROM grantees
     /// ```
     RevokeRole(RevokeRole),
+    /// ```sql
+    /// ALTER DEFAULT PRIVILEGES
+    /// ```
+    AlterDefaultPrivileges(AlterDefaultPrivileges),
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
     /// ```
@@ -5610,7 +5625,12 @@ impl fmt::Display for Statement {
                     write!(f, " LANGUAGE {language}")?;
                 }
 
-                write!(f, " AS {body}")
+                match body {
+                    CreateProcedureBody::As(body) => write!(f, " AS {body}"),
+                    CreateProcedureBody::BeginAtomic(BeginEndStatements { statements, .. }) => {
+                        format_begin_atomic(f, statements)
+                    }
+                }
             }
             Statement::CreateMacro {
                 or_replace,
@@ -6192,6 +6212,7 @@ impl fmt::Display for Statement {
             Statement::Revoke(revoke) => write!(f, "{revoke}"),
             Statement::GrantRole(grant) => write!(f, "{grant}"),
             Statement::RevokeRole(revoke) => write!(f, "{revoke}"),
+            Statement::AlterDefaultPrivileges(stmt) => write!(f, "{stmt}"),
             Statement::Deallocate { name, prepare } => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",
@@ -10571,6 +10592,19 @@ pub enum CreateFunctionBody {
     ///
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#select_stmt
     AsReturnSelect(Select),
+}
+
+/// Body of a `CREATE PROCEDURE` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateProcedureBody {
+    /// Statements after `AS`.
+    As(ConditionalStatements),
+    /// SQL-standard body enclosed by `BEGIN ATOMIC` and `END`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
+    BeginAtomic(BeginEndStatements),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

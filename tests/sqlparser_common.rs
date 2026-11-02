@@ -16196,7 +16196,7 @@ fn parse_alter_trigger_spans() {
 
 #[test]
 fn parse_alter_rejects_missing_or_unknown_object_type() {
-    let objects = "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR";
+    let objects = "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR";
     for (sql, found) in [
         ("ALTER", "EOF"),
         ("ALTER 1", "1"),
@@ -23324,5 +23324,93 @@ fn display_refresh_materialized_view_propagates_write_errors() {
     for rejected in ["REFRESH", "CONCURRENTLY", "app", "NO DATA"] {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
+fn parse_create_procedure_begin_atomic() {
+    let sql = "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (1); END";
+    verified_stmt(sql);
+    match all_dialects().run_parser_method(sql, |parser| parser.parse_statement().unwrap()) {
+        Statement::CreateProcedure {
+            body: CreateProcedureBody::BeginAtomic(body),
+            ..
+        } => {
+            assert_eq!(
+                body.statements,
+                vec![verified_stmt("INSERT INTO t VALUES (1)")]
+            );
+            assert_eq!(
+                body.span(),
+                Span::new(Location::new(1, 36), Location::new(1, 78))
+            );
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for sql in [
+        "CREATE PROCEDURE p (a INT) LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (a); UPDATE t SET b = a; END",
+        "CREATE PROCEDURE p () BEGIN ATOMIC SELECT 1; END",
+        "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC END",
+    ] {
+        verified_stmt(sql);
+    }
+
+    one_statement_parses_to(
+        r#"CREATE PROCEDURE public.p(a integer)
+    LANGUAGE sql
+    BEGIN ATOMIC
+ INSERT INTO public.t (a)
+   VALUES (p.a);
+END"#,
+        "CREATE PROCEDURE public.p (a INTEGER) LANGUAGE sql BEGIN ATOMIC INSERT INTO public.t (a) VALUES (p.a); END",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1 AS a END",
+            "Expected: ;, found: END",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN SELECT 1; END",
+            "Expected: AS, found: BEGIN",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql AS BEGIN SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_create_procedure_begin_atomic_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = verified_stmt("CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
+    for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }

@@ -1131,6 +1131,7 @@ define_keywords!(
     TSVECTOR,
     TUPLE,
     TYPE,
+    TYPES,
     TYPMOD_IN,
     TYPMOD_OUT,
     UBIGINT,

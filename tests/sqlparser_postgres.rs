@@ -12648,7 +12648,8 @@ fn parse_alter_domain() {
         );
     }
 
-    pg_and_generic().verified_stmt("ALTER DOMAIN s2.span SET DEFAULT INTERVAL '1 day'");
+    let stmt = pg_and_generic().verified_stmt("ALTER DOMAIN s2.span SET DEFAULT INTERVAL '1 day'");
+    assert_eq!(Span::empty(), stmt.span());
 
     for (sql, expected) in [
         (
@@ -12671,11 +12672,103 @@ fn parse_alter_domain() {
             "ALTER DOMAIN d1 RENAME CONSTRAINT a b",
             "Expected: TO, found: b",
         ),
+        ("ALTER DOMAIN", "Expected: identifier, found: EOF"),
+        (
+            "ALTER DOMAIN d1 SET DEFAULT",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER DOMAIN d1 DROP CONSTRAINT",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DOMAIN d1 RENAME CONSTRAINT",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DOMAIN d1 RENAME CONSTRAINT a TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DOMAIN d1 VALIDATE CONSTRAINT",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DOMAIN d1 OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF",
+        ),
+        ("ALTER DOMAIN d1 RENAME TO", "Expected: identifier, found: EOF"),
+        ("ALTER DOMAIN d1 SET SCHEMA", "Expected: identifier, found: EOF"),
+        (
+            "ALTER DOMAIN d1 ADD CONSTRAINT",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DOMAIN d1 ADD CHECK VALUE > 0",
+            "Expected: (, found: VALUE",
+        ),
+        (
+            "ALTER DOMAIN d1 ADD CHECK ()",
+            "Expected: an expression, found: )",
+        ),
+        (
+            "ALTER DOMAIN d1 ADD CHECK (VALUE > 0",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "CREATE DOMAIN d1 AS INT CHECK VALUE > 0",
+            "Expected: (, found: VALUE",
+        ),
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err().to_string(),
             format!("sql parser error: {expected}"),
             "{sql}"
         );
+    }
+}
+
+#[test]
+fn display_alter_domain_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for (sql, rejected) in [
+        ("ALTER DOMAIN d1 ADD CHECK (VALUE > 0) NOT VALID", "ADD"),
+        (
+            "ALTER DOMAIN d1 ADD CHECK (VALUE > 0) NOT VALID",
+            "NOT VALID",
+        ),
+        (
+            "ALTER DOMAIN d1 DROP CONSTRAINT IF EXISTS c_name CASCADE",
+            "DROP CONSTRAINT",
+        ),
+        (
+            "ALTER DOMAIN d1 DROP CONSTRAINT IF EXISTS c_name CASCADE",
+            "IF EXISTS",
+        ),
+        (
+            "ALTER DOMAIN d1 DROP CONSTRAINT IF EXISTS c_name CASCADE",
+            "c_name",
+        ),
+        (
+            "ALTER DOMAIN d1 DROP CONSTRAINT IF EXISTS c_name CASCADE",
+            "CASCADE",
+        ),
+    ] {
+        let statement = pg().verified_stmt(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
     }
 }

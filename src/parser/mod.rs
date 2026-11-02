@@ -6181,17 +6181,9 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.function_body, "RETURN")?;
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
-            } else if self.peek_keywords(&[Keyword::BEGIN, Keyword::ATOMIC]) {
+            } else if let Some(statements) = self.maybe_parse_begin_atomic()? {
                 ensure_not_set(&body.function_body, "BEGIN ATOMIC")?;
-                let begin_token = self.next_token();
-                self.advance_token();
-                let statements = self.parse_statement_list(&[Keyword::END])?;
-                let end_token = self.expect_keyword(Keyword::END)?;
-                body.function_body = Some(CreateFunctionBody::BeginAtomic(BeginEndStatements {
-                    begin_token: AttachedToken(begin_token),
-                    statements,
-                    end_token: AttachedToken(end_token),
-                }));
+                body.function_body = Some(CreateFunctionBody::BeginAtomic(statements));
             } else {
                 break;
             }
@@ -6459,6 +6451,22 @@ impl<'a> Parser<'a> {
         let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
         self.expect_token(&Token::RParen)?;
         Ok((name, args))
+    }
+
+    /// Parses `BEGIN ATOMIC <statements> END` when the next tokens are `BEGIN ATOMIC`.
+    fn maybe_parse_begin_atomic(&mut self) -> Result<Option<BeginEndStatements>, ParserError> {
+        if !self.peek_keywords(&[Keyword::BEGIN, Keyword::ATOMIC]) {
+            return Ok(None);
+        }
+        let begin_token = self.next_token();
+        self.advance_token();
+        let statements = self.parse_statement_list(&[Keyword::END])?;
+        let end_token = self.expect_keyword(Keyword::END)?;
+        Ok(Some(BeginEndStatements {
+            begin_token: AttachedToken(begin_token),
+            statements,
+            end_token: AttachedToken(end_token),
+        }))
     }
 
     fn parse_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {
@@ -11664,11 +11672,15 @@ impl<'a> Parser<'a> {
                     generated_as,
                     sequence_options,
                 }
+            } else if self.parse_keyword(Keyword::OPTIONS) {
+                AlterColumnOperation::GenericOptions {
+                    options: self.parse_alter_generic_options()?,
+                }
             } else {
                 let message = if is_postgresql {
-                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or ADD GENERATED after ALTER COLUMN"
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN"
                 } else {
-                    "SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN"
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN"
                 };
 
                 return self.expected_ref(message, self.peek_token_ref());
@@ -11808,6 +11820,10 @@ impl<'a> Parser<'a> {
             let options = self.parse_comma_separated(|p| p.parse_object_name(false))?;
             self.expect_token(&Token::RParen)?;
             AlterTableOperation::ResetOptions { options }
+        } else if self.parse_keyword(Keyword::OPTIONS) {
+            AlterTableOperation::GenericOptions {
+                options: self.parse_alter_generic_options()?,
+            }
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -11864,6 +11880,10 @@ impl<'a> Parser<'a> {
             return self.parse_alter_text_search().map(Into::into);
         }
 
+        if self.parse_keywords(&[Keyword::DEFAULT, Keyword::PRIVILEGES]) {
+            return self.parse_alter_default_privileges().map(Into::into);
+        }
+
         let index = self.index;
         self.advance_token();
         let object_type = match &self.get_current_token().token {
@@ -11879,10 +11899,14 @@ impl<'a> Parser<'a> {
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
-            Keyword::TABLE => self.parse_alter_table(false),
+            Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
-                self.parse_alter_table(true)
+                self.parse_alter_table(Some(AlterTableType::Iceberg))
+            }
+            Keyword::FOREIGN => {
+                self.expect_keyword(Keyword::TABLE)?;
+                self.parse_alter_table(Some(AlterTableType::Foreign))
             }
             Keyword::INDEX => {
                 let index_name = self.parse_object_name(false)?;
@@ -11924,7 +11948,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
                     self.peek_token_ref(),
                 )
             }
@@ -12145,13 +12169,25 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a [Statement::AlterTable]
-    pub fn parse_alter_table(&mut self, iceberg: bool) -> Result<Statement, ParserError> {
+    pub fn parse_alter_table(
+        &mut self,
+        table_type: Option<AlterTableType>,
+    ) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
+        let on_cluster_loc = self.peek_token_ref().span.start;
         let on_cluster = self.parse_optional_on_cluster()?;
+        let foreign = table_type == Some(AlterTableType::Foreign);
+        if foreign && on_cluster.is_some() {
+            return parser_err!(
+                "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+                on_cluster_loc
+            );
+        }
         let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
 
+        let location_loc = self.peek_token_ref().span.start;
         let mut location = None;
         if self.parse_keyword(Keyword::LOCATION) {
             location = Some(HiveSetLocation {
@@ -12163,6 +12199,12 @@ impl<'a> Parser<'a> {
                 has_set: true,
                 location: self.parse_identifier()?,
             });
+        }
+        if foreign && location.is_some() {
+            return parser_err!(
+                "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+                location_loc
+            );
         }
 
         let end_token = if self.peek_token_ref().token == Token::SemiColon {
@@ -12178,11 +12220,7 @@ impl<'a> Parser<'a> {
             operations,
             location,
             on_cluster,
-            table_type: if iceberg {
-                Some(AlterTableType::Iceberg)
-            } else {
-                None
-            },
+            table_type,
             end_token: AttachedToken(end_token),
         }
         .into())
@@ -18840,14 +18878,7 @@ impl<'a> Parser<'a> {
     pub fn parse_grant_deny_revoke_privileges_objects(
         &mut self,
     ) -> Result<(Privileges, Option<GrantObjects>), ParserError> {
-        let privileges = if self.parse_keyword(Keyword::ALL) {
-            Privileges::All {
-                with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
-            }
-        } else {
-            let actions = self.parse_actions_list()?;
-            Privileges::Actions(actions)
-        };
+        let privileges = self.parse_privileges()?;
 
         let objects = if self.parse_keyword(Keyword::ON) {
             if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
@@ -19421,6 +19452,103 @@ impl<'a> Parser<'a> {
         matched
     }
 
+    /// Parse `ALTER DEFAULT PRIVILEGES`, whose keywords are already consumed.
+    ///
+    /// See [PostgreSQL docs](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html).
+    pub fn parse_alter_default_privileges(
+        &mut self,
+    ) -> Result<AlterDefaultPrivileges, ParserError> {
+        // `FOR USER` is a synonym of `FOR ROLE` and is normalised to it.
+        let mut options = Vec::new();
+        loop {
+            if self.parse_keyword(Keyword::FOR) {
+                self.expect_one_of_keywords(&[Keyword::ROLE, Keyword::USER])?;
+                options.push(DefaultPrivilegesOption::ForRole(
+                    self.parse_comma_separated(|p| p.parse_identifier())?,
+                ));
+            } else if self.parse_keywords(&[Keyword::IN, Keyword::SCHEMA]) {
+                options.push(DefaultPrivilegesOption::InSchema(
+                    self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                ));
+            } else {
+                break;
+            }
+        }
+
+        let is_grant = if self.parse_keyword(Keyword::GRANT) {
+            true
+        } else if self.parse_keyword(Keyword::REVOKE) {
+            false
+        } else {
+            return self.expected_ref("GRANT or REVOKE", self.peek_token_ref());
+        };
+
+        let grant_option_for =
+            !is_grant && self.parse_keywords(&[Keyword::GRANT, Keyword::OPTION, Keyword::FOR]);
+        let privileges = self.parse_privileges()?;
+        self.expect_keyword_is(Keyword::ON)?;
+        let object_type = self.parse_default_privileges_object_type()?;
+        self.expect_keyword_is(if is_grant { Keyword::TO } else { Keyword::FROM })?;
+        let grantees = self.parse_grantees()?;
+
+        let operation = if is_grant {
+            AlterDefaultPrivilegesOperation::Grant {
+                privileges,
+                object_type,
+                grantees,
+                with_grant_option: self.parse_keywords(&[
+                    Keyword::WITH,
+                    Keyword::GRANT,
+                    Keyword::OPTION,
+                ]),
+            }
+        } else {
+            AlterDefaultPrivilegesOperation::Revoke {
+                grant_option_for,
+                privileges,
+                object_type,
+                grantees,
+                cascade: self.parse_cascade_option(),
+            }
+        };
+
+        Ok(AlterDefaultPrivileges { options, operation })
+    }
+
+    /// Parse `ALL [PRIVILEGES]` or a comma separated privilege list.
+    fn parse_privileges(&mut self) -> Result<Privileges, ParserError> {
+        if self.parse_keyword(Keyword::ALL) {
+            Ok(Privileges::All {
+                with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
+            })
+        } else {
+            Ok(Privileges::Actions(self.parse_actions_list()?))
+        }
+    }
+
+    fn parse_default_privileges_object_type(
+        &mut self,
+    ) -> Result<DefaultPrivilegesObjectType, ParserError> {
+        if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECTS]) {
+            return Ok(DefaultPrivilegesObjectType::LargeObjects);
+        }
+        for (keyword, object_type) in [
+            (Keyword::TABLES, DefaultPrivilegesObjectType::Tables),
+            (Keyword::SEQUENCES, DefaultPrivilegesObjectType::Sequences),
+            (Keyword::FUNCTIONS, DefaultPrivilegesObjectType::Functions),
+            (Keyword::ROUTINES, DefaultPrivilegesObjectType::Routines),
+            (Keyword::TYPES, DefaultPrivilegesObjectType::Types),
+            (Keyword::SCHEMAS, DefaultPrivilegesObjectType::Schemas),
+        ] {
+            if self.parse_keyword(keyword) {
+                return Ok(object_type);
+            }
+        }
+        self.expected_ref(
+            "TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES, SCHEMAS or LARGE OBJECTS",
+            self.peek_token_ref(),
+        )
+    }
     /// Parse an REPLACE statement
     pub fn parse_replace(
         &mut self,
@@ -21539,13 +21667,37 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.expect_token(&Token::LParen)?;
-        let options = self.parse_comma_separated(|p| {
-            let key = p.parse_identifier()?;
-            let value = p.parse_identifier()?;
-            Ok(CreateServerOption { key, value })
-        })?;
+        let options = self.parse_comma_separated(Parser::parse_pg_option)?;
         self.expect_token(&Token::RParen)?;
         Ok(Some(options))
+    }
+
+    fn parse_pg_option(&mut self) -> Result<CreateServerOption, ParserError> {
+        let key = self.parse_identifier()?;
+        let value = self.parse_identifier()?;
+        Ok(CreateServerOption { key, value })
+    }
+
+    /// Parse the parenthesized list following `OPTIONS` in an `ALTER` statement.
+    fn parse_alter_generic_options(&mut self) -> Result<Vec<AlterGenericOption>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| {
+            // Before a string literal, `ADD`, `SET` and `DROP` name an option.
+            let action = match p.peek_nth_token_ref(1).token {
+                Token::SingleQuotedString(_) => None,
+                _ => p.parse_one_of_keywords(&[Keyword::ADD, Keyword::SET, Keyword::DROP]),
+            };
+            match action {
+                Some(Keyword::SET) => Ok(AlterGenericOption::Set(p.parse_pg_option()?)),
+                Some(Keyword::DROP) => Ok(AlterGenericOption::Drop(p.parse_identifier()?)),
+                action => Ok(AlterGenericOption::Add {
+                    option: p.parse_pg_option()?,
+                    add_keyword: action.is_some(),
+                }),
+            }
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(options)
     }
 
     /// Parse a `CREATE FOREIGN TABLE` statement.
@@ -21704,9 +21856,13 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.expect_keyword_is(Keyword::AS)?;
-
-        let body = self.parse_conditional_statements(&[Keyword::END])?;
+        let body = match self.maybe_parse_begin_atomic()? {
+            Some(statements) => CreateProcedureBody::BeginAtomic(statements),
+            None => {
+                self.expect_keyword_is(Keyword::AS)?;
+                CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+            }
+        };
 
         Ok(Statement::CreateProcedure {
             name,

@@ -5253,6 +5253,179 @@ fn parse_alter_user() {
 }
 
 #[test]
+fn parse_alter_default_privileges() {
+    // What `pg_dump -s` emits for a default ACL.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO app_user");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE a, b IN SCHEMA s1, s2 GRANT SELECT, INSERT ON TABLES TO app WITH GRANT OPTION");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT ALL PRIVILEGES ON SEQUENCES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON ROUTINES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE ON TYPES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE, CREATE ON SCHEMAS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR ALL ON TABLES FROM app CASCADE",
+    );
+    // `FOR USER` normalises to `FOR ROLE`.
+    pg().one_statement_parses_to(
+        "ALTER DEFAULT PRIVILEGES FOR USER bob GRANT SELECT ON TABLES TO app",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE bob GRANT SELECT ON TABLES TO app",
+    );
+
+    // Options keep the order written.
+    for (sql, options) in [
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA s FOR ROLE r GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+            ],
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+            ],
+        ),
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::AlterDefaultPrivileges(stmt) => assert_eq!(stmt.options, options, "{sql}"),
+            _ => unreachable!(),
+        }
+    }
+    // `LARGE OBJECTS` is a valid object type for both `GRANT` and `REVOKE`.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT, UPDATE ON LARGE OBJECTS TO app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON LARGE OBJECTS FROM app CASCADE",
+    );
+    // The grammar accepts a repeated option, which PostgreSQL rejects only when executing.
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE a FOR ROLE b GRANT SELECT ON TABLES TO app",
+    );
+}
+
+#[test]
+fn parse_alter_default_privileges_rejects_malformed_statements() {
+    for (sql, expected) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE a",
+            "Expected: GRANT or REVOKE, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ALL GRANT SELECT ON TABLES TO app",
+            "Expected: one of ROLE or USER, found: ALL",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT ON TABLES TO app",
+            "Expected: a privilege keyword, found: ON",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT TO app",
+            "Expected: ON, found: TO",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON INDEXES TO app",
+            "Expected: TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES, SCHEMAS or LARGE OBJECTS, found: INDEXES",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn parse_alter_default_privileges_spans() {
+    for (sql, start, end) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g",
+            35,
+            76,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM g",
+            55,
+            56,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r GRANT SELECT ON TABLES TO PUBLIC",
+            35,
+            36,
+        ),
+    ] {
+        let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+        assert_eq!(
+            statements[0].span(),
+            Span::new(Location::new(1, start), Location::new(1, end)),
+            "span for {sql}"
+        );
+    }
+    let sql = "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM 'bob'@'localhost'";
+    let statements = Parser::parse_sql(&sqlparser::dialect::GenericDialect {}, sql).unwrap();
+    assert_eq!(
+        statements[0].span(),
+        Span::new(Location::new(1, 55), Location::new(1, 72))
+    );
+}
+
+#[test]
+fn display_alter_default_privileges_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let grant = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g WITH GRANT OPTION",
+    );
+    for rejected in [
+        "ALTER DEFAULT PRIVILEGES",
+        "FOR ROLE ",
+        "GRANT ",
+        " WITH GRANT OPTION",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{grant}"), Err(fmt::Error), "{rejected}");
+    }
+
+    let revoke = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON TABLES FROM g CASCADE",
+    );
+    for rejected in ["REVOKE ", "GRANT OPTION FOR ", " FROM ", "CASCADE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{revoke}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     pg().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
@@ -12344,6 +12517,257 @@ fn parse_column_generic_options() {
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_foreign_table() {
+    for sql in [
+        "ALTER FOREIGN TABLE ft ADD COLUMN note TEXT",
+        "ALTER FOREIGN TABLE ft DROP COLUMN IF EXISTS note CASCADE",
+        "ALTER FOREIGN TABLE ft RENAME COLUMN note TO memo",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id TYPE BIGINT",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET DEFAULT 0",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET NOT NULL",
+        "ALTER FOREIGN TABLE ft ADD CONSTRAINT positive CHECK (id > 0) NOT VALID",
+        "ALTER FOREIGN TABLE ft VALIDATE CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft DROP CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft OWNER TO app",
+        "ALTER FOREIGN TABLE ft RENAME TO archive",
+        "ALTER FOREIGN TABLE IF EXISTS ONLY public.ft ADD COLUMN a INT, DROP COLUMN b",
+    ] {
+        let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(alter.table_type, Some(AlterTableType::Foreign));
+    }
+
+    let option = |key: &str, value: &str| CreateServerOption {
+        key: Ident::new(key),
+        value: Ident::with_quote('\'', value),
+    };
+    let sql = "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100', SET batch_size '10', DROP updatable, use_remote_estimate 'true')";
+    let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("fetch_size", "100"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("batch_size", "10")),
+                AlterGenericOption::Drop(Ident::new("updatable")),
+                AlterGenericOption::Add {
+                    option: option("use_remote_estimate", "true"),
+                    add_keyword: false,
+                },
+            ],
+        }]
+    );
+
+    // As written by pg_dump.
+    let stmt = pg_and_generic().one_statement_parses_to(
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (\n    column_name 'remote_id'\n)",
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (column_name 'remote_id')",
+    );
+    let Statement::AlterTable(alter) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::AlterColumn {
+            column_name: Ident::new("id"),
+            op: AlterColumnOperation::GenericOptions {
+                options: vec![AlterGenericOption::Add {
+                    option: option("column_name", "remote_id"),
+                    add_keyword: false,
+                }],
+            },
+        }]
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS (SET column_name 'remote_id', DROP other)",
+    );
+
+    // `ADD`, `SET` and `DROP` before a string literal name a plain option.
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (add 'x', set 'y', drop 'z')")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: ["add", "set", "drop"]
+                .into_iter()
+                .zip(["x", "y", "z"])
+                .map(|(key, value)| AlterGenericOption::Add {
+                    option: option(key, value),
+                    add_keyword: false,
+                })
+                .collect(),
+        }]
+    );
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD add 'x', SET set 'y', DROP drop)")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("add", "x"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("set", "y")),
+                AlterGenericOption::Drop(Ident::new("drop")),
+            ],
+        }]
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP fetch_size '100')",
+            "Expected: ), found: '100'",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (SET fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100'",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ADD fetch_size '100'",
+            "Expected: (, found: ADD",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS column_name 'remote_id'",
+            "Expected: (, found: column_name",
+        ),
+        (
+            "ALTER FOREIGN ft OWNER TO app",
+            "Expected: TABLE, found: ft",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+}
+
+#[test]
+fn display_alter_foreign_table_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt =
+        pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100')");
+    for rejected in ["ALTER FOREIGN TABLE ", "ADD "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_options_errors() {
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS schema_name 'public'",
+            "Expected: (, found: schema_name",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public'",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_foreign_table_rejects_clauses() {
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft ON CLUSTER c ADD COLUMN x INT",
+            "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT SET LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
             format!("sql parser error: {expected}"),
             "{sql}"
         );

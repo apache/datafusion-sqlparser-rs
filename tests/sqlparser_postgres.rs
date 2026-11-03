@@ -13034,6 +13034,16 @@ fn parse_alter_table_detach_partition_of() {
                 mode,
             }]
         );
+        let Statement::AlterTable(located) = Parser::parse_sql(&PostgreSqlDialect {}, &sql)
+            .unwrap()
+            .remove(0)
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            located.operations[0].span(),
+            Span::new(Location::new(1, 57), Location::new(1, 68))
+        );
     }
 
     for (sql, expected) in [

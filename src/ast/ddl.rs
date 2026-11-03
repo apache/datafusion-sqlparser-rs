@@ -976,11 +976,11 @@ impl fmt::Display for AlterTableOperation {
                 write!(f, "DETACH {partition}")
             }
             AlterTableOperation::DetachPartitionOf { partition, mode } => {
-                write!(f, "DETACH PARTITION {partition}")?;
-                if let Some(mode) = mode {
-                    write!(f, " {mode}")?;
-                }
-                Ok(())
+                write!(
+                    f,
+                    "DETACH PARTITION {partition}{}",
+                    display_option_spaced(mode)
+                )
             }
             AlterTableOperation::EnableAlwaysRule { name } => {
                 write!(f, "ENABLE ALWAYS RULE {name}")

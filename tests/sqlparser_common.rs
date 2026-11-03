@@ -23442,6 +23442,9 @@ fn parse_do_statement() {
 
     dialects.verified_stmt("DO 'BEGIN NULL; END'");
     dialects.verified_stmt("DO U&'BEGIN NULL; END'");
+    dialects.verified_stmt("DO U&'BEGIN NULL; END' LANGUAGE plpgsql");
+    dialects.verified_stmt("DO LANGUAGE 'plpgsql'");
+    dialects.verified_stmt("DO LANGUAGE plpgsql U&'BEGIN NULL; END'");
     dialects.verified_stmt("DO $$BEGIN NULL; END$$ LANGUAGE plpgsql");
     dialects.verified_stmt("DO LANGUAGE 'plpgsql' $$BEGIN NULL; END$$");
     dialects.verified_stmt("DO LANGUAGE $$plpgsql$$ $$BEGIN NULL; END$$");

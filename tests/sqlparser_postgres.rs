@@ -13014,3 +13014,42 @@ fn display_create_foreign_table_partition_of_propagates_formatter_errors() {
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }
+
+#[test]
+fn parse_alter_table_detach_partition_of() {
+    for (suffix, mode) in [
+        ("", None),
+        (" CONCURRENTLY", Some(DetachPartitionMode::Concurrently)),
+        (" FINALIZE", Some(DetachPartitionMode::Finalize)),
+    ] {
+        let sql =
+            format!("ALTER TABLE IF EXISTS ONLY public.root DETACH PARTITION public.part{suffix}");
+        let Statement::AlterTable(alter) = pg().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            alter.operations,
+            vec![AlterTableOperation::DetachPartitionOf {
+                partition: ObjectName::from(vec![Ident::new("public"), Ident::new("part")]),
+                mode,
+            }]
+        );
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE root DETACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE root DETACH PARTITION part CONCURRENTLY FINALIZE",
+            "Expected: end of statement, found: FINALIZE",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

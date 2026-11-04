@@ -757,6 +757,7 @@ impl<'a> Parser<'a> {
                 Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
                 Keyword::UNLISTEN if self.dialect.supports_listen_notify() => self.parse_unlisten(),
                 Keyword::NOTIFY if self.dialect.supports_listen_notify() => self.parse_notify(),
+                Keyword::DO if self.dialect.supports_do_statement() => self.parse_do(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => {
@@ -1544,6 +1545,50 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(Statement::UNLISTEN { channel })
+    }
+
+    /// Parse `DO` statement.
+    pub fn parse_do(&mut self) -> Result<Statement, ParserError> {
+        let mut options = Vec::new();
+        loop {
+            let language = self.parse_keyword(Keyword::LANGUAGE);
+            let string_literal = matches!(
+                self.peek_token_ref().token,
+                Token::SingleQuotedString(_)
+                    | Token::DollarQuotedString(_)
+                    | Token::EscapedStringLiteral(_)
+                    | Token::UnicodeStringLiteral(_)
+            );
+            let option = match (language, string_literal) {
+                (true, true) => DoOption::LanguageLiteral(self.parse_value()?),
+                (true, false) => match self.next_token() {
+                    // PostgreSQL lexes `N'...'` as the `NCHAR` keyword followed
+                    // by a string literal, so `LANGUAGE N'...'` is the language
+                    // name `nchar` followed by the code block.
+                    TokenWithSpan {
+                        token: Token::NationalStringLiteral(code),
+                        span,
+                    } => {
+                        let quote = Location::new(span.start.line, span.start.column + 1);
+                        let language = Ident::with_span(Span::new(span.start, quote), "nchar");
+                        options.push(DoOption::Language(language));
+                        let code = Value::SingleQuotedString(code);
+                        DoOption::Code(code.with_span(Span::new(quote, span.end)))
+                    }
+                    _ => {
+                        self.prev_token();
+                        DoOption::Language(self.parse_identifier()?)
+                    }
+                },
+                (false, true) => DoOption::Code(self.parse_value()?),
+                (false, false) if options.is_empty() => {
+                    return self.expected_ref("string literal", self.peek_token_ref());
+                }
+                (false, false) => break,
+            };
+            options.push(option);
+        }
+        Ok(Statement::Do(DoStatement { options }))
     }
 
     /// Parse `NOTIFY` statement.
@@ -11703,11 +11748,15 @@ impl<'a> Parser<'a> {
                     generated_as,
                     sequence_options,
                 }
+            } else if self.parse_keyword(Keyword::OPTIONS) {
+                AlterColumnOperation::GenericOptions {
+                    options: self.parse_alter_generic_options()?,
+                }
             } else {
                 let message = if is_postgresql {
-                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or ADD GENERATED after ALTER COLUMN"
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN"
                 } else {
-                    "SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN"
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN"
                 };
 
                 return self.expected_ref(message, self.peek_token_ref());
@@ -11735,6 +11784,17 @@ impl<'a> Parser<'a> {
             AlterTableOperation::AttachPartition {
                 partition: self.parse_part_or_partition()?,
             }
+        } else if self.dialect.supports_detach_partition_of()
+            && self.parse_keywords(&[Keyword::DETACH, Keyword::PARTITION])
+        {
+            let partition = self.parse_object_name(false)?;
+            let mode = match self.parse_one_of_keywords(&[Keyword::CONCURRENTLY, Keyword::FINALIZE])
+            {
+                Some(Keyword::CONCURRENTLY) => Some(DetachPartitionMode::Concurrently),
+                Some(Keyword::FINALIZE) => Some(DetachPartitionMode::Finalize),
+                _ => None,
+            };
+            AlterTableOperation::DetachPartitionOf { partition, mode }
         } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
             && self.parse_keyword(Keyword::DETACH)
         {
@@ -11838,6 +11898,15 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keyword(Keyword::INHERIT) {
+            AlterTableOperation::Inherit {
+                parent: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keyword(Keyword::NO) {
+            self.expect_keyword_is(Keyword::INHERIT)?;
+            AlterTableOperation::NoInherit {
+                parent: self.parse_object_name(false)?,
+            }
         } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
             AlterTableOperation::SetLogged
         } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
@@ -11847,6 +11916,10 @@ impl<'a> Parser<'a> {
             let options = self.parse_comma_separated(|p| p.parse_object_name(false))?;
             self.expect_token(&Token::RParen)?;
             AlterTableOperation::ResetOptions { options }
+        } else if self.parse_keyword(Keyword::OPTIONS) {
+            AlterTableOperation::GenericOptions {
+                options: self.parse_alter_generic_options()?,
+            }
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -11919,13 +11992,21 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 self.parse_alter_schema()
             }
-            Keyword::VIEW => self.parse_alter_view(),
+            Keyword::VIEW => self.parse_alter_view(false),
+            Keyword::MATERIALIZED => {
+                self.expect_keyword_is(Keyword::VIEW)?;
+                self.parse_alter_view(true)
+            }
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
-            Keyword::TABLE => self.parse_alter_table(false),
+            Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
-                self.parse_alter_table(true)
+                self.parse_alter_table(Some(AlterTableType::Iceberg))
+            }
+            Keyword::FOREIGN => {
+                self.expect_keyword(Keyword::TABLE)?;
+                self.parse_alter_table(Some(AlterTableType::Foreign))
             }
             Keyword::INDEX => {
                 let index_name = self.parse_object_name(false)?;
@@ -11967,7 +12048,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
                     self.peek_token_ref(),
                 )
             }
@@ -12188,13 +12269,25 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a [Statement::AlterTable]
-    pub fn parse_alter_table(&mut self, iceberg: bool) -> Result<Statement, ParserError> {
+    pub fn parse_alter_table(
+        &mut self,
+        table_type: Option<AlterTableType>,
+    ) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
+        let on_cluster_loc = self.peek_token_ref().span.start;
         let on_cluster = self.parse_optional_on_cluster()?;
+        let foreign = table_type == Some(AlterTableType::Foreign);
+        if foreign && on_cluster.is_some() {
+            return parser_err!(
+                "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+                on_cluster_loc
+            );
+        }
         let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
 
+        let location_loc = self.peek_token_ref().span.start;
         let mut location = None;
         if self.parse_keyword(Keyword::LOCATION) {
             location = Some(HiveSetLocation {
@@ -12206,6 +12299,12 @@ impl<'a> Parser<'a> {
                 has_set: true,
                 location: self.parse_identifier()?,
             });
+        }
+        if foreign && location.is_some() {
+            return parser_err!(
+                "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+                location_loc
+            );
         }
 
         let end_token = if self.peek_token_ref().token == Token::SemiColon {
@@ -12221,18 +12320,14 @@ impl<'a> Parser<'a> {
             operations,
             location,
             on_cluster,
-            table_type: if iceberg {
-                Some(AlterTableType::Iceberg)
-            } else {
-                None
-            },
+            table_type,
             end_token: AttachedToken(end_token),
         }
         .into())
     }
 
-    /// Parse an `ALTER VIEW` statement.
-    pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {
+    /// Parse an `ALTER [ MATERIALIZED ] VIEW` statement.
+    pub fn parse_alter_view(&mut self, materialized: bool) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
 
@@ -12302,6 +12397,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterView {
+            materialized,
             name,
             if_exists,
             operation,
@@ -21672,32 +21768,78 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.expect_token(&Token::LParen)?;
-        let options = self.parse_comma_separated(|p| {
-            let key = p.parse_identifier()?;
-            let value = p.parse_identifier()?;
-            Ok(CreateServerOption { key, value })
-        })?;
+        let options = self.parse_comma_separated(Parser::parse_pg_option)?;
         self.expect_token(&Token::RParen)?;
         Ok(Some(options))
     }
 
+    fn parse_pg_option(&mut self) -> Result<CreateServerOption, ParserError> {
+        let key = self.parse_identifier()?;
+        let value = self.parse_identifier()?;
+        Ok(CreateServerOption { key, value })
+    }
+
+    /// Parse the parenthesized list following `OPTIONS` in an `ALTER` statement.
+    fn parse_alter_generic_options(&mut self) -> Result<Vec<AlterGenericOption>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| {
+            // Before a string literal, `ADD`, `SET` and `DROP` name an option.
+            let action = match p.peek_nth_token_ref(1).token {
+                Token::SingleQuotedString(_) => None,
+                _ => p.parse_one_of_keywords(&[Keyword::ADD, Keyword::SET, Keyword::DROP]),
+            };
+            match action {
+                Some(Keyword::SET) => Ok(AlterGenericOption::Set(p.parse_pg_option()?)),
+                Some(Keyword::DROP) => Ok(AlterGenericOption::Drop(p.parse_identifier()?)),
+                action => Ok(AlterGenericOption::Add {
+                    option: p.parse_pg_option()?,
+                    add_keyword: action.is_some(),
+                }),
+            }
+        })?;
+        self.expect_token(&Token::RParen)?;
+        Ok(options)
+    }
+
     /// Parse a `CREATE FOREIGN TABLE` statement.
-    ///
-    /// The `PARTITION OF` form is not parsed yet.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
     pub fn parse_create_foreign_table(&mut self) -> Result<CreateForeignTable, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
-        if self.peek_token_ref().token != Token::LParen {
+        let partition_of = if self.parse_keywords(&[Keyword::PARTITION, Keyword::OF]) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+        let (columns, constraints) = if partition_of.is_some() {
+            self.parse_partition_of_columns()?
+        } else if self.peek_token_ref().token == Token::LParen {
+            self.parse_columns()?
+        } else {
             return self.expected_ref(
                 "'(' before the column list of CREATE FOREIGN TABLE",
                 self.peek_token_ref(),
             );
-        }
-        let (columns, constraints) = self.parse_columns()?;
-        let inherits = if self.parse_keyword(Keyword::INHERITS) {
+        };
+        // `INHERITS` belongs to the column-list form only.
+        let inherits = if partition_of.is_none() && self.parse_keyword(Keyword::INHERITS) {
             Some(self.parse_parenthesized_qualified_column_list(IsOptional::Mandatory, false)?)
+        } else {
+            None
+        };
+
+        let for_values = if partition_of.is_some() {
+            if self
+                .peek_one_of_keywords(&[Keyword::FOR, Keyword::DEFAULT])
+                .is_none()
+            {
+                return self.expected_ref(
+                    "FOR VALUES or DEFAULT after PARTITION OF",
+                    self.peek_token_ref(),
+                );
+            }
+            Some(self.parse_partition_for_values()?)
         } else {
             None
         };
@@ -21711,6 +21853,8 @@ impl<'a> Parser<'a> {
             columns,
             constraints,
             inherits,
+            partition_of,
+            for_values,
             server_name,
             options,
         })

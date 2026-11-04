@@ -1624,6 +1624,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports detaching a partition with
+    /// `ALTER TABLE ... DETACH PARTITION name [ CONCURRENTLY | FINALIZE ]`.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_detach_partition_of(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `OPTIONS ( option 'value' [, ...] )`
     /// in a column definition.
     ///

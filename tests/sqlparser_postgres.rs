@@ -13205,9 +13205,11 @@ RETURN (($1 + $2))::timestamp with time zone"#,
 
 #[test]
 fn parse_create_function_rows() {
-    let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(
+    let stmt = pg_and_generic().verified_stmt(
         "CREATE FUNCTION f() RETURNS SETOF INT LANGUAGE sql COST 2 ROWS 10 AS 'SELECT 1'",
-    ) else {
+    );
+    assert_display_propagates_write_errors(&stmt, &[" ROWS "]);
+    let Statement::CreateFunction(create) = stmt else {
         unreachable!()
     };
     assert_eq!(create.rows, Some(Expr::value(number("10"))));

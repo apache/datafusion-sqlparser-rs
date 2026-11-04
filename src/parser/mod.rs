@@ -19268,6 +19268,8 @@ impl<'a> Parser<'a> {
             Ok(Action::Insert {
                 columns: parse_columns(self)?,
             })
+        } else if self.parse_keyword(Keyword::MAINTAIN) {
+            Ok(Action::Maintain)
         } else if self.parse_keyword(Keyword::MANAGE) {
             let manage_type = self.parse_action_manage_type()?;
             Ok(Action::Manage { manage_type })

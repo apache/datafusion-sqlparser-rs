@@ -1479,6 +1479,7 @@ impl Spanned for AlterIndexOperation {
     fn span(&self) -> Span {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => index_name.span(),
+            AlterIndexOperation::AttachPartition { index_name } => index_name.span(),
         }
     }
 }

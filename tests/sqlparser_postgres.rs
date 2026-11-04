@@ -13144,3 +13144,40 @@ fn parse_alter_table_no_inherit() {
         );
     }
 }
+
+#[test]
+fn parse_alter_index_attach_partition() {
+    let sql = "ALTER INDEX d.orders_note_idx ATTACH PARTITION d.p0_note_idx";
+    assert_eq!(
+        Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap()[0].span(),
+        Span::new(Location::new(1, 13), Location::new(1, 61))
+    );
+    match pg().verified_stmt(sql) {
+        Statement::AlterIndex {
+            name,
+            operation: AlterIndexOperation::AttachPartition { index_name },
+        } => {
+            assert_eq!("d.orders_note_idx", name.to_string());
+            assert_eq!("d.p0_note_idx", index_name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, expected) in [
+        ("ALTER INDEX i ATTACH p", "Expected: PARTITION, found: p"),
+        (
+            "ALTER INDEX i ATTACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER INDEX i DETACH PARTITION p",
+            "Expected: RENAME or ATTACH PARTITION after ALTER INDEX, found: DETACH",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

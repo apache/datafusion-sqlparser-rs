@@ -11710,6 +11710,17 @@ impl<'a> Parser<'a> {
             AlterTableOperation::AttachPartition {
                 partition: self.parse_part_or_partition()?,
             }
+        } else if self.dialect.supports_detach_partition_of()
+            && self.parse_keywords(&[Keyword::DETACH, Keyword::PARTITION])
+        {
+            let partition = self.parse_object_name(false)?;
+            let mode = match self.parse_one_of_keywords(&[Keyword::CONCURRENTLY, Keyword::FINALIZE])
+            {
+                Some(Keyword::CONCURRENTLY) => Some(DetachPartitionMode::Concurrently),
+                Some(Keyword::FINALIZE) => Some(DetachPartitionMode::Finalize),
+                _ => None,
+            };
+            AlterTableOperation::DetachPartitionOf { partition, mode }
         } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
             && self.parse_keyword(Keyword::DETACH)
         {

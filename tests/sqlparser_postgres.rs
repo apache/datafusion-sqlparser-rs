@@ -13355,9 +13355,11 @@ fn parse_create_function_leakproof() {
 
 #[test]
 fn parse_create_function_window() {
-    let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(
+    let stmt = pg_and_generic().verified_stmt(
         "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c WINDOW IMMUTABLE AS 'obj', 'f'",
-    ) else {
+    );
+    assert_display_propagates_write_errors(&stmt, &[" WINDOW"]);
+    let Statement::CreateFunction(create) = stmt else {
         unreachable!()
     };
     assert!(create.window);

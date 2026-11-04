@@ -35,22 +35,23 @@ use super::{
     CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
     ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectByKind,
     ConstraintCharacteristics, CopySource, CreateIndex, CreateRule, CreateRuleAction, CreateTable,
-    CreateTableOptions, CreateUserMapping, Cte, Delete, DoUpdate, DropRule, ExceptSelectItem,
-    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
-    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
-    IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
-    JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge,
-    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
-    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
-    OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr,
-    OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
-    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
-    Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    CreateTableOptions, CreateUserMapping, Cte, Delete, DoOption, DoStatement, DoUpdate, DropRule,
+    ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch,
+    ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
+    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
+    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
+    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
+    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RefreshMaterializedView,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -502,6 +503,7 @@ impl Spanned for Statement {
             Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
             Statement::LISTEN { .. } => Span::empty(),
+            Statement::Do(s) => s.span(),
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
@@ -2873,6 +2875,21 @@ impl Spanned for CreateUserMapping {
     }
 }
 
+impl Spanned for DoStatement {
+    fn span(&self) -> Span {
+        union_spans(self.options.iter().map(|option| option.span()))
+    }
+}
+
+impl Spanned for DoOption {
+    fn span(&self) -> Span {
+        match self {
+            DoOption::Language(language) => language.span,
+            DoOption::LanguageLiteral(value) | DoOption::Code(value) => value.span,
+        }
+    }
+}
+
 impl Spanned for AlterServer {
     fn span(&self) -> Span {
         let operation = match &self.operation {
@@ -3615,5 +3632,23 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let stmt = &Parser::parse_sql(dialect, sql).unwrap()[0];
             assert_eq!(test.get_source(stmt.span()), expected, "{sql}");
         }
+    }
+
+    #[test]
+    fn test_do_statement_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "DO LANGUAGE plpgsql $$BEGIN NULL; END$$";
+        let test = SpanTest::new(dialect, sql);
+        let r = Parser::parse_sql(dialect, sql).unwrap();
+        assert_eq!(test.get_source(r[0].span()), "plpgsql $$BEGIN NULL; END$$");
+
+        let sql = "DO LANGUAGE N'BEGIN NULL; END'";
+        let test = SpanTest::new(dialect, sql);
+        let options = match Parser::parse_sql(dialect, sql).unwrap().remove(0) {
+            Statement::Do(DoStatement { options }) => options,
+            stmt => panic!("expected DO, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(options[0].span()), "N");
+        assert_eq!(test.get_source(options[1].span()), "'BEGIN NULL; END'");
     }
 }

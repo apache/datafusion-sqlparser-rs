@@ -3927,6 +3927,10 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub security: Option<FunctionSecurity>,
+    /// `COST execution_cost`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub cost: Option<Expr>,
     /// SET configuration_parameter clauses
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -3999,6 +4003,9 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(security) = &self.security {
             write!(f, " {security}")?;
+        }
+        if let Some(cost) = &self.cost {
+            write!(f, " COST {cost}")?;
         }
         for set_param in &self.set_params {
             write!(f, " {set_param}")?;

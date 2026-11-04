@@ -572,6 +572,13 @@ pub enum AlterTableOperation {
         /// Parent table to remove.
         parent: ObjectName,
     },
+    /// `SET SCHEMA <new_schema>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
     /// Arbitrary parenthesized `SET` options.
     ///
     /// Example:
@@ -1169,6 +1176,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::Inherit { parent } => write!(f, "INHERIT {parent}"),
             AlterTableOperation::NoInherit { parent } => write!(f, "NO INHERIT {parent}"),
+            AlterTableOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
             }

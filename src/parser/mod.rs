@@ -11923,6 +11923,10 @@ impl<'a> Parser<'a> {
             AlterTableOperation::SetLogged
         } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
             AlterTableOperation::SetUnlogged
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterTableOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
         } else if self.parse_keyword(Keyword::RESET) {
             self.expect_token(&Token::LParen)?;
             let options = self.parse_comma_separated(|p| p.parse_object_name(false))?;

@@ -1385,6 +1385,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Inherit { parent } | AlterTableOperation::NoInherit { parent } => {
                 parent.span()
             }
+            AlterTableOperation::SetSchema { schema_name } => schema_name.span(),
             AlterTableOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
             }

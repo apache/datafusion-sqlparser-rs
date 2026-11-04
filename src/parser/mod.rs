@@ -11826,6 +11826,11 @@ impl<'a> Parser<'a> {
             AlterTableOperation::Inherit {
                 parent: self.parse_object_name(false)?,
             }
+        } else if self.parse_keyword(Keyword::NO) {
+            self.expect_keyword_is(Keyword::INHERIT)?;
+            AlterTableOperation::NoInherit {
+                parent: self.parse_object_name(false)?,
+            }
         } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
             AlterTableOperation::SetLogged
         } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {

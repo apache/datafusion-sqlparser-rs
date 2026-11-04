@@ -13100,3 +13100,34 @@ fn parse_alter_table_inherit() {
         "sql parser error: Expected: identifier, found: EOF"
     );
 }
+
+#[test]
+fn parse_alter_table_no_inherit() {
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER TABLE IF EXISTS ONLY c NO INHERIT public.p, INHERIT q")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0],
+        AlterTableOperation::NoInherit {
+            parent: ObjectName::from(vec![Ident::new("public"), Ident::new("p")]),
+        }
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft NO INHERIT p");
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE c NO INHERIT",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER TABLE c NO p", "Expected: INHERIT, found: p"),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

@@ -5489,6 +5489,7 @@ $$"#;
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5534,6 +5535,7 @@ $$"#;
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5583,6 +5585,7 @@ $$"#;
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5632,6 +5635,7 @@ $$"#;
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5674,6 +5678,7 @@ $$"#;
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5722,6 +5727,7 @@ fn parse_create_function() {
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5866,6 +5872,7 @@ fn parse_create_function_c_with_module_pathname() {
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -7715,6 +7722,7 @@ fn parse_trigger_related_functions() {
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
             using: None,
             language: Some(Ident::new("plpgsql")),
@@ -13227,6 +13235,44 @@ fn parse_create_function_rows() {
         (
             "CREATE FUNCTION f() RETURNS SETOF INT ROWS AS 'SELECT 1'",
             "Expected: a concrete value, found: AS",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_support() {
+    let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c IMMUTABLE STRICT SUPPORT public.f_support AS 'obj', 'f'",
+    ) else {
+        unreachable!()
+    };
+    assert_eq!(
+        create.support,
+        Some(ObjectName::from(vec![
+            Ident::new("public"),
+            Ident::new("f_support")
+        ]))
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS INT SUPPORT f_support COST 1 AS 'obj', 'f'",
+        "CREATE FUNCTION f(INT) RETURNS INT COST 1 SUPPORT f_support AS 'obj', 'f'",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT SUPPORT a SUPPORT b AS 'obj', 'f'",
+            "SUPPORT specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT SUPPORT",
+            "Expected: identifier, found: EOF",
         ),
     ] {
         assert_eq!(

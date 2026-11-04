@@ -3935,6 +3935,10 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub rows: Option<Expr>,
+    /// `SUPPORT support_function`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub support: Option<ObjectName>,
     /// SET configuration_parameter clauses
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -4013,6 +4017,9 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(rows) = &self.rows {
             write!(f, " ROWS {rows}")?;
+        }
+        if let Some(support) = &self.support {
+            write!(f, " SUPPORT {support}")?;
         }
         for set_param in &self.set_params {
             write!(f, " {set_param}")?;

@@ -1522,6 +1522,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports table-level `NOT NULL` constraints, e.g.
+    /// `CONSTRAINT nn NOT NULL a NO INHERIT` in `CREATE TABLE`/`ALTER TABLE`.
+    /// See <https://www.postgresql.org/docs/current/sql-createtable.html>.
+    fn supports_table_not_null_constraint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LOAD DATA` statement
     fn supports_load_data(&self) -> bool {
         false

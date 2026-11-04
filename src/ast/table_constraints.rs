@@ -123,6 +123,10 @@ pub enum TableConstraint {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
     Exclude(ExcludeConstraint),
+    /// `[ CONSTRAINT <name> ] NOT NULL <column> [ NO INHERIT ]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
+    NotNull(NotNullConstraint),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -167,6 +171,12 @@ impl From<ExcludeConstraint> for TableConstraint {
     }
 }
 
+impl From<NotNullConstraint> for TableConstraint {
+    fn from(constraint: NotNullConstraint) -> Self {
+        TableConstraint::NotNull(constraint)
+    }
+}
+
 impl fmt::Display for TableConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -179,6 +189,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
             TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
             TableConstraint::Exclude(constraint) => constraint.fmt(f),
+            TableConstraint::NotNull(constraint) => constraint.fmt(f),
         }
     }
 }
@@ -223,6 +234,45 @@ impl crate::ast::Spanned for CheckConstraint {
     fn span(&self) -> Span {
         self.expr
             .span()
+            .union_opt(&self.name.as_ref().map(|i| i.span))
+    }
+}
+
+/// A table-level `NOT NULL` constraint (`[ CONSTRAINT <name> ] NOT NULL <column> [ NO INHERIT ]`).
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct NotNullConstraint {
+    /// Optional constraint name.
+    pub name: Option<Ident>,
+    /// The column that must not be null.
+    pub column: Ident,
+    /// Set by `NO INHERIT`, which keeps child tables from inheriting the constraint.
+    pub no_inherit: bool,
+}
+
+impl fmt::Display for NotNullConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use crate::ast::ddl::display_constraint_name;
+        write!(
+            f,
+            "{}NOT NULL {}",
+            display_constraint_name(&self.name),
+            self.column
+        )?;
+        if self.no_inherit {
+            write!(f, " NO INHERIT")?;
+        }
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for NotNullConstraint {
+    fn span(&self) -> Span {
+        self.column
+            .span
             .union_opt(&self.name.as_ref().map(|i| i.span))
     }
 }

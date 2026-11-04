@@ -712,6 +712,7 @@ impl Spanned for TableConstraint {
             TableConstraint::PrimaryKeyUsingIndex(constraint)
             | TableConstraint::UniqueUsingIndex(constraint) => constraint.span(),
             TableConstraint::Exclude(constraint) => constraint.span(),
+            TableConstraint::NotNull(constraint) => constraint.span(),
         }
     }
 }

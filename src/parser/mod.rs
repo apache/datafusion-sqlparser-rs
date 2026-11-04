@@ -11013,6 +11013,23 @@ impl<'a> Parser<'a> {
                     Ok(None)
                 }
             }
+            Token::Word(w)
+                if w.keyword == Keyword::NOT
+                    && self.dialect.supports_table_not_null_constraint()
+                    && self.peek_keyword(Keyword::NULL) =>
+            {
+                self.expect_keyword_is(Keyword::NULL)?;
+                let column = self.parse_identifier()?;
+                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
+                Ok(Some(
+                    NotNullConstraint {
+                        name,
+                        column,
+                        no_inherit,
+                    }
+                    .into(),
+                ))
+            }
             _ => {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE", next_token)

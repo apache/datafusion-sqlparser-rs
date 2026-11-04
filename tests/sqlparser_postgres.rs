@@ -14400,3 +14400,40 @@ fn parse_create_table_generated_column_mode() {
         "sql parser error: Expected: ',' or ')' after column definition, found: STORED"
     );
 }
+
+#[test]
+fn parse_alter_table_set_schema() {
+    let Statement::AlterTable(alter) =
+        pg_and_generic().verified_stmt("ALTER TABLE IF EXISTS public.p SET SCHEMA o")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::SetSchema {
+            schema_name: ObjectName::from(vec![Ident::new("o")]),
+        }]
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE p SET SCHEMA o")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 26), Location::new(1, 27))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft SET SCHEMA o");
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TABLE p SET SCHEMA")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}

@@ -757,6 +757,7 @@ impl<'a> Parser<'a> {
                 Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
                 Keyword::UNLISTEN if self.dialect.supports_listen_notify() => self.parse_unlisten(),
                 Keyword::NOTIFY if self.dialect.supports_listen_notify() => self.parse_notify(),
+                Keyword::DO if self.dialect.supports_do_statement() => self.parse_do(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => {
@@ -1544,6 +1545,50 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(Statement::UNLISTEN { channel })
+    }
+
+    /// Parse `DO` statement.
+    pub fn parse_do(&mut self) -> Result<Statement, ParserError> {
+        let mut options = Vec::new();
+        loop {
+            let language = self.parse_keyword(Keyword::LANGUAGE);
+            let string_literal = matches!(
+                self.peek_token_ref().token,
+                Token::SingleQuotedString(_)
+                    | Token::DollarQuotedString(_)
+                    | Token::EscapedStringLiteral(_)
+                    | Token::UnicodeStringLiteral(_)
+            );
+            let option = match (language, string_literal) {
+                (true, true) => DoOption::LanguageLiteral(self.parse_value()?),
+                (true, false) => match self.next_token() {
+                    // PostgreSQL lexes `N'...'` as the `NCHAR` keyword followed
+                    // by a string literal, so `LANGUAGE N'...'` is the language
+                    // name `nchar` followed by the code block.
+                    TokenWithSpan {
+                        token: Token::NationalStringLiteral(code),
+                        span,
+                    } => {
+                        let quote = Location::new(span.start.line, span.start.column + 1);
+                        let language = Ident::with_span(Span::new(span.start, quote), "nchar");
+                        options.push(DoOption::Language(language));
+                        let code = Value::SingleQuotedString(code);
+                        DoOption::Code(code.with_span(Span::new(quote, span.end)))
+                    }
+                    _ => {
+                        self.prev_token();
+                        DoOption::Language(self.parse_identifier()?)
+                    }
+                },
+                (false, true) => DoOption::Code(self.parse_value()?),
+                (false, false) if options.is_empty() => {
+                    return self.expected_ref("string literal", self.peek_token_ref());
+                }
+                (false, false) => break,
+            };
+            options.push(option);
+        }
+        Ok(Statement::Do(DoStatement { options }))
     }
 
     /// Parse `NOTIFY` statement.

@@ -13305,11 +13305,18 @@ fn parse_create_function_leakproof() {
             false,
         ),
     ] {
-        let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(sql) else {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        assert_display_propagates_write_errors(&stmt, &[" LEAKPROOF"]);
+        let Statement::CreateFunction(create) = stmt else {
             unreachable!()
         };
         assert_eq!(create.leakproof, Some(leakproof), "{sql}");
     }
+    assert_display_propagates_write_errors(
+        &pg_and_generic()
+            .verified_stmt("CREATE FUNCTION f() RETURNS BOOLEAN NOT LEAKPROOF RETURN true"),
+        &[" NOT"],
+    );
 
     pg_and_generic().one_statement_parses_to(
         "CREATE FUNCTION f(INT) RETURNS BOOLEAN LEAKPROOF STRICT RETURN true",
@@ -13319,6 +13326,10 @@ fn parse_create_function_leakproof() {
     for (sql, expected) in [
         (
             "CREATE FUNCTION f() RETURNS BOOLEAN LEAKPROOF NOT LEAKPROOF RETURN true",
+            "[NOT] LEAKPROOF specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN NOT LEAKPROOF LEAKPROOF RETURN true",
             "[NOT] LEAKPROOF specified more than once",
         ),
         (

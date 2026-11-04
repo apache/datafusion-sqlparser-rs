@@ -10641,6 +10641,7 @@ fn test_create_index_with_using_function() {
     match verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(name),
+            only: false,
             table_name,
             using,
             columns,
@@ -10698,6 +10699,7 @@ fn test_create_index_with_with_clause() {
     match dialects.verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(name),
+            only: false,
             table_name,
             using: None,
             columns,

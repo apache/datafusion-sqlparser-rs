@@ -11822,6 +11822,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keyword(Keyword::INHERIT) {
+            AlterTableOperation::Inherit {
+                parent: self.parse_object_name(false)?,
+            }
         } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
             AlterTableOperation::SetLogged
         } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {

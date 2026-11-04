@@ -1,0 +1,1 @@
+ALTER TABLE IF EXISTS ONLY public.c INHERIT public.p

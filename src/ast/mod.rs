@@ -2586,10 +2586,14 @@ pub enum CommentObject {
     Collation,
     /// A table column.
     Column,
+    /// A table constraint, `CONSTRAINT name ON table`.
+    Constraint,
     /// A database.
     Database,
     /// A domain.
     Domain,
+    /// A domain constraint, `CONSTRAINT name ON DOMAIN domain`.
+    DomainConstraint,
     /// An extension.
     Extension,
     /// A foreign table.
@@ -2623,6 +2627,9 @@ impl fmt::Display for CommentObject {
         match self {
             CommentObject::Collation => f.write_str("COLLATION"),
             CommentObject::Column => f.write_str("COLUMN"),
+            CommentObject::Constraint | CommentObject::DomainConstraint => {
+                f.write_str("CONSTRAINT")
+            }
             CommentObject::Database => f.write_str("DATABASE"),
             CommentObject::Domain => f.write_str("DOMAIN"),
             CommentObject::Extension => f.write_str("EXTENSION"),
@@ -4445,6 +4452,8 @@ pub enum Statement {
         object_type: CommentObject,
         /// Name of the object the comment applies to.
         object_name: ObjectName,
+        /// Table or domain owning the object, for `CONSTRAINT name ON [DOMAIN] parent`.
+        parent_name: Option<ObjectName>,
         /// Optional comment text (None to remove comment).
         comment: Option<String>,
         /// An optional `IF EXISTS` clause. (Non-standard.)
@@ -6277,6 +6286,7 @@ impl fmt::Display for Statement {
             Statement::Comment {
                 object_type,
                 object_name,
+                parent_name,
                 comment,
                 if_exists,
             } => {
@@ -6284,7 +6294,15 @@ impl fmt::Display for Statement {
                 if *if_exists {
                     write!(f, "IF EXISTS ")?
                 };
-                write!(f, "ON {object_type} {object_name} IS ")?;
+                write!(f, "ON {object_type} {object_name} ")?;
+                if let Some(parent_name) = parent_name {
+                    write!(f, "ON ")?;
+                    if *object_type == CommentObject::DomainConstraint {
+                        write!(f, "DOMAIN ")?;
+                    }
+                    write!(f, "{parent_name} ")?;
+                }
+                write!(f, "IS ")?;
                 if let Some(c) = comment {
                     write!(f, "'{c}'")
                 } else {

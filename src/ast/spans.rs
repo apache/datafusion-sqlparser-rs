@@ -3618,5 +3618,14 @@ SETTINGS update_parallel_mode = 'auto'"#;
         let test = SpanTest::new(dialect, sql);
         let r = Parser::parse_sql(dialect, sql).unwrap();
         assert_eq!(test.get_source(r[0].span()), "plpgsql $$BEGIN NULL; END$$");
+
+        let sql = "DO LANGUAGE N'BEGIN NULL; END'";
+        let test = SpanTest::new(dialect, sql);
+        let options = match Parser::parse_sql(dialect, sql).unwrap().remove(0) {
+            Statement::Do(DoStatement { options }) => options,
+            stmt => panic!("expected DO, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(options[0].span()), "N");
+        assert_eq!(test.get_source(options[1].span()), "'BEGIN NULL; END'");
     }
 }

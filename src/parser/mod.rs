@@ -1569,8 +1569,11 @@ impl<'a> Parser<'a> {
                         token: Token::NationalStringLiteral(code),
                         span,
                     } => {
-                        options.push(DoOption::Language(Ident::with_span(span, "nchar")));
-                        DoOption::Code(Value::SingleQuotedString(code).with_span(span))
+                        let quote = Location::new(span.start.line, span.start.column + 1);
+                        let language = Ident::with_span(Span::new(span.start, quote), "nchar");
+                        options.push(DoOption::Language(language));
+                        let code = Value::SingleQuotedString(code);
+                        DoOption::Code(code.with_span(Span::new(quote, span.end)))
                     }
                     _ => {
                         self.prev_token();

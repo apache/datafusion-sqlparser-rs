@@ -3927,6 +3927,10 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub security: Option<FunctionSecurity>,
+    /// `[ NOT ] LEAKPROOF`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub leakproof: Option<bool>,
     /// `COST execution_cost`
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -4011,6 +4015,12 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(security) = &self.security {
             write!(f, " {security}")?;
+        }
+        if let Some(leakproof) = self.leakproof {
+            if !leakproof {
+                write!(f, " NOT")?;
+            }
+            write!(f, " LEAKPROOF")?;
         }
         if let Some(cost) = &self.cost {
             write!(f, " COST {cost}")?;

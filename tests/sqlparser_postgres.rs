@@ -5487,6 +5487,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -5533,6 +5534,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -5583,6 +5585,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -5633,6 +5636,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -5676,6 +5680,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -5725,6 +5730,7 @@ fn parse_create_function() {
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -5870,6 +5876,7 @@ fn parse_create_function_c_with_module_pathname() {
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -7720,6 +7727,7 @@ fn parse_trigger_related_functions() {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -13275,6 +13283,47 @@ fn parse_create_function_support() {
         (
             "CREATE FUNCTION f() RETURNS INT SUPPORT",
             "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_leakproof() {
+    for (sql, leakproof) in [
+        (
+            "CREATE FUNCTION f(INT) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE STRICT LEAKPROOF COST 1 RETURN true",
+            true,
+        ),
+        (
+            "CREATE FUNCTION f(INT) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE NOT LEAKPROOF RETURN true",
+            false,
+        ),
+    ] {
+        let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(create.leakproof, Some(leakproof), "{sql}");
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS BOOLEAN LEAKPROOF STRICT RETURN true",
+        "CREATE FUNCTION f(INT) RETURNS BOOLEAN STRICT LEAKPROOF RETURN true",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN LEAKPROOF NOT LEAKPROOF RETURN true",
+            "[NOT] LEAKPROOF specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN NOT RETURN true",
+            "Expected: end of statement, found: NOT",
         ),
     ] {
         assert_eq!(

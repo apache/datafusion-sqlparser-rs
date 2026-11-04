@@ -255,6 +255,15 @@ pub enum AlterTableOperation {
         /// Partition expression to detach.
         partition: Partition,
     },
+    /// `DETACH PARTITION partition_name [ CONCURRENTLY | FINALIZE ]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    DetachPartitionOf {
+        /// The partition to detach.
+        partition: ObjectName,
+        /// `CONCURRENTLY` or `FINALIZE`, if given.
+        mode: Option<DetachPartitionMode>,
+    },
     /// `FREEZE PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#freeze-partition)
@@ -548,6 +557,20 @@ pub enum AlterTableOperation {
     ValidateConstraint {
         /// Name of the constraint to validate.
         name: Ident,
+    },
+    /// `INHERIT <parent_table>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    Inherit {
+        /// Parent table to add.
+        parent: ObjectName,
+    },
+    /// `NO INHERIT <parent_table>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    NoInherit {
+        /// Parent table to remove.
+        parent: ObjectName,
     },
     /// Arbitrary parenthesized `SET` options.
     ///
@@ -966,6 +989,13 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::DetachPartition { partition } => {
                 write!(f, "DETACH {partition}")
             }
+            AlterTableOperation::DetachPartitionOf { partition, mode } => {
+                write!(
+                    f,
+                    "DETACH PARTITION {partition}{}",
+                    display_option_spaced(mode)
+                )
+            }
             AlterTableOperation::EnableAlwaysRule { name } => {
                 write!(f, "ENABLE ALWAYS RULE {name}")
             }
@@ -1137,6 +1167,8 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
             }
+            AlterTableOperation::Inherit { parent } => write!(f, "INHERIT {parent}"),
+            AlterTableOperation::NoInherit { parent } => write!(f, "NO INHERIT {parent}"),
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
             }
@@ -2516,6 +2548,26 @@ impl fmt::Display for DropBehavior {
         f.write_str(match self {
             DropBehavior::Restrict => "RESTRICT",
             DropBehavior::Cascade => "CASCADE",
+        })
+    }
+}
+
+/// The mode of PostgreSQL `ALTER TABLE ... DETACH PARTITION`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DetachPartitionMode {
+    /// `CONCURRENTLY`
+    Concurrently,
+    /// `FINALIZE`, completing an interrupted `CONCURRENTLY` detach.
+    Finalize,
+}
+
+impl fmt::Display for DetachPartitionMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DetachPartitionMode::Concurrently => "CONCURRENTLY",
+            DetachPartitionMode::Finalize => "FINALIZE",
         })
     }
 }

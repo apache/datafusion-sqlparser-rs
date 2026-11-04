@@ -614,6 +614,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_detach_partition_of(&self) -> bool {
+        true
+    }
+
     /// See <https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM>
     fn supports_table_inheritance_markers(&self) -> bool {
         true

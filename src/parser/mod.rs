@@ -11708,6 +11708,17 @@ impl<'a> Parser<'a> {
             AlterTableOperation::AttachPartition {
                 partition: self.parse_part_or_partition()?,
             }
+        } else if self.dialect.supports_detach_partition_of()
+            && self.parse_keywords(&[Keyword::DETACH, Keyword::PARTITION])
+        {
+            let partition = self.parse_object_name(false)?;
+            let mode = match self.parse_one_of_keywords(&[Keyword::CONCURRENTLY, Keyword::FINALIZE])
+            {
+                Some(Keyword::CONCURRENTLY) => Some(DetachPartitionMode::Concurrently),
+                Some(Keyword::FINALIZE) => Some(DetachPartitionMode::Finalize),
+                _ => None,
+            };
+            AlterTableOperation::DetachPartitionOf { partition, mode }
         } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
             && self.parse_keyword(Keyword::DETACH)
         {
@@ -11811,6 +11822,15 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keyword(Keyword::INHERIT) {
+            AlterTableOperation::Inherit {
+                parent: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keyword(Keyword::NO) {
+            self.expect_keyword_is(Keyword::INHERIT)?;
+            AlterTableOperation::NoInherit {
+                parent: self.parse_object_name(false)?,
+            }
         } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
             AlterTableOperation::SetLogged
         } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {

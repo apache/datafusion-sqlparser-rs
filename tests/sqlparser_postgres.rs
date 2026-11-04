@@ -13014,3 +13014,133 @@ fn display_create_foreign_table_partition_of_propagates_formatter_errors() {
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }
+
+#[test]
+fn parse_alter_table_detach_partition_of() {
+    for (suffix, mode) in [
+        ("", None),
+        (" CONCURRENTLY", Some(DetachPartitionMode::Concurrently)),
+        (" FINALIZE", Some(DetachPartitionMode::Finalize)),
+    ] {
+        let sql =
+            format!("ALTER TABLE IF EXISTS ONLY public.root DETACH PARTITION public.part{suffix}");
+        let Statement::AlterTable(alter) = pg().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            alter.operations,
+            vec![AlterTableOperation::DetachPartitionOf {
+                partition: ObjectName::from(vec![Ident::new("public"), Ident::new("part")]),
+                mode,
+            }]
+        );
+        let Statement::AlterTable(located) = Parser::parse_sql(&PostgreSqlDialect {}, &sql)
+            .unwrap()
+            .remove(0)
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            located.operations[0].span(),
+            Span::new(Location::new(1, 57), Location::new(1, 68))
+        );
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE root DETACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE root DETACH PARTITION part CONCURRENTLY FINALIZE",
+            "Expected: end of statement, found: FINALIZE",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_table_inherit() {
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER TABLE IF EXISTS ONLY c INHERIT public.p, ADD COLUMN x INT")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0],
+        AlterTableOperation::Inherit {
+            parent: ObjectName::from(vec![Ident::new("public"), Ident::new("p")]),
+        }
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 23), Location::new(1, 31))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft INHERIT p");
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TABLE c INHERIT")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_alter_table_no_inherit() {
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER TABLE IF EXISTS ONLY c NO INHERIT public.p, INHERIT q")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0],
+        AlterTableOperation::NoInherit {
+            parent: ObjectName::from(vec![Ident::new("public"), Ident::new("p")]),
+        }
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c NO INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 26), Location::new(1, 34))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft NO INHERIT p");
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE c NO INHERIT",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER TABLE c NO p", "Expected: INHERIT, found: p"),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

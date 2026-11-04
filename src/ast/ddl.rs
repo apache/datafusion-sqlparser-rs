@@ -3935,6 +3935,10 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub window: bool,
+    /// Types listed in `TRANSFORM { FOR TYPE type_name } [, ...]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub transform_types: Vec<DataType>,
     /// `COST execution_cost`
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -4007,6 +4011,15 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(language) = &self.language {
             write!(f, " LANGUAGE {language}")?;
+        }
+        if !self.transform_types.is_empty() {
+            write!(f, " TRANSFORM ")?;
+            for (i, transform_type) in self.transform_types.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "FOR TYPE {transform_type}")?;
+            }
         }
         if self.window {
             write!(f, " WINDOW")?;

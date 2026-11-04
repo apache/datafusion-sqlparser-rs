@@ -1113,6 +1113,7 @@ define_keywords!(
     TRAILING,
     TRAN,
     TRANSACTION,
+    TRANSFORM,
     TRANSIENT,
     TRANSLATE,
     TRANSLATE_REGEX,

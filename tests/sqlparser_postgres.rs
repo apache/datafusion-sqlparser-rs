@@ -4553,6 +4553,16 @@ fn parse_xml_typed_string() {
     }
 }
 
+#[test]
+fn parse_do_statement() {
+    let dialects = pg();
+    dialects.verified_stmt("DO LANGUAGE plpgsql LANGUAGE sql $$BEGIN NULL; END$$");
+    dialects.one_statement_parses_to(
+        "DO LANGUAGE N'BEGIN NULL; END'",
+        "DO LANGUAGE nchar 'BEGIN NULL; END'",
+    );
+}
+
 fn pg() -> TestedDialects {
     TestedDialects::new(vec![Box::new(PostgreSqlDialect {})])
 }
@@ -12514,6 +12524,628 @@ fn parse_column_generic_options() {
             "CREATE FOREIGN TABLE ft (id INT OPTIONS ()) SERVER s",
             "Expected: identifier, found: )",
         ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_foreign_table() {
+    for sql in [
+        "ALTER FOREIGN TABLE ft ADD COLUMN note TEXT",
+        "ALTER FOREIGN TABLE ft DROP COLUMN IF EXISTS note CASCADE",
+        "ALTER FOREIGN TABLE ft RENAME COLUMN note TO memo",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id TYPE BIGINT",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET DEFAULT 0",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET NOT NULL",
+        "ALTER FOREIGN TABLE ft ADD CONSTRAINT positive CHECK (id > 0) NOT VALID",
+        "ALTER FOREIGN TABLE ft VALIDATE CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft DROP CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft OWNER TO app",
+        "ALTER FOREIGN TABLE ft RENAME TO archive",
+        "ALTER FOREIGN TABLE IF EXISTS ONLY public.ft ADD COLUMN a INT, DROP COLUMN b",
+    ] {
+        let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(alter.table_type, Some(AlterTableType::Foreign));
+    }
+
+    let option = |key: &str, value: &str| CreateServerOption {
+        key: Ident::new(key),
+        value: Ident::with_quote('\'', value),
+    };
+    let sql = "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100', SET batch_size '10', DROP updatable, use_remote_estimate 'true')";
+    let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("fetch_size", "100"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("batch_size", "10")),
+                AlterGenericOption::Drop(Ident::new("updatable")),
+                AlterGenericOption::Add {
+                    option: option("use_remote_estimate", "true"),
+                    add_keyword: false,
+                },
+            ],
+        }]
+    );
+
+    // As written by pg_dump.
+    let stmt = pg_and_generic().one_statement_parses_to(
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (\n    column_name 'remote_id'\n)",
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (column_name 'remote_id')",
+    );
+    let Statement::AlterTable(alter) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::AlterColumn {
+            column_name: Ident::new("id"),
+            op: AlterColumnOperation::GenericOptions {
+                options: vec![AlterGenericOption::Add {
+                    option: option("column_name", "remote_id"),
+                    add_keyword: false,
+                }],
+            },
+        }]
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS (SET column_name 'remote_id', DROP other)",
+    );
+
+    // `ADD`, `SET` and `DROP` before a string literal name a plain option.
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (add 'x', set 'y', drop 'z')")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: ["add", "set", "drop"]
+                .into_iter()
+                .zip(["x", "y", "z"])
+                .map(|(key, value)| AlterGenericOption::Add {
+                    option: option(key, value),
+                    add_keyword: false,
+                })
+                .collect(),
+        }]
+    );
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD add 'x', SET set 'y', DROP drop)")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("add", "x"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("set", "y")),
+                AlterGenericOption::Drop(Ident::new("drop")),
+            ],
+        }]
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP fetch_size '100')",
+            "Expected: ), found: '100'",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (SET fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100'",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ADD fetch_size '100'",
+            "Expected: (, found: ADD",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS column_name 'remote_id'",
+            "Expected: (, found: column_name",
+        ),
+        (
+            "ALTER FOREIGN ft OWNER TO app",
+            "Expected: TABLE, found: ft",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+}
+
+#[test]
+fn display_alter_foreign_table_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt =
+        pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100')");
+    for rejected in ["ALTER FOREIGN TABLE ", "ADD "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_options_errors() {
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS schema_name 'public'",
+            "Expected: (, found: schema_name",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public'",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_foreign_table_rejects_clauses() {
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft ON CLUSTER c ADD COLUMN x INT",
+            "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT SET LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_materialized_view() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW IF EXISTS s.m OWNER TO alice"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("s"), Ident::new("m")]),
+            if_exists: true,
+            operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("alice"))),
+        })
+    );
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m SET (fillfactor = 70)"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("m")]),
+            if_exists: false,
+            operation: AlterViewOperation::SetOptions {
+                options: vec![SqlOption::KeyValue {
+                    key: ObjectName::from(vec![Ident::new("fillfactor")]),
+                    value: Expr::value(number("70")),
+                }],
+            },
+        })
+    );
+    for sql in [
+        "ALTER MATERIALIZED VIEW m RESET (fillfactor, autovacuum_enabled)",
+        "ALTER MATERIALIZED VIEW m RENAME TO m2",
+        "ALTER MATERIALIZED VIEW m RENAME COLUMN a TO b",
+        "ALTER MATERIALIZED VIEW m SET SCHEMA s",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m ALTER COLUMN c SET DEFAULT 1"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("m")]),
+            if_exists: false,
+            operation: AlterViewOperation::AlterColumn {
+                column_name: Ident::new("c"),
+                op: AlterColumnOperation::SetDefault {
+                    value: Expr::value(number("1")),
+                },
+            },
+        })
+    );
+    pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m ALTER COLUMN c DROP DEFAULT");
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("ALTER MATERIALIZED m OWNER TO alice")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: VIEW, found: m".to_string())
+    );
+}
+
+#[test]
+fn display_alter_materialized_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let materialized = pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m RENAME TO m2");
+    for rejected in ["ALTER ", "MATERIALIZED ", "VIEW "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{materialized}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_partition_of() {
+    let sql = "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES FROM (0) TO (10) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.partition_of,
+        Some(ObjectName::from(vec![Ident::new("root")]))
+    );
+    assert_eq!(
+        stmt.for_values,
+        Some(ForValues::From {
+            from: vec![PartitionBoundValue::Expr(Expr::value(number("0")))],
+            to: vec![PartitionBoundValue::Expr(Expr::value(number("10")))],
+        })
+    );
+    assert!(stmt.columns.is_empty());
+
+    let sql = "CREATE FOREIGN TABLE part PARTITION OF public.root (id NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES FROM (MINVALUE) TO (MAXVALUE) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.columns,
+        vec![ColumnDef {
+            name: Ident::new("id"),
+            data_type: DataType::Unspecified,
+            options: vec![ColumnOptionDef {
+                name: None,
+                option: ColumnOption::NotNull,
+            }],
+        }]
+    );
+    assert_eq!(stmt.constraints.len(), 1);
+    assert_eq!(
+        stmt.for_values,
+        Some(ForValues::From {
+            from: vec![PartitionBoundValue::MinValue],
+            to: vec![PartitionBoundValue::MaxValue],
+        })
+    );
+
+    for sql in [
+        "CREATE FOREIGN TABLE IF NOT EXISTS part PARTITION OF root DEFAULT SERVER s OPTIONS (table_name 'remote')",
+        "CREATE FOREIGN TABLE part PARTITION OF root (CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1, 2) SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES WITH (MODULUS 4, REMAINDER 0) SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) FOR VALUES IN (3) SERVER s",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN TABLE part PARTITION OF root (id WITH OPTIONS NOT NULL) DEFAULT SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) DEFAULT SERVER s",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root SERVER s",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: SERVER",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root DEFAULT INHERITS (other) SERVER s",
+            "Expected: SERVER, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root INHERITS (other) FOR VALUES IN (1) SERVER s",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES IN (1)",
+            "Expected: SERVER, found: EOF",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES IN () SERVER s",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES SERVER s",
+            "Expected: IN, FROM, or WITH after FOR VALUES, found: SERVER",
+        ),
+        (
+            "CREATE FOREIGN TABLE part (id INT) PARTITION OF root DEFAULT SERVER s",
+            "Expected: SERVER, found: PARTITION",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root (id INT) DEFAULT SERVER s",
+            "Expected: ',' or ')' after column definition, found: INT",
+        ),
+        (
+            "CREATE FOREIGN TABLE part (id) SERVER s",
+            "Expected: a data type name, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn visit_relations_create_foreign_table_partition_of() {
+    let stmts = pg()
+        .parse_sql_statements("CREATE FOREIGN TABLE part PARTITION OF public.root DEFAULT SERVER s")
+        .unwrap();
+    let mut relations = vec![];
+    let _ = sqlparser::ast::visit_relations(&stmts, |relation| {
+        relations.push(relation.to_string());
+        core::ops::ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(relations, ["part", "public.root"]);
+}
+
+#[test]
+fn display_create_foreign_table_partition_of_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1) SERVER s",
+    );
+    for rejected in [
+        "CREATE FOREIGN TABLE ",
+        " PARTITION OF ",
+        " (",
+        ", ",
+        ")",
+        "FOR VALUES IN (",
+        " SERVER ",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_alter_table_detach_partition_of() {
+    for (suffix, mode) in [
+        ("", None),
+        (" CONCURRENTLY", Some(DetachPartitionMode::Concurrently)),
+        (" FINALIZE", Some(DetachPartitionMode::Finalize)),
+    ] {
+        let sql =
+            format!("ALTER TABLE IF EXISTS ONLY public.root DETACH PARTITION public.part{suffix}");
+        let Statement::AlterTable(alter) = pg().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            alter.operations,
+            vec![AlterTableOperation::DetachPartitionOf {
+                partition: ObjectName::from(vec![Ident::new("public"), Ident::new("part")]),
+                mode,
+            }]
+        );
+        let Statement::AlterTable(located) = Parser::parse_sql(&PostgreSqlDialect {}, &sql)
+            .unwrap()
+            .remove(0)
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            located.operations[0].span(),
+            Span::new(Location::new(1, 57), Location::new(1, 68))
+        );
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE root DETACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE root DETACH PARTITION part CONCURRENTLY FINALIZE",
+            "Expected: end of statement, found: FINALIZE",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_table_inherit() {
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER TABLE IF EXISTS ONLY c INHERIT public.p, ADD COLUMN x INT")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0],
+        AlterTableOperation::Inherit {
+            parent: ObjectName::from(vec![Ident::new("public"), Ident::new("p")]),
+        }
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 23), Location::new(1, 31))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft INHERIT p");
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TABLE c INHERIT")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_alter_table_no_inherit() {
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER TABLE IF EXISTS ONLY c NO INHERIT public.p, INHERIT q")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0],
+        AlterTableOperation::NoInherit {
+            parent: ObjectName::from(vec![Ident::new("public"), Ident::new("p")]),
+        }
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c NO INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 26), Location::new(1, 34))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft NO INHERIT p");
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE c NO INHERIT",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER TABLE c NO p", "Expected: INHERIT, found: p"),
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err().to_string(),

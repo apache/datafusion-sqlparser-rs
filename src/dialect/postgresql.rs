@@ -418,6 +418,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_do_statement(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
     fn supports_exclude_constraint(&self) -> bool {
         true
@@ -611,6 +615,11 @@ impl Dialect for PostgreSqlDialect {
 
     /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
     fn supports_attach_partition_of(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_detach_partition_of(&self) -> bool {
         true
     }
 

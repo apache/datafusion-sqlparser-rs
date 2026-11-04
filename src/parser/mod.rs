@@ -9441,6 +9441,13 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // PostgreSQL typed table
+        let of_type = if partition_of.is_none() && self.parse_keyword(Keyword::OF) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
         let on_cluster = self.parse_optional_on_cluster()?;
 
@@ -9453,8 +9460,8 @@ impl<'a> Parser<'a> {
         };
 
         // parse optional column list (schema)
-        let (columns, constraints) = if partition_of.is_some() {
-            self.parse_partition_of_columns()?
+        let (columns, constraints) = if partition_of.is_some() || of_type.is_some() {
+            self.parse_columns_without_types()?
         } else {
             self.parse_columns()?
         };
@@ -9601,6 +9608,7 @@ impl<'a> Parser<'a> {
             .cluster_by(create_table_config.cluster_by)
             .inherits(create_table_config.inherits)
             .partition_of(partition_of)
+            .of_type(of_type)
             .for_values(for_values)
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
@@ -10146,11 +10154,11 @@ impl<'a> Parser<'a> {
         self.parse_table_elements(Parser::parse_column_def)
     }
 
-    /// Parse the columns and constraints of a `PARTITION OF` table, whose column entries
-    /// carry no data type.
+    /// Parse the columns and constraints of a `PARTITION OF` table or a typed table, whose
+    /// column entries carry no data type.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createtable.html>
-    fn parse_partition_of_columns(
+    fn parse_columns_without_types(
         &mut self,
     ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         self.parse_table_elements(|parser| {
@@ -21827,7 +21835,7 @@ impl<'a> Parser<'a> {
             None
         };
         let (columns, constraints) = if partition_of.is_some() {
-            self.parse_partition_of_columns()?
+            self.parse_columns_without_types()?
         } else if self.peek_token_ref().token == Token::LParen {
             self.parse_columns()?
         } else {

@@ -767,6 +767,7 @@ fn test_duckdb_union_datatype() {
             inherits: Default::default(),
             partition_of: Default::default(),
             for_values: Default::default(),
+            of_type: Default::default(),
             copy_grants: Default::default(),
             enable_schema_evolution: Default::default(),
             change_tracking: Default::default(),

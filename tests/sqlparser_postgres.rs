@@ -7680,6 +7680,7 @@ fn parse_trigger_related_functions() {
             inherits: None,
             partition_of: None,
             for_values: None,
+            of_type: None,
             copy_grants: false,
             enable_schema_evolution: None,
             change_tracking: None,
@@ -13305,6 +13306,92 @@ fn parse_create_function_support() {
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_table_of_type() {
+    let create_table = |sql: &str| match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => create_table,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+
+    let stmt = create_table("CREATE TABLE c OF t");
+    assert_eq!(stmt.of_type, Some(ObjectName::from(vec![Ident::new("t")])));
+    assert_eq!(stmt.partition_of, None);
+    assert!(stmt.columns.is_empty());
+
+    let stmt = create_table(
+        "CREATE UNLOGGED TABLE IF NOT EXISTS s.c OF s.t (a NOT NULL, b DEFAULT 1, CONSTRAINT pk PRIMARY KEY (a)) WITH (fillfactor = 70)",
+    );
+    assert_eq!(
+        stmt.of_type,
+        Some(ObjectName::from(vec![Ident::new("s"), Ident::new("t")]))
+    );
+    assert_eq!(
+        stmt.columns,
+        vec![
+            ColumnDef {
+                name: Ident::new("a"),
+                data_type: DataType::Unspecified,
+                options: vec![ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                }],
+            },
+            ColumnDef {
+                name: Ident::new("b"),
+                data_type: DataType::Unspecified,
+                options: vec![ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::Default(Expr::value(number("1"))),
+                }],
+            },
+        ]
+    );
+    assert_eq!(stmt.constraints.len(), 1);
+
+    pg_and_generic().verified_stmt(
+        "CREATE TEMPORARY TABLE c OF t (CONSTRAINT positive CHECK (a > 0)) ON COMMIT DROP",
+    );
+    pg_and_generic().verified_stmt("CREATE TABLE c OF t PARTITION BY RANGE(a)");
+    pg_and_generic().one_statement_parses_to(
+        "CREATE TABLE c OF t (a WITH OPTIONS NOT NULL, b WITH OPTIONS)",
+        "CREATE TABLE c OF t (a NOT NULL, b)",
+    );
+
+    let Statement::CreateTable(stmt) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("CREATE TABLE c OF public.t")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.span(),
+        Span::new(Location::new(1, 14), Location::new(1, 27))
+    );
+
+    for (sql, expected) in [
+        ("CREATE TABLE c OF", "Expected: identifier, found: EOF"),
+        (
+            "CREATE TABLE c OF t (a INT)",
+            "Expected: ',' or ')' after column definition, found: INT",
+        ),
+        (
+            "CREATE TABLE c (a INT) OF t",
+            "Expected: end of statement, found: OF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
             format!("sql parser error: {expected}"),
             "{sql}"
         );

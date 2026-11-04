@@ -1287,6 +1287,7 @@ impl Spanned for AlterTableOperation {
                 for_values,
             } => partition.span().union(&for_values.span()),
             AlterTableOperation::DetachPartition { partition } => partition.span(),
+            AlterTableOperation::DetachPartitionOf { partition, .. } => partition.span(),
             AlterTableOperation::FreezePartition {
                 partition,
                 with_name,

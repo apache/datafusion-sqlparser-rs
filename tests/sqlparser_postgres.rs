@@ -13078,6 +13078,19 @@ fn parse_alter_table_inherit() {
         }
     );
 
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 23), Location::new(1, 31))
+    );
+
     pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft INHERIT p");
 
     assert_eq!(

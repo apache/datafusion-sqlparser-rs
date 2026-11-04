@@ -5488,6 +5488,7 @@ $$"#;
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5532,6 +5533,7 @@ $$"#;
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5580,6 +5582,7 @@ $$"#;
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5628,6 +5631,7 @@ $$"#;
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5669,6 +5673,7 @@ $$"#;
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5716,6 +5721,7 @@ fn parse_create_function() {
             parallel: Some(FunctionParallel::Safe),
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5859,6 +5865,7 @@ fn parse_create_function_c_with_module_pathname() {
             parallel: Some(FunctionParallel::Safe),
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -7707,6 +7714,7 @@ fn parse_trigger_related_functions() {
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             using: None,
             language: Some(Ident::new("plpgsql")),
@@ -13185,6 +13193,38 @@ RETURN (($1 + $2))::timestamp with time zone"#,
         (
             "CREATE FUNCTION f() RETURNS INT COST RETURN 1",
             "Expected: a concrete value, found: RETURN",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_rows() {
+    let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f() RETURNS SETOF INT LANGUAGE sql COST 2 ROWS 10 AS 'SELECT 1'",
+    ) else {
+        unreachable!()
+    };
+    assert_eq!(create.rows, Some(Expr::value(number("10"))));
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f() RETURNS SETOF INT ROWS 10 COST 2 AS 'SELECT 1'",
+        "CREATE FUNCTION f() RETURNS SETOF INT COST 2 ROWS 10 AS 'SELECT 1'",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS SETOF INT ROWS 1 ROWS 2 AS 'SELECT 1'",
+            "ROWS specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS SETOF INT ROWS AS 'SELECT 1'",
+            "Expected: a concrete value, found: AS",
         ),
     ] {
         assert_eq!(

@@ -3931,6 +3931,10 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub cost: Option<Expr>,
+    /// `ROWS result_rows`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub rows: Option<Expr>,
     /// SET configuration_parameter clauses
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -4006,6 +4010,9 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(cost) = &self.cost {
             write!(f, " COST {cost}")?;
+        }
+        if let Some(rows) = &self.rows {
+            write!(f, " ROWS {rows}")?;
         }
         for set_param in &self.set_params {
             write!(f, " {set_param}")?;

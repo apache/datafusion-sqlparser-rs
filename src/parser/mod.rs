@@ -6095,6 +6095,7 @@ impl<'a> Parser<'a> {
             parallel: Option<FunctionParallel>,
             security: Option<FunctionSecurity>,
             cost: Option<Expr>,
+            rows: Option<Expr>,
         }
         let mut body = Body::default();
         let mut set_params: Vec<FunctionDefinitionSetParam> = Vec::new();
@@ -6166,6 +6167,9 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::COST) {
                 ensure_not_set(&body.cost, "COST")?;
                 body.cost = Some(self.parse_number()?);
+            } else if self.parse_keyword(Keyword::ROWS) {
+                ensure_not_set(&body.rows, "ROWS")?;
+                body.rows = Some(self.parse_number()?);
             } else if self.parse_keyword(Keyword::SET) {
                 let name = self.parse_object_name(false)?;
                 let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
@@ -6205,6 +6209,7 @@ impl<'a> Parser<'a> {
             parallel: body.parallel,
             security: body.security,
             cost: body.cost,
+            rows: body.rows,
             set_params,
             language: body.language,
             function_body: body.function_body,
@@ -6245,6 +6250,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
             language: None,
             determinism_specifier: None,
@@ -6330,6 +6336,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
         })
     }
@@ -6422,6 +6429,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             cost: None,
+            rows: None,
             set_params: vec![],
         })
     }

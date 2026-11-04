@@ -11780,13 +11780,13 @@ END"#,
     }
 }
 
-#[test]
-fn display_create_function_begin_atomic_propagates_write_errors() {
+/// Asserts that displaying `stmt` fails whenever the writer rejects one of `fragments`.
+fn assert_display_propagates_write_errors(stmt: &Statement, fragments: &[&str]) {
     use core::fmt::{self, Write};
 
-    struct RejectingWriter(&'static str);
+    struct RejectingWriter<'a>(&'a str);
 
-    impl Write for RejectingWriter {
+    impl Write for RejectingWriter<'_> {
         fn write_str(&mut self, value: &str) -> fmt::Result {
             if value == self.0 {
                 Err(fmt::Error)
@@ -11796,12 +11796,17 @@ fn display_create_function_begin_atomic_propagates_write_errors() {
         }
     }
 
-    let stmt = pg_and_generic()
-        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
-    for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
+    for rejected in fragments {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
+}
+
+#[test]
+fn display_create_function_begin_atomic_propagates_write_errors() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
+    assert_display_propagates_write_errors(&stmt, &[" BEGIN ATOMIC", " ", ";", " END"]);
 }
 
 #[test]
@@ -13155,9 +13160,10 @@ fn parse_alter_table_no_inherit() {
 
 #[test]
 fn parse_create_function_cost() {
-    let Statement::CreateFunction(create) = pg_and_generic()
-        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql STABLE COST 2.5 RETURN 1")
-    else {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql STABLE COST 2.5 RETURN 1");
+    assert_display_propagates_write_errors(&stmt, &[" COST "]);
+    let Statement::CreateFunction(create) = stmt else {
         unreachable!()
     };
     assert_eq!(create.cost, Some(Expr::value(number("2.5"))));

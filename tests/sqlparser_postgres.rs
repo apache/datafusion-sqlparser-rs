@@ -13387,9 +13387,11 @@ fn parse_create_function_window() {
 
 #[test]
 fn parse_create_function_transform() {
-    let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(
+    let stmt = pg_and_generic().verified_stmt(
         "CREATE FUNCTION f(x INT) RETURNS INT LANGUAGE plpython3u TRANSFORM FOR TYPE hstore, FOR TYPE public.ltree IMMUTABLE AS 'return x'",
-    ) else {
+    );
+    assert_display_propagates_write_errors(&stmt, &[" TRANSFORM ", "FOR TYPE ", ", "]);
+    let Statement::CreateFunction(create) = stmt else {
         unreachable!()
     };
     assert_eq!(

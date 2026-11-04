@@ -13144,3 +13144,45 @@ fn parse_alter_table_no_inherit() {
         );
     }
 }
+
+#[test]
+fn parse_create_table_generated_column_mode() {
+    for (sql, expected_mode) in [
+        (
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a * 2) VIRTUAL)",
+            Some(GeneratedExpressionMode::Virtual),
+        ),
+        (
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a * 2) STORED)",
+            Some(GeneratedExpressionMode::Stored),
+        ),
+        (
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a * 2))",
+            None,
+        ),
+    ] {
+        let Statement::CreateTable(create) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        let ColumnOption::Generated {
+            generation_expr_mode,
+            ..
+        } = &create.columns[1].options[0].option
+        else {
+            unreachable!()
+        };
+        assert_eq!(generation_expr_mode, &expected_mode, "{sql}");
+    }
+
+    pg_and_generic()
+        .verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a || 'x') NOT NULL)");
+
+    assert_eq!(
+        pg().parse_sql_statements(
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a) VIRTUAL STORED)"
+        )
+        .unwrap_err()
+        .to_string(),
+        "sql parser error: Expected: ',' or ')' after column definition, found: STORED"
+    );
+}

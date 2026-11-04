@@ -13115,6 +13115,19 @@ fn parse_alter_table_no_inherit() {
         }
     );
 
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c NO INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 26), Location::new(1, 34))
+    );
+
     pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft NO INHERIT p");
 
     for (sql, expected) in [

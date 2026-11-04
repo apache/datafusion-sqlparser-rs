@@ -255,6 +255,15 @@ pub enum AlterTableOperation {
         /// Partition expression to detach.
         partition: Partition,
     },
+    /// `DETACH PARTITION partition_name [ CONCURRENTLY | FINALIZE ]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    DetachPartitionOf {
+        /// The partition to detach.
+        partition: ObjectName,
+        /// `CONCURRENTLY` or `FINALIZE`, if given.
+        mode: Option<DetachPartitionMode>,
+    },
     /// `FREEZE PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#freeze-partition)
@@ -548,6 +557,20 @@ pub enum AlterTableOperation {
     ValidateConstraint {
         /// Name of the constraint to validate.
         name: Ident,
+    },
+    /// `INHERIT <parent_table>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    Inherit {
+        /// Parent table to add.
+        parent: ObjectName,
+    },
+    /// `NO INHERIT <parent_table>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    NoInherit {
+        /// Parent table to remove.
+        parent: ObjectName,
     },
     /// Arbitrary parenthesized `SET` options.
     ///
@@ -966,6 +989,13 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::DetachPartition { partition } => {
                 write!(f, "DETACH {partition}")
             }
+            AlterTableOperation::DetachPartitionOf { partition, mode } => {
+                write!(
+                    f,
+                    "DETACH PARTITION {partition}{}",
+                    display_option_spaced(mode)
+                )
+            }
             AlterTableOperation::EnableAlwaysRule { name } => {
                 write!(f, "ENABLE ALWAYS RULE {name}")
             }
@@ -1137,6 +1167,8 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
             }
+            AlterTableOperation::Inherit { parent } => write!(f, "INHERIT {parent}"),
+            AlterTableOperation::NoInherit { parent } => write!(f, "NO INHERIT {parent}"),
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
             }
@@ -2516,6 +2548,26 @@ impl fmt::Display for DropBehavior {
         f.write_str(match self {
             DropBehavior::Restrict => "RESTRICT",
             DropBehavior::Cascade => "CASCADE",
+        })
+    }
+}
+
+/// The mode of PostgreSQL `ALTER TABLE ... DETACH PARTITION`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DetachPartitionMode {
+    /// `CONCURRENTLY`
+    Concurrently,
+    /// `FINALIZE`, completing an interrupted `CONCURRENTLY` detach.
+    Finalize,
+}
+
+impl fmt::Display for DetachPartitionMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DetachPartitionMode::Concurrently => "CONCURRENTLY",
+            DetachPartitionMode::Finalize => "FINALIZE",
         })
     }
 }
@@ -6584,6 +6636,11 @@ pub struct CreateForeignTable {
     pub constraints: Vec<TableConstraint>,
     /// `INHERITS ( parent_table [, ...] )`
     pub inherits: Option<Vec<ObjectName>>,
+    /// The parent table of `PARTITION OF parent_table`.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub partition_of: Option<ObjectName>,
+    /// The partition bound following `PARTITION OF`.
+    pub for_values: Option<ForValues>,
     /// The `SERVER server_name` clause.
     pub server_name: Ident,
     /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
@@ -6594,22 +6651,30 @@ impl fmt::Display for CreateForeignTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}",
+            "CREATE FOREIGN TABLE {if_not_exists}{name}",
             if_not_exists = if self.if_not_exists {
                 "IF NOT EXISTS "
             } else {
                 ""
             },
             name = self.name,
-            columns = display_comma_separated(&self.columns),
         )?;
-        if !self.columns.is_empty() && !self.constraints.is_empty() {
-            write!(f, ", ")?;
+        if let Some(partition_of) = &self.partition_of {
+            write!(f, " PARTITION OF {partition_of}")?;
         }
-        write!(f, "{}", display_comma_separated(&self.constraints))?;
-        f.write_str(")")?;
+        // The column list is optional only in the `PARTITION OF` form.
+        if self.partition_of.is_none() || !self.columns.is_empty() || !self.constraints.is_empty() {
+            write!(f, " ({}", display_comma_separated(&self.columns))?;
+            if !self.columns.is_empty() && !self.constraints.is_empty() {
+                write!(f, ", ")?;
+            }
+            write!(f, "{})", display_comma_separated(&self.constraints))?;
+        }
         if let Some(inherits) = &self.inherits {
             write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
+        }
+        if let Some(for_values) = &self.for_values {
+            write!(f, " {for_values}")?;
         }
         write!(f, " SERVER {}", self.server_name)?;
         if let Some(options) = &self.options {
@@ -6694,6 +6759,8 @@ impl Spanned for CreateForeignTable {
                 .chain(self.columns.iter().map(|column| column.span()))
                 .chain(self.constraints.iter().map(|constraint| constraint.span()))
                 .chain(self.inherits.iter().flatten().map(|parent| parent.span()))
+                .chain(self.partition_of.iter().map(|parent| parent.span()))
+                .chain(self.for_values.iter().map(|for_values| for_values.span()))
                 .chain(core::iter::once(self.server_name.span))
                 .chain(
                     self.options

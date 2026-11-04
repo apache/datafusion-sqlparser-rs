@@ -6095,6 +6095,7 @@ impl<'a> Parser<'a> {
             parallel: Option<FunctionParallel>,
             security: Option<FunctionSecurity>,
             leakproof: Option<bool>,
+            window: Option<()>,
             cost: Option<Expr>,
             rows: Option<Expr>,
             support: Option<ObjectName>,
@@ -6172,6 +6173,9 @@ impl<'a> Parser<'a> {
             } else if self.parse_keywords(&[Keyword::NOT, Keyword::LEAKPROOF]) {
                 ensure_not_set(&body.leakproof, "[NOT] LEAKPROOF")?;
                 body.leakproof = Some(false);
+            } else if self.parse_keyword(Keyword::WINDOW) {
+                ensure_not_set(&body.window, "WINDOW")?;
+                body.window = Some(());
             } else if self.parse_keyword(Keyword::COST) {
                 ensure_not_set(&body.cost, "COST")?;
                 body.cost = Some(self.parse_number()?);
@@ -6220,6 +6224,7 @@ impl<'a> Parser<'a> {
             parallel: body.parallel,
             security: body.security,
             leakproof: body.leakproof,
+            window: body.window.is_some(),
             cost: body.cost,
             rows: body.rows,
             support: body.support,
@@ -6263,6 +6268,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -6351,6 +6357,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -6446,6 +6453,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,

@@ -3931,6 +3931,10 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub leakproof: Option<bool>,
+    /// `WINDOW`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub window: bool,
     /// `COST execution_cost`
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -4003,6 +4007,9 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(language) = &self.language {
             write!(f, " LANGUAGE {language}")?;
+        }
+        if self.window {
+            write!(f, " WINDOW")?;
         }
         if let Some(behavior) = &self.behavior {
             write!(f, " {behavior}")?;

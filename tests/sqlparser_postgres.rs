@@ -5488,6 +5488,7 @@ $$"#;
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -5535,6 +5536,7 @@ $$"#;
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -5586,6 +5588,7 @@ $$"#;
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -5637,6 +5640,7 @@ $$"#;
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -5681,6 +5685,7 @@ $$"#;
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -5731,6 +5736,7 @@ fn parse_create_function() {
             parallel: Some(FunctionParallel::Safe),
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -5877,6 +5883,7 @@ fn parse_create_function_c_with_module_pathname() {
             parallel: Some(FunctionParallel::Safe),
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -7728,6 +7735,7 @@ fn parse_trigger_related_functions() {
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,
@@ -13343,4 +13351,26 @@ fn parse_create_function_leakproof() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_create_function_window() {
+    let Statement::CreateFunction(create) = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c WINDOW IMMUTABLE AS 'obj', 'f'",
+    ) else {
+        unreachable!()
+    };
+    assert!(create.window);
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS INT IMMUTABLE WINDOW AS 'obj', 'f'",
+        "CREATE FUNCTION f(INT) RETURNS INT WINDOW IMMUTABLE AS 'obj', 'f'",
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE FUNCTION f() RETURNS INT WINDOW WINDOW AS 'obj', 'f'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: WINDOW specified more than once"
+    );
 }

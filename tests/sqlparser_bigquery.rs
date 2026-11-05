@@ -2354,6 +2354,7 @@ fn test_bigquery_create_function() {
             parallel: None,
             security: None,
             leakproof: None,
+            window: false,
             cost: None,
             rows: None,
             support: None,

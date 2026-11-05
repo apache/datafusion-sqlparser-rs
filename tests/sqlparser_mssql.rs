@@ -2428,6 +2428,15 @@ fn parse_mssql_merge_with_output() {
 }
 
 #[test]
+fn parse_mssql_isnull_function() {
+    // The two-argument `ISNULL(a, b)` function must not be read as
+    // the postfix `x ISNULL` operator in dialects that lack it.
+    ms_and_generic().verified_stmt("SELECT ISNULL(a, b) FROM t");
+    ms_and_generic()
+        .verified_only_select_with_canonical("SELECT a ISNULL FROM t", "SELECT a AS ISNULL FROM t");
+}
+
+#[test]
 fn parse_create_trigger() {
     let create_trigger = "\
         CREATE OR ALTER TRIGGER reminder1 \

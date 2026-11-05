@@ -23470,3 +23470,17 @@ fn parse_do_statement() {
         ParserError::ParserError("Expected: an SQL statement, found: DO".to_string())
     );
 }
+
+#[test]
+fn parse_comment_on_escaped_comment_value() {
+    let dialects = all_dialects_where(|d| d.supports_comment_on());
+
+    match dialects.verified_stmt("COMMENT ON COLUMN t.id IS 'Column ''id'' on t'") {
+        Statement::Comment {
+            comment: Some(comment),
+            ..
+        } => assert_eq!("Column 'id' on t", comment),
+        _ => unreachable!(),
+    }
+    dialects.verified_stmt("COMMENT ON SEQUENCE asdf IS 'won''t work'");
+}

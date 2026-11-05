@@ -5499,6 +5499,7 @@ $$"#;
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -5547,6 +5548,7 @@ $$"#;
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -5599,6 +5601,7 @@ $$"#;
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -5651,6 +5654,7 @@ $$"#;
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -5696,6 +5700,7 @@ $$"#;
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -5747,6 +5752,7 @@ fn parse_create_function() {
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -5894,6 +5900,7 @@ fn parse_create_function_c_with_module_pathname() {
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -7746,6 +7753,7 @@ fn parse_trigger_related_functions() {
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -13385,4 +13393,51 @@ fn parse_create_function_window() {
             .to_string(),
         "sql parser error: WINDOW specified more than once"
     );
+}
+
+#[test]
+fn parse_create_function_transform() {
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(x INT) RETURNS INT LANGUAGE plpython3u TRANSFORM FOR TYPE hstore, FOR TYPE public.ltree IMMUTABLE AS 'return x'",
+    );
+    assert_display_propagates_write_errors(&stmt, &[" TRANSFORM ", "FOR TYPE ", ", "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(
+        create.transform_types,
+        vec![
+            DataType::Custom(ObjectName::from(vec![Ident::new("hstore")]), vec![]),
+            DataType::Custom(
+                ObjectName::from(vec![Ident::new("public"), Ident::new("ltree")]),
+                vec![]
+            ),
+        ]
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(x INT) RETURNS INT IMMUTABLE TRANSFORM FOR TYPE int LANGUAGE plpython3u AS 'return x'",
+        "CREATE FUNCTION f(x INT) RETURNS INT LANGUAGE plpython3u TRANSFORM FOR TYPE INT IMMUTABLE AS 'return x'",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT TRANSFORM FOR TYPE a TRANSFORM FOR TYPE b AS 'x'",
+            "TRANSFORM specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT TRANSFORM hstore AS 'x'",
+            "Expected: FOR, found: hstore",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT TRANSFORM FOR hstore AS 'x'",
+            "Expected: TYPE, found: hstore",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
 }

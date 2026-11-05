@@ -6141,6 +6141,7 @@ impl<'a> Parser<'a> {
             security: Option<FunctionSecurity>,
             leakproof: Option<bool>,
             window: Option<()>,
+            transform_types: Option<Vec<DataType>>,
             cost: Option<Expr>,
             rows: Option<Expr>,
             support: Option<ObjectName>,
@@ -6221,6 +6222,12 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::WINDOW) {
                 ensure_not_set(&body.window, "WINDOW")?;
                 body.window = Some(());
+            } else if self.parse_keyword(Keyword::TRANSFORM) {
+                ensure_not_set(&body.transform_types, "TRANSFORM")?;
+                body.transform_types = Some(self.parse_comma_separated(|parser| {
+                    parser.expect_keywords(&[Keyword::FOR, Keyword::TYPE])?;
+                    parser.parse_data_type()
+                })?);
             } else if self.parse_keyword(Keyword::COST) {
                 ensure_not_set(&body.cost, "COST")?;
                 body.cost = Some(self.parse_number()?);
@@ -6270,6 +6277,7 @@ impl<'a> Parser<'a> {
             security: body.security,
             leakproof: body.leakproof,
             window: body.window.is_some(),
+            transform_types: body.transform_types.unwrap_or_default(),
             cost: body.cost,
             rows: body.rows,
             support: body.support,
@@ -6314,6 +6322,7 @@ impl<'a> Parser<'a> {
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -6403,6 +6412,7 @@ impl<'a> Parser<'a> {
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,
@@ -6499,6 +6509,7 @@ impl<'a> Parser<'a> {
             security: None,
             leakproof: None,
             window: false,
+            transform_types: vec![],
             cost: None,
             rows: None,
             support: None,

@@ -6139,6 +6139,7 @@ impl<'a> Parser<'a> {
             called_on_null: Option<FunctionCalledOnNull>,
             parallel: Option<FunctionParallel>,
             security: Option<FunctionSecurity>,
+            leakproof: Option<bool>,
             cost: Option<Expr>,
             rows: Option<Expr>,
             support: Option<ObjectName>,
@@ -6210,6 +6211,12 @@ impl<'a> Parser<'a> {
                 } else {
                     return self.expected_ref("DEFINER or INVOKER", self.peek_token_ref());
                 }
+            } else if self.parse_keyword(Keyword::LEAKPROOF) {
+                ensure_not_set(&body.leakproof, "[NOT] LEAKPROOF")?;
+                body.leakproof = Some(true);
+            } else if self.parse_keywords(&[Keyword::NOT, Keyword::LEAKPROOF]) {
+                ensure_not_set(&body.leakproof, "[NOT] LEAKPROOF")?;
+                body.leakproof = Some(false);
             } else if self.parse_keyword(Keyword::COST) {
                 ensure_not_set(&body.cost, "COST")?;
                 body.cost = Some(self.parse_number()?);
@@ -6257,6 +6264,7 @@ impl<'a> Parser<'a> {
             called_on_null: body.called_on_null,
             parallel: body.parallel,
             security: body.security,
+            leakproof: body.leakproof,
             cost: body.cost,
             rows: body.rows,
             support: body.support,
@@ -6299,6 +6307,7 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -6386,6 +6395,7 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,
@@ -6480,6 +6490,7 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
             cost: None,
             rows: None,
             support: None,

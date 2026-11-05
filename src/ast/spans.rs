@@ -747,6 +747,7 @@ impl Spanned for CreateIndex {
     fn span(&self) -> Span {
         let CreateIndex {
             name,
+            only: _, // bool
             table_name,
             using: _,
             columns,

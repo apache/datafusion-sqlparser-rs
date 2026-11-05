@@ -2203,15 +2203,18 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if this dialect supports the `ONLY` and `*` table
-    /// inheritance markers on a table factor.
+    /// inheritance markers on a table factor, and `ONLY` before the table
+    /// name of `CREATE INDEX`.
     ///
     /// Example:
     /// ```sql
     /// SELECT * FROM ONLY parent;
     /// SELECT * FROM parent *;
+    /// CREATE INDEX ON ONLY parent (a);
     /// ```
     ///
-    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM),
+    /// [`CREATE INDEX`](https://www.postgresql.org/docs/current/sql-createindex.html)
     fn supports_table_inheritance_markers(&self) -> bool {
         false
     }

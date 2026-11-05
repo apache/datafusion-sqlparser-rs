@@ -8926,6 +8926,8 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let only =
+            self.dialect.supports_table_inheritance_markers() && self.parse_keyword(Keyword::ONLY);
         let table_name = self.parse_object_name(false)?;
 
         // MySQL allows having two `USING` clauses.
@@ -8986,6 +8988,7 @@ impl<'a> Parser<'a> {
 
         Ok(CreateIndex {
             name: index_name,
+            only,
             table_name,
             using,
             columns,

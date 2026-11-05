@@ -3834,7 +3834,7 @@ pub struct CreateDomain {
     /// The default value of the domain.
     pub default: Option<Expr>,
     /// The constraints of the domain.
-    pub constraints: Vec<TableConstraint>,
+    pub constraints: Vec<DomainConstraint>,
 }
 
 impl fmt::Display for CreateDomain {
@@ -3858,15 +3858,20 @@ impl fmt::Display for CreateDomain {
     }
 }
 
-/// A domain constraint, as added by `ALTER DOMAIN ... ADD`.
+/// A domain constraint, as in `CREATE DOMAIN` and `ALTER DOMAIN ... ADD`.
 ///
-/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdomain.html)
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createdomain.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DomainConstraint {
     /// `[ CONSTRAINT <name> ] NOT NULL`
     NotNull {
+        /// Optional constraint name.
+        name: Option<Ident>,
+    },
+    /// `[ CONSTRAINT <name> ] NULL`, accepted by `CREATE DOMAIN` only.
+    Null {
         /// Optional constraint name.
         name: Option<Ident>,
     },
@@ -3880,8 +3885,15 @@ impl fmt::Display for DomainConstraint {
             DomainConstraint::NotNull { name } => {
                 write!(f, "{}NOT NULL", display_constraint_name(name))
             }
+            DomainConstraint::Null { name } => write!(f, "{}NULL", display_constraint_name(name)),
             DomainConstraint::Check(check) => write!(f, "{check}"),
         }
+    }
+}
+
+impl From<CheckConstraint> for DomainConstraint {
+    fn from(constraint: CheckConstraint) -> Self {
+        DomainConstraint::Check(constraint)
     }
 }
 

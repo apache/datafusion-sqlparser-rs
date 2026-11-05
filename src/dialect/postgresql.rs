@@ -449,6 +449,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/current/sql-createtableas.html>
+    fn supports_create_table_as_column_names(&self) -> bool {
+        true
+    }
+
     /// See <https://www.postgresql.org/docs/current/sql-load.html>
     fn supports_load_extension(&self) -> bool {
         true

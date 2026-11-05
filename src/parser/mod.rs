@@ -9409,8 +9409,18 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // A list whose first entry is a bare name is the column names of `CREATE TABLE ... AS`.
+        let ctas_columns = partition_of.is_none()
+            && self.dialect.supports_create_table_as_column_names()
+            && matches!(
+                self.peek_tokens_ref().map(|token| &token.token),
+                [Token::LParen, Token::Word(_), Token::Comma | Token::RParen]
+            );
+
         // parse optional column list (schema)
-        let (columns, constraints) = if partition_of.is_some() {
+        let (columns, constraints) = if ctas_columns {
+            (self.parse_create_table_as_columns()?, vec![])
+        } else if partition_of.is_some() {
             self.parse_partition_of_columns()?
         } else {
             self.parse_columns()?
@@ -9523,6 +9533,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        if ctas_columns && query.is_none() {
+            return self.expected_ref("AS after column names", self.peek_token_ref());
+        }
 
         // `WITH DATA` clause only applies if there is a query body.
         let with_data = if query.is_some() {
@@ -10118,6 +10132,23 @@ impl<'a> Parser<'a> {
                 data_type: DataType::Unspecified,
                 options: parser.parse_column_option_defs()?,
             })
+        })
+    }
+
+    /// Parse the column names of `CREATE TABLE t (a, b) AS query`, which carry no data type.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtableas.html>
+    fn parse_create_table_as_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.parse_parenthesized_column_list_inner(Mandatory, false, |parser| {
+            let next_token = parser.next_token();
+            match next_token.token {
+                Token::Word(word) => Ok(ColumnDef {
+                    name: word.into_ident(next_token.span),
+                    data_type: DataType::Unspecified,
+                    options: vec![],
+                }),
+                _ => parser.expected("column name", next_token),
+            }
         })
     }
 

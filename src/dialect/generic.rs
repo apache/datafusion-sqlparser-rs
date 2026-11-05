@@ -380,4 +380,8 @@ impl Dialect for GenericDialect {
     fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }
+
+    fn supports_create_table_as_column_names(&self) -> bool {
+        true
+    }
 }

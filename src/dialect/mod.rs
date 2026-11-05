@@ -1560,6 +1560,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts a list of column names without data
+    /// types before the query of a `CREATE TABLE ... AS` statement, e.g.
+    ///
+    /// ```sql
+    /// CREATE TABLE t (a, b) AS SELECT 1, 2
+    /// ```
+    fn supports_create_table_as_column_names(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `PROC` as an abbreviation for
     /// `PROCEDURE` in a `CREATE` statement.
     fn supports_create_proc_syntax(&self) -> bool {

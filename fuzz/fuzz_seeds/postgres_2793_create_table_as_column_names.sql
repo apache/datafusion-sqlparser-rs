@@ -1,0 +1,1 @@
+CREATE TABLE cn (a, b) AS SELECT 1, 2

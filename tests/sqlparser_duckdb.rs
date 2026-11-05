@@ -638,6 +638,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {

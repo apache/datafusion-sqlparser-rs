@@ -792,6 +792,8 @@ fn parse_create_table_with_primary_key() {
                 assert_eq!(
                     actual.args,
                     FunctionArguments::List(FunctionArgumentList {
+                        closing_token:
+                            sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
                             Ident::new(arg)
                         )),)],
@@ -849,6 +851,7 @@ fn parse_create_table_with_variant_default_expressions() {
                                 name: ObjectName::from(vec![Ident::new("now")]),
                                 uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
+                                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                                     args: vec![],
                                     duplicate_treatment: None,
                                     clauses: vec![],
@@ -870,6 +873,7 @@ fn parse_create_table_with_variant_default_expressions() {
                                 name: ObjectName::from(vec![Ident::new("now")]),
                                 uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
+                                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                                     args: vec![],
                                     duplicate_treatment: None,
                                     clauses: vec![],
@@ -899,6 +903,7 @@ fn parse_create_table_with_variant_default_expressions() {
                                 name: ObjectName::from(vec![Ident::new("toString")]),
                                 uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
+                                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                         Identifier(Ident::new("c"))
                                     ))],

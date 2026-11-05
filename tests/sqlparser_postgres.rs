@@ -5497,6 +5497,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            cost: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5540,6 +5541,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            cost: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5587,6 +5589,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            cost: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5634,6 +5637,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            cost: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5674,6 +5678,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            cost: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5720,6 +5725,7 @@ fn parse_create_function() {
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            cost: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5862,6 +5868,7 @@ fn parse_create_function_c_with_module_pathname() {
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            cost: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -7709,6 +7716,7 @@ fn parse_trigger_related_functions() {
             called_on_null: None,
             parallel: None,
             security: None,
+            cost: None,
             set_params: vec![],
             using: None,
             language: Some(Ident::new("plpgsql")),
@@ -11782,13 +11790,13 @@ END"#,
     }
 }
 
-#[test]
-fn display_create_function_begin_atomic_propagates_write_errors() {
+/// Asserts that displaying `stmt` fails whenever the writer rejects one of `fragments`.
+fn assert_display_propagates_write_errors(stmt: &Statement, fragments: &[&str]) {
     use core::fmt::{self, Write};
 
-    struct RejectingWriter(&'static str);
+    struct RejectingWriter<'a>(&'a str);
 
-    impl Write for RejectingWriter {
+    impl Write for RejectingWriter<'_> {
         fn write_str(&mut self, value: &str) -> fmt::Result {
             if value == self.0 {
                 Err(fmt::Error)
@@ -11798,12 +11806,17 @@ fn display_create_function_begin_atomic_propagates_write_errors() {
         }
     }
 
-    let stmt = pg_and_generic()
-        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
-    for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
+    for rejected in fragments {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
+}
+
+#[test]
+fn display_create_function_begin_atomic_propagates_write_errors() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
+    assert_display_propagates_write_errors(&stmt, &[" BEGIN ATOMIC", " ", ";", " END"]);
 }
 
 #[test]
@@ -13146,6 +13159,43 @@ fn parse_alter_table_no_inherit() {
             "Expected: identifier, found: EOF",
         ),
         ("ALTER TABLE c NO p", "Expected: INHERIT, found: p"),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_cost() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql STABLE COST 2.5 RETURN 1");
+    assert_display_propagates_write_errors(&stmt, &[" COST "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(create.cost, Some(Expr::value(number("2.5"))));
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE OR REPLACE FUNCTION pg_catalog.timestamptz(date, time without time zone)
+ RETURNS timestamp with time zone
+ LANGUAGE sql
+ STABLE PARALLEL SAFE STRICT COST 1
+RETURN (($1 + $2))::timestamp with time zone"#,
+        "CREATE OR REPLACE FUNCTION pg_catalog.timestamptz(DATE, TIME WITHOUT TIME ZONE) RETURNS TIMESTAMP WITH TIME ZONE LANGUAGE sql STABLE STRICT PARALLEL SAFE COST 1 RETURN (($1 + $2))::TIMESTAMP WITH TIME ZONE",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT COST 1 COST 2 RETURN 1",
+            "COST specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT COST RETURN 1",
+            "Expected: a concrete value, found: RETURN",
+        ),
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err().to_string(),

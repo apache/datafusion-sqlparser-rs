@@ -390,6 +390,10 @@ impl Dialect for PostgreSqlDialect {
         }
     }
 
+    fn unary_plus_minus_precedence(&self) -> u8 {
+        self.prec_value(Precedence::Caret)
+    }
+
     fn allow_extract_custom(&self) -> bool {
         true
     }

@@ -1185,6 +1185,11 @@ pub trait Dialect: Debug + Any {
         self.prec_value(Precedence::Between)
     }
 
+    /// Returns the precedence used to parse the operand of unary `+` and `-`.
+    fn unary_plus_minus_precedence(&self) -> u8 {
+        self.prec_value(Precedence::MulDivModOp)
+    }
+
     /// Returns true if the low bound of a `BETWEEN` predicate may end with one comparison,
     /// as in `a BETWEEN b > 1 AND c`, while `IS`, `LIKE` and `BETWEEN` still end the bound.
     ///

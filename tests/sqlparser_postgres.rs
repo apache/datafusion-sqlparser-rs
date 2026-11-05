@@ -13154,3 +13154,51 @@ fn parse_alter_table_no_inherit() {
         );
     }
 }
+
+#[test]
+fn parse_unary_plus_minus_before_pg_exponentiation() {
+    for (sql, unary_op, operand, exponent) in [
+        ("SELECT -1 ^ 0", UnaryOperator::Minus, "1", "0"),
+        ("SELECT +2 ^ 2", UnaryOperator::Plus, "2", "2"),
+    ] {
+        let select = pg().verified_only_select(sql);
+        let Expr::BinaryOp { left, op, right } = expr_from_projection(&select.projection[0]) else {
+            panic!("Expected exponentiation expression")
+        };
+        assert_eq!(*op, BinaryOperator::PGExp);
+        assert_eq!(
+            right.as_ref(),
+            &Expr::Value(number(exponent).with_empty_span())
+        );
+        assert_eq!(
+            left.as_ref(),
+            &Expr::UnaryOp {
+                op: unary_op,
+                expr: Box::new(Expr::Value(number(operand).with_empty_span())),
+            }
+        );
+    }
+}
+
+#[test]
+fn parse_generic_unary_minus_before_caret() {
+    let statements = Parser::parse_sql(&GenericDialect {}, "SELECT -1 ^ 0").unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        panic!("Expected query")
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        panic!("Expected select")
+    };
+    let Expr::BinaryOp { left, op, right } = expr_from_projection(&select.projection[0]) else {
+        panic!("Expected bitwise expression")
+    };
+    assert_eq!(*op, BinaryOperator::BitwiseXor);
+    assert_eq!(
+        left.as_ref(),
+        &Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: Box::new(Expr::Value(number("1").with_empty_span())),
+        }
+    );
+    assert_eq!(right.as_ref(), &Expr::Value(number("0").with_empty_span()));
+}

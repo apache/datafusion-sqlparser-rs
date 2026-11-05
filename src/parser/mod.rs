@@ -11986,8 +11986,15 @@ impl<'a> Parser<'a> {
                     } else {
                         return self.expected_ref("TO after RENAME", self.peek_token_ref());
                     }
+                } else if self.parse_keyword(Keyword::ATTACH) {
+                    self.expect_keyword_is(Keyword::PARTITION)?;
+                    let index_name = self.parse_object_name(false)?;
+                    AlterIndexOperation::AttachPartition { index_name }
                 } else {
-                    return self.expected_ref("RENAME after ALTER INDEX", self.peek_token_ref());
+                    return self.expected_ref(
+                        "RENAME or ATTACH PARTITION after ALTER INDEX",
+                        self.peek_token_ref(),
+                    );
                 };
 
                 Ok(Statement::AlterIndex {

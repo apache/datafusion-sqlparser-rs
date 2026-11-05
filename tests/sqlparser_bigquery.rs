@@ -2355,6 +2355,7 @@ fn test_bigquery_create_function() {
             security: None,
             cost: None,
             rows: None,
+            support: None,
             set_params: vec![],
         })
     );

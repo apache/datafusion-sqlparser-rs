@@ -1,0 +1,2 @@
+ALTER SERVER s VERSION NULL OPTIONS (ADD host 'db', SET port '5432', DROP dbname);
+ALTER SERVER s OWNER TO postgres

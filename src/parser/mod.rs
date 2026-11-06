@@ -11018,7 +11018,7 @@ impl<'a> Parser<'a> {
                     && self.dialect.supports_table_not_null_constraint()
                     && self.peek_keyword(Keyword::NULL) =>
             {
-                self.expect_keyword_is(Keyword::NULL)?;
+                self.advance_token(); // NULL
                 let column = self.parse_identifier()?;
                 let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
                 Ok(Some(

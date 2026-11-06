@@ -132,7 +132,7 @@ fn parse_create_procedure() {
 
     assert_eq!(
         ms().verified_stmt(sql),
-        Statement::CreateProcedure {
+        Statement::CreateProcedure(Box::new(CreateProcedure {
             or_alter: true,
             body: CreateProcedureBody::As(ConditionalStatements::BeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
@@ -208,7 +208,7 @@ fn parse_create_procedure() {
                 span: Span::empty(),
             }]),
             language: None,
-        }
+        }))
     )
 }
 
@@ -239,7 +239,7 @@ fn parse_create_function() {
     let return_expression_function = "CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) RETURNS INT AS BEGIN RETURN 1; END";
     assert_eq!(
         ms().verified_stmt(return_expression_function),
-        sqlparser::ast::Statement::CreateFunction(CreateFunction {
+        sqlparser::ast::Statement::CreateFunction(Box::new(CreateFunction {
             or_alter: false,
             or_replace: false,
             temporary: false,
@@ -265,11 +265,11 @@ fn parse_create_function() {
             return_type: Some(FunctionReturnType::DataType(DataType::Int(None))),
             function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
-                statements: vec![Statement::Return(ReturnStatement {
+                statements: vec![Statement::Return(Box::new(ReturnStatement {
                     value: Some(ReturnStatementValue::Expr(Expr::Value(
                         (number("1")).with_empty_span()
                     ))),
-                })],
+                }))],
                 end_token: AttachedToken::empty(),
             })),
             behavior: None,
@@ -287,7 +287,7 @@ fn parse_create_function() {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        }),
+        })),
     );
 
     let multi_statement_function = "\
@@ -430,7 +430,7 @@ fn parse_create_function_parameter_default_values() {
         "CREATE FUNCTION test_func(@param1 INT = 42) RETURNS INT AS BEGIN RETURN @param1; END";
     assert_eq!(
         ms().verified_stmt(single_default_sql),
-        Statement::CreateFunction(CreateFunction {
+        Statement::CreateFunction(Box::new(CreateFunction {
             or_alter: false,
             or_replace: false,
             temporary: false,
@@ -445,11 +445,11 @@ fn parse_create_function_parameter_default_values() {
             return_type: Some(FunctionReturnType::DataType(DataType::Int(None))),
             function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
-                statements: vec![Statement::Return(ReturnStatement {
+                statements: vec![Statement::Return(Box::new(ReturnStatement {
                     value: Some(ReturnStatementValue::Expr(Expr::Identifier(Ident::new(
                         "@param1"
                     )))),
-                })],
+                }))],
                 end_token: AttachedToken::empty(),
             })),
             behavior: None,
@@ -467,7 +467,7 @@ fn parse_create_function_parameter_default_values() {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        }),
+        })),
     );
 }
 
@@ -817,7 +817,7 @@ fn parse_alter_role() {
     let sql = "ALTER ROLE old_name WITH NAME = new_name";
     assert_eq!(
         ms().parse_sql_statements(sql).unwrap(),
-        [Statement::AlterRole {
+        [Statement::AlterRole(Box::new(AlterRole {
             name: Ident {
                 value: "old_name".into(),
                 quote_style: None,
@@ -830,13 +830,13 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }
             },
-        }]
+        }))]
     );
 
     let sql = "ALTER ROLE role_name ADD MEMBER new_member";
     assert_eq!(
         ms().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(Box::new(AlterRole {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -849,13 +849,13 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }
             },
-        }
+        }))
     );
 
     let sql = "ALTER ROLE role_name DROP MEMBER old_member";
     assert_eq!(
         ms().verified_stmt(sql),
-        Statement::AlterRole {
+        Statement::AlterRole(Box::new(AlterRole {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None,
@@ -868,7 +868,7 @@ fn parse_alter_role() {
                     span: Span::empty(),
                 }
             },
-        }
+        }))
     );
 }
 
@@ -1383,7 +1383,7 @@ fn parse_mssql_declare() {
     let ast = ms().parse_sql_statements(sql).unwrap();
 
     assert_eq!(
-        vec![Statement::Declare {
+        vec![Statement::Declare(Box::new(DeclareStatement {
             stmts: vec![
                 Declare {
                     names: vec![Ident {
@@ -1434,7 +1434,7 @@ fn parse_mssql_declare() {
                 }
             ],
             separator: DeclareSeparator::Comma,
-        }],
+        }))],
         ast
     );
 
@@ -1442,7 +1442,7 @@ fn parse_mssql_declare() {
     let ast = ms().parse_sql_statements(sql).unwrap();
     assert_eq!(
         vec![
-            Statement::Declare {
+            Statement::Declare(Box::new(DeclareStatement {
                 stmts: vec![Declare {
                     names: vec![Ident::new("@bar"),],
                     data_type: Some(Int(None)),
@@ -1455,15 +1455,15 @@ fn parse_mssql_declare() {
                     for_query: None
                 }],
                 separator: DeclareSeparator::Comma,
-            },
-            Statement::Set(Set::SingleAssignment {
+            })),
+            Statement::Set(Box::new(Set::SingleAssignment {
                 scope: None,
                 hivevar: false,
                 variable: ObjectName::from(vec![Ident::new("@bar")]),
                 values: vec![Expr::Value(
                     (Value::Number("2".parse().unwrap(), false)).with_empty_span()
                 )],
-            }),
+            })),
             Statement::Query(Box::new(Query {
                 with: None,
                 limit_clause: None,
@@ -1546,7 +1546,7 @@ fn test_mssql_while_statement() {
     let stmt = ms().verified_stmt(while_single_statement);
     assert_eq!(
         stmt,
-        Statement::While(sqlparser::ast::WhileStatement {
+        Statement::While(Box::new(WhileStatement {
             while_block: ConditionalStatementBlock {
                 start_token: AttachedToken(TokenWithSpan {
                     token: Token::Word(Word {
@@ -1567,15 +1567,15 @@ fn test_mssql_while_statement() {
                 }),
                 then_token: None,
                 conditional_statements: ConditionalStatements::Sequence {
-                    statements: vec![Statement::Print(PrintStatement {
+                    statements: vec![Statement::Print(Box::new(PrintStatement {
                         message: Box::new(Expr::Value(
                             (Value::SingleQuotedString("Hello World".to_string()))
                                 .with_empty_span()
                         )),
-                    })],
+                    }))],
                 }
             }
-        })
+        }))
     );
 
     let while_begin_end = "\
@@ -1602,7 +1602,7 @@ fn test_parse_raiserror() {
     let s = ms().verified_stmt(sql);
     assert_eq!(
         s,
-        Statement::RaisError {
+        Statement::RaisError(Box::new(RaisError {
             message: Box::new(Expr::Value(
                 (Value::SingleQuotedString("This is a test".to_string())).with_empty_span()
             )),
@@ -1614,7 +1614,7 @@ fn test_parse_raiserror() {
             )),
             arguments: vec![],
             options: vec![],
-        }
+        }))
     );
 
     let sql = r#"RAISERROR('This is a test', 16, 1) WITH NOWAIT"#;
@@ -1640,7 +1640,7 @@ fn test_parse_throw() {
     let s = ms().verified_stmt(sql);
     assert_eq!(
         s,
-        Statement::Throw(ThrowStatement {
+        Statement::Throw(Box::new(ThrowStatement {
             error_number: Some(Box::new(Expr::Value(
                 (Value::Number("51000".parse().unwrap(), false)).with_empty_span()
             ))),
@@ -1650,7 +1650,7 @@ fn test_parse_throw() {
             state: Some(Box::new(Expr::Value(
                 (Value::Number("1".parse().unwrap(), false)).with_empty_span()
             ))),
-        })
+        }))
     );
 
     // THROW with variable references
@@ -1662,11 +1662,11 @@ fn test_parse_throw() {
     let s = ms().verified_stmt(sql);
     assert_eq!(
         s,
-        Statement::Throw(ThrowStatement {
+        Statement::Throw(Box::new(ThrowStatement {
             error_number: None,
             message: None,
             state: None,
-        })
+        }))
     );
 }
 
@@ -1677,12 +1677,12 @@ fn test_parse_waitfor() {
     let stmt = ms_and_generic().verified_stmt(sql);
     assert_eq!(
         stmt,
-        Statement::WaitFor(WaitForStatement {
+        Statement::WaitFor(Box::new(WaitForStatement {
             wait_type: WaitForType::Delay,
             expr: Expr::Value(
                 (Value::SingleQuotedString("00:00:05".to_string())).with_empty_span()
             ),
-        })
+        }))
     );
 
     // WAITFOR TIME
@@ -1690,12 +1690,12 @@ fn test_parse_waitfor() {
     let stmt = ms_and_generic().verified_stmt(sql);
     assert_eq!(
         stmt,
-        Statement::WaitFor(WaitForStatement {
+        Statement::WaitFor(Box::new(WaitForStatement {
             wait_type: WaitForType::Time,
             expr: Expr::Value(
                 (Value::SingleQuotedString("14:30:00".to_string())).with_empty_span()
             ),
-        })
+        }))
     );
 
     // WAITFOR DELAY with variable
@@ -1727,18 +1727,17 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             ms().verified_stmt(&format!("USE {object_name}")),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
+            Statement::Use(Box::new(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )]))))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
                 ms().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
-                    quote,
-                    object_name.to_string(),
-                )])))
+                Statement::Use(Box::new(Use::Object(ObjectName::from(vec![
+                    Ident::with_quote(quote, object_name.to_string(),)
+                ]))))
             );
         }
     }
@@ -1893,7 +1892,7 @@ fn parse_create_table_with_valid_options() {
     for (sql, with_options) in options {
         assert_eq!(
             ms_and_generic().verified_stmt(sql),
-            Statement::CreateTable(CreateTable {
+            Statement::CreateTable(Box::new(CreateTable {
                 or_replace: false,
                 temporary: false,
                 unlogged: false,
@@ -1989,7 +1988,7 @@ fn parse_create_table_with_valid_options() {
                 multiset: None,
                 fallback: None,
                 with_data: None,
-            })
+            }))
         );
     }
 }
@@ -2090,7 +2089,7 @@ fn parse_create_table_with_identity_column() {
     for (sql, column_options) in with_column_options {
         assert_eq!(
             ms_and_generic().verified_stmt(sql),
-            Statement::CreateTable(CreateTable {
+            Statement::CreateTable(Box::new(CreateTable {
                 or_replace: false,
                 temporary: false,
                 unlogged: false,
@@ -2167,7 +2166,7 @@ fn parse_create_table_with_identity_column() {
                 multiset: None,
                 fallback: None,
                 with_data: None,
-            }),
+            })),
         );
     }
 }
@@ -2262,7 +2261,7 @@ fn parse_mssql_if_else() {
         .parse_sql_statements("DECLARE @A INT; IF 1=1 BEGIN SET @A = 1 END ELSE SET @A = 2")
         .unwrap();
     match &stmts[..] {
-        [Statement::Declare { .. }, Statement::If(stmt)] => {
+        [Statement::Declare(_), Statement::If(stmt)] => {
             assert_eq!(
                 stmt.to_string(),
                 "IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;"
@@ -2304,11 +2303,15 @@ fn test_mssql_if_statements_span() {
     let mut sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
     let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     match parser.parse_statement().unwrap() {
-        Statement::If(IfStatement {
-            if_block,
-            else_block: Some(else_block),
-            ..
-        }) => {
+        Statement::If(if_statement) => {
+            let IfStatement {
+                if_block,
+                else_block: Some(else_block),
+                ..
+            } = *if_statement
+            else {
+                unreachable!()
+            };
             assert_eq!(
                 if_block.span(),
                 Span::new(Location::new(1, 1), Location::new(1, 20))
@@ -2325,11 +2328,15 @@ fn test_mssql_if_statements_span() {
     sql = "IF 1 = 1 BEGIN SET @A = 1; END ELSE BEGIN SET @A = 2 END";
     parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     match parser.parse_statement().unwrap() {
-        Statement::If(IfStatement {
-            if_block,
-            else_block: Some(else_block),
-            ..
-        }) => {
+        Statement::If(if_statement) => {
+            let IfStatement {
+                if_block,
+                else_block: Some(else_block),
+                ..
+            } = *if_statement
+            else {
+                unreachable!()
+            };
             assert_eq!(
                 if_block.span(),
                 Span::new(Location::new(1, 1), Location::new(1, 31))
@@ -2348,7 +2355,8 @@ fn parse_mssql_varbinary_max_length() {
     let sql = "CREATE TABLE example (var_binary_col VARBINARY(MAX))";
 
     match ms_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, columns, .. } = *create_table;
             assert_eq!(
                 name,
                 ObjectName::from(vec![Ident {
@@ -2373,7 +2381,8 @@ fn parse_mssql_varbinary_max_length() {
     let sql = "CREATE TABLE example (var_binary_col VARBINARY(50))";
 
     match ms_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(create_table) => {
+            let CreateTable { name, columns, .. } = *create_table;
             assert_eq!(
                 name,
                 ObjectName::from(vec![Ident {
@@ -2448,7 +2457,7 @@ fn parse_create_trigger() {
     let create_stmt = ms().verified_stmt(create_trigger);
     assert_eq!(
         create_stmt,
-        Statement::CreateTrigger(CreateTrigger {
+        Statement::CreateTrigger(Box::new(CreateTrigger {
             or_alter: true,
             temporary: false,
             or_replace: false,
@@ -2465,7 +2474,7 @@ fn parse_create_trigger() {
             exec_body: None,
             statements_as: true,
             statements: Some(ConditionalStatements::Sequence {
-                statements: vec![Statement::RaisError {
+                statements: vec![Statement::RaisError(Box::new(RaisError {
                     message: Box::new(Expr::Value(
                         (Value::SingleQuotedString("Notify Customer Relations".to_string()))
                             .with_empty_span()
@@ -2478,10 +2487,10 @@ fn parse_create_trigger() {
                     )),
                     arguments: vec![],
                     options: vec![],
-                }],
+                }))],
             }),
             characteristics: None,
-        })
+        }))
     );
 
     let multi_statement_as_trigger = "\
@@ -2540,12 +2549,12 @@ fn parse_drop_trigger() {
     let drop_stmt = ms().one_statement_parses_to(sql_drop_trigger, "");
     assert_eq!(
         drop_stmt,
-        Statement::DropTrigger(DropTrigger {
+        Statement::DropTrigger(Box::new(DropTrigger {
             if_exists: false,
             trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             table_name: None,
             option: None,
-        })
+        }))
     );
 }
 
@@ -2555,11 +2564,11 @@ fn parse_print() {
     let print_stmt = ms().verified_stmt(print_string_literal);
     assert_eq!(
         print_stmt,
-        Statement::Print(PrintStatement {
+        Statement::Print(Box::new(PrintStatement {
             message: Box::new(Expr::Value(
                 (Value::SingleQuotedString("Hello, world!".to_string())).with_empty_span()
             )),
-        })
+        }))
     );
 
     let _ = ms().verified_stmt("PRINT N'Hello, ⛄️!'");
@@ -2584,7 +2593,7 @@ DECLARE @Y AS NVARCHAR(MAX)='y'
     "#;
     let stmts = tsql().parse_sql_statements(sql).unwrap();
     assert_eq!(stmts.len(), 2);
-    assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
+    assert!(stmts.iter().all(|s| matches!(s, Statement::Declare(_))));
 
     let sql = r#"
 SELECT col FROM tbl
@@ -2667,14 +2676,15 @@ fn parse_mssql_begin_end_block() {
     let sql = "BEGIN SELECT 1; END";
     let stmt = ms().verified_stmt(sql);
     match &stmt {
-        Statement::StartTransaction {
-            begin,
-            has_end_keyword,
-            statements,
-            transaction,
-            modifier,
-            ..
-        } => {
+        Statement::StartTransaction(start_transaction) => {
+            let StartTransaction {
+                begin,
+                has_end_keyword,
+                statements,
+                transaction,
+                modifier,
+                ..
+            } = &**start_transaction;
             assert!(begin);
             assert!(has_end_keyword);
             assert!(transaction.is_none());
@@ -2688,11 +2698,12 @@ fn parse_mssql_begin_end_block() {
     let sql = "BEGIN SELECT 1; SELECT 2; END";
     let stmt = ms().verified_stmt(sql);
     match &stmt {
-        Statement::StartTransaction {
-            statements,
-            has_end_keyword,
-            ..
-        } => {
+        Statement::StartTransaction(start_transaction) => {
+            let StartTransaction {
+                statements,
+                has_end_keyword,
+                ..
+            } = &**start_transaction;
             assert!(has_end_keyword);
             assert_eq!(statements.len(), 2);
         }
@@ -2703,11 +2714,12 @@ fn parse_mssql_begin_end_block() {
     let sql = "BEGIN INSERT INTO t VALUES (1); UPDATE t SET x = 2; END";
     let stmt = ms().verified_stmt(sql);
     match &stmt {
-        Statement::StartTransaction {
-            statements,
-            has_end_keyword,
-            ..
-        } => {
+        Statement::StartTransaction(start_transaction) => {
+            let StartTransaction {
+                statements,
+                has_end_keyword,
+                ..
+            } = &**start_transaction;
             assert!(has_end_keyword);
             assert_eq!(statements.len(), 2);
         }
@@ -2718,12 +2730,13 @@ fn parse_mssql_begin_end_block() {
     let sql = "BEGIN TRANSACTION";
     let stmt = ms().verified_stmt(sql);
     match &stmt {
-        Statement::StartTransaction {
-            begin,
-            has_end_keyword,
-            transaction,
-            ..
-        } => {
+        Statement::StartTransaction(start_transaction) => {
+            let StartTransaction {
+                begin,
+                has_end_keyword,
+                transaction,
+                ..
+            } = &**start_transaction;
             assert!(begin);
             assert!(!has_end_keyword);
             assert!(transaction.is_some());
@@ -2740,12 +2753,13 @@ fn parse_mssql_tran_shorthand() {
     let sql = "BEGIN TRAN";
     let stmt = ms().verified_stmt(sql);
     match &stmt {
-        Statement::StartTransaction {
-            begin,
-            transaction,
-            has_end_keyword,
-            ..
-        } => {
+        Statement::StartTransaction(start_transaction) => {
+            let StartTransaction {
+                begin,
+                transaction,
+                has_end_keyword,
+                ..
+            } = &**start_transaction;
             assert!(begin);
             assert_eq!(*transaction, Some(BeginTransactionKind::Tran));
             assert!(!has_end_keyword);
@@ -2823,7 +2837,7 @@ fn test_exec_dynamic_sql() {
         .expect("EXEC (@sql) should parse");
     assert_eq!(stmts.len(), 1);
     assert!(
-        matches!(&stmts[0], Statement::Execute { .. }),
+        matches!(&stmts[0], Statement::Execute(_)),
         "expected Execute, got: {:?}",
         stmts[0]
     );
@@ -2844,7 +2858,7 @@ fn test_exec_dynamic_sql_string_concat() {
         .expect("EXEC with string concatenation should parse");
     assert_eq!(stmts.len(), 1);
     assert!(
-        matches!(&stmts[0], Statement::Execute { .. }),
+        matches!(&stmts[0], Statement::Execute(_)),
         "expected Execute, got: {:?}",
         stmts[0]
     );

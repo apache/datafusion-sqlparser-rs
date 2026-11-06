@@ -2353,6 +2353,7 @@ fn test_bigquery_create_function() {
             called_on_null: None,
             parallel: None,
             security: None,
+            cost: None,
             set_params: vec![],
         })
     );

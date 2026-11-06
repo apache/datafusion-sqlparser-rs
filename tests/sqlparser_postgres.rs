@@ -13399,6 +13399,12 @@ fn parse_create_table_of_type() {
 }
 
 #[test]
+fn display_create_table_of_type_propagates_write_errors() {
+    let stmt = pg_and_generic().verified_stmt("CREATE TABLE c OF t");
+    assert_display_propagates_write_errors(&stmt, &[" OF "]);
+}
+
+#[test]
 fn parse_create_function_leakproof() {
     for (sql, leakproof) in [
         (

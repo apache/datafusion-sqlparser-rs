@@ -13361,6 +13361,7 @@ fn parse_comment_on_constraint() {
             "COMMENT ON CONSTRAINT s.c ON t IS 'x'",
             "Expected: ON, found: .",
         ),
+        ("COMMENT ON CONSTRAINT", "Expected: identifier, found: EOF"),
     ] {
         assert_eq!(
             pg_and_generic()
@@ -13371,6 +13372,14 @@ fn parse_comment_on_constraint() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn display_comment_on_constraint_propagates_write_errors() {
+    let stmt = pg().verified_stmt("COMMENT ON CONSTRAINT c ON p IS 'x'");
+    assert_display_propagates_write_errors(&stmt, &["CONSTRAINT", "p", "IS "]);
+    let stmt = pg().verified_stmt("COMMENT ON CONSTRAINT c ON DOMAIN d IS 'x'");
+    assert_display_propagates_write_errors(&stmt, &["DOMAIN "]);
 }
 
 #[test]

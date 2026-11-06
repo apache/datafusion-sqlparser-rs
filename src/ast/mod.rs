@@ -6296,11 +6296,12 @@ impl fmt::Display for Statement {
                 };
                 write!(f, "ON {object_type} {object_name} ")?;
                 if let Some(parent_name) = parent_name {
-                    write!(f, "ON ")?;
-                    if *object_type == CommentObject::DomainConstraint {
-                        write!(f, "DOMAIN ")?;
-                    }
-                    write!(f, "{parent_name} ")?;
+                    let domain = if *object_type == CommentObject::DomainConstraint {
+                        "DOMAIN "
+                    } else {
+                        ""
+                    };
+                    write!(f, "ON {domain}{parent_name} ")?;
                 }
                 write!(f, "IS ")?;
                 if let Some(c) = comment {

@@ -13408,3 +13408,25 @@ fn parse_grant_maintain() {
         "sql parser error: Expected: TO, found: ("
     );
 }
+
+#[test]
+fn display_maintain_privilege_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter;
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == "MAINTAIN" {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    assert_eq!(
+        write!(RejectingWriter, "{}", Action::Maintain),
+        Err(fmt::Error)
+    );
+}

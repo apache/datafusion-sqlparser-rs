@@ -7101,6 +7101,8 @@ pub enum Privileges {
     All {
         /// Optional keyword from the spec, ignored in practice
         with_privileges_keyword: bool,
+        /// Optional list of columns, as in PostgreSQL `GRANT ALL (col) ON t`.
+        columns: Option<Vec<Ident>>,
     },
     /// Specific privileges (e.g. `SELECT`, `INSERT`)
     Actions(Vec<Action>),
@@ -7111,6 +7113,7 @@ impl fmt::Display for Privileges {
         match self {
             Privileges::All {
                 with_privileges_keyword,
+                columns,
             } => {
                 write!(
                     f,
@@ -7120,7 +7123,11 @@ impl fmt::Display for Privileges {
                     } else {
                         ""
                     }
-                )
+                )?;
+                if let Some(columns) = columns {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                Ok(())
             }
             Privileges::Actions(actions) => {
                 write!(f, "{}", display_comma_separated(actions))

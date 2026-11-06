@@ -79,7 +79,18 @@ pub enum TableConstraint {
     /// }`).
     ForeignKey(ForeignKeyConstraint),
     /// `[ CONSTRAINT <name> ] CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`
+    ///
+    /// The parentheses are only optional to parse when
+    /// [`supports_unparenthesized_check_constraint`](crate::dialect::Dialect::supports_unparenthesized_check_constraint)
+    /// is true for the dialect (e.g. ClickHouse).
     Check(CheckConstraint),
+    /// ClickHouse [table constraint][1]: `CONSTRAINT <name> ASSUME (<expr>)`.
+    /// Unlike the other constraints here, the name is mandatory.
+    ///
+    /// The parentheses are optional.
+    ///
+    /// [1]: https://clickhouse.com/docs/reference/statements/create/table#constraints
+    Assume(AssumeConstraint),
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
     /// is restricted to MySQL, as no other dialects that support this syntax were found.
     ///
@@ -149,6 +160,12 @@ impl From<CheckConstraint> for TableConstraint {
     }
 }
 
+impl From<AssumeConstraint> for TableConstraint {
+    fn from(constraint: AssumeConstraint) -> Self {
+        TableConstraint::Assume(constraint)
+    }
+}
+
 impl From<IndexConstraint> for TableConstraint {
     fn from(constraint: IndexConstraint) -> Self {
         TableConstraint::Index(constraint)
@@ -174,6 +191,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::PrimaryKey(constraint) => constraint.fmt(f),
             TableConstraint::ForeignKey(constraint) => constraint.fmt(f),
             TableConstraint::Check(constraint) => constraint.fmt(f),
+            TableConstraint::Assume(constraint) => constraint.fmt(f),
             TableConstraint::Index(constraint) => constraint.fmt(f),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
@@ -192,6 +210,8 @@ pub struct CheckConstraint {
     pub name: Option<Ident>,
     /// The boolean expression the CHECK constraint enforces.
     pub expr: Box<Expr>,
+    /// Whether `expr` is wrapped in parentheses.
+    pub parenthesized: bool,
     /// PostgreSQL-specific `NO INHERIT` flag: child tables do not inherit the constraint.
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
     pub no_inherit: bool,
@@ -203,12 +223,12 @@ pub struct CheckConstraint {
 impl fmt::Display for CheckConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use crate::ast::ddl::display_constraint_name;
-        write!(
-            f,
-            "{}CHECK ({})",
-            display_constraint_name(&self.name),
-            self.expr
-        )?;
+        write!(f, "{}CHECK ", display_constraint_name(&self.name))?;
+        if self.parenthesized {
+            write!(f, "({})", self.expr)?;
+        } else {
+            write!(f, "{}", self.expr)?;
+        }
         if self.no_inherit {
             write!(f, " NO INHERIT")?;
         }
@@ -224,6 +244,36 @@ impl crate::ast::Spanned for CheckConstraint {
         self.expr
             .span()
             .union_opt(&self.name.as_ref().map(|i| i.span))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// An `ASSUME` constraint (`CONSTRAINT <name> ASSUME <expr>`).
+pub struct AssumeConstraint {
+    /// Constraint name.
+    pub name: Ident,
+    /// The boolean expression the ASSUME constraint claims is true.
+    pub expr: Box<Expr>,
+    /// Whether `expr` is wrapped in parentheses.
+    pub parenthesized: bool,
+}
+
+impl fmt::Display for AssumeConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CONSTRAINT {} ASSUME ", self.name)?;
+        if self.parenthesized {
+            write!(f, "({})", self.expr)
+        } else {
+            write!(f, "{}", self.expr)
+        }
+    }
+}
+
+impl crate::ast::Spanned for AssumeConstraint {
+    fn span(&self) -> Span {
+        self.expr.span().union_opt(&Some(self.name.span))
     }
 }
 

@@ -7192,6 +7192,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            parenthesized: true,
             no_inherit: false,
             enforced: None,
         }
@@ -7213,6 +7214,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            parenthesized: true,
             no_inherit: false,
             enforced: None,
         }
@@ -7234,6 +7236,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            parenthesized: true,
             no_inherit: false,
             enforced: None,
         }
@@ -7255,6 +7258,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            parenthesized: true,
             no_inherit: false,
             enforced: None,
         }
@@ -7276,6 +7280,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            parenthesized: true,
             no_inherit: false,
             enforced: None,
         }
@@ -10796,6 +10801,7 @@ fn parse_alter_table_constraint_check_no_inherit() {
                             op: BinaryOperator::Gt,
                             right: Box::new(Expr::Value(test_utils::number("0").into())),
                         }),
+                        parenthesized: true,
                         no_inherit: true,
                         enforced: None,
                     }

@@ -13386,3 +13386,47 @@ fn parse_create_function_window() {
         "sql parser error: WINDOW specified more than once"
     );
 }
+
+#[test]
+fn parse_grant_maintain() {
+    // https://www.postgresql.org/docs/17/sql-grant.html
+    match pg().verified_stmt("GRANT MAINTAIN ON t TO r") {
+        Statement::Grant(grant) => assert_eq!(
+            grant.privileges,
+            Privileges::Actions(vec![Action::Maintain])
+        ),
+        _ => unreachable!(),
+    }
+    pg().verified_stmt("GRANT SELECT, MAINTAIN ON t TO r WITH GRANT OPTION");
+    pg().verified_stmt("REVOKE MAINTAIN ON t FROM r");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT MAINTAIN ON TABLES TO r");
+
+    assert_eq!(
+        pg().parse_sql_statements("GRANT MAINTAIN (a) ON t TO r")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: ("
+    );
+}
+
+#[test]
+fn display_maintain_privilege_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter;
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == "MAINTAIN" {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    assert_eq!(
+        write!(RejectingWriter, "{}", Action::Maintain),
+        Err(fmt::Error)
+    );
+}

@@ -7305,6 +7305,8 @@ pub enum Action {
         /// Optional list of target columns for insert.
         columns: Option<Vec<Ident>>,
     },
+    /// Maintain permission.
+    Maintain,
     /// Manage operation with a specific manage type.
     Manage {
         /// The specific manage sub-type.
@@ -7408,6 +7410,7 @@ impl fmt::Display for Action {
             Action::ImportedPrivileges => f.write_str("IMPORTED PRIVILEGES")?,
             Action::ImportShare => f.write_str("IMPORT SHARE")?,
             Action::Insert { .. } => f.write_str("INSERT")?,
+            Action::Maintain => f.write_str("MAINTAIN")?,
             Action::Manage { manage_type } => write!(f, "MANAGE {manage_type}")?,
             Action::ManageReleases => f.write_str("MANAGE RELEASES")?,
             Action::ManageVersions => f.write_str("MANAGE VERSIONS")?,

@@ -7115,19 +7115,17 @@ impl fmt::Display for Privileges {
                 with_privileges_keyword,
                 columns,
             } => {
+                use crate::ast::ddl::display_option;
                 write!(
                     f,
-                    "ALL{}",
+                    "ALL{}{}",
                     if *with_privileges_keyword {
                         " PRIVILEGES"
                     } else {
                         ""
-                    }
-                )?;
-                if let Some(columns) = columns {
-                    write!(f, " ({})", display_comma_separated(columns))?;
-                }
-                Ok(())
+                    },
+                    display_option(" (", ")", &columns.as_deref().map(display_comma_separated))
+                )
             }
             Privileges::Actions(actions) => {
                 write!(f, "{}", display_comma_separated(actions))

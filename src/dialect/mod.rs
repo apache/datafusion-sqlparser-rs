@@ -1152,7 +1152,7 @@ pub trait Dialect: Debug + Any {
             Precedence::Period => 100,
             Precedence::DoubleColon => 50,
             Precedence::AtTz => 41,
-            Precedence::MulDivModOp => 40,
+            Precedence::MulDivModOp | Precedence::UnaryPlusMinus => 40,
             Precedence::PlusMinus => 30,
             Precedence::Xor => 24,
             Precedence::Ampersand => 23,
@@ -1183,11 +1183,6 @@ pub trait Dialect: Debug + Any {
     /// Precedence used to stop parsing the low bound expression of a BETWEEN predicate.
     fn between_low_bound_precedence(&self) -> u8 {
         self.prec_value(Precedence::Between)
-    }
-
-    /// Returns the precedence used to parse the operand of unary `+` and `-`.
-    fn unary_plus_minus_precedence(&self) -> u8 {
-        self.prec_value(Precedence::MulDivModOp)
     }
 
     /// Returns true if the low bound of a `BETWEEN` predicate may end with one comparison,
@@ -2360,6 +2355,8 @@ pub enum Precedence {
     DoubleColon,
     /// Timezone operator (e.g. `AT TIME ZONE`).
     AtTz,
+    /// Unary `+` and `-`, bounding their operand.
+    UnaryPlusMinus,
     /// Multiplication / Division / Modulo operators (`*`, `/`, `%`).
     MulDivModOp,
     /// Addition / Subtraction (`+`, `-`).

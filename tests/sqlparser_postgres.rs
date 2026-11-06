@@ -13181,6 +13181,21 @@ fn parse_unary_plus_minus_before_pg_exponentiation() {
 }
 
 #[test]
+fn parse_unary_minus_before_pg_at_time_zone() {
+    let select = pg().verified_only_select("SELECT -ts AT TIME ZONE 'UTC'");
+    let Expr::AtTimeZone { timestamp, .. } = expr_from_projection(&select.projection[0]) else {
+        panic!("Expected AT TIME ZONE expression")
+    };
+    assert_eq!(
+        timestamp.as_ref(),
+        &Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: Box::new(Expr::Identifier(Ident::new("ts"))),
+        }
+    );
+}
+
+#[test]
 fn parse_generic_unary_minus_before_caret() {
     let statements = Parser::parse_sql(&GenericDialect {}, "SELECT -1 ^ 0").unwrap();
     let Statement::Query(query) = &statements[0] else {

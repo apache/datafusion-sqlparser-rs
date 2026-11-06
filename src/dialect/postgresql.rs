@@ -208,6 +208,7 @@ pub struct PostgreSqlDialect {}
 const PERIOD_PREC: u8 = 200;
 const DOUBLE_COLON_PREC: u8 = 140;
 const BRACKET_PREC: u8 = 130;
+const UNARY_PLUS_MINUS_PREC: u8 = 125;
 const COLLATE_PREC: u8 = 120;
 const AT_TZ_PREC: u8 = 110;
 const CARET_PREC: u8 = 100;
@@ -387,11 +388,8 @@ impl Dialect for PostgreSqlDialect {
             Precedence::UnaryNot => NOT_PREC,
             Precedence::And => AND_PREC,
             Precedence::Or => OR_PREC,
+            Precedence::UnaryPlusMinus => UNARY_PLUS_MINUS_PREC,
         }
-    }
-
-    fn unary_plus_minus_precedence(&self) -> u8 {
-        self.prec_value(Precedence::Caret)
     }
 
     fn allow_extract_custom(&self) -> bool {

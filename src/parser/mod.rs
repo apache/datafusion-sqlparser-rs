@@ -2017,7 +2017,9 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(self.dialect.unary_plus_minus_precedence())?),
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
+                    ),
                 })
             }
             Token::ExclamationMark if dialect.supports_bang_not_operator() => Ok(Expr::UnaryOp {
@@ -2044,13 +2046,15 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op,
                     expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
                     ),
                 })
             }
             Token::Tilde => Ok(Expr::UnaryOp {
                 op: UnaryOperator::BitwiseNot,
-                expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?),
+                expr: Box::new(
+                    self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
+                ),
             }),
             tok @ Token::Sharp
             | tok @ Token::AtDashAt
@@ -2074,7 +2078,7 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op,
                     expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
                     ),
                 })
             }

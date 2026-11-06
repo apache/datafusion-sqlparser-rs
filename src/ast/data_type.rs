@@ -33,6 +33,7 @@ use super::{value::escape_single_quote_string, ColumnDef};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A member of an ENUM type.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum EnumMember {
     /// Just a name.
     Name(String),
@@ -46,6 +47,7 @@ pub enum EnumMember {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TypeModifier {
     /// Identifier or keyword segment, quotes carried by `Ident`.
     Identifier(Ident),
@@ -69,6 +71,7 @@ impl fmt::Display for TypeModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DataType {
     /// Table type in [PostgreSQL], e.g. CREATE FUNCTION RETURNS TABLE(...).
     ///
@@ -951,6 +954,7 @@ fn format_clickhouse_datetime_precision_and_timezone(
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum StructBracketKind {
     /// Example: `STRUCT(a INT, b STRING)`
     Parentheses,
@@ -962,6 +966,7 @@ pub enum StructBracketKind {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MapBracketKind {
     /// Example: `Map(String, UInt16)`
     Parentheses,
@@ -978,6 +983,7 @@ pub enum MapBracketKind {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TimezoneInfo {
     /// No information about time zone, e.g. TIMESTAMP
     None,
@@ -1025,6 +1031,7 @@ impl fmt::Display for TimezoneInfo {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum IntervalFields {
     /// `YEAR` field
     Year,
@@ -1081,6 +1088,7 @@ impl fmt::Display for IntervalFields {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ExactNumberInfo {
     /// No additional information, e.g. `DECIMAL`.
     None,
@@ -1112,6 +1120,7 @@ impl fmt::Display for ExactNumberInfo {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CharacterLength {
     /// Integer length with optional unit (e.g. `CHAR(10)` or `VARCHAR(10 CHARACTERS)`).
     IntegerLength {
@@ -1147,6 +1156,7 @@ impl fmt::Display for CharacterLength {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CharLengthUnits {
     /// CHARACTERS unit
     Characters,
@@ -1173,6 +1183,7 @@ impl fmt::Display for CharLengthUnits {
 /// Information about [binary length][1], including length and possibly unit.
 ///
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-length
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum BinaryLength {
     /// Integer length for binary types (e.g. `VARBINARY(100)`).
     IntegerLength {
@@ -1204,6 +1215,7 @@ impl fmt::Display for BinaryLength {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ArrayElemTypeDef {
     /// Use `ARRAY` style without an explicit element type.
     None,
@@ -1226,6 +1238,7 @@ pub enum ArrayElemTypeDef {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GeometricTypeKind {
     /// Point geometry
     Point,

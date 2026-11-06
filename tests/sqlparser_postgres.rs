@@ -13430,3 +13430,43 @@ fn display_maintain_privilege_propagates_formatter_errors() {
         Err(fmt::Error)
     );
 }
+
+#[test]
+fn parse_create_procedure_dollar_quoted_body() {
+    match pg_and_generic()
+        .verified_stmt("CREATE PROCEDURE pg_proc (proc_param INT) LANGUAGE sql AS $$ SELECT 1 $$")
+    {
+        Statement::CreateProcedure {
+            body: CreateProcedureBody::AsString { definition, .. },
+            ..
+        } => assert_eq!(
+            definition,
+            Expr::Value(
+                Value::DollarQuotedString(DollarQuotedString {
+                    value: " SELECT 1 ".to_string(),
+                    tag: None,
+                })
+                .with_empty_span()
+            )
+        ),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE PROCEDURE p(a integer)
+AS $body$
+BEGIN
+    INSERT INTO t VALUES (a);
+END
+$body$ LANGUAGE plpgsql"#,
+        "CREATE PROCEDURE p (a INTEGER) LANGUAGE plpgsql AS $body$\nBEGIN\n    INSERT INTO t VALUES (a);\nEND\n$body$",
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements(
+            "CREATE PROCEDURE p () LANGUAGE sql AS $$ SELECT 1 $$ LANGUAGE sql"
+        )
+        .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: LANGUAGE".to_string())
+    );
+}

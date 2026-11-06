@@ -21965,7 +21965,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
 
-        let language = if self.parse_keyword(Keyword::LANGUAGE) {
+        let mut language = if self.parse_keyword(Keyword::LANGUAGE) {
             Some(self.parse_identifier()?)
         } else {
             None
@@ -21975,7 +21975,26 @@ impl<'a> Parser<'a> {
             Some(statements) => CreateProcedureBody::BeginAtomic(statements),
             None => {
                 self.expect_keyword_is(Keyword::AS)?;
-                CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                if matches!(
+                    self.peek_token_ref().token,
+                    Token::SingleQuotedString(_) | Token::DollarQuotedString(_)
+                ) {
+                    let definition = self.parse_procedure_definition_string()?;
+                    let link_symbol = if self.consume_token(&Token::Comma) {
+                        Some(self.parse_procedure_definition_string()?)
+                    } else {
+                        None
+                    };
+                    if language.is_none() && self.parse_keyword(Keyword::LANGUAGE) {
+                        language = Some(self.parse_identifier()?);
+                    }
+                    CreateProcedureBody::AsString {
+                        definition,
+                        link_symbol,
+                    }
+                } else {
+                    CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                }
             }
         };
 
@@ -21986,6 +22005,16 @@ impl<'a> Parser<'a> {
             language,
             body,
         })
+    }
+
+    fn parse_procedure_definition_string(&mut self) -> Result<Expr, ParserError> {
+        let token = self.next_token();
+        let value = match token.token {
+            Token::SingleQuotedString(s) => Value::SingleQuotedString(s),
+            Token::DollarQuotedString(s) => Value::DollarQuotedString(s),
+            _ => return self.expected("literal string", token),
+        };
+        Ok(Expr::Value(value.with_span(token.span)))
     }
 
     /// Parse a window specification.

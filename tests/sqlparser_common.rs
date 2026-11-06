@@ -23470,3 +23470,62 @@ fn parse_do_statement() {
         ParserError::ParserError("Expected: an SQL statement, found: DO".to_string())
     );
 }
+
+#[test]
+fn parse_create_procedure_string_body() {
+    match verified_stmt("CREATE PROCEDURE p (a INT) LANGUAGE sql AS 'SELECT a'") {
+        Statement::CreateProcedure {
+            language,
+            body:
+                CreateProcedureBody::AsString {
+                    definition,
+                    link_symbol,
+                },
+            ..
+        } => {
+            assert_eq!(language, Some(Ident::new("sql")));
+            assert_eq!(
+                definition,
+                Expr::Value(Value::SingleQuotedString("SELECT a".to_string()).with_empty_span())
+            );
+            assert_eq!(link_symbol, None);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    match verified_stmt("CREATE PROCEDURE p () LANGUAGE C AS 'obj_file', 'link_symbol'") {
+        Statement::CreateProcedure {
+            body: CreateProcedureBody::AsString { link_symbol, .. },
+            ..
+        } => assert_eq!(
+            link_symbol,
+            Some(Expr::Value(
+                Value::SingleQuotedString("link_symbol".to_string()).with_empty_span()
+            ))
+        ),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    verified_stmt("CREATE PROCEDURE p () AS 'SELECT 1'");
+    one_statement_parses_to(
+        "CREATE PROCEDURE p () AS 'SELECT 1' LANGUAGE sql",
+        "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1'",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () AS 'obj_file', 1",
+            "Expected: literal string, found: 1",
+        ),
+        (
+            "CREATE PROCEDURE p () AS 'SELECT 1' LANGUAGE",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}

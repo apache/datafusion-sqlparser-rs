@@ -23376,10 +23376,6 @@ END"#,
             "Expected: ;, found: END",
         ),
         (
-            "CREATE PROCEDURE p () LANGUAGE sql BEGIN SELECT 1; END",
-            "Expected: AS, found: BEGIN",
-        ),
-        (
             "CREATE PROCEDURE p () LANGUAGE sql AS BEGIN SELECT 1;",
             "Expected: END, found: EOF",
         ),
@@ -23390,6 +23386,14 @@ END"#,
             "{sql}"
         );
     }
+
+    let sql = "CREATE PROCEDURE p () LANGUAGE sql BEGIN SELECT 1; END";
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_create_procedure_body_without_as())
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: AS, found: BEGIN".to_string()),
+    );
 }
 
 #[test]

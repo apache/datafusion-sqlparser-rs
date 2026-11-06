@@ -1566,6 +1566,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts a `CREATE PROCEDURE` body without a
+    /// leading `AS`, either a `BEGIN ... END` block or a single statement.
+    fn supports_create_procedure_body_without_as(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect accepts a comma-separated list of table-level
     /// options placed between the table name and the column-list parenthesis, e.g.
     ///

@@ -142,6 +142,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/create-procedure.html>
+    fn supports_create_procedure_body_without_as(&self) -> bool {
+        true
+    }
+
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
     fn supports_insert_set(&self) -> bool {
         true

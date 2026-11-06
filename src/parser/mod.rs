@@ -21971,30 +21971,44 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let body = match self.maybe_parse_begin_atomic()? {
-            Some(statements) => CreateProcedureBody::BeginAtomic(statements),
-            None => {
-                self.expect_keyword_is(Keyword::AS)?;
-                if matches!(
-                    self.peek_token_ref().token,
-                    Token::SingleQuotedString(_) | Token::DollarQuotedString(_)
-                ) {
-                    let definition = self.parse_procedure_definition_string()?;
-                    let link_symbol = if self.consume_token(&Token::Comma) {
-                        Some(self.parse_procedure_definition_string()?)
-                    } else {
-                        None
-                    };
-                    if language.is_none() && self.parse_keyword(Keyword::LANGUAGE) {
-                        language = Some(self.parse_identifier()?);
-                    }
-                    CreateProcedureBody::AsString {
-                        definition,
-                        link_symbol,
-                    }
+        let body = if let Some(statements) = self.maybe_parse_begin_atomic()? {
+            CreateProcedureBody::BeginAtomic(statements)
+        } else if self.dialect.supports_create_procedure_body_without_as()
+            && !self.peek_keyword(Keyword::AS)
+        {
+            if self.peek_keyword(Keyword::BEGIN) {
+                let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+                let statements = self.parse_statement_list(&[Keyword::END])?;
+                let end_token = self.expect_keyword(Keyword::END)?;
+                CreateProcedureBody::BeginEnd(BeginEndStatements {
+                    begin_token: AttachedToken(begin_token),
+                    statements,
+                    end_token: AttachedToken(end_token),
+                })
+            } else {
+                CreateProcedureBody::Statement(Box::new(self.parse_statement()?))
+            }
+        } else {
+            self.expect_keyword_is(Keyword::AS)?;
+            if matches!(
+                self.peek_token_ref().token,
+                Token::SingleQuotedString(_) | Token::DollarQuotedString(_)
+            ) {
+                let definition = self.parse_procedure_definition_string()?;
+                let link_symbol = if self.consume_token(&Token::Comma) {
+                    Some(self.parse_procedure_definition_string()?)
                 } else {
-                    CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                    None
+                };
+                if language.is_none() && self.parse_keyword(Keyword::LANGUAGE) {
+                    language = Some(self.parse_identifier()?);
                 }
+                CreateProcedureBody::AsString {
+                    definition,
+                    link_symbol,
+                }
+            } else {
+                CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
             }
         };
 

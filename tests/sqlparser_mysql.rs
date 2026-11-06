@@ -5247,3 +5247,71 @@ fn parse_key_constraint_index_type_before_columns() {
         );
     }
 }
+
+#[test]
+fn parse_create_procedure_without_as() {
+    match mysql().one_statement_parses_to(
+        "CREATE PROCEDURE my_proc(IN proc_param INT) BEGIN SELECT 1; END",
+        "CREATE PROCEDURE my_proc (IN proc_param INT) BEGIN SELECT 1; END",
+    ) {
+        Statement::CreateProcedure {
+            params: Some(params),
+            body: CreateProcedureBody::BeginEnd(body),
+            ..
+        } => {
+            assert_eq!(
+                params,
+                vec![ProcedureParam {
+                    name: Ident::new("proc_param"),
+                    data_type: DataType::Int(None),
+                    mode: Some(ArgMode::In),
+                    default: None,
+                }]
+            );
+            assert_eq!(body.statements.len(), 1);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for sql in [
+        "CREATE PROCEDURE p (IN a INT, OUT b INT) BEGIN SET b = a + 1; SELECT b; END",
+        "CREATE PROCEDURE p (IN a INT) BEGIN IF a > 0 THEN SELECT 1; END IF; END",
+    ] {
+        mysql().verified_stmt(sql);
+    }
+
+    match mysql().verified_stmt("CREATE PROCEDURE p () SELECT 1") {
+        Statement::CreateProcedure {
+            body: CreateProcedureBody::Statement(statement),
+            ..
+        } => assert_eq!(statement.to_string(), "SELECT 1"),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+    let statements = mysql()
+        .parse_sql_statements("CREATE PROCEDURE p () SELECT 1; SELECT 2")
+        .unwrap();
+    assert_eq!(
+        statements
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        ["CREATE PROCEDURE p () SELECT 1", "SELECT 2"]
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () BEGIN SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+        (
+            "CREATE PROCEDURE p ()",
+            "Expected: an SQL statement, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            mysql().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}

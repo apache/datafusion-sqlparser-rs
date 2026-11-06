@@ -5643,6 +5643,8 @@ impl fmt::Display for Statement {
                         }
                         Ok(())
                     }
+                    CreateProcedureBody::BeginEnd(body) => write!(f, " {body}"),
+                    CreateProcedureBody::Statement(statement) => write!(f, " {statement}"),
                     CreateProcedureBody::BeginAtomic(BeginEndStatements { statements, .. }) => {
                         format_begin_atomic(f, statements)
                     }
@@ -10634,6 +10636,14 @@ pub enum CreateProcedureBody {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
     BeginAtomic(BeginEndStatements),
+    /// `BEGIN ... END` block without `AS`.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/create-procedure.html
+    BeginEnd(BeginEndStatements),
+    /// Single statement without `AS`.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/create-procedure.html
+    Statement(Box<Statement>),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

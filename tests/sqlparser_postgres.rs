@@ -13309,6 +13309,13 @@ fn parse_table_not_null_constraint() {
 }
 
 #[test]
+fn display_table_not_null_constraint_propagates_write_errors() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT, CONSTRAINT nn NOT NULL a NO INHERIT)");
+    assert_display_propagates_write_errors(&stmt, &["NOT NULL ", " NO INHERIT"]);
+}
+
+#[test]
 fn parse_create_function_rows() {
     let stmt = pg_and_generic().verified_stmt(
         "CREATE FUNCTION f() RETURNS SETOF INT LANGUAGE sql COST 2 ROWS 10 AS 'SELECT 1'",

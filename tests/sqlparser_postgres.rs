@@ -1068,6 +1068,13 @@ fn parse_drop_extension() {
             cascade_or_restrict: Some(ReferentialAction::Restrict),
         })
     );
+
+    let stmt = pg_and_generic().verified_stmt("DROP EXTENSION extension_name");
+    if let Statement::DropExtension(drop_extension) = stmt {
+        assert_eq!(Span::empty(), drop_extension.span());
+    } else {
+        unreachable!("expected DROP EXTENSION statement");
+    }
 }
 
 #[test]
@@ -13517,4 +13524,46 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+#[test]
+fn parse_alter_extension_set_schema() {
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA other_schema");
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA schema.other");
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA \"other schema\"");
+
+    let stmt = pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA other_schema");
+    assert_eq!(Span::empty(), stmt.span());
+    match stmt {
+        Statement::AlterExtension(alter_extension) => {
+            assert_eq!(Span::empty(), alter_extension.span());
+            let AlterExtension { name, operation } = alter_extension;
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(
+                operation,
+                AlterExtensionOperation::SetSchema {
+                    schema_name: ObjectName::from(Ident::new("other_schema"))
+                }
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "ALTER EXTENSION ext_name SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name",
+            "Expected: SET SCHEMA after ALTER EXTENSION name, found: EOF",
+        ),
+        ("ALTER EXTENSION 1", "Expected: identifier, found: 1"),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
 }

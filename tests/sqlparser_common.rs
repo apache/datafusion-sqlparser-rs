@@ -23512,12 +23512,19 @@ fn parse_set_schema() {
     }
     dialects.one_statement_parses_to("SET schema TO 'other'", "SET schema = 'other'");
 
-    assert_eq!(
-        dialects
-            .parse_sql_statements("SET SCHEMA 'a', 'b'")
-            .unwrap_err(),
-        ParserError::ParserError("Expected: end of statement, found: ,".to_string())
-    );
+    for (sql, expected) in [
+        (
+            "SET SCHEMA 'a', 'b'",
+            "Expected: end of statement, found: ,",
+        ),
+        ("SET SCHEMA", "Expected: an expression, found: EOF"),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
 
     let dialects =
         all_dialects_where(|d| !d.supports_set_schema() && !d.supports_set_stmt_without_operator());

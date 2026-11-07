@@ -12526,10 +12526,16 @@ impl<'a> Parser<'a> {
                 schema_name: self.parse_object_name(false)?,
             }
         } else {
-            self.expected_ref(
-                "OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name",
-                self.peek_token_ref(),
-            )?
+            // PostgreSQL requires at least one option and never mixes options
+            // with the other operations
+            let options = self.parse_sequence_options(true)?;
+            if options.is_empty() {
+                return self.expected_ref(
+                    "a sequence option, OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name",
+                    self.peek_token_ref(),
+                );
+            }
+            AlterSequenceOperation::Options(options)
         };
 
         Ok(Statement::AlterSequence(AlterSequence {

@@ -13522,6 +13522,22 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 #[test]
 fn parse_alter_sequence() {
     let dialects = pg_and_generic();
+    dialects.verified_stmt("ALTER SEQUENCE s AS BIGINT");
+    dialects.verified_stmt("ALTER SEQUENCE s AS DOUBLE PRECISION");
+    dialects.verified_stmt("ALTER SEQUENCE s INCREMENT BY 2");
+    dialects.verified_stmt("ALTER SEQUENCE s INCREMENT 2");
+    dialects.verified_stmt("ALTER SEQUENCE s MINVALUE -5");
+    dialects.verified_stmt("ALTER SEQUENCE s NO MINVALUE");
+    dialects.verified_stmt("ALTER SEQUENCE s MAXVALUE 50");
+    dialects.verified_stmt("ALTER SEQUENCE s NO MAXVALUE");
+    dialects.verified_stmt("ALTER SEQUENCE s START WITH 10");
+    dialects.verified_stmt("ALTER SEQUENCE s START 10");
+    dialects.verified_stmt("ALTER SEQUENCE s CACHE 3");
+    dialects.verified_stmt("ALTER SEQUENCE s CYCLE");
+    dialects.verified_stmt("ALTER SEQUENCE s NO CYCLE");
+    dialects.verified_stmt("ALTER SEQUENCE s OWNED BY NONE");
+    dialects.verified_stmt("ALTER SEQUENCE s OWNED BY t.c");
+    dialects.verified_stmt("ALTER SEQUENCE s OWNED BY public.t.c");
     dialects.verified_stmt("ALTER SEQUENCE s SET LOGGED");
     dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s SET LOGGED");
     dialects.verified_stmt("ALTER SEQUENCE s SET UNLOGGED");
@@ -13536,6 +13552,11 @@ fn parse_alter_sequence() {
     dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA other");
     dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s SET SCHEMA other");
     dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA a.b");
+    // the options form is an unordered list, each option at most once
+    dialects.verified_stmt(
+        "ALTER SEQUENCE s INCREMENT BY 2 MINVALUE -5 MAXVALUE 50 START WITH 100 CACHE 3 NO CYCLE",
+    );
+    dialects.verified_stmt("ALTER SEQUENCE s AS DOUBLE PRECISION INCREMENT 3 NO MINVALUE CYCLE");
 }
 
 #[test]
@@ -13576,11 +13597,16 @@ fn parse_alter_sequence_errors() {
         ),
         (
             "ALTER SEQUENCE s",
-            "Expected: OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name, found: EOF",
+            "Expected: a sequence option, OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name, found: EOF",
         ),
         (
             "ALTER SEQUENCE s SET",
-            "Expected: OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name, found: SET",
+            "Expected: a sequence option, OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name, found: SET",
+        ),
+        // duplicated options are rejected, as in CREATE SEQUENCE
+        (
+            "ALTER SEQUENCE s INCREMENT BY 2 INCREMENT BY 3",
+            "INCREMENT specified more than once",
         ),
         (
             "ALTER SEQUENCE s SET SCHEMA",
@@ -13593,6 +13619,10 @@ fn parse_alter_sequence_errors() {
         (
             "ALTER SEQUENCE s OWNER TO",
             "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER SEQUENCE s INCREMENT",
+            "Expected: a value, found: EOF",
         ),
     ] {
         assert_eq!(
@@ -13625,6 +13655,32 @@ fn display_alter_sequence_propagates_write_errors() {
     ] {
         let statement = pg().verified_stmt(sql);
         let mut writer = RejectingWriter("SEQUENCE");
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}
+
+#[test]
+fn display_alter_sequence_options_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for sql in [
+        "ALTER SEQUENCE s INCREMENT BY 2",
+        "ALTER SEQUENCE s INCREMENT 2",
+    ] {
+        let statement = pg().verified_stmt(sql);
+        let mut writer = RejectingWriter("INCREMENT");
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
     }
 }

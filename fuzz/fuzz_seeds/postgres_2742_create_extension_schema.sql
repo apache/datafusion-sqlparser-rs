@@ -1,0 +1,1 @@
+CREATE EXTENSION hstore VERSION '1.8' SCHEMA exts;

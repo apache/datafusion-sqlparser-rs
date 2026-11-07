@@ -1,0 +1,2 @@
+SELECT * FROM ON;
+SELECT * FROM t JOIN limit ON true;

@@ -15,12 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
-
-use crate::ast::{BinaryOperator, Expr};
+use crate::ast::Expr;
 use crate::dialect::Dialect;
-use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
 /// A [`Dialect`] for [Apache Spark SQL](https://spark.apache.org/docs/latest/sql-ref.html).
@@ -46,6 +42,10 @@ impl Dialect for SparkSqlDialect {
     /// Aliases are identifiers, see <https://spark.apache.org/docs/latest/sql-ref-identifier.html>
     fn supports_string_literal_table_alias(&self, _explicit: bool) -> bool {
         false
+    }
+
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
+        true
     }
 
     /// See <https://spark.apache.org/docs/latest/sql-ref-identifier.html>
@@ -151,19 +151,6 @@ impl Dialect for SparkSqlDialect {
         expr: &Expr,
         precedence: u8,
     ) -> Option<Result<Expr, ParserError>> {
-        if parser.parse_keyword(Keyword::DIV) {
-            let left = Box::new(expr.clone());
-            let right = Box::new(match parser.parse_subexpr(precedence) {
-                Ok(expr) => expr,
-                Err(e) => return Some(Err(e)),
-            });
-            Some(Ok(Expr::BinaryOp {
-                left,
-                op: BinaryOperator::MyIntegerDivide,
-                right,
-            }))
-        } else {
-            None
-        }
+        super::parse_div_infix(parser, expr, precedence)
     }
 }

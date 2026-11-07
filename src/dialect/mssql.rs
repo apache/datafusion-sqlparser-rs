@@ -21,7 +21,7 @@ use crate::ast::{
     GranteesType, IfStatement, Statement,
 };
 use crate::dialect::Dialect;
-use crate::keywords::Keyword;
+use crate::keywords::{Keyword, RESERVED_FOR_TABLE_FACTOR};
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
@@ -138,67 +138,17 @@ impl Dialect for MsSqlDialect {
     }
 
     fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
-        match kw {
-            // List of keywords that cannot be used as select item (column) aliases in MSSQL
-            // regardless of whether the alias is explicit or implicit.
-            //
-            // These are T-SQL statement-starting keywords; allowing them as implicit aliases
-            // causes the parser to consume the keyword as an alias for the previous expression,
-            // then fail on the token that follows (e.g. `TABLE`, `@var`, `sp_name`, …).
-            Keyword::IF
-            | Keyword::ELSE
-            | Keyword::DECLARE
-            | Keyword::EXEC
-            | Keyword::EXECUTE
-            | Keyword::INSERT
-            | Keyword::UPDATE
-            | Keyword::DELETE
-            | Keyword::DROP
-            | Keyword::CREATE
-            | Keyword::ALTER
-            | Keyword::TRUNCATE
-            | Keyword::PRINT
-            | Keyword::WHILE
-            | Keyword::RETURN
-            | Keyword::THROW
-            | Keyword::RAISERROR
-            | Keyword::MERGE => false,
-            _ => explicit || self.is_column_alias(kw, parser),
-        }
+        !Self::is_reserved_for_alias(kw) && (explicit || self.is_column_alias(kw, parser))
+    }
+
+    /// LIMIT is not a reserved word in Transact-SQL.
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/reserved-keywords-transact-sql>
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        kw == &Keyword::LIMIT || !RESERVED_FOR_TABLE_FACTOR.contains(kw)
     }
 
     fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
-        match kw {
-            // List of keywords that cannot be used as table aliases in MSSQL
-            // regardless of whether the alias is explicit or implicit.
-            //
-            // These are T-SQL statement-starting keywords. Without blocking them here,
-            // a bare `SELECT * FROM t` followed by a newline and one of these keywords
-            // would cause the parser to consume the keyword as a table alias for `t`,
-            // then fail on the token that follows (e.g. `@var`, `sp_name`, `TABLE`, …).
-            //
-            // `SET` is already covered by the global `RESERVED_FOR_TABLE_ALIAS` list;
-            // the keywords below are MSSQL-specific additions.
-            Keyword::IF
-            | Keyword::ELSE
-            | Keyword::DECLARE
-            | Keyword::EXEC
-            | Keyword::EXECUTE
-            | Keyword::INSERT
-            | Keyword::UPDATE
-            | Keyword::DELETE
-            | Keyword::DROP
-            | Keyword::CREATE
-            | Keyword::ALTER
-            | Keyword::TRUNCATE
-            | Keyword::PRINT
-            | Keyword::WHILE
-            | Keyword::RETURN
-            | Keyword::THROW
-            | Keyword::RAISERROR
-            | Keyword::MERGE => false,
-            _ => explicit || self.is_table_alias(kw, parser),
-        }
+        !Self::is_reserved_for_alias(kw) && (explicit || self.is_table_alias(kw, parser))
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
@@ -255,6 +205,31 @@ impl Dialect for MsSqlDialect {
 }
 
 impl MsSqlDialect {
+    /// Keywords excluded from explicit and implicit aliases.
+    fn is_reserved_for_alias(kw: &Keyword) -> bool {
+        matches!(
+            kw,
+            Keyword::IF
+                | Keyword::ELSE
+                | Keyword::DECLARE
+                | Keyword::EXEC
+                | Keyword::EXECUTE
+                | Keyword::INSERT
+                | Keyword::UPDATE
+                | Keyword::DELETE
+                | Keyword::DROP
+                | Keyword::CREATE
+                | Keyword::ALTER
+                | Keyword::TRUNCATE
+                | Keyword::PRINT
+                | Keyword::WHILE
+                | Keyword::RETURN
+                | Keyword::THROW
+                | Keyword::RAISERROR
+                | Keyword::MERGE
+        )
+    }
+
     /// ```sql
     /// IF boolean_expression
     ///     { sql_statement | statement_block }

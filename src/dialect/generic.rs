@@ -141,6 +141,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_sql_option_without_value(&self) -> bool {
+        true
+    }
+
     fn supports_explain_with_utility_options(&self) -> bool {
         true
     }
@@ -186,6 +190,18 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_tilde_like_match_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_aggregate_order_by_with_empty_args(&self) -> bool {
+        true
+    }
+
+    fn supports_in_table_expression(&self) -> bool {
+        true
+    }
+
+    fn supports_comparison_in_between_low_bound(&self) -> bool {
         true
     }
 
@@ -314,6 +330,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_table_partitions(&self) -> bool {
+        true
+    }
+
+    fn supports_table_inheritance_markers(&self) -> bool {
         true
     }
 

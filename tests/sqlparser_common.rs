@@ -643,6 +643,7 @@ fn parse_update_with_table_alias() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![],
                 },
@@ -745,6 +746,7 @@ fn parse_select_with_table_alias() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![],
         }]
@@ -951,6 +953,7 @@ fn parse_where_delete_with_alias_statement() {
                     json_path: None,
                     sample: None,
                     index_directives: vec![],
+                    inheritance: None,
                 },
                 from[0].relation,
             );
@@ -967,6 +970,7 @@ fn parse_where_delete_with_alias_statement() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![],
                 }]),
@@ -1258,10 +1262,10 @@ fn parse_select_wildcard() {
 
 #[test]
 fn parse_count_wildcard() {
-    verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
+    verified_only_select("SELECT COUNT(*) FROM orders WHERE id = 10");
 
     verified_only_select(
-        "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
+        "SELECT COUNT(Employee.*) FROM orders JOIN Employee ON orders.employee = Employee.id",
     );
 }
 
@@ -2692,8 +2696,10 @@ fn parse_in_error() {
     // <expr> IN <expr> is no valid, except in dialects that accept an
     // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res =
-        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+    let res = all_dialects_except(|d| {
+        d.supports_in_unparenthesized_expr() || d.supports_in_table_expression()
+    })
+    .parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
@@ -2710,6 +2716,130 @@ fn parse_in_unparenthesized_expr() {
     // The branch must not fire when the next token is `(` (regressions).
     dialects.verified_expr("x IN (1, 2, 3)");
     dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
+}
+
+#[test]
+fn parse_in_table_expression() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for sql in [
+        "SELECT a IN t FROM t",
+        "SELECT a NOT IN t FROM t",
+        "SELECT a IN main.t FROM t",
+        "SELECT a IN f() FROM t",
+        "SELECT a NOT IN f(1, 2) FROM t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    match dialects.verified_expr("a IN main.f(1)") {
+        Expr::In {
+            target:
+                InTarget::Table {
+                    name,
+                    args: Some(args),
+                },
+            negated: false,
+            global: false,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "main.f");
+            assert_eq!(args.len(), 1);
+        }
+        other => panic!("expected an IN table target, got {other:?}"),
+    }
+    dialects.verified_stmt("SELECT a IN (1, 2) FROM t");
+    dialects.verified_stmt("SELECT a IN (SELECT b FROM u) FROM t");
+}
+
+/// Malformed table and table-function targets of `IN` keep their precise
+/// parse errors.
+#[test]
+fn parse_in_table_expression_malformed_targets() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for (sql, expected) in [
+        // A dangling dot leaves the qualified name without its last part.
+        ("SELECT a IN t.", "Expected: identifier, found: EOF"),
+        // A trailing comma leaves the next argument without an expression.
+        ("SELECT a IN f(x,)", "Expected: an expression, found: )"),
+        // The argument list never closes its parenthesis.
+        ("SELECT a IN f(1, 2", "Expected: ), found: EOF"),
+    ] {
+        assert_eq!(
+            ParserError::ParserError(expected.to_string()),
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            "{sql}"
+        );
+    }
+}
+
+/// Display of an `IN` table target propagates formatter errors from the
+/// name and the argument list writes.
+#[test]
+fn display_in_table_target_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(char);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let plain = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: None,
+    };
+    let mut writer = RejectingWriter('t');
+    assert_eq!(write!(writer, "{plain}"), Err(fmt::Error));
+
+    let function = InTarget::Table {
+        name: ObjectName::from(Ident::new("t")),
+        args: Some(vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+            Expr::value(number("1")),
+        ))]),
+    };
+    let mut writer = RejectingWriter('1');
+    assert_eq!(write!(writer, "{function}"), Err(fmt::Error));
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let stmts = Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let mut relations = vec![];
+        let _ = sqlparser::ast::visit_relations(&stmts, |relation| {
+            relations.push(relation.to_string());
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(relations, ["lookup", "source"], "{dialect:?}");
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_mut_in_table_target() {
+    let dialects = all_dialects_where(|d| d.supports_in_table_expression());
+    for dialect in dialects.dialects {
+        let mut stmts =
+            Parser::parse_sql(dialect.as_ref(), "SELECT a IN lookup FROM source").unwrap();
+        let _ = sqlparser::ast::visit_relations_mut(&mut stmts, |relation| {
+            if relation.to_string() == "lookup" {
+                *relation = ObjectName::from(Ident::new("renamed"));
+            }
+            core::ops::ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(
+            stmts[0].to_string(),
+            "SELECT a IN renamed FROM source",
+            "{dialect:?}"
+        );
+    }
 }
 
 #[test]
@@ -2877,6 +3007,66 @@ fn parse_between_with_expr() {
         },
         select.selection.unwrap(),
     )
+}
+
+#[test]
+fn parse_comparison_in_between_low_bound() {
+    let dialects = all_dialects_where(|d| d.supports_comparison_in_between_low_bound());
+    for (sql, expected) in [
+        ("a BETWEEN b > 1 AND c", BinaryOperator::Gt),
+        ("a BETWEEN b <> 1 AND c", BinaryOperator::NotEq),
+        ("a BETWEEN b + 1 >= 2 AND c", BinaryOperator::GtEq),
+    ] {
+        match dialects.verified_expr(sql) {
+            Expr::Between { low, .. } => assert!(
+                matches!(&*low, Expr::BinaryOp { op, .. } if *op == expected),
+                "{sql}: {low:?}"
+            ),
+            other => panic!("{sql}: expected BETWEEN, got {other:?}"),
+        }
+    }
+    for (sql, error) in [
+        (
+            "SELECT a BETWEEN b = 1 = true AND c",
+            "Expected: AND, found: =",
+        ),
+        (
+            "SELECT a BETWEEN b LIKE 'x' AND c",
+            "Expected: AND, found: LIKE",
+        ),
+        (
+            "SELECT a BETWEEN b IS NULL AND c",
+            "Expected: AND, found: IS",
+        ),
+        (
+            "SELECT a BETWEEN b BETWEEN 1 AND 2 AND c",
+            "Expected: AND, found: BETWEEN",
+        ),
+        (
+            "SELECT a BETWEEN (1 AND 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
+        (
+            "SELECT a BETWEEN b = (1, 2 FROM t",
+            "Expected: ), found: FROM",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.to_string())),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_except(|d| {
+            d.supports_comparison_in_between_low_bound() || d.is::<SQLiteDialect>()
+        })
+        .parse_sql_statements("SELECT a BETWEEN b > 1 AND c"),
+        Err(ParserError::ParserError(
+            "Expected: AND, found: >".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -3935,6 +4125,28 @@ fn parse_agg_with_order_by() {
     ] {
         supported_dialects.verified_stmt(sql);
     }
+}
+
+#[test]
+fn parse_aggregate_order_by_with_empty_args() {
+    let dialects = all_dialects_where(|d| d.supports_aggregate_order_by_with_empty_args());
+    dialects.verified_stmt("SELECT count(ORDER BY a) FROM t");
+    dialects.verified_stmt("SELECT count(ORDER BY a ASC, b DESC) FROM t");
+    dialects.verified_stmt("SELECT count(ALL ORDER BY a) FROM t");
+    assert_eq!(
+        dialects.parse_sql_statements("SELECT count(DISTINCT ORDER BY a) FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: BY".to_string()
+        ))
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_aggregate_order_by_with_empty_args())
+            .parse_sql_statements("SELECT count(ORDER BY a) FROM t"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: BY".to_string()
+        ))
+    );
 }
 
 #[test]
@@ -5045,13 +5257,13 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ],
@@ -5302,7 +5514,8 @@ fn parse_alter_table() {
                         value: "classification".to_string(),
                         quote_style: Some('\''),
                         span: Span::empty(),
-                    },
+                    }
+                    .into(),
                     value: Expr::Value(
                         (Value::SingleQuotedString("parquet".to_string())).with_empty_span()
                     ),
@@ -5323,7 +5536,8 @@ fn parse_alter_table() {
                             value: "autovacuum_vacuum_scale_factor".to_string(),
                             quote_style: None,
                             span: Span::empty(),
-                        },
+                        }
+                        .into(),
                         value: Expr::Value(test_utils::number("0.01").with_empty_span()),
                     },
                     SqlOption::KeyValue {
@@ -5331,7 +5545,8 @@ fn parse_alter_table() {
                             value: "autovacuum_vacuum_threshold".to_string(),
                             quote_style: None,
                             span: Span::empty(),
-                        },
+                        }
+                        .into(),
                         value: Expr::Value(test_utils::number("500").with_empty_span()),
                     }
                 ],
@@ -5453,13 +5668,19 @@ fn parse_alter_index() {
 fn parse_alter_view() {
     let sql = "ALTER VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterView {
+            materialized: false,
             name,
-            columns,
-            query,
-            with_options,
-        } => {
+            if_exists,
+            operation:
+                AlterViewOperation::As {
+                    columns,
+                    query,
+                    with_options,
+                },
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
+            assert!(!if_exists);
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert_eq!(with_options, vec![]);
@@ -5472,17 +5693,20 @@ fn parse_alter_view() {
 fn parse_alter_view_with_options() {
     let sql = "ALTER VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::AlterView { with_options, .. } => {
+        Statement::AlterView(AlterView {
+            operation: AlterViewOperation::As { with_options, .. },
+            ..
+        }) => {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ],
@@ -5491,24 +5715,209 @@ fn parse_alter_view_with_options() {
         }
         _ => unreachable!(),
     }
+
+    verified_stmt("ALTER VIEW v (a) WITH (x = 1) AS SELECT 1");
 }
 
 #[test]
 fn parse_alter_view_with_columns() {
     let sql = "ALTER VIEW v (has, cols) AS SELECT 1, 2";
     match verified_stmt(sql) {
-        Statement::AlterView {
+        Statement::AlterView(AlterView {
+            materialized: false,
             name,
-            columns,
-            query,
-            with_options,
-        } => {
+            if_exists,
+            operation:
+                AlterViewOperation::As {
+                    columns,
+                    query,
+                    with_options,
+                },
+        }) => {
             assert_eq!("v", name.to_string());
+            assert!(!if_exists);
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_view_operations() {
+    let operation = |sql: &str| match verified_stmt(sql) {
+        Statement::AlterView(AlterView { operation, .. }) => operation,
+        stmt => panic!("Expected ALTER VIEW, got {stmt:?}"),
+    };
+
+    assert_eq!(
+        verified_stmt("ALTER VIEW IF EXISTS s.v OWNER TO o"),
+        Statement::AlterView(AlterView {
+            materialized: false,
+            name: ObjectName::from(vec![Ident::new("s"), Ident::new("v")]),
+            if_exists: true,
+            operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("o"))),
+        })
+    );
+    assert_eq!(
+        operation("ALTER VIEW v OWNER TO CURRENT_USER"),
+        AlterViewOperation::OwnerTo(Owner::CurrentUser)
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET (check_option = 'local', security_barrier)"),
+        AlterViewOperation::SetOptions {
+            options: vec![
+                SqlOption::KeyValue {
+                    key: ObjectName::from(vec![Ident::new("check_option")]),
+                    value: Expr::Value(Value::SingleQuotedString("local".into()).with_empty_span()),
+                },
+                SqlOption::Ident(ObjectName::from(vec![Ident::new("security_barrier")])),
+            ],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RESET (security_invoker, check_option)"),
+        AlterViewOperation::ResetOptions {
+            options: vec![Ident::new("security_invoker"), Ident::new("check_option")],
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c SET DEFAULT 1"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::SetDefault {
+                value: Expr::value(number("1")),
+            },
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v ALTER COLUMN c DROP DEFAULT"),
+        AlterViewOperation::AlterColumn {
+            column_name: Ident::new("c"),
+            op: AlterColumnOperation::DropDefault,
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME COLUMN a TO b"),
+        AlterViewOperation::RenameColumn {
+            old_column_name: Ident::new("a"),
+            new_column_name: Ident::new("b"),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v RENAME TO w"),
+        AlterViewOperation::RenameTo {
+            new_name: ObjectName::from(vec![Ident::new("w")]),
+        }
+    );
+    assert_eq!(
+        operation("ALTER VIEW v SET SCHEMA s"),
+        AlterViewOperation::SetSchema {
+            schema_name: ObjectName::from(vec![Ident::new("s")]),
+        }
+    );
+
+    one_statement_parses_to(
+        "ALTER VIEW v ALTER c DROP DEFAULT",
+        "ALTER VIEW v ALTER COLUMN c DROP DEFAULT",
+    );
+    one_statement_parses_to(
+        "ALTER VIEW v RENAME a TO b",
+        "ALTER VIEW v RENAME COLUMN a TO b",
+    );
+
+    for (sql, expected) in [
+        ("ALTER VIEW 123", "Expected: identifier, found: 123"),
+        ("ALTER VIEW v SET ()", "Expected: identifier, found: )"),
+        ("ALTER VIEW IF v OWNER TO o", "Expected: AS, found: v"),
+        ("ALTER VIEW v RESET (a = 1)", "Expected: ), found: ="),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET NOT NULL",
+            "Expected: SET DEFAULT or DROP DEFAULT after ALTER COLUMN, found: SET",
+        ),
+        ("ALTER VIEW v RENAME COLUMN a", "Expected: TO, found: EOF"),
+        (
+            "ALTER VIEW v OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. \
+             sql parser error: Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER VIEW v SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v SET a", "Expected: (, found: a"),
+        (
+            "ALTER VIEW v SET (a = )",
+            "Expected: an expression, found: )",
+        ),
+        ("ALTER VIEW v SET (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v RESET a", "Expected: (, found: a"),
+        ("ALTER VIEW v RESET (a b)", "Expected: ), found: b"),
+        ("ALTER VIEW v RENAME TO", "Expected: identifier, found: EOF"),
+        ("ALTER VIEW v RENAME", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v RENAME COLUMN a TO",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER VIEW v ALTER", "Expected: identifier, found: EOF"),
+        (
+            "ALTER VIEW v ALTER COLUMN c SET DEFAULT",
+            "Expected: an expression, found: EOF",
+        ),
+        ("ALTER VIEW v (a", "Expected: ), found: EOF"),
+        ("ALTER VIEW v WITH (a", "Expected: =, found: EOF"),
+        ("ALTER VIEW v WITH (a = 1)", "Expected: AS, found: EOF"),
+        (
+            "ALTER VIEW v AS",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_trailing_commas())
+            .parse_sql_statements("ALTER VIEW v RESET (a, )")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string()),
+    );
+}
+
+#[test]
+fn display_alter_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let with_options = verified_stmt("ALTER VIEW IF EXISTS v WITH (x = 1) AS SELECT 1");
+    for rejected in ["ALTER ", "VIEW ", "IF EXISTS ", "WITH ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{with_options}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+
+    let columns = verified_stmt("ALTER VIEW IF EXISTS v (zeta) AS SELECT 1");
+    for rejected in ["ALTER ", "VIEW ", "IF EXISTS ", "("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{columns}"), Err(fmt::Error), "{rejected:?}");
     }
 }
 
@@ -5748,6 +6157,154 @@ fn parse_bad_constraint() {
         ),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_sequence_options_in_any_order() {
+    // The sequence options form an unordered list, so every permutation below
+    // is accepted and round-trips in the order written.
+    let dialects = all_dialects();
+    for sql in [
+        "CREATE SEQUENCE sa START WITH 1 INCREMENT BY 1",
+        "CREATE SEQUENCE sb INCREMENT BY 1 START WITH 1",
+        "CREATE SEQUENCE sc CACHE 1 START WITH 1",
+        "CREATE SEQUENCE sd CYCLE INCREMENT BY 2",
+        "CREATE SEQUENCE se NO MAXVALUE NO MINVALUE NO CYCLE INCREMENT 1",
+        "CREATE SEQUENCE sf AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+        "CREATE SEQUENCE sg START WITH 1 AS BIGINT",
+        "CREATE SEQUENCE sh OWNED BY t.c START WITH 5",
+        "CREATE SEQUENCE si OWNED BY NONE INCREMENT BY 2",
+        "CREATE SEQUENCE sj CACHE 1 AS BIGINT OWNED BY a.b START WITH 3",
+        "CREATE SEQUENCE sk OWNED BY none.c",
+        "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY ( START WITH 10 INCREMENT BY 1 CYCLE ))",
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( CACHE 2 INCREMENT 1 )",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    // This is what `pg_dump -s` emits for a table with a SERIAL column.
+    dialects.one_statement_parses_to(
+        r#"CREATE SEQUENCE public.accounts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1"#,
+        "CREATE SEQUENCE public.accounts_id_seq AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+    );
+
+    // The parsed options keep the order they were written in, and `OWNED BY NONE`
+    // is distinct from being owned by something called `NONE`.
+    let Statement::CreateSequence {
+        sequence_options, ..
+    } = dialects.verified_stmt("CREATE SEQUENCE sk CACHE 1 OWNED BY NONE AS BIGINT INCREMENT BY 3")
+    else {
+        panic!("expected a CREATE SEQUENCE statement");
+    };
+    assert!(matches!(
+        sequence_options.as_slice(),
+        [
+            SequenceOptions::Cache(_),
+            SequenceOptions::OwnedBy(None),
+            SequenceOptions::DataType(DataType::BigInt(None)),
+            SequenceOptions::IncrementBy(_, true),
+        ]
+    ));
+
+    for (sql, expected) in [
+        // Each option may appear only once.
+        (
+            "CREATE SEQUENCE s START WITH 1 START 2",
+            "START specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s INCREMENT 1 INCREMENT BY 2",
+            "INCREMENT specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s MINVALUE 1 NO MINVALUE",
+            "MINVALUE | NO MINVALUE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s MAXVALUE 1 NO MAXVALUE",
+            "MAXVALUE | NO MAXVALUE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s CACHE 1 CACHE 2",
+            "CACHE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s CYCLE NO CYCLE",
+            "CYCLE | NO CYCLE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s AS INT AS BIGINT",
+            "AS specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s OWNED BY a.b OWNED BY NONE",
+            "OWNED BY specified more than once",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (START 1 START 2))",
+            "START specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s AS",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "CREATE SEQUENCE s OWNED BY",
+            "Expected: identifier, found: EOF",
+        ),
+        // Identity columns take the shared list without `AS` and `OWNED BY`.
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (AS BIGINT))",
+            "Expected: ), found: AS",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED ALWAYS AS IDENTITY (OWNED BY t.id))",
+            "Expected: ), found: OWNED",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn sequence_options_reject_non_numeric_values() {
+    let dialects = all_dialects();
+    for (sql, expected) in [
+        (
+            "CREATE SEQUENCE s MINVALUE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s MAXVALUE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s START WITH x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE SEQUENCE s CACHE x",
+            "Expected: a concrete value, found: x",
+        ),
+        (
+            "CREATE TABLE t (id INT GENERATED BY DEFAULT AS IDENTITY (MINVALUE x))",
+            "Expected: a concrete value, found: x",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
 }
 
 #[test]
@@ -6724,8 +7281,11 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
+    // PostgreSQL reads `WEEK` and the plural units as a column alias.
+    let dialects = all_dialects_except(|d| d.is::<PostgreSqlDialect>());
+
     let sql = "SELECT INTERVAL 5 DAYS";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::value(number("5"))),
@@ -6766,18 +7326,18 @@ fn parse_interval_all() {
 
     verified_only_select("SELECT INTERVAL '1' YEAR");
     verified_only_select("SELECT INTERVAL '1' MONTH");
-    verified_only_select("SELECT INTERVAL '1' WEEK");
+    dialects.verified_only_select("SELECT INTERVAL '1' WEEK");
     verified_only_select("SELECT INTERVAL '1' DAY");
     verified_only_select("SELECT INTERVAL '1' HOUR");
     verified_only_select("SELECT INTERVAL '1' MINUTE");
     verified_only_select("SELECT INTERVAL '1' SECOND");
-    verified_only_select("SELECT INTERVAL '1' YEARS");
-    verified_only_select("SELECT INTERVAL '1' MONTHS");
-    verified_only_select("SELECT INTERVAL '1' WEEKS");
-    verified_only_select("SELECT INTERVAL '1' DAYS");
-    verified_only_select("SELECT INTERVAL '1' HOURS");
-    verified_only_select("SELECT INTERVAL '1' MINUTES");
-    verified_only_select("SELECT INTERVAL '1' SECONDS");
+    dialects.verified_only_select("SELECT INTERVAL '1' YEARS");
+    dialects.verified_only_select("SELECT INTERVAL '1' MONTHS");
+    dialects.verified_only_select("SELECT INTERVAL '1' WEEKS");
+    dialects.verified_only_select("SELECT INTERVAL '1' DAYS");
+    dialects.verified_only_select("SELECT INTERVAL '1' HOURS");
+    dialects.verified_only_select("SELECT INTERVAL '1' MINUTES");
+    dialects.verified_only_select("SELECT INTERVAL '1' SECONDS");
     verified_only_select("SELECT INTERVAL '1' YEAR TO MONTH");
     verified_only_select("SELECT INTERVAL '1' DAY TO HOUR");
     verified_only_select("SELECT INTERVAL '1' DAY TO MINUTE");
@@ -6787,18 +7347,18 @@ fn parse_interval_all() {
     verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
     verified_only_select("SELECT INTERVAL 1 YEAR");
     verified_only_select("SELECT INTERVAL 1 MONTH");
-    verified_only_select("SELECT INTERVAL 1 WEEK");
+    dialects.verified_only_select("SELECT INTERVAL 1 WEEK");
     verified_only_select("SELECT INTERVAL 1 DAY");
     verified_only_select("SELECT INTERVAL 1 HOUR");
     verified_only_select("SELECT INTERVAL 1 MINUTE");
     verified_only_select("SELECT INTERVAL 1 SECOND");
-    verified_only_select("SELECT INTERVAL 1 YEARS");
-    verified_only_select("SELECT INTERVAL 1 MONTHS");
-    verified_only_select("SELECT INTERVAL 1 WEEKS");
-    verified_only_select("SELECT INTERVAL 1 DAYS");
-    verified_only_select("SELECT INTERVAL 1 HOURS");
-    verified_only_select("SELECT INTERVAL 1 MINUTES");
-    verified_only_select("SELECT INTERVAL 1 SECONDS");
+    dialects.verified_only_select("SELECT INTERVAL 1 YEARS");
+    dialects.verified_only_select("SELECT INTERVAL 1 MONTHS");
+    dialects.verified_only_select("SELECT INTERVAL 1 WEEKS");
+    dialects.verified_only_select("SELECT INTERVAL 1 DAYS");
+    dialects.verified_only_select("SELECT INTERVAL 1 HOURS");
+    dialects.verified_only_select("SELECT INTERVAL 1 MINUTES");
+    dialects.verified_only_select("SELECT INTERVAL 1 SECONDS");
     verified_only_select(
         "SELECT '2 years 15 months 100 weeks 99 hours 123456789 milliseconds'::INTERVAL",
     );
@@ -7868,6 +8428,7 @@ fn parse_joins_on() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -8010,6 +8571,7 @@ fn parse_joins_using() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
@@ -8105,6 +8667,7 @@ fn parse_natural_join() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -8875,13 +9438,13 @@ fn parse_create_view_with_options() {
             assert_eq!(
                 CreateTableOptions::With(vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ]),
@@ -10246,7 +10809,7 @@ fn parse_create_role() {
     }
 
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
-    match verified_stmt(sql) {
+    match all_dialects_where(|d| d.supports_create_role_if_not_exists()).verified_stmt(sql) {
         Statement::CreateRole(create_role) => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
             assert!(create_role.if_not_exists);
@@ -10621,6 +11184,7 @@ fn parse_merge() {
                     json_path: None,
                     sample: None,
                     index_directives: vec![],
+                    inheritance: None,
                 }
             );
             assert_eq!(table, table_no_into);
@@ -11390,6 +11954,8 @@ fn parse_is_boolean() {
         verified_expr(sql)
     );
 
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
+
     let sql = "a IS NORMALIZED";
     assert_eq!(
         IsNormalized {
@@ -11397,7 +11963,7 @@ fn parse_is_boolean() {
             form: None,
             negated: false,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT NORMALIZED";
@@ -11407,7 +11973,7 @@ fn parse_is_boolean() {
             form: None,
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NFKC NORMALIZED";
@@ -11417,7 +11983,7 @@ fn parse_is_boolean() {
             form: Some(NormalizationForm::NFKC),
             negated: false,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT NFKD NORMALIZED";
@@ -11427,19 +11993,19 @@ fn parse_is_boolean() {
             form: Some(NormalizationForm::NFKD),
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS UNKNOWN";
     assert_eq!(
         IsUnknown(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     let sql = "a IS NOT UNKNOWN";
     assert_eq!(
         IsNotUnknown(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     verified_stmt("SELECT f FROM foo WHERE field IS TRUE");
@@ -11448,14 +12014,14 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
 
-    verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
 
-    verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
-    verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
+    dialects.verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
     for (sql, found) in [
         ("SELECT f from foo where field is 0", "0"),
@@ -11464,7 +12030,7 @@ fn parse_is_boolean() {
         ("SELECT s, s IS TRIM(' NFKC ') FROM foo", "TRIM"),
     ] {
         assert_eq!(
-            parse_sql_statements(sql),
+            dialects.parse_sql_statements(sql),
             Err(ParserError::ParserError(format!(
                 "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: {found}"
             ))),
@@ -11476,6 +12042,7 @@ fn parse_is_boolean() {
 #[test]
 fn parse_is_json_predicate() {
     use self::Expr::*;
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
 
     // Assert the full AST once for a case that exercises every field.
     let sql = "a IS NOT JSON OBJECT WITHOUT UNIQUE KEYS";
@@ -11486,24 +12053,24 @@ fn parse_is_json_predicate() {
             unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
             negated: true,
         },
-        verified_expr(sql)
+        dialects.verified_expr(sql)
     );
 
     // The remaining forms only need to round-trip.
-    verified_expr("a IS JSON");
-    verified_expr("a IS NOT JSON");
-    verified_expr("a IS JSON VALUE");
-    verified_expr("a IS JSON SCALAR");
-    verified_expr("a IS JSON ARRAY");
-    verified_expr("a IS JSON OBJECT");
-    verified_expr("a IS JSON WITH UNIQUE KEYS");
-    verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
+    dialects.verified_expr("a IS JSON");
+    dialects.verified_expr("a IS NOT JSON");
+    dialects.verified_expr("a IS JSON VALUE");
+    dialects.verified_expr("a IS JSON SCALAR");
+    dialects.verified_expr("a IS JSON ARRAY");
+    dialects.verified_expr("a IS JSON OBJECT");
+    dialects.verified_expr("a IS JSON WITH UNIQUE KEYS");
+    dialects.verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
 
-    all_dialects().expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
-    all_dialects().expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
+    dialects.expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
+    dialects.expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
 
     assert_matches!(
-        verified_expr("NOT a IS JSON"),
+        dialects.verified_expr("NOT a IS JSON"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             expr
@@ -11513,7 +12080,7 @@ fn parse_is_json_predicate() {
 
 #[test]
 fn parse_is_json_predicate_invalid() {
-    let dialects = all_dialects();
+    let dialects = all_dialects_except(|dialect| dialect.supports_is_operator());
 
     for (sql, err) in [
         (
@@ -11676,11 +12243,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").into(),
                     value: Expr::Value((Value::SingleQuotedString("V1".into())).with_empty_span()),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").into(),
                     value: Expr::value(number("0.88")),
                 },
             ],
@@ -11701,11 +12268,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").into(),
                     value: Expr::Value((Value::SingleQuotedString("V1".into())).with_empty_span()),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").into(),
                     value: Expr::value(number("0.88")),
                 },
             ],
@@ -11726,11 +12293,11 @@ fn parse_cache_table() {
             has_as: true,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").into(),
                     value: Expr::Value((Value::SingleQuotedString("V1".into())).with_empty_span()),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").into(),
                     value: Expr::value(number("0.88")),
                 },
             ],
@@ -12098,6 +12665,7 @@ fn parse_pivot_table() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -12178,6 +12746,7 @@ fn parse_pivot_table() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             }),
             aggregate_functions: vec![
                 ExprWithAlias {
@@ -12264,6 +12833,7 @@ fn parse_unpivot_table() {
             json_path: None,
             sample: None,
             index_directives: vec![],
+            inheritance: None,
         }),
         null_inclusion: None,
         value: Expr::Identifier(Ident::new("quantity")),
@@ -12523,6 +13093,7 @@ fn parse_select_table_with_index_hints() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![],
         }]
@@ -12552,6 +13123,7 @@ fn parse_pivot_unpivot_table() {
                     json_path: None,
                     sample: None,
                     index_directives: vec![],
+                    inheritance: None,
                 }),
                 null_inclusion: None,
                 value: Expr::Identifier(Ident::new("population")),
@@ -13284,7 +13856,8 @@ fn parse_unload() {
                     value: "format".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                },
+                }
+                .into(),
                 value: Expr::Value(
                     (Value::SingleQuotedString("AVRO".to_string())).with_empty_span()
                 )
@@ -15271,6 +15844,129 @@ fn test_drop_policy() {
 }
 
 #[test]
+fn parse_drop_rule() {
+    let sql = "DROP RULE r ON t";
+    match all_dialects().verified_stmt(sql) {
+        Statement::DropRule(DropRule {
+            if_exists,
+            name,
+            table_name,
+            drop_behavior,
+        }) => {
+            assert!(!if_exists);
+            assert_eq!(name.to_string(), "r");
+            assert_eq!(table_name.to_string(), "t");
+            assert_eq!(drop_behavior, None);
+        }
+        _ => unreachable!("Expected DROP RULE"),
+    }
+
+    all_dialects().verified_stmt("DROP RULE IF EXISTS r ON s1.t CASCADE");
+    all_dialects().verified_stmt("DROP RULE r ON t RESTRICT");
+
+    // the table name is mandatory
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("DROP RULE r")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ON, found: EOF"
+    );
+}
+
+#[test]
+fn parse_drop_rule_rejects_missing_names() {
+    for (sql, expected) in [
+        ("DROP RULE", "Expected: identifier, found: EOF"),
+        ("DROP RULE r ON", "Expected: identifier, found: EOF"),
+        ("DROP 1", "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: 1"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn parse_drop_rule_rejects_lists_and_extra_options() {
+    for (sql, expected) in [
+        ("DROP RULE r1, r2 ON t", "Expected: ON, found: ,"),
+        ("DROP RULE s.r ON t", "Expected: ON, found: ."),
+        ("DROP RULE 1 ON t", "Expected: identifier, found: 1"),
+        ("DROP RULE IF EXISTS", "Expected: identifier, found: EOF"),
+        ("DROP RULE IF NOT EXISTS r ON t", "Expected: ON, found: NOT"),
+        ("DROP RULE r t", "Expected: ON, found: t"),
+        ("DROP RULE r ON (t)", "Expected: identifier, found: ("),
+        (
+            "DROP RULE r ON t1, t2",
+            "Expected: end of statement, found: ,",
+        ),
+        (
+            "DROP RULE r ON t ON t",
+            "Expected: end of statement, found: ON",
+        ),
+        (
+            "DROP RULE r ON t CASCADE RESTRICT",
+            "Expected: end of statement, found: RESTRICT",
+        ),
+        (
+            "DROP RULE r ON t RESTRICT CASCADE",
+            "Expected: end of statement, found: CASCADE",
+        ),
+        (
+            "DROP RULE r ON t PURGE",
+            "Expected: end of statement, found: PURGE",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql),
+            Err(ParserError::ParserError(expected.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_drop_rule_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = all_dialects().verified_stmt("DROP RULE r ON t");
+    let mut writer = RejectingWriter("DROP");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+
+    let statement = all_dialects().verified_stmt("DROP RULE r ON t CASCADE");
+    let mut writer = RejectingWriter("CASCADE");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_drop_rule_spans() {
+    let dialects = all_dialects();
+    let sql = "DROP RULE r ON t CASCADE";
+    for dialect in &dialects.dialects {
+        let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+        assert_eq!(
+            statements[0].span(),
+            Span::new(Location::new(1, 11), Location::new(1, 17)),
+            "{dialect:?} {sql}"
+        );
+    }
+}
+
+#[test]
 fn test_alter_policy() {
     match verified_stmt("ALTER POLICY old_policy ON my_table RENAME TO new_policy") {
         Statement::AlterPolicy(AlterPolicy {
@@ -15352,6 +16048,168 @@ fn test_alter_policy() {
 }
 
 #[test]
+fn test_alter_trigger() {
+    match verified_stmt("ALTER TRIGGER old_trigger ON my_table RENAME TO new_trigger") {
+        Statement::AlterTrigger(AlterTrigger {
+            name,
+            table_name,
+            operation,
+        }) => {
+            assert_eq!(name.to_string(), "old_trigger");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::Rename {
+                    new_name: Ident::new("new_trigger")
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ALTER TRIGGER my_trigger ON my_table DEPENDS ON EXTENSION my_extension") {
+        Statement::AlterTrigger(AlterTrigger { operation, .. }) => {
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::DependsOnExtension {
+                    no: false,
+                    extension_name: ObjectName::from(Ident::new("my_extension"))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ALTER TRIGGER my_trigger ON my_table NO DEPENDS ON EXTENSION my_extension")
+    {
+        Statement::AlterTrigger(AlterTrigger { operation, .. }) => {
+            assert_eq!(
+                operation,
+                AlterTriggerOperation::DependsOnExtension {
+                    no: true,
+                    extension_name: ObjectName::from(Ident::new("my_extension"))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // a qualified table name is preserved
+    verified_stmt("ALTER TRIGGER my_trigger ON my_schema.my_table RENAME TO new_trigger");
+
+    // an operation is required
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: RENAME, DEPENDS or NO DEPENDS after ALTER TRIGGER, found: EOF"
+    );
+    // missing TO in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table RENAME")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: EOF"
+    );
+    // missing new name in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table RENAME TO")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+    // NO must be followed by DEPENDS
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table NO EXTENSION my_extension")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: DEPENDS after NO, found: EXTENSION"
+    );
+    // missing the extension name
+    assert_eq!(
+        parse_sql_statements("ALTER TRIGGER my_trigger ON my_table DEPENDS ON EXTENSION")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_alter_trigger_rejects_malformed_statements() {
+    for (sql, expected) in [
+        ("ALTER TRIGGER", "Expected: identifier, found: EOF"),
+        ("ALTER TRIGGER t", "Expected: ON, found: EOF"),
+        ("ALTER TRIGGER t ON", "Expected: identifier, found: EOF"),
+        ("ALTER TRIGGER t ON tbl DEPENDS", "Expected: ON, found: EOF"),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+        );
+    }
+}
+
+#[test]
+fn display_alter_trigger_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = verified_stmt("ALTER TRIGGER t ON tbl NO DEPENDS ON EXTENSION ext");
+    let mut writer = RejectingWriter("NO ");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_alter_trigger_spans() {
+    let dialects = all_dialects();
+    for (sql, end) in [
+        (
+            "ALTER TRIGGER trg ON t RENAME TO trg2",
+            Location::new(1, 38),
+        ),
+        (
+            "ALTER TRIGGER trg ON t DEPENDS ON EXTENSION ext",
+            Location::new(1, 48),
+        ),
+    ] {
+        for dialect in &dialects.dialects {
+            let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+            assert_eq!(
+                statements[0].span(),
+                Span::new(Location::new(1, 15), end),
+                "{dialect:?} {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn parse_alter_rejects_missing_or_unknown_object_type() {
+    let objects = "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR";
+    for (sql, found) in [
+        ("ALTER", "EOF"),
+        ("ALTER 1", "1"),
+        ("ALTER unknown", "unknown"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("Expected: {objects}, found: {found}")),
+        );
+    }
+}
+
+#[test]
 fn test_create_connector() {
     let sql = "CREATE CONNECTOR my_connector \
                TYPE 'jdbc' \
@@ -15373,13 +16231,13 @@ fn test_create_connector() {
                 with_dcproperties,
                 Some(vec![
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "user"),
+                        key: Ident::with_quote('\'', "user").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("root".to_string())).with_empty_span()
                         )
                     },
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "password"),
+                        key: Ident::with_quote('\'', "password").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("password".to_string())).with_empty_span()
                         )
@@ -15444,13 +16302,13 @@ fn test_alter_connector() {
                 properties,
                 Some(vec![
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "user"),
+                        key: Ident::with_quote('\'', "user").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("root".to_string())).with_empty_span()
                         )
                     },
                     SqlOption::KeyValue {
-                        key: Ident::with_quote('\'', "password"),
+                        key: Ident::with_quote('\'', "password").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("password".to_string())).with_empty_span()
                         )
@@ -18244,8 +19102,8 @@ fn parse_pipeline_operator_negative_tests() {
         ),
         // Test that JOIN without table name fails
         (
-            "SELECT * FROM users |> JOIN ON users.id = orders.user_id",
-            "Expected: end of statement, found: .",
+            "SELECT * FROM users |> JOIN",
+            "Expected: identifier, found: EOF",
         ),
         // Test that CROSS JOIN with ON condition fails
         (
@@ -18479,6 +19337,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18492,6 +19351,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -18546,6 +19406,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18559,6 +19420,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
@@ -18613,6 +19475,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18626,6 +19489,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
@@ -18680,6 +19544,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18693,6 +19558,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
@@ -18747,6 +19613,7 @@ fn test_nested_join_without_parentheses() {
                         json_path: None,
                         sample: None,
                         index_directives: vec![],
+                        inheritance: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -18760,6 +19627,7 @@ fn test_nested_join_without_parentheses() {
                             json_path: None,
                             sample: None,
                             index_directives: vec![],
+                            inheritance: None,
                         },
                         global: false,
                         join_operator: JoinOperator::FullOuter(JoinConstraint::On(
@@ -18808,7 +19676,7 @@ fn parse_create_procedure_with_language() {
         } => {
             assert_eq!(or_alter, false);
             assert_eq!(name.to_string(), "test_proc");
-            assert_eq!(params, Some(vec![]));
+            assert_eq!(params, None);
             assert_eq!(
                 language,
                 Some(Ident {
@@ -20734,6 +21602,29 @@ fn parse_hex_string_literal_display_escaping() {
 }
 
 #[test]
+fn on_keyword_rejected_as_table_name() {
+    let dialects = all_dialects_where(|d| !d.is_table_factor(&Keyword::ON, &mut Parser::new(d)));
+    for sql in [
+        "SELECT * FROM ON",
+        "SELECT * FROM t JOIN ON",
+        "SELECT * FROM t JOIN ON u ON TRUE",
+    ] {
+        assert_eq!(
+            ParserError::ParserError("Expected: table name, found: ON".to_string()),
+            dialects.parse_sql_statements(sql).unwrap_err()
+        );
+    }
+}
+
+#[test]
+fn quoted_on_allowed_as_table_name() {
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('"'));
+    dialects.verified_stmt(r#"SELECT * FROM "ON""#);
+    let dialects = all_dialects_where(|d| d.is_delimited_identifier_start('`'));
+    dialects.verified_stmt("SELECT * FROM `ON`");
+}
+
+#[test]
 fn parse_stage_table_factor() {
     let supported = all_dialects_where(|d| d.supports_stages());
     supported.verified_stmt("SELECT * FROM @stage");
@@ -20746,6 +21637,228 @@ fn parse_stage_table_factor() {
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
+}
+
+#[test]
+fn parse_create_rule() {
+    let sql = "CREATE RULE r AS ON DELETE TO docs DO INSTEAD NOTHING";
+    match all_dialects().verified_stmt(sql) {
+        Statement::CreateRule(CreateRule {
+            or_replace,
+            name,
+            event,
+            table_name,
+            condition,
+            do_kind,
+            action,
+        }) => {
+            assert!(!or_replace);
+            assert_eq!(name.to_string(), "r");
+            assert_eq!(event, CreateRuleEvent::Delete);
+            assert_eq!(table_name.to_string(), "docs");
+            assert!(condition.is_none());
+            assert_eq!(do_kind, Some(CreateRuleDoKind::Instead));
+            assert_eq!(action, CreateRuleAction::Nothing);
+        }
+        _ => unreachable!("Expected CREATE RULE"),
+    }
+
+    all_dialects().verified_stmt("CREATE OR REPLACE RULE r AS ON SELECT TO t DO ALSO NOTHING");
+    all_dialects().verified_stmt("CREATE RULE r AS ON INSERT TO s1.t DO NOTHING");
+    all_dialects().verified_stmt(
+        "CREATE RULE r AS ON UPDATE TO t WHERE quantity > 100 DO ALSO INSERT INTO audit (id) VALUES (1)",
+    );
+    all_dialects().verified_stmt(
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (UPDATE t2 SET deleted = 1 WHERE id = 1; DELETE FROM t3)",
+    );
+
+    // A trailing semicolon inside a parenthesized action list is accepted and
+    // normalized away.
+    all_dialects().one_statement_parses_to(
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (DELETE FROM t2;)",
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (DELETE FROM t2)",
+    );
+
+    // invalid event
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON TRUNCATE TO t DO NOTHING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: one of SELECT or INSERT or UPDATE or DELETE, found: TRUNCATE"
+    );
+
+    // missing DO clause
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON DELETE TO t")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: DO, found: EOF"
+    );
+
+    // missing table name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON DELETE DO NOTHING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: DO"
+    );
+}
+
+#[test]
+fn parse_create_rule_action_boundaries() {
+    let dialects = all_dialects();
+    let Statement::CreateRule(CreateRule {
+        action: CreateRuleAction::Statements(commands),
+        ..
+    }) = dialects.verified_stmt("CREATE RULE r AS ON INSERT TO t DO ()")
+    else {
+        panic!("expected a rule with a command list");
+    };
+    assert!(commands.is_empty());
+
+    let statements = dialects
+        .parse_sql_statements(
+            "CREATE RULE r AS ON INSERT TO t DO (;; INSERT INTO audit VALUES (1);; DELETE FROM pending;;); SELECT 9",
+        )
+        .unwrap();
+    assert_eq!(
+        statements.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        [
+            "CREATE RULE r AS ON INSERT TO t DO (INSERT INTO audit VALUES (1); DELETE FROM pending)",
+            "SELECT 9",
+        ]
+    );
+}
+
+#[test]
+fn parse_create_rule_invalid_components() {
+    let dialects = all_dialects();
+    for (sql, expected) in [
+        ("CREATE RULE", "Expected: identifier, found: EOF"),
+        (
+            "CREATE RULE r ON UPDATE TO t DO NOTHING",
+            "Expected: AS, found: ON",
+        ),
+        (
+            "CREATE RULE r AS UPDATE TO t DO NOTHING",
+            "Expected: ON, found: UPDATE",
+        ),
+        (
+            "CREATE RULE r AS ON 1 TO t DO NOTHING",
+            "Expected: one of SELECT or INSERT or UPDATE or DELETE, found: 1",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t WHERE (",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO",
+            "Expected: an SQL statement, found: EOF",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (BOGUS)",
+            "Expected: an SQL statement, found: BOGUS",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (SELECT 1 SELECT 2)",
+            "Expected: ), found: SELECT",
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO t DO (SELECT 1",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql),
+            Err(ParserError::ParserError(expected.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_rule_spans() {
+    let dialects = all_dialects();
+    for (sql, end) in [
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO NOTHING",
+            Location::new(1, 34),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t WHERE new.id > 0 DO NOTHING",
+            Location::new(1, 51),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO SELECT 1",
+            Location::new(1, 46),
+        ),
+        (
+            "CREATE RULE r AS ON INSERT TO s.t DO ()",
+            Location::new(1, 34),
+        ),
+        (
+            r#"CREATE RULE r AS ON UPDATE TO s.t
+WHERE old.id = new.id
+DO ALSO (
+  UPDATE audit SET id = new.id;
+  DELETE FROM archive WHERE id = old.id
+)"#,
+            Location::new(5, 40),
+        ),
+    ] {
+        for dialect in &dialects.dialects {
+            let statements = Parser::parse_sql(dialect.as_ref(), sql).unwrap();
+            assert_eq!(
+                statements[0].span(),
+                Span::new(Location::new(1, 13), end),
+                "{dialect:?} {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn display_create_rule_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let dialects = all_dialects();
+    let statement = dialects.verified_stmt(
+        "CREATE OR REPLACE RULE r AS ON UPDATE TO t WHERE id > 0 DO ALSO (DELETE FROM audit)",
+    );
+    for rejected in ["CREATE ", "r", "UPDATE", "t", ">", " DO", "ALSO", "(", ")"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+    for (sql, rejected) in [
+        ("CREATE RULE r AS ON INSERT TO t DO NOTHING", "NOTHING"),
+        (
+            "CREATE RULE r AS ON DELETE TO t DO DELETE FROM audit",
+            "audit",
+        ),
+    ] {
+        let statement = dialects.verified_stmt(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
 }
 
 #[test]
@@ -21335,4 +22448,1025 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
     ] {
         dialects.tokenizes_to(sql, vec![token]);
     }
+}
+
+#[test]
+fn parse_cache_table_options_without_flag() {
+    let dialects = all_dialects();
+    for (suffix, has_as) in [("", false), (" SELECT 1", false), (" AS SELECT 1", true)] {
+        let query = if suffix.is_empty() {
+            None
+        } else {
+            Some(dialects.verified_query("SELECT 1").into())
+        };
+        assert_eq!(
+            dialects.verified_stmt(&format!("CACHE TABLE t OPTIONS('k' = 'v'){suffix}")),
+            Statement::Cache {
+                table_flag: None,
+                table_name: ObjectName::from(vec![Ident::new("t")]),
+                has_as,
+                options: vec![SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "k").into(),
+                    value: Expr::Value(Value::SingleQuotedString("v".into()).with_empty_span()),
+                }],
+                query,
+            }
+        );
+    }
+}
+
+#[test]
+fn parse_reference_clauses_in_any_order() {
+    let dialects = all_dialects();
+    for clauses in [
+        "MATCH FULL ON DELETE CASCADE ON UPDATE SET NULL",
+        "MATCH FULL ON UPDATE SET NULL ON DELETE CASCADE",
+        "ON DELETE CASCADE MATCH FULL ON UPDATE SET NULL",
+        "ON DELETE CASCADE ON UPDATE SET NULL MATCH FULL",
+        "ON UPDATE SET NULL MATCH FULL ON DELETE CASCADE",
+        "ON UPDATE SET NULL ON DELETE CASCADE MATCH FULL",
+    ] {
+        for prefix in [
+            "a INT REFERENCES r (id)",
+            "a INT, FOREIGN KEY (a) REFERENCES r(id)",
+        ] {
+            let sql = format!("CREATE TABLE t ({prefix} {clauses} DEFERRABLE INITIALLY DEFERRED)");
+            let canonical = format!(
+                "CREATE TABLE t ({prefix} MATCH FULL ON DELETE CASCADE ON UPDATE SET NULL DEFERRABLE INITIALLY DEFERRED)"
+            );
+            dialects.one_statement_parses_to(&sql, &canonical);
+        }
+    }
+}
+
+#[test]
+fn parse_reference_clauses_leave_duplicates_unconsumed() {
+    for (clauses, keyword, match_kind, on_delete, on_update) in [
+        (
+            "MATCH FULL MATCH SIMPLE",
+            Keyword::MATCH,
+            Some(ConstraintReferenceMatchKind::Full),
+            None,
+            None,
+        ),
+        (
+            "ON DELETE CASCADE ON DELETE SET NULL",
+            Keyword::ON,
+            None,
+            Some(ReferentialAction::Cascade),
+            None,
+        ),
+        (
+            "ON UPDATE RESTRICT ON UPDATE NO ACTION",
+            Keyword::ON,
+            None,
+            None,
+            Some(ReferentialAction::Restrict),
+        ),
+    ] {
+        for table_level in [false, true] {
+            let prefix = if table_level {
+                "FOREIGN KEY (a) REFERENCES r(id)"
+            } else {
+                "REFERENCES r(id)"
+            };
+            let sql = format!("{prefix} {clauses}");
+            let mut parser = Parser::new(&GenericDialect {}).try_with_sql(&sql).unwrap();
+            let constraint = if table_level {
+                let Some(TableConstraint::ForeignKey(constraint)) =
+                    parser.parse_optional_table_constraint().unwrap()
+                else {
+                    panic!("{sql}");
+                };
+                constraint
+            } else {
+                let Some(ColumnOption::ForeignKey(constraint)) =
+                    parser.parse_optional_column_option().unwrap()
+                else {
+                    panic!("{sql}");
+                };
+                constraint
+            };
+            assert_eq!(
+                (
+                    constraint.match_kind,
+                    constraint.on_delete,
+                    constraint.on_update
+                ),
+                (match_kind, on_delete, on_update),
+                "{sql}"
+            );
+            assert!(parser.peek_keyword(keyword), "{sql}");
+        }
+    }
+}
+
+#[test]
+fn parse_div_with_nested_divisor() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(sqlparser::dialect::SparkSqlDialect),
+    ]);
+    assert_eq!(
+        dialects.verified_expr("10 DIV (5 DIV 2)"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::value(number("10"))),
+            op: BinaryOperator::MyIntegerDivide,
+            right: Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("5"))),
+                op: BinaryOperator::MyIntegerDivide,
+                right: Box::new(Expr::value(number("2"))),
+            }))),
+        }
+    );
+}
+
+#[test]
+fn column_key_shorthand_preserves_characteristics_and_unique() {
+    let dialects = all_dialects_where(|d| d.supports_key_column_option());
+    let Statement::CreateTable(table) = dialects.one_statement_parses_to(
+        "CREATE TABLE t (id INT KEY DEFERRABLE INITIALLY DEFERRED UNIQUE KEY)",
+        "CREATE TABLE t (id INT PRIMARY KEY DEFERRABLE INITIALLY DEFERRED UNIQUE KEY)",
+    ) else {
+        panic!("Expected CREATE TABLE");
+    };
+    let [ColumnOptionDef {
+        option: ColumnOption::PrimaryKey(primary),
+        ..
+    }, ColumnOptionDef {
+        option: ColumnOption::Unique(unique),
+        ..
+    }] = table.columns[0].options.as_slice()
+    else {
+        panic!("Expected primary and unique column options");
+    };
+    assert_eq!(
+        primary.characteristics,
+        Some(ConstraintCharacteristics {
+            deferrable: Some(true),
+            initially: Some(DeferrableInitial::Deferred),
+            enforced: None,
+        })
+    );
+    assert_eq!(unique.index_type_display, KeyOrIndexDisplay::Key);
+}
+
+#[test]
+fn unsupported_key_column_option_preserves_keyword() {
+    for dialect in all_dialects_where(|d| !d.supports_key_column_option()).dialects {
+        let mut parser = Parser::new(dialect.as_ref()).try_with_sql("KEY").unwrap();
+        assert_eq!(
+            parser.parse_optional_column_option(),
+            Ok(None),
+            "{dialect:?}"
+        );
+        assert!(parser.parse_keyword(Keyword::KEY), "{dialect:?}");
+    }
+}
+
+#[test]
+fn parse_delimited_identifiers() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(ClickHouseDialect {}),
+        Box::new(MsSqlDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(SnowflakeDialect {}),
+    ]);
+    let select = dialects.verified_only_select(
+        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
+    );
+    match only(select.from).relation {
+        TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+            version,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
+            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert!(args.is_none());
+            assert!(with_hints.is_empty());
+            assert!(version.is_none());
+        }
+        _ => panic!("Expecting TableFactor::Table"),
+    }
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_quote('"', "alias"),
+            Ident::with_quote('"', "bar baz"),
+        ]),
+        expr_from_projection(&select.projection[0]),
+    );
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
+            parameters: FunctionArguments::None,
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
+            null_treatment: None,
+            filter: None,
+            over: None,
+            within_group: vec![],
+        }),
+        expr_from_projection(&select.projection[1]),
+    );
+    match &select.projection[2] {
+        SelectItem::ExprWithAlias { expr, alias } => {
+            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+        }
+        _ => panic!("Expected ExprWithAlias"),
+    }
+}
+
+#[test]
+fn parse_grant_function_signature() {
+    let objects = |sql: &str| match verified_stmt(sql) {
+        Statement::Grant(grant) => grant.objects,
+        Statement::Revoke(revoke) => revoke.objects,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+    let function = |args| FunctionDesc {
+        name: ObjectName::from(vec![Ident::new("f")]),
+        args,
+    };
+
+    assert_eq!(
+        objects("GRANT EXECUTE ON FUNCTION f() TO bob"),
+        Some(GrantObjects::Functions(vec![function(Some(vec![]))]))
+    );
+    assert_eq!(
+        objects("GRANT EXECUTE ON FUNCTION f TO bob"),
+        Some(GrantObjects::Functions(vec![function(None)]))
+    );
+    assert_eq!(
+        objects("REVOKE ALL ON PROCEDURE f(IN p_id UUID, INT) FROM bob"),
+        Some(GrantObjects::Procedures(vec![function(Some(vec![
+            OperateFunctionArg {
+                mode: Some(ArgMode::In),
+                name: Some(Ident::new("p_id")),
+                data_type: DataType::Uuid,
+                default_expr: None,
+            },
+            OperateFunctionArg::unnamed(DataType::Int(None)),
+        ]))]))
+    );
+
+    verified_stmt("REVOKE ALL ON FUNCTION public.f(p_id UUID) FROM bob");
+    verified_stmt("GRANT EXECUTE ON FUNCTION f(INOUT x TEXT), s.g, h() TO bob");
+    verified_stmt("GRANT USAGE ON PROCEDURE p(OUT INT), q TO ROLE role1");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT EXECUTE ON FUNCTION f(INT")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: EOF".to_string())
+    );
+}
+
+#[test]
+fn parse_grant_role() {
+    let role_grantee = |name: &str| Grantee {
+        grantee_type: GranteesType::None,
+        name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+            name,
+        )]))),
+    };
+
+    let sql = "GRANT bypasser, auditor TO anon, authenticated GRANTED BY admin";
+    assert_eq!(
+        all_dialects().verified_stmt(sql),
+        Statement::GrantRole(GrantRole {
+            roles: vec![Ident::new("bypasser"), Ident::new("auditor")],
+            grantees: vec![role_grantee("anon"), role_grantee("authenticated")],
+            options: vec![],
+            granted_by: Some(Ident::new("admin")),
+        })
+    );
+
+    all_dialects().verified_stmt("GRANT bypasser TO anon");
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT bypasser ON t TO anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a privilege keyword, found: bypasser".to_string())
+    );
+
+    assert_matches!(
+        all_dialects().verified_stmt(r#"GRANT "select" TO anon"#),
+        Statement::GrantRole(_)
+    );
+    assert_matches!(
+        all_dialects().verified_stmt("GRANT SELECT TO anon"),
+        Statement::Grant(_)
+    );
+    for (sql, err) in [
+        ("GRANT bypasser TO", "Expected: identifier, found: EOF"),
+        (
+            "GRANT bypasser TO anon GRANTED BY 1",
+            "Expected: identifier, found: 1",
+        ),
+        ("GRANT 1 TO anon", "Expected: a privilege keyword, found: 1"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_grant_role_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let grant = verified_stmt("GRANT bypasser TO anon GRANTED BY admin");
+    for rejected in ["anon", "admin"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{grant}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
+fn parse_grant_role_options() {
+    let sql = "GRANT bypasser TO anon WITH ADMIN OPTION, INHERIT FALSE, SET TRUE GRANTED BY admin";
+    let Statement::GrantRole(GrantRole { options, .. }) = all_dialects().verified_stmt(sql) else {
+        panic!("Expected GRANT role");
+    };
+    assert_eq!(
+        options,
+        vec![
+            RoleGrantOption {
+                name: Ident::new("ADMIN"),
+                value: RoleGrantOptionValue::Option,
+            },
+            RoleGrantOption {
+                name: Ident::new("INHERIT"),
+                value: RoleGrantOptionValue::False,
+            },
+            RoleGrantOption {
+                name: Ident::new("SET"),
+                value: RoleGrantOptionValue::True,
+            },
+        ]
+    );
+
+    all_dialects().verified_stmt("GRANT bypasser TO anon WITH SET FALSE");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT bypasser TO anon WITH ADMIN")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: OPTION, TRUE or FALSE, found: EOF".to_string())
+    );
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT bypasser TO anon WITH 1 OPTION")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: 1".to_string())
+    );
+}
+
+#[test]
+fn display_grant_role_options_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = all_dialects().verified_stmt("GRANT bypasser TO anon WITH SET FALSE");
+    for rejected in [" WITH ", "SET", "FALSE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}
+
+#[test]
+fn parse_revoke_role() {
+    let sql = "REVOKE bypasser, auditor FROM anon GRANTED BY admin CASCADE";
+    assert_eq!(
+        all_dialects().verified_stmt(sql),
+        Statement::RevokeRole(RevokeRole {
+            option_for: None,
+            roles: vec![Ident::new("bypasser"), Ident::new("auditor")],
+            grantees: vec![Grantee {
+                grantee_type: GranteesType::None,
+                name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+                    "anon"
+                )]))),
+            }],
+            granted_by: Some(Ident::new("admin")),
+            cascade: Some(CascadeOption::Cascade),
+        })
+    );
+
+    all_dialects().verified_stmt("REVOKE bypasser FROM anon RESTRICT");
+    all_dialects().verified_stmt("REVOKE bypasser FROM anon");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE bypasser ON t FROM anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a privilege keyword, found: bypasser".to_string())
+    );
+    for (sql, expected) in [
+        ("REVOKE bypasser FROM", "Expected: identifier, found: EOF"),
+        (
+            "REVOKE bypasser FROM anon GRANTED BY",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+
+    let dialect = GenericDialect {};
+    for (sql, expected) in [
+        (
+            "1 FROM anon",
+            "Expected: identifier, found: 1 at Line: 1, Column: 1",
+        ),
+        (
+            "bypasser TO anon",
+            "Expected: FROM, found: TO at Line: 1, Column: 10",
+        ),
+    ] {
+        let err = Parser::new(&dialect)
+            .try_with_sql(sql)
+            .and_then(|mut parser| parser.parse_revoke_role())
+            .unwrap_err();
+        assert_eq!(err, ParserError::ParserError(expected.to_string()), "{sql}");
+    }
+}
+
+#[test]
+fn display_revoke_role_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement =
+        all_dialects().verified_stmt("REVOKE bypasser FROM anon GRANTED BY admin CASCADE");
+    for rejected in [
+        "REVOKE ",
+        "bypasser",
+        "anon",
+        " GRANTED BY ",
+        "admin",
+        "CASCADE",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}
+
+#[test]
+fn parse_revoke_role_option_for() {
+    let Statement::RevokeRole(RevokeRole { option_for, .. }) =
+        all_dialects().verified_stmt("REVOKE SET OPTION FOR bypasser FROM anon")
+    else {
+        panic!("Expected REVOKE role");
+    };
+    assert_eq!(option_for, Some(Ident::new("SET")));
+
+    all_dialects()
+        .verified_stmt("REVOKE ADMIN OPTION FOR bypasser FROM anon GRANTED BY admin RESTRICT");
+    all_dialects().verified_stmt("REVOKE INHERIT OPTION FOR bypasser, auditor FROM anon");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE ADMIN OPTION FOR bypasser TO anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: FROM, found: TO".to_string())
+    );
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REVOKE 1 FROM anon")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a privilege keyword, found: 1".to_string())
+    );
+}
+
+#[test]
+fn display_revoke_role_option_for_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = all_dialects().verified_stmt("REVOKE ADMIN OPTION FOR bypasser FROM anon");
+    for rejected in ["REVOKE ", "ADMIN", " OPTION FOR "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}
+
+#[test]
+fn parse_grantee_after_public() {
+    let grantees =
+        |sql: &str| match all_dialects_except(|d| d.is::<MsSqlDialect>()).verified_stmt(sql) {
+            Statement::Grant(grant) => grant.grantees,
+            Statement::Revoke(revoke) => revoke.grantees,
+            stmt => panic!("unexpected statement: {stmt:?}"),
+        };
+    let public = || Grantee {
+        grantee_type: GranteesType::Public,
+        name: None,
+    };
+    let named = |grantee_type, name| Grantee {
+        grantee_type,
+        name: Some(GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+            name,
+        )]))),
+    };
+
+    assert_eq!(
+        grantees("GRANT SELECT ON t TO PUBLIC, reader"),
+        vec![public(), named(GranteesType::None, "reader")]
+    );
+    assert_eq!(
+        grantees("REVOKE SELECT ON t FROM PUBLIC, ROLE r, PUBLIC"),
+        vec![public(), named(GranteesType::Role, "r"), public()]
+    );
+    assert_eq!(
+        grantees("GRANT SELECT ON t TO GROUP g, PUBLIC, reader"),
+        vec![
+            named(GranteesType::Group, "g"),
+            public(),
+            named(GranteesType::None, "reader")
+        ]
+    );
+
+    // MsSql reads PUBLIC as an ordinary name.
+    TestedDialects::new(vec![Box::new(MsSqlDialect {})])
+        .verified_stmt("GRANT SELECT ON t TO PUBLIC, reader");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("GRANT SELECT ON t TO PUBLIC,")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+}
+
+#[test]
+fn parse_create_procedure_empty_parameter_list() {
+    verified_stmt("CREATE PROCEDURE p () AS BEGIN SELECT 1; END");
+    match verified_stmt("CREATE PROCEDURE p AS BEGIN SELECT 1; END") {
+        Statement::CreateProcedure { params, .. } => assert_eq!(params, None),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+}
+
+#[test]
+fn display_create_procedure_parameter_list_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = verified_stmt("CREATE PROCEDURE p () AS BEGIN SELECT 1; END");
+    let mut writer = RejectingWriter(" (");
+    assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_grant_routines() {
+    let objects = |sql: &str| match verified_stmt(sql) {
+        Statement::Grant(grant) => grant.objects,
+        Statement::Revoke(revoke) => revoke.objects,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+    let name = |name: &str| ObjectName::from(vec![Ident::new(name)]);
+
+    assert_eq!(
+        objects("GRANT EXECUTE ON ROUTINE f(INT) TO bob"),
+        Some(GrantObjects::Routines(vec![FunctionDesc {
+            name: name("f"),
+            args: Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))]),
+        }]))
+    );
+    assert_eq!(
+        objects("REVOKE ALL ON ROUTINE f, g() FROM bob"),
+        Some(GrantObjects::Routines(vec![
+            FunctionDesc {
+                name: name("f"),
+                args: None,
+            },
+            FunctionDesc {
+                name: name("g"),
+                args: Some(vec![]),
+            },
+        ]))
+    );
+    assert_eq!(
+        objects("GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA s TO bob"),
+        Some(GrantObjects::AllProceduresInSchema {
+            schemas: vec![name("s")],
+        })
+    );
+    assert_eq!(
+        objects("REVOKE EXECUTE ON ALL ROUTINES IN SCHEMA s, t FROM bob"),
+        Some(GrantObjects::AllRoutinesInSchema {
+            schemas: vec![name("s"), name("t")],
+        })
+    );
+
+    verified_stmt("REVOKE ALL ON ROUTINE public.f(p_id UUID), g() FROM bob");
+    verified_stmt("REVOKE EXECUTE ON ALL PROCEDURES IN SCHEMA s, t FROM bob");
+    verified_stmt("GRANT EXECUTE ON ALL ROUTINES IN SCHEMA s TO bob");
+    assert_eq!(
+        objects("GRANT EXECUTE ON ROUTINE routine TO bob"),
+        Some(GrantObjects::Routines(vec![FunctionDesc {
+            name: name("routine"),
+            args: None,
+        }]))
+    );
+
+    for (sql, err) in [
+        ("GRANT EXECUTE ON ROUTINE f(INT", "Expected: ), found: EOF"),
+        (
+            "GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "GRANT EXECUTE ON ALL ROUTINES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql),
+            Err(ParserError::ParserError(err.to_string())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_grant_on_tables_named_after_object_types() {
+    for name in [
+        "function",
+        "procedure",
+        "routine",
+        "sequence",
+        "database",
+        "schema",
+        "view",
+        "warehouse",
+        "integration",
+        "user",
+        "connection",
+    ] {
+        let sql = format!("GRANT SELECT ON {name} TO r");
+        match verified_stmt(&sql) {
+            Statement::Grant(grant) => assert_eq!(
+                grant.objects,
+                Some(GrantObjects::Tables(vec![ObjectName::from(vec![
+                    Ident::new(name)
+                ])])),
+                "{sql}"
+            ),
+            stmt => panic!("unexpected statement: {stmt:?}"),
+        }
+        one_statement_parses_to(&format!("GRANT SELECT ON TABLE {name} TO r"), &sql);
+        verified_stmt(&format!("REVOKE SELECT ON {name}, t FROM r"));
+        verified_stmt(&format!("GRANT SELECT ON {name}.t TO r"));
+    }
+}
+
+#[test]
+fn parse_alter_table_reset_options() {
+    match alter_table_op(verified_stmt(
+        "ALTER TABLE tab RESET (fillfactor, toast.autovacuum_enabled)",
+    )) {
+        AlterTableOperation::ResetOptions { options } => {
+            assert_eq!(
+                options,
+                [
+                    ObjectName::from(vec![Ident::new("fillfactor")]),
+                    ObjectName::from(vec![Ident::new("toast"), Ident::new("autovacuum_enabled")]),
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, expected) in [
+        ("ALTER TABLE tab RESET ()", "Expected: identifier, found: )"),
+        ("ALTER TABLE tab RESET (a = 1)", "Expected: ), found: ="),
+        ("ALTER TABLE tab RESET a", "Expected: (, found: a"),
+        (
+            "ALTER TABLE tab RESET (toast.)",
+            "Expected: identifier, found: )",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_refresh_materialized_view() {
+    let sql = "REFRESH MATERIALIZED VIEW CONCURRENTLY app.m WITH NO DATA";
+    assert_eq!(
+        Parser::parse_sql(&GenericDialect {}, sql).unwrap()[0].span(),
+        Span::new(Location::new(1, 40), Location::new(1, 45))
+    );
+    match verified_stmt(sql) {
+        Statement::RefreshMaterializedView(RefreshMaterializedView {
+            concurrently,
+            name,
+            with_data,
+        }) => {
+            assert!(concurrently);
+            assert_eq!(
+                name,
+                ObjectName::from(vec![Ident::new("app"), Ident::new("m")])
+            );
+            assert_eq!(with_data, Some(false));
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+    match verified_stmt("REFRESH MATERIALIZED VIEW m") {
+        Statement::RefreshMaterializedView(RefreshMaterializedView {
+            concurrently,
+            with_data,
+            ..
+        }) => {
+            assert!(!concurrently);
+            assert_eq!(with_data, None);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+    match verified_stmt("REFRESH MATERIALIZED VIEW m WITH DATA") {
+        Statement::RefreshMaterializedView(RefreshMaterializedView { with_data, .. }) => {
+            assert_eq!(with_data, Some(true));
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "REFRESH MATERIALIZED VIEW",
+            "Expected: identifier, found: EOF",
+        ),
+        ("REFRESH VIEW m", "Expected: MATERIALIZED, found: VIEW"),
+        (
+            "REFRESH MATERIALIZED VIEW m WITH",
+            "Expected: end of statement, found: WITH",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn test_visit_relations_refresh_materialized_view() {
+    let stmts = all_dialects().parse_sql_statements("REFRESH MATERIALIZED VIEW app.m");
+    let mut relations = vec![];
+    let _ = visit_relations(&stmts.unwrap(), |relation| {
+        relations.push(relation.to_string());
+        core::ops::ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(relations, vec!["app.m"]);
+}
+
+#[test]
+fn display_refresh_materialized_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = verified_stmt("REFRESH MATERIALIZED VIEW CONCURRENTLY app.m WITH NO DATA");
+    for rejected in ["REFRESH", "CONCURRENTLY", "app", "NO DATA"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
+fn parse_create_procedure_begin_atomic() {
+    let sql = "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (1); END";
+    verified_stmt(sql);
+    match all_dialects().run_parser_method(sql, |parser| parser.parse_statement().unwrap()) {
+        Statement::CreateProcedure {
+            body: CreateProcedureBody::BeginAtomic(body),
+            ..
+        } => {
+            assert_eq!(
+                body.statements,
+                vec![verified_stmt("INSERT INTO t VALUES (1)")]
+            );
+            assert_eq!(
+                body.span(),
+                Span::new(Location::new(1, 36), Location::new(1, 78))
+            );
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for sql in [
+        "CREATE PROCEDURE p (a INT) LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (a); UPDATE t SET b = a; END",
+        "CREATE PROCEDURE p () BEGIN ATOMIC SELECT 1; END",
+        "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC END",
+    ] {
+        verified_stmt(sql);
+    }
+
+    one_statement_parses_to(
+        r#"CREATE PROCEDURE public.p(a integer)
+    LANGUAGE sql
+    BEGIN ATOMIC
+ INSERT INTO public.t (a)
+   VALUES (p.a);
+END"#,
+        "CREATE PROCEDURE public.p (a INTEGER) LANGUAGE sql BEGIN ATOMIC INSERT INTO public.t (a) VALUES (p.a); END",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1 AS a END",
+            "Expected: ;, found: END",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql BEGIN SELECT 1; END",
+            "Expected: AS, found: BEGIN",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql AS BEGIN SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_create_procedure_begin_atomic_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = verified_stmt("CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
+    for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_do_statement() {
+    let dialects = all_dialects_where(|d| d.supports_do_statement());
+
+    match dialects.verified_stmt("DO $$BEGIN RAISE NOTICE 'hi'; END$$") {
+        Statement::Do(DoStatement { options }) => assert_eq!(
+            options,
+            vec![DoOption::Code(
+                Value::DollarQuotedString(DollarQuotedString {
+                    value: "BEGIN RAISE NOTICE 'hi'; END".to_string(),
+                    tag: None,
+                })
+                .with_empty_span()
+            )]
+        ),
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("DO LANGUAGE plpgsql $body$BEGIN NULL; END$body$") {
+        Statement::Do(DoStatement { options }) => {
+            assert_eq!(options[0], DoOption::Language(Ident::new("plpgsql")));
+        }
+        _ => unreachable!(),
+    }
+
+    dialects.verified_stmt("DO 'BEGIN NULL; END'");
+    dialects.verified_stmt("DO U&'BEGIN NULL; END'");
+    dialects.verified_stmt("DO U&'BEGIN NULL; END' LANGUAGE plpgsql");
+    dialects.verified_stmt("DO LANGUAGE 'plpgsql'");
+    dialects.verified_stmt("DO LANGUAGE plpgsql U&'BEGIN NULL; END'");
+    dialects.verified_stmt("DO $$BEGIN NULL; END$$ LANGUAGE plpgsql");
+    dialects.verified_stmt("DO LANGUAGE 'plpgsql' $$BEGIN NULL; END$$");
+    dialects.verified_stmt("DO LANGUAGE $$plpgsql$$ $$BEGIN NULL; END$$");
+    dialects.verified_stmt("DO $$BEGIN NULL; END$$ LANGUAGE E'plpgsql'");
+    dialects.verified_stmt("DO LANGUAGE plpgsql");
+    dialects.verified_stmt("DO $$BEGIN NULL; END$$ $$BEGIN NULL; END$$");
+    dialects.verified_stmt("DO LANGUAGE plpgsql LANGUAGE sql $$BEGIN NULL; END$$");
+
+    assert_eq!(
+        dialects.parse_sql_statements("DO 1").unwrap_err(),
+        ParserError::ParserError("Expected: string literal, found: 1".to_string())
+    );
+    assert_eq!(
+        dialects.parse_sql_statements("DO LANGUAGE").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_do_statement());
+    assert_eq!(
+        dialects
+            .parse_sql_statements("DO $$BEGIN NULL; END$$")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: DO".to_string())
+    );
 }

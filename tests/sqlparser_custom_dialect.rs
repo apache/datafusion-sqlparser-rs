@@ -18,8 +18,8 @@
 //! Test the ability for dialects to override parsing
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Statement, Value},
-    dialect::Dialect,
+    ast::{BinaryOperator, DataType, Expr, Statement, Value},
+    dialect::{Dialect, SQLiteDialect},
     keywords::Keyword,
     parser::{Parser, ParserError},
     test_utils::{expr_from_projection, only},
@@ -338,4 +338,53 @@ fn custom_dialect_lambda_arrow_syntax_without_keyword() {
             "Expected: ), found: x at Line: 1, Column: 29".to_string()
         ))
     );
+}
+
+#[test]
+fn custom_data_type_parser() -> Result<(), ParserError> {
+    #[derive(Debug)]
+    struct MyDialect;
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn parse_data_type(&self, parser: &mut Parser) -> Option<Result<DataType, ParserError>> {
+            if parser.parse_keyword(Keyword::TEXT) {
+                Some(Ok(DataType::BigInt(None)))
+            } else if parser.parse_keyword(Keyword::NUMERIC) {
+                Some(Err(ParserError::ParserError(
+                    "NUMERIC is not supported".to_string(),
+                )))
+            } else {
+                SQLiteDialect {}.parse_data_type(parser)
+            }
+        }
+    }
+
+    for (sql, expected) in [
+        ("TEXT", "BIGINT"),
+        ("ARRAY<ARRAY<TEXT>>", "ARRAY<ARRAY<BIGINT>>"),
+        ("INTEGER", "INTEGER"),
+        ("CHAR(-1)", "CHAR(-1)"),
+    ] {
+        let data_type = Parser::new(&MyDialect)
+            .try_with_sql(sql)?
+            .parse_data_type()?;
+        assert_eq!(data_type.to_string(), expected);
+    }
+    assert_eq!(
+        Parser::new(&MyDialect)
+            .try_with_sql("NUMERIC(10)")?
+            .parse_data_type(),
+        Err(ParserError::ParserError(
+            "NUMERIC is not supported".to_string()
+        ))
+    );
+    Ok(())
 }

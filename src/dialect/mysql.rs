@@ -15,12 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
-
 use crate::{
-    ast::{BinaryOperator, Expr, LockTable, LockTableType, Statement},
-    dialect::{Dialect, Precedence},
+    ast::{Expr, LockTable, LockTableType, Statement},
+    dialect::{BindPlaceholderStyle, Dialect, Precedence},
     keywords::Keyword,
     parser::{Parser, ParserError},
     tokenizer::Token,
@@ -74,6 +71,10 @@ impl Dialect for MySqlDialect {
         Some('`')
     }
 
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+        Some(BindPlaceholderStyle::QuestionMark)
+    }
+
     // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
@@ -111,25 +112,11 @@ impl Dialect for MySqlDialect {
 
     fn parse_infix(
         &self,
-        parser: &mut crate::parser::Parser,
-        expr: &crate::ast::Expr,
+        parser: &mut Parser,
+        expr: &Expr,
         precedence: u8,
-    ) -> Option<Result<crate::ast::Expr, ParserError>> {
-        // Parse DIV as an operator
-        if parser.parse_keyword(Keyword::DIV) {
-            let left = Box::new(expr.clone());
-            let right = Box::new(match parser.parse_subexpr(precedence) {
-                Ok(expr) => expr,
-                Err(e) => return Some(Err(e)),
-            });
-            Some(Ok(Expr::BinaryOp {
-                left,
-                op: BinaryOperator::MyIntegerDivide,
-                right,
-            }))
-        } else {
-            None
-        }
+    ) -> Option<Result<Expr, ParserError>> {
+        super::parse_div_infix(parser, expr, precedence)
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

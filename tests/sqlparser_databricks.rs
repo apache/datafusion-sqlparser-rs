@@ -56,6 +56,19 @@ fn test_databricks_identifiers() {
 }
 
 #[test]
+fn parse_non_reserved_keyword_table_names() {
+    for name in ["limit", "where", "on", "into", "having"] {
+        let sql = format!("SELECT * FROM {name}");
+        let select = databricks().verified_only_select(&sql);
+        assert_eq!(select.from[0].relation, table(name));
+
+        let sql = format!("SELECT * FROM t JOIN {name} ON true");
+        let select = databricks().verified_only_select(&sql);
+        assert_eq!(select.from[0].joins[0].relation, table(name));
+    }
+}
+
+#[test]
 fn test_databricks_exists() {
     // exists is a function in databricks
     assert_eq!(

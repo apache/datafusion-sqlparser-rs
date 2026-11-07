@@ -1,0 +1,1 @@
+CREATE AGGREGATE my_sum (BASETYPE = int4, SFUNC = int4pl, STYPE = int4, INITCOND = '0')

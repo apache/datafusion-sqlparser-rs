@@ -539,3 +539,9 @@ fn test_insert_without_alias() {
         if matches!(&*source, Query { body, .. } if matches!(&**body, SetExpr::Values(_)))
     ));
 }
+
+#[test]
+fn parse_non_reserved_keyword_table_names() {
+    oracle().verified_stmt("SELECT * FROM limit");
+    oracle().verified_stmt("SELECT * FROM t JOIN limit ON TRUE");
+}

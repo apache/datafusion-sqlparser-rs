@@ -22,7 +22,10 @@ use crate::{
     tokenizer::Token,
 };
 
-use super::{keywords::Keyword, Dialect, Precedence};
+use super::{
+    keywords::{Keyword, RESERVED_FOR_TABLE_FACTOR},
+    Dialect, Precedence,
+};
 
 const RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR: [Keyword; 1] = [Keyword::CONNECT_BY_ROOT];
 
@@ -47,6 +50,12 @@ impl Dialect for OracleDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_alphanumeric() || ch == '_' || ch == '$' || ch == '#' || ch == '@'
+    }
+
+    /// LIMIT is not a reserved word in Oracle SQL.
+    /// See <https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Oracle-SQL-Reserved-Words.html>
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        kw == &Keyword::LIMIT || !RESERVED_FOR_TABLE_FACTOR.contains(kw)
     }
 
     fn supports_outer_join_operator(&self) -> bool {

@@ -194,3 +194,29 @@ fn test_lambda_keyword_syntax_with_json_arrow_operator() {
     };
     assert_eq!(&BinaryOperator::Arrow, op);
 }
+
+#[test]
+fn test_literal_leading_char_expression_override() {
+    derive_dialect!(LiteralExpressionDialect, GenericDialect, overrides = {
+        is_identifier_start = '_' == ch || ch.is_ascii_alphabetic(),
+    });
+    let dialect = LiteralExpressionDialect::new();
+
+    assert!(dialect.is_identifier_start('_'));
+    assert!(dialect.is_identifier_start('a'));
+    assert!(!dialect.is_identifier_start('1'));
+}
+
+#[test]
+fn test_literal_leading_bool_expression_override() {
+    derive_dialect!(LiteralExpressionDialect, GenericDialect, overrides = {
+        ordered_bind_placeholder_style =
+            true.then_some(sqlparser::dialect::BindPlaceholderStyle::DollarNumbered),
+    });
+    let dialect = LiteralExpressionDialect::new();
+
+    assert_eq!(
+        dialect.ordered_bind_placeholder_style(),
+        Some(sqlparser::dialect::BindPlaceholderStyle::DollarNumbered)
+    );
+}

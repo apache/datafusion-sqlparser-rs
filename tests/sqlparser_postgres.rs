@@ -13537,6 +13537,7 @@ fn parse_alter_database_rename() {
         Span::new(Location::new(1, 16), Location::new(1, 21))
     );
     for (sql, error) in [
+        ("ALTER DATABASE", "Expected: identifier, found: EOF"),
         (
             "ALTER DATABASE d RENAME TO",
             "Expected: identifier, found: EOF",

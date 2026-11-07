@@ -10952,7 +10952,8 @@ fn parse_grant() {
         Statement::Grant(Grant { privileges, .. }) => {
             assert_eq!(
                 Privileges::All {
-                    with_privileges_keyword: true
+                    with_privileges_keyword: true,
+                    columns: None,
                 },
                 privileges
             );
@@ -10970,6 +10971,7 @@ fn parse_grant() {
             (
                 Privileges::All {
                     with_privileges_keyword,
+                    columns: None,
                 },
                 Some(GrantObjects::Schemas(schemas)),
             ) => {
@@ -11085,7 +11087,8 @@ fn test_revoke() {
         }) => {
             assert_eq!(
                 Privileges::All {
-                    with_privileges_keyword: true
+                    with_privileges_keyword: true,
+                    columns: None,
                 },
                 privileges
             );
@@ -11112,7 +11115,8 @@ fn test_revoke_with_cascade() {
         }) => {
             assert_eq!(
                 Privileges::All {
-                    with_privileges_keyword: true
+                    with_privileges_keyword: true,
+                    columns: None,
                 },
                 privileges
             );
@@ -23468,5 +23472,34 @@ fn parse_do_statement() {
             .parse_sql_statements("DO $$BEGIN NULL; END$$")
             .unwrap_err(),
         ParserError::ParserError("Expected: an SQL statement, found: DO".to_string())
+    );
+}
+
+#[test]
+fn parse_grant_revoke_all_privileges_columns() {
+    match verified_stmt("GRANT ALL PRIVILEGES (id) ON t TO r") {
+        Statement::Grant(Grant { privileges, .. }) => assert_eq!(
+            privileges,
+            Privileges::All {
+                with_privileges_keyword: true,
+                columns: Some(vec![Ident::new("id")]),
+            }
+        ),
+        _ => unreachable!(),
+    }
+    match verified_stmt("REVOKE ALL (a, b) ON t FROM r") {
+        Statement::Revoke(Revoke { privileges, .. }) => assert_eq!(
+            privileges,
+            Privileges::All {
+                with_privileges_keyword: false,
+                columns: Some(vec![Ident::new("a"), Ident::new("b")]),
+            }
+        ),
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        parse_sql_statements("GRANT ALL PRIVILEGES () ON t TO r").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
     );
 }

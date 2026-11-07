@@ -19630,11 +19630,14 @@ impl<'a> Parser<'a> {
         Ok(AlterDefaultPrivileges { options, operation })
     }
 
-    /// Parse `ALL [PRIVILEGES]` or a comma separated privilege list.
+    /// Parse `ALL [PRIVILEGES] [(column, ...)]` or a comma separated privilege list.
     fn parse_privileges(&mut self) -> Result<Privileges, ParserError> {
         if self.parse_keyword(Keyword::ALL) {
+            let with_privileges_keyword = self.parse_keyword(Keyword::PRIVILEGES);
+            let columns = self.parse_parenthesized_column_list(Optional, false)?;
             Ok(Privileges::All {
-                with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
+                with_privileges_keyword,
+                columns: (!columns.is_empty()).then_some(columns),
             })
         } else {
             Ok(Privileges::Actions(self.parse_actions_list()?))

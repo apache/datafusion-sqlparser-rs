@@ -21711,11 +21711,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse the sequence options shared by `CREATE SEQUENCE` and identity
-    /// columns. The options form an unordered list, each allowed at most once.
+    /// Parse the sequence options shared by `CREATE SEQUENCE`, `ALTER SEQUENCE`
+    /// and identity columns. The options form an unordered list, each allowed
+    /// at most once.
     ///
-    /// `AS <data_type>` and `OWNED BY` are options of `CREATE SEQUENCE` only, so
-    /// `allow_type_and_owner` gates them off for an identity column.
+    /// `AS <data_type>` and `OWNED BY` are not options of an identity column, so
+    /// `allow_type_and_owner` gates them off there.
     fn parse_sequence_options(
         &mut self,
         allow_type_and_owner: bool,
@@ -21752,6 +21753,15 @@ impl<'a> Parser<'a> {
                     SequenceOptions::StartWith(self.parse_number()?, with),
                     "START",
                 )
+            } else if self.parse_keyword(Keyword::RESTART) {
+                // [ RESTART [ [ WITH ] restart ] ]
+                let with = self.parse_keyword(Keyword::WITH);
+                let restart = if with {
+                    Some(self.parse_number()?)
+                } else {
+                    self.maybe_parse(|parser| parser.parse_number())?
+                };
+                (SequenceOptions::Restart(restart, with), "RESTART")
             } else if self.parse_keyword(Keyword::CACHE) {
                 //[ CACHE cache ]
                 (SequenceOptions::Cache(self.parse_number()?), "CACHE")

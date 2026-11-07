@@ -24,7 +24,7 @@
 
 mod expression;
 
-use expression::{parenthesize, Chain, Grammar};
+use expression::{parenthesize, Case, Grammar};
 use libfuzzer_sys::fuzz_target;
 use serde_json::Value;
 use sqlparser::dialect::PostgreSqlDialect;
@@ -50,6 +50,22 @@ const POSTGRES: Grammar = Grammar {
         "E'\\n'",
         "DATE '2020-01-01'",
         "INTERVAL '1 day'",
+        ".5",
+        "1.5e-3",
+        "0x1F",
+        "0o17",
+        "0b101",
+        "1_000",
+        "U&'a'",
+        "$$a$$",
+        "X'1F'",
+        "CURRENT_TIMESTAMP",
+        "CURRENT_USER",
+        "ROW(1, 2)",
+        "'(1,2)'::point",
+        "'{\"a\":1}'::jsonb",
+        "(SELECT 1)",
+        "EXISTS (SELECT 1)",
     ],
     prefix: &[
         "-",
@@ -119,9 +135,28 @@ const POSTGRES: Grammar = Grammar {
         "IS NOT",
         "= ANY",
         "< ALL",
+        "> SOME",
+        "<> ALL",
+        "LIKE ANY",
         "OPERATOR(pg_catalog.+)",
         "<->",
         "-|-",
+        "#-",
+        "?&",
+        "@?",
+        "##",
+        "<<|",
+        "|>>",
+        "&<",
+        "&>",
+        "<^",
+        ">^",
+        "?#",
+        "~=",
+        "<<=",
+        ">>=",
+        "AND NOT",
+        "OR NOT",
     ],
     postfix: &[
         "IS NULL",
@@ -136,6 +171,21 @@ const POSTGRES: Grammar = Grammar {
         "::text",
         "::numeric",
         "::int[]",
+        "::regclass",
+        "::jsonb",
+        "::bit(3)",
+        "::varchar(5)",
+        "::timestamp(3) with time zone",
+        "::double precision",
+        "::\"char\"",
+        "IS NOT UNKNOWN",
+        "IS NOT NORMALIZED",
+        "IS NFC NORMALIZED",
+        "IS JSON OBJECT",
+        "IS NOT JSON",
+        "[1][2]",
+        "[:2]",
+        "[1:]",
         "COLLATE \"C\"",
         "[1]",
         "[1:2]",
@@ -153,6 +203,14 @@ const POSTGRES: Grammar = Grammar {
         "timestamptz",
     ],
     array: ("ARRAY[", "]"),
+    contexts: &[
+        "SELECT {} FROM t",
+        "SELECT 1 FROM t WHERE {}",
+        "SELECT 1 FROM t ORDER BY {}",
+        "SELECT 1 FROM t GROUP BY 1 HAVING {}",
+        "SELECT 1 FROM t JOIN u ON {}",
+        "UPDATE t SET a = {}",
+    ],
 };
 
 /// Drops source positions, which differ between the two texts by construction.
@@ -175,8 +233,8 @@ fn tree(parsed: &pg_query::ParseResult) -> Value {
     tree
 }
 
-fuzz_target!(|chain: Chain| {
-    let sql = format!("SELECT {} FROM t", chain.render(&POSTGRES));
+fuzz_target!(|case: Case| {
+    let sql = case.render(&POSTGRES);
     let Ok(original) = pg_query::parse(&sql) else {
         return;
     };

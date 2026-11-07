@@ -24,7 +24,7 @@
 
 mod expression;
 
-use expression::{parenthesize, Chain, Grammar};
+use expression::{parenthesize, Case, Grammar};
 use libfuzzer_sys::fuzz_target;
 use libsqlite3_sys as ffi;
 use sqlparser::dialect::SQLiteDialect;
@@ -51,6 +51,21 @@ const SQLITE: Grammar = Grammar {
         "?1",
         "CURRENT_DATE",
         "9223372036854775808",
+        ".5",
+        "1.5e-3",
+        "0x1F",
+        "1_000",
+        "CURRENT_TIME",
+        "CURRENT_TIMESTAMP",
+        ":p",
+        "@p",
+        "$p",
+        "?",
+        "(SELECT 1)",
+        "EXISTS (SELECT 1)",
+        "\"a\"",
+        "[a]",
+        "`a`",
     ],
     prefix: &["-", "+", "~", "NOT"],
     infix: &[
@@ -89,6 +104,10 @@ const SQLITE: Grammar = Grammar {
         "NOT IN",
         "->",
         "->>",
+        "MATCH",
+        "NOT MATCH",
+        "AND NOT",
+        "OR NOT",
     ],
     postfix: &[
         "ISNULL",
@@ -100,10 +119,42 @@ const SQLITE: Grammar = Grammar {
         "IS NOT FALSE",
         "COLLATE NOCASE",
         "COLLATE BINARY",
+        "COLLATE RTRIM",
     ],
-    functions: &["abs", "coalesce", "max", "length", "iif", "json"],
-    types: &["INTEGER", "TEXT", "REAL", "NUMERIC", "BLOB"],
+    functions: &[
+        "abs",
+        "coalesce",
+        "max",
+        "length",
+        "iif",
+        "json",
+        "printf",
+        "json_extract",
+        "nullif",
+        "typeof",
+        "unlikely",
+    ],
+    types: &[
+        "INTEGER",
+        "TEXT",
+        "REAL",
+        "NUMERIC",
+        "BLOB",
+        "VARCHAR(10)",
+        "DECIMAL(5, 2)",
+        "UNSIGNED BIG INT",
+        "DOUBLE PRECISION",
+        "INT8",
+    ],
     array: ("(", ")"),
+    contexts: &[
+        "SELECT {} FROM t",
+        "SELECT 1 FROM t WHERE {}",
+        "SELECT 1 FROM t ORDER BY {}",
+        "SELECT 1 FROM t GROUP BY 1 HAVING {}",
+        "SELECT 1 FROM t JOIN (SELECT 1 AS z) AS u ON {}",
+        "UPDATE t SET a = {}",
+    ],
 };
 
 struct Db(*mut ffi::sqlite3);
@@ -210,8 +261,8 @@ thread_local! {
     static DB: Db = Db::open();
 }
 
-fn check(db: &Db, chain: &Chain) {
-    let sql = format!("SELECT {} FROM t", chain.render(&SQLITE));
+fn check(db: &Db, case: &Case) {
+    let sql = case.render(&SQLITE);
     let Ok(original) = db.explain(sql.as_bytes()) else {
         return;
     };
@@ -236,4 +287,4 @@ fn check(db: &Db, chain: &Chain) {
     }
 }
 
-fuzz_target!(|chain: Chain| DB.with(|db| check(db, &chain)));
+fuzz_target!(|case: Case| DB.with(|db| check(db, &case)));

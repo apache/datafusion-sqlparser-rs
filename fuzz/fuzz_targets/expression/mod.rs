@@ -24,7 +24,7 @@ use sqlparser::ast::{
 use std::fmt::Write;
 use std::ops::ControlFlow;
 
-const MAX_DEPTH: usize = 4;
+const MAX_DEPTH: usize = 6;
 
 /// The tokens one dialect's chains are built from.
 pub struct Grammar {
@@ -36,6 +36,22 @@ pub struct Grammar {
     pub types: &'static [&'static str],
     /// Opening and closing text of an array constructor.
     pub array: (&'static str, &'static str),
+    /// Statements a chain is placed in, with `{}` where the chain goes.
+    pub contexts: &'static [&'static str],
+}
+
+/// A chain placed in one of the grammar's statement contexts.
+#[derive(Arbitrary, Debug)]
+pub struct Case {
+    context: u8,
+    chain: Chain,
+}
+
+impl Case {
+    /// Writes the statement as SQL text in the tokens of `grammar`.
+    pub fn render(&self, grammar: &Grammar) -> String {
+        pick(grammar.contexts, self.context).replacen("{}", &self.chain.render(grammar), 1)
+    }
 }
 
 /// An expression written as operands joined by operators, with no parentheses unless the input asks for a group.

@@ -23481,3 +23481,55 @@ fn parse_trailing_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_qualified_role_keyword_function_calls() {
+    let dialects = all_dialects();
+    let pg_and_generic = TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+    ]);
+
+    for func in ["current_user", "session_user", "user", "current_catalog"] {
+        for (sql_args, expected_args) in [
+            ("", vec![]),
+            (
+                "1",
+                vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+                    number("1"),
+                )))],
+            ),
+        ] {
+            let sql = format!("SELECT app.{func}({sql_args})");
+            match expr_from_projection(&dialects.verified_only_select(&sql).projection[0]) {
+                Expr::Function(Function {
+                    name,
+                    args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+                    ..
+                }) => {
+                    assert_eq!(
+                        name,
+                        &ObjectName::from(vec![Ident::new("app"), Ident::new(func)])
+                    );
+                    assert_eq!(args, &expected_args);
+                }
+                other => panic!("Expected a qualified function call, got: {other:?}"),
+            }
+        }
+
+        let sql = format!("SELECT d.{func} FROM d");
+        match expr_from_projection(&dialects.verified_only_select(&sql).projection[0]) {
+            Expr::CompoundIdentifier(idents) => {
+                assert_eq!(idents, &vec![Ident::new("d"), Ident::new(func)])
+            }
+            other => panic!("Expected CompoundIdentifier, got: {other:?}"),
+        }
+
+        assert_eq!(
+            pg_and_generic
+                .parse_sql_statements(&format!("SELECT {func}()"))
+                .unwrap_err(),
+            ParserError::ParserError("Expected: end of statement, found: (".to_string())
+        );
+    }
+}

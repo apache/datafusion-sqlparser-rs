@@ -1034,7 +1034,16 @@ pub trait Dialect: Debug + Any {
                     _ => Ok(self.prec_unknown()),
                 }
             }
-            Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::IN => {
+                // IN PARTITION ends a ClickHouse expression; it is not an IN operator.
+                if self.supports_alter_table_mutations()
+                    && matches!(&parser.peek_nth_token_ref(1).token, Token::Word(w) if w.keyword == Keyword::PARTITION)
+                {
+                    Ok(self.prec_unknown())
+                } else {
+                    Ok(p!(Between))
+                }
+            }
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
@@ -1891,6 +1900,11 @@ pub trait Dialect: Debug + Any {
     ///  ALTER TABLE tbl ADD COLUMN c INT AFTER b
     /// ```
     fn supports_alter_column_position(&self) -> bool {
+        false
+    }
+
+    /// Supports ClickHouse `ALTER TABLE ... UPDATE/DELETE ... WHERE ...` mutations.
+    fn supports_alter_table_mutations(&self) -> bool {
         false
     }
 

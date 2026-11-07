@@ -1267,6 +1267,26 @@ impl Spanned for AlterTableOperation {
                 name,
                 partition,
             } => name.span.union_opt(&partition.as_ref().map(|i| i.span)),
+            AlterTableOperation::Delete {
+                partitions,
+                selection,
+            } => union_spans(
+                partitions
+                    .iter()
+                    .map(|p| p.span())
+                    .chain(core::iter::once(selection.span())),
+            ),
+            AlterTableOperation::Update {
+                assignments,
+                partitions,
+                selection,
+            } => union_spans(
+                assignments
+                    .iter()
+                    .map(|a| a.span())
+                    .chain(partitions.iter().map(|p| p.span()))
+                    .chain(core::iter::once(selection.span())),
+            ),
             AlterTableOperation::DisableRowLevelSecurity => Span::empty(),
             AlterTableOperation::DisableRule { name } => name.span,
             AlterTableOperation::DisableTrigger { name } => name.span,
@@ -2689,6 +2709,7 @@ impl Spanned for AlterTable {
             core::iter::once(self.name.span())
                 .chain(self.operations.iter().map(|i| i.span()))
                 .chain(self.on_cluster.iter().map(|i| i.span))
+                .chain(self.settings.iter().flatten().map(|s| s.span()))
                 .chain(core::iter::once(self.end_token.0.span)),
         )
     }

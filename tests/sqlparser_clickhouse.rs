@@ -2367,3 +2367,203 @@ fn parse_create_table_engine_name_quoting() {
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
     clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
 }
+
+#[test]
+fn parse_alter_table_mutations() {
+    let dialects = all_dialects_where(|d| d.supports_alter_table_mutations());
+    for sql in [
+        "ALTER TABLE hits DELETE WHERE user_id = 42",
+        "ALTER TABLE db.hits ON CLUSTER '{cluster}' DELETE WHERE user_id = 42 AND tenant_id = 7",
+        "ALTER TABLE hits DELETE IN PARTITION ID '202401' WHERE user_id = 42",
+        "ALTER TABLE hits DELETE IN PARTITION '202401', '202402' WHERE user_id = 42",
+        "ALTER TABLE hits DELETE IN PARTITION tuple(2024, 1), ID '202402' WHERE user_id = 42",
+        "ALTER TABLE hits UPDATE x = x + 1, y = if(y IN (1, 2), 0, y) WHERE user_id = 42",
+        "ALTER TABLE db.`hits` ON CLUSTER c1 UPDATE `x` = 1 WHERE user_id = 42",
+        "ALTER TABLE hits UPDATE x = x + 1 IN PARTITION 2 WHERE user_id = 42",
+        "ALTER TABLE hits UPDATE x = x IN (1, 2) IN PARTITION ID '202401', ID '202402' WHERE user_id = 42",
+        "ALTER TABLE hits UPDATE x = CASE WHEN y = 1 THEN 2 ELSE 3 END IN PARTITION tuple(2024, 1) WHERE user_id = 42",
+        "ALTER TABLE hits UPDATE x = 1 WHERE user_id IN (SELECT user_id FROM users WHERE tenant_id = 7)",
+        "ALTER TABLE hits UPDATE x = 1, y = 2 WHERE user_id = 42, DELETE WHERE tenant_id = 7, UPDATE z = 3 WHERE user_id = 43",
+        "ALTER TABLE hits ADD COLUMN x UInt8, UPDATE x = 1 WHERE user_id = 42",
+        "ALTER TABLE hits DELETE WHERE user_id = 42 SETTINGS mutations_sync = 1, max_threads = 2",
+        "ALTER TABLE hits UPDATE x = 1 WHERE user_id = 42, DELETE WHERE user_id = 43 SETTINGS mutations_sync = 2",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_alter_table_mutations_ast() {
+    let sql = "ALTER TABLE db.hits ON CLUSTER c1 UPDATE x = 1, y = 2 IN PARTITION ID '202401' WHERE user_id = 42 AND tenant_id = 7, DELETE IN PARTITION 2, 3 WHERE user_id = 43 SETTINGS mutations_sync = 1";
+    match clickhouse_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(AlterTable {
+            name,
+            on_cluster,
+            operations,
+            settings,
+            ..
+        }) => {
+            assert_eq!(
+                name,
+                ObjectName::from(vec![Ident::new("db"), Ident::new("hits")])
+            );
+            assert_eq!(on_cluster, Some(Ident::new("c1")));
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::Update {
+                        assignments: vec![
+                            Assignment {
+                                target: AssignmentTarget::ColumnName(Ident::new("x").into()),
+                                value: Expr::value(number("1")),
+                            },
+                            Assignment {
+                                target: AssignmentTarget::ColumnName(Ident::new("y").into()),
+                                value: Expr::value(number("2")),
+                            },
+                        ],
+                        partitions: vec![Partition::Identifier(Ident::with_quote('\'', "202401"))],
+                        selection: BinaryOp {
+                            left: Box::new(BinaryOp {
+                                left: Box::new(Identifier(Ident::new("user_id"))),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::value(number("42"))),
+                            }),
+                            op: BinaryOperator::And,
+                            right: Box::new(BinaryOp {
+                                left: Box::new(Identifier(Ident::new("tenant_id"))),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::value(number("7"))),
+                            }),
+                        },
+                    },
+                    AlterTableOperation::Delete {
+                        partitions: vec![
+                            Partition::Expr(Expr::value(number("2"))),
+                            Partition::Expr(Expr::value(number("3"))),
+                        ],
+                        selection: BinaryOp {
+                            left: Box::new(Identifier(Ident::new("user_id"))),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::value(number("43"))),
+                        },
+                    },
+                ]
+            );
+            assert_eq!(
+                settings,
+                Some(vec![Setting {
+                    key: Ident::new("mutations_sync"),
+                    value: Expr::value(number("1")),
+                }])
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_mutations_invalid() {
+    for (sql, error) in [
+        ("ALTER TABLE hits DELETE", "Expected: WHERE, found: EOF"),
+        (
+            "ALTER TABLE hits UPDATE x = 1",
+            "Expected: WHERE, found: EOF",
+        ),
+        (
+            "ALTER TABLE hits DELETE WHERE",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER TABLE hits UPDATE x = 1 WHERE",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER TABLE hits UPDATE x WHERE user_id = 42",
+            "Expected: =, found: WHERE",
+        ),
+        (
+            "ALTER TABLE hits DELETE IN PARTITION ID 2 WHERE user_id = 42",
+            "Expected: literal string, found: 2",
+        ),
+        (
+            "ALTER TABLE hits DELETE WHERE user_id = 42 IN PARTITION 2",
+            "Expected: end of statement, found: IN",
+        ),
+        (
+            "ALTER TABLE hits DELETE IN PARTITION ID foo WHERE user_id = 42",
+            "Expected: literal string, found: foo",
+        ),
+        (
+            r#"ALTER TABLE hits DELETE IN PARTITION ID "2" WHERE user_id = 42"#,
+            "Expected: literal string, found: \"2\"",
+        ),
+        (
+            "ALTER TABLE hits UPDATE (x, y) = (1, 2) WHERE user_id = 42",
+            "Expected: identifier, found: (",
+        ),
+        (
+            "ALTER TABLE hits UPDATE t.x = 1 WHERE user_id = 42",
+            "Expected: =, found: .",
+        ),
+        (
+            "ALTER TABLE hits UPDATE x = 1 WHERE user_id = 42, DELETE",
+            "Expected: WHERE, found: EOF",
+        ),
+        (
+            "ALTER TABLE hits UPDATE x = 1 WHERE user_id = 42 SETTINGS mutations_sync =",
+            "Expected: an expression, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            all_dialects_where(|d| d.supports_alter_table_mutations())
+                .parse_sql_statements(sql)
+                .unwrap_err(),
+            ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+    for sql in [
+        "ALTER TABLE hits DELETE WHERE user_id = 42",
+        "ALTER TABLE hits UPDATE x = 1 WHERE user_id = 42",
+    ] {
+        all_dialects_where(|d| !d.supports_alter_table_mutations())
+            .parse_sql_statements(sql)
+            .unwrap_err();
+    }
+}
+
+#[test]
+fn parse_alter_table_mutations_spans() {
+    for (sql, operation_start, predicate_column) in [
+        (
+            "ALTER TABLE hits DELETE IN PARTITION ID '2' WHERE user_id = 42 SETTINGS mutations_sync = 1",
+            "'2'",
+            "user_id",
+        ),
+        (
+            "ALTER TABLE hits UPDATE x = 1 IN PARTITION ID '2' WHERE tenant_id = 7 SETTINGS mutations_sync = 1",
+            "x = 1",
+            "tenant_id",
+        ),
+    ] {
+        let statements = sqlparser::parser::Parser::parse_sql(&ClickHouseDialect {}, sql).unwrap();
+        match &statements[0] {
+            Statement::AlterTable(stmt) => {
+                let operation = &stmt.operations[0];
+                assert_eq!(operation.span().start.column as usize, sql.find(operation_start).unwrap() + 1);
+                assert_eq!(operation.span().end.column as usize, sql.find(" SETTINGS").unwrap() + 1);
+                let (partitions, selection) = match operation {
+                    AlterTableOperation::Delete { partitions, selection }
+                    | AlterTableOperation::Update { partitions, selection, .. } => (partitions, selection),
+                    _ => unreachable!(),
+                };
+                assert_eq!(partitions[0].span().start.column as usize, sql.find("'2'").unwrap() + 1);
+                assert_eq!(partitions[0].span().end.column as usize, sql.find("'2'").unwrap() + 4);
+                assert_eq!(selection.span().start.column as usize, sql.find(predicate_column).unwrap() + 1);
+                assert_eq!(stmt.span().end.column as usize, sql.len() + 1);
+            }
+            _ => unreachable!(),
+        }
+    }
+}

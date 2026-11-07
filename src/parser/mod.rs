@@ -11422,6 +11422,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_mutation_partitions(&mut self) -> Result<Vec<Partition>, ParserError> {
+        if self.parse_keywords(&[Keyword::IN, Keyword::PARTITION]) {
+            self.parse_comma_separated(|p| {
+                if p.parse_keyword(Keyword::ID) {
+                    let token = p.next_token();
+                    if let Token::SingleQuotedString(value) = token.token {
+                        Ok(Partition::Identifier(Ident {
+                            value,
+                            quote_style: Some('\''),
+                            span: token.span,
+                        }))
+                    } else {
+                        p.expected("literal string", token)
+                    }
+                } else {
+                    Ok(Partition::Expr(p.parse_expr()?))
+                }
+            })
+        } else {
+            Ok(vec![])
+        }
+    }
+
     /// Parse a single `ALTER TABLE` operation and return an `AlterTableOperation`.
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
@@ -11472,6 +11495,33 @@ impl<'a> Parser<'a> {
                         column_position,
                     }
                 }
+            }
+        } else if self.dialect.supports_alter_table_mutations()
+            && self.parse_keyword(Keyword::DELETE)
+        {
+            let partitions = self.parse_mutation_partitions()?;
+            self.expect_keyword_is(Keyword::WHERE)?;
+            AlterTableOperation::Delete {
+                partitions,
+                selection: self.parse_expr()?,
+            }
+        } else if self.dialect.supports_alter_table_mutations()
+            && self.parse_keyword(Keyword::UPDATE)
+        {
+            let assignments = self.parse_comma_separated(|p| {
+                let target = AssignmentTarget::ColumnName(p.parse_identifier()?.into());
+                p.expect_token(&Token::Eq)?;
+                Ok(Assignment {
+                    target,
+                    value: p.parse_expr()?,
+                })
+            })?;
+            let partitions = self.parse_mutation_partitions()?;
+            self.expect_keyword_is(Keyword::WHERE)?;
+            AlterTableOperation::Update {
+                assignments,
+                partitions,
+                selection: self.parse_expr()?,
             }
         } else if self.parse_keyword(Keyword::RENAME) {
             if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::CONSTRAINT) {
@@ -12291,6 +12341,7 @@ impl<'a> Parser<'a> {
             );
         }
         let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
+        let settings = self.parse_settings()?;
 
         let location_loc = self.peek_token_ref().span.start;
         let mut location = None;
@@ -12325,6 +12376,7 @@ impl<'a> Parser<'a> {
             operations,
             location,
             on_cluster,
+            settings,
             table_type,
             end_token: AttachedToken(end_token),
         }

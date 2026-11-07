@@ -13527,10 +13527,8 @@ impl<'a> Parser<'a> {
 
         self.advance_token();
         let token = self.get_current_token();
-        let first = match &token.token {
-            Token::Word(word) => word.clone().into_ident(token.span),
-            Token::SingleQuotedString(value) => Ident::with_quote('\'', value.clone()),
-            _ => return self.expected_ref("a data type name", token),
+        let Some(first) = Self::multiword_type_name_ident(token) else {
+            return self.expected_ref("a data type name", token);
         };
         if self.peek_multiword_type_name_part().is_none() {
             if let Some(error) = dedicated_error {
@@ -15305,6 +15303,15 @@ impl<'a> Parser<'a> {
         is_part.then_some(peeked)
     }
 
+    /// Converts a word or single-quoted string token into one part of a multi-word type name.
+    fn multiword_type_name_ident(token: &TokenWithSpan) -> Option<Ident> {
+        match &token.token {
+            Token::Word(word) => Some(word.clone().into_ident(token.span)),
+            Token::SingleQuotedString(value) => Some(Ident::with_quote('\'', value.clone())),
+            _ => None,
+        }
+    }
+
     /// Parse a space-separated multi-word typename per SQLite's `typename` grammar.
     fn parse_multiword_type_name(
         &mut self,
@@ -15312,12 +15319,10 @@ impl<'a> Parser<'a> {
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let mut parts = Vec::with_capacity(4);
         parts.push(first);
-        while let Some(peeked) = self.peek_multiword_type_name_part() {
-            let next_part = match &peeked.token {
-                Token::Word(word) => word.clone().into_ident(peeked.span),
-                Token::SingleQuotedString(value) => Ident::with_quote('\'', value.clone()),
-                _ => break,
-            };
+        while let Some(next_part) = self
+            .peek_multiword_type_name_part()
+            .and_then(Self::multiword_type_name_ident)
+        {
             self.advance_token();
             parts.push(next_part);
         }

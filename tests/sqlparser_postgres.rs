@@ -13555,7 +13555,7 @@ fn parse_alter_database_rename() {
         ),
         (
             "ALTER DATABASE d",
-            "Expected: RENAME TO or SET after ALTER DATABASE, found: EOF",
+            "Expected: RENAME TO, SET or RESET after ALTER DATABASE, found: EOF",
         ),
     ] {
         assert_eq!(
@@ -13681,4 +13681,31 @@ fn parse_alter_database_set() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_alter_database_reset() {
+    let dialects = pg_and_generic();
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE d RESET my.custom"),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("d")]),
+            operation: AlterDatabaseOperation::Reset(ResetConfig::ConfigName(ObjectName::from(
+                vec![Ident::new("my"), Ident::new("custom")]
+            ))),
+        })
+    );
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE d RESET ALL"),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("d")]),
+            operation: AlterDatabaseOperation::Reset(ResetConfig::ALL),
+        })
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER DATABASE d RESET")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }

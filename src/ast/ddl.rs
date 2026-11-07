@@ -5044,7 +5044,7 @@ impl fmt::Display for AlterDatabase {
 
 impl Spanned for AlterDatabase {
     fn span(&self) -> Span {
-        Span::empty()
+        self.name.span()
     }
 }
 

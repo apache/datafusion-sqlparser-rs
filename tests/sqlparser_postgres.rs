@@ -13532,9 +13532,24 @@ fn parse_alter_database_rename() {
         })
     );
     assert_eq!(
-        dialects
-            .parse_sql_statements("ALTER DATABASE d RENAME TO")
-            .unwrap_err(),
-        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+        Parser::parse_sql(&PostgreSqlDialect {}, "ALTER DATABASE app.d RENAME TO e").unwrap()[0]
+            .span(),
+        Span::new(Location::new(1, 16), Location::new(1, 21))
     );
+    for (sql, error) in [
+        (
+            "ALTER DATABASE d RENAME TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d",
+            "Expected: RENAME TO after ALTER DATABASE, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
 }

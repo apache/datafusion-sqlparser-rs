@@ -13515,6 +13515,13 @@ impl<'a> Parser<'a> {
     /// Parse the body of a `CREATE FUNCTION` specified as a string.
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
     fn parse_create_function_body_string(&mut self) -> Result<CreateFunctionBody, ParserError> {
+        let (body, link_symbol) = self.parse_definition_string()?;
+        Ok(CreateFunctionBody::AsBeforeOptions { body, link_symbol })
+    }
+
+    /// Parse a definition string and the link symbol that may follow it,
+    /// e.g. `$$ body $$` or `'obj_file', 'link_symbol'`.
+    fn parse_definition_string(&mut self) -> Result<(Expr, Option<Expr>), ParserError> {
         let parse_string_expr = |parser: &mut Parser| -> Result<Expr, ParserError> {
             let peek_token = parser.peek_token();
             let span = peek_token.span;
@@ -13530,14 +13537,13 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(CreateFunctionBody::AsBeforeOptions {
-            body: parse_string_expr(self)?,
-            link_symbol: if self.consume_token(&Token::Comma) {
-                Some(parse_string_expr(self)?)
-            } else {
-                None
-            },
-        })
+        let body = parse_string_expr(self)?;
+        let link_symbol = if self.consume_token(&Token::Comma) {
+            Some(parse_string_expr(self)?)
+        } else {
+            None
+        };
+        Ok((body, link_symbol))
     }
 
     /// Parse a literal string
@@ -21975,7 +21981,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
 
-        let language = if self.parse_keyword(Keyword::LANGUAGE) {
+        let mut language = if self.parse_keyword(Keyword::LANGUAGE) {
             Some(self.parse_identifier()?)
         } else {
             None
@@ -21985,7 +21991,18 @@ impl<'a> Parser<'a> {
             Some(statements) => CreateProcedureBody::BeginAtomic(statements),
             None => {
                 self.expect_keyword_is(Keyword::AS)?;
-                CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                if matches!(
+                    self.peek_token_ref().token,
+                    Token::SingleQuotedString(_) | Token::DollarQuotedString(_)
+                ) {
+                    let (body, link_symbol) = self.parse_definition_string()?;
+                    if language.is_none() && self.parse_keyword(Keyword::LANGUAGE) {
+                        language = Some(self.parse_identifier()?);
+                    }
+                    CreateProcedureBody::AsString { body, link_symbol }
+                } else {
+                    CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                }
             }
         };
 

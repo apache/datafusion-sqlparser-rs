@@ -554,15 +554,8 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            match &self.peek_token_ref().token {
-                Token::EOF => break,
-                // end of statement
-                Token::Word(word)
-                    if expecting_statement_delimiter && word.keyword == Keyword::END =>
-                {
-                    break;
-                }
-                _ => {}
+            if self.peek_token_ref().token == Token::EOF {
+                break;
             }
 
             if expecting_statement_delimiter {

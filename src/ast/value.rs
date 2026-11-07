@@ -541,6 +541,8 @@ impl fmt::Display for NormalizationForm {
 pub struct EscapeQuotedString<'a> {
     string: &'a str,
     quote: char,
+    /// Whether a quote preceded by a backslash is treated as already escaped.
+    backslash_escape: bool,
 }
 
 impl fmt::Display for EscapeQuotedString<'_> {
@@ -570,7 +572,7 @@ impl fmt::Display for EscapeQuotedString<'_> {
         while let Some(&(idx, ch)) = peekable_chars.peek() {
             match ch {
                 char if char == quote => {
-                    if previous_char == '\\' {
+                    if self.backslash_escape && previous_char == '\\' {
                         // the quote is already escaped with a backslash, skip
                         peekable_chars.next();
                         continue;
@@ -605,7 +607,21 @@ impl fmt::Display for EscapeQuotedString<'_> {
 /// Return a helper which formats `string` for inclusion inside a quoted
 /// literal that uses `quote` as the delimiter.
 pub fn escape_quoted_string(string: &str, quote: char) -> EscapeQuotedString<'_> {
-    EscapeQuotedString { string, quote }
+    EscapeQuotedString {
+        string,
+        quote,
+        backslash_escape: true,
+    }
+}
+
+/// Like [`escape_quoted_string`], for quoted identifiers, which the tokenizer
+/// never backslash-escapes.
+pub(crate) fn escape_quoted_identifier(string: &str, quote: char) -> EscapeQuotedString<'_> {
+    EscapeQuotedString {
+        string,
+        quote,
+        backslash_escape: false,
+    }
 }
 
 /// Convenience wrapper for escaping strings for single-quoted literals (`'`).

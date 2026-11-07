@@ -3633,4 +3633,17 @@ SETTINGS update_parallel_mode = 'auto'"#;
         assert_eq!(test.get_source(options[0].span()), "N");
         assert_eq!(test.get_source(options[1].span()), "'BEGIN NULL; END'");
     }
+
+    #[test]
+    fn test_table_not_null_constraint_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            ("CONSTRAINT nn NOT NULL a NO INHERIT", "nn NOT NULL a"),
+            ("NOT NULL a", "a"),
+        ] {
+            let mut test = SpanTest::new(dialect, sql);
+            let constraint = test.0.parse_optional_table_constraint().unwrap().unwrap();
+            assert_eq!(test.get_source(constraint.span()), expected, "{sql}");
+        }
+    }
 }

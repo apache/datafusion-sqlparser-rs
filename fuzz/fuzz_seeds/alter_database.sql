@@ -1,0 +1,1 @@
+ALTER DATABASE d RENAME TO "Weird"

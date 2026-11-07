@@ -4889,6 +4889,15 @@ pub struct AlterExtension {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterExtensionOperation {
+    /// Update the extension to a new version.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name UPDATE [ TO new_version ]
+    /// ```
+    Update {
+        /// New version to update to.
+        new_version: Option<Ident>,
+    },
     /// Move the extension to another schema.
     ///
     /// ```sql
@@ -4903,6 +4912,13 @@ pub enum AlterExtensionOperation {
 impl fmt::Display for AlterExtensionOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterExtensionOperation::Update { new_version } => {
+                write!(f, "UPDATE")?;
+                if let Some(new_version) = new_version {
+                    write!(f, " TO {new_version}")?;
+                }
+                Ok(())
+            }
             AlterExtensionOperation::SetSchema { schema_name } => {
                 write!(f, "SET SCHEMA {schema_name}")
             }

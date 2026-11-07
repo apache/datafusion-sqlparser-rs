@@ -13527,6 +13527,85 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 }
 
 #[test]
+fn parse_alter_extension_update() {
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE");
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE TO latest");
+    pg_and_generic().verified_stmt("ALTER EXTENSION \"uuid-ossp\" UPDATE TO '1.1'");
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE TO latest") {
+        Statement::AlterExtension(AlterExtension { name, operation }) => {
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(
+                operation,
+                AlterExtensionOperation::Update {
+                    new_version: Some(Ident::new("latest"))
+                }
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE") {
+        Statement::AlterExtension(AlterExtension {
+            name,
+            operation: AlterExtensionOperation::Update { new_version },
+        }) => {
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(new_version, None);
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "ALTER EXTENSION ext_name",
+            "Expected: UPDATE or SET SCHEMA after ALTER EXTENSION name, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name UPDATE TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name UPDATE TO 1.1",
+            "Expected: identifier, found: 1.1",
+        ),
+        (
+            "ALTER EXTENSION ext_name UPDATE TO latest latest",
+            "Expected: end of statement, found: latest",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_extension_update_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg().verified_stmt("ALTER EXTENSION ext_name UPDATE TO latest");
+    for rejected in ["UPDATE", " TO "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
 fn parse_alter_extension_set_schema() {
     pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA other_schema");
     pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA schema.other");
@@ -13553,10 +13632,6 @@ fn parse_alter_extension_set_schema() {
         (
             "ALTER EXTENSION ext_name SET SCHEMA",
             "Expected: identifier, found: EOF",
-        ),
-        (
-            "ALTER EXTENSION ext_name",
-            "Expected: SET SCHEMA after ALTER EXTENSION name, found: EOF",
         ),
         ("ALTER EXTENSION 1", "Expected: identifier, found: 1"),
     ] {

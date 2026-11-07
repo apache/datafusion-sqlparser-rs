@@ -13201,6 +13201,26 @@ fn parse_alter_table_no_inherit() {
 }
 
 #[test]
+fn parse_pg_prefix_operator_before_multiplication() {
+    for sql in ["SELECT ~ 1 * 2", "SELECT |/ 25 * 4", "SELECT # 1 * 2"] {
+        let select = pg().verified_only_select(sql);
+        let Expr::UnaryOp { expr, .. } = expr_from_projection(&select.projection[0]) else {
+            panic!("Expected prefix operator expression in {sql}")
+        };
+        assert!(
+            matches!(
+                expr.as_ref(),
+                Expr::BinaryOp {
+                    op: BinaryOperator::Multiply,
+                    ..
+                }
+            ),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn parse_unary_plus_minus_before_pg_exponentiation() {
     for (sql, unary_op, operand, exponent) in [
         ("SELECT -1 ^ 0", UnaryOperator::Minus, "1", "0"),
@@ -13221,6 +13241,11 @@ fn parse_unary_plus_minus_before_pg_exponentiation() {
                 op: unary_op,
                 expr: Box::new(Expr::Value(number(operand).with_empty_span())),
             }
+        );
+    }
+}
+
+#[test]
 fn parse_create_function_cost() {
     let stmt = pg_and_generic()
         .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql STABLE COST 2.5 RETURN 1");
@@ -13327,6 +13352,9 @@ fn parse_generic_unary_minus_before_caret() {
         }
     );
     assert_eq!(right.as_ref(), &Expr::Value(number("0").with_empty_span()));
+}
+
+#[test]
 fn parse_create_function_support() {
     let stmt = pg_and_generic().verified_stmt(
         "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c IMMUTABLE STRICT SUPPORT public.f_support AS 'obj', 'f'",

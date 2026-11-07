@@ -2046,7 +2046,7 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op,
                     expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
                     ),
                 })
             }
@@ -2078,7 +2078,7 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op,
                     expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
                     ),
                 })
             }

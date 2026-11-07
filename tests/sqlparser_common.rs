@@ -23481,3 +23481,62 @@ fn parse_trailing_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_create_procedure_string_body() {
+    match verified_stmt("CREATE PROCEDURE p (a INT) LANGUAGE sql AS 'INSERT INTO t VALUES (a)'") {
+        Statement::CreateProcedure {
+            language,
+            body: CreateProcedureBody::AsString { body, link_symbol },
+            ..
+        } => {
+            assert_eq!(language, Some(Ident::new("sql")));
+            assert_eq!(
+                body,
+                Expr::Value(
+                    Value::SingleQuotedString("INSERT INTO t VALUES (a)".to_string())
+                        .with_empty_span()
+                )
+            );
+            assert_eq!(link_symbol, None);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    verified_stmt("CREATE PROCEDURE p () LANGUAGE C AS 'MODULE_PATHNAME', 'p_wrapper'");
+    one_statement_parses_to(
+        "CREATE PROCEDURE p () AS 'SELECT 1' LANGUAGE sql",
+        "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1'",
+    );
+
+    pg_and_generic().verified_stmt(
+        "CREATE PROCEDURE p (a INT) LANGUAGE plpgsql AS $$ BEGIN INSERT INTO t VALUES (a); END; $$",
+    );
+    pg_and_generic().verified_stmt("CREATE PROCEDURE p () LANGUAGE sql AS $body$ SELECT 1 $body$");
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE PROCEDURE insert_data(a integer, b integer)
+LANGUAGE SQL
+AS $$
+INSERT INTO tbl VALUES (a);
+INSERT INTO tbl VALUES (b);
+$$"#,
+        "CREATE PROCEDURE insert_data (a INTEGER, b INTEGER) LANGUAGE SQL AS $$\nINSERT INTO tbl VALUES (a);\nINSERT INTO tbl VALUES (b);\n$$",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1' LANGUAGE sql",
+            "Expected: end of statement, found: LANGUAGE",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE C AS 'MODULE_PATHNAME',",
+            "Expected: literal string, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}

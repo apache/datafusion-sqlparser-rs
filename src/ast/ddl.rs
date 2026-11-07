@@ -3927,6 +3927,26 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub security: Option<FunctionSecurity>,
+    /// `[ NOT ] LEAKPROOF`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub leakproof: Option<bool>,
+    /// `WINDOW`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub window: bool,
+    /// `COST execution_cost`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub cost: Option<Expr>,
+    /// `ROWS result_rows`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub rows: Option<Expr>,
+    /// `SUPPORT support_function`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub support: Option<ObjectName>,
     /// SET configuration_parameter clauses
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -3988,6 +4008,9 @@ impl fmt::Display for CreateFunction {
         if let Some(language) = &self.language {
             write!(f, " LANGUAGE {language}")?;
         }
+        if self.window {
+            write!(f, " WINDOW")?;
+        }
         if let Some(behavior) = &self.behavior {
             write!(f, " {behavior}")?;
         }
@@ -3999,6 +4022,21 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(security) = &self.security {
             write!(f, " {security}")?;
+        }
+        if let Some(leakproof) = self.leakproof {
+            if !leakproof {
+                write!(f, " NOT")?;
+            }
+            write!(f, " LEAKPROOF")?;
+        }
+        if let Some(cost) = &self.cost {
+            write!(f, " COST {cost}")?;
+        }
+        if let Some(rows) = &self.rows {
+            write!(f, " ROWS {rows}")?;
+        }
+        if let Some(support) = &self.support {
+            write!(f, " SUPPORT {support}")?;
         }
         for set_param in &self.set_params {
             write!(f, " {set_param}")?;

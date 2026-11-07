@@ -630,6 +630,7 @@ define_keywords!(
     LSEG,
     MACRO,
     MAIN,
+    MAINTAIN,
     MANAGE,
     MANAGED,
     MANAGEDLOCATION,

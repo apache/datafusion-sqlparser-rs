@@ -5497,6 +5497,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5540,6 +5545,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5587,6 +5597,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5634,6 +5649,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5674,6 +5694,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5720,6 +5745,11 @@ fn parse_create_function() {
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5862,6 +5892,11 @@ fn parse_create_function_c_with_module_pathname() {
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -7709,6 +7744,11 @@ fn parse_trigger_related_functions() {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             using: None,
             language: Some(Ident::new("plpgsql")),
@@ -11782,13 +11822,13 @@ END"#,
     }
 }
 
-#[test]
-fn display_create_function_begin_atomic_propagates_write_errors() {
+/// Asserts that displaying `stmt` fails whenever the writer rejects one of `fragments`.
+fn assert_display_propagates_write_errors(stmt: &Statement, fragments: &[&str]) {
     use core::fmt::{self, Write};
 
-    struct RejectingWriter(&'static str);
+    struct RejectingWriter<'a>(&'a str);
 
-    impl Write for RejectingWriter {
+    impl Write for RejectingWriter<'_> {
         fn write_str(&mut self, value: &str) -> fmt::Result {
             if value == self.0 {
                 Err(fmt::Error)
@@ -11798,12 +11838,17 @@ fn display_create_function_begin_atomic_propagates_write_errors() {
         }
     }
 
-    let stmt = pg_and_generic()
-        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
-    for rejected in [" BEGIN ATOMIC", " ", ";", " END"] {
+    for rejected in fragments {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
+}
+
+#[test]
+fn display_create_function_begin_atomic_propagates_write_errors() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
+    assert_display_propagates_write_errors(&stmt, &[" BEGIN ATOMIC", " ", ";", " END"]);
 }
 
 #[test]
@@ -13176,6 +13221,72 @@ fn parse_unary_plus_minus_before_pg_exponentiation() {
                 op: unary_op,
                 expr: Box::new(Expr::Value(number(operand).with_empty_span())),
             }
+fn parse_create_function_cost() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql STABLE COST 2.5 RETURN 1");
+    assert_display_propagates_write_errors(&stmt, &[" COST "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(create.cost, Some(Expr::value(number("2.5"))));
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE OR REPLACE FUNCTION pg_catalog.timestamptz(date, time without time zone)
+ RETURNS timestamp with time zone
+ LANGUAGE sql
+ STABLE PARALLEL SAFE STRICT COST 1
+RETURN (($1 + $2))::timestamp with time zone"#,
+        "CREATE OR REPLACE FUNCTION pg_catalog.timestamptz(DATE, TIME WITHOUT TIME ZONE) RETURNS TIMESTAMP WITH TIME ZONE LANGUAGE sql STABLE STRICT PARALLEL SAFE COST 1 RETURN (($1 + $2))::TIMESTAMP WITH TIME ZONE",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT COST 1 COST 2 RETURN 1",
+            "COST specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT COST RETURN 1",
+            "Expected: a concrete value, found: RETURN",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_rows() {
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f() RETURNS SETOF INT LANGUAGE sql COST 2 ROWS 10 AS 'SELECT 1'",
+    );
+    assert_display_propagates_write_errors(&stmt, &[" ROWS "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(create.rows, Some(Expr::value(number("10"))));
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f() RETURNS SETOF INT ROWS 10 COST 2 AS 'SELECT 1'",
+        "CREATE FUNCTION f() RETURNS SETOF INT COST 2 ROWS 10 AS 'SELECT 1'",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS SETOF INT ROWS 1 ROWS 2 AS 'SELECT 1'",
+            "ROWS specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS SETOF INT ROWS AS 'SELECT 1'",
+            "Expected: a concrete value, found: AS",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
         );
     }
 }
@@ -13216,4 +13327,161 @@ fn parse_generic_unary_minus_before_caret() {
         }
     );
     assert_eq!(right.as_ref(), &Expr::Value(number("0").with_empty_span()));
+fn parse_create_function_support() {
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c IMMUTABLE STRICT SUPPORT public.f_support AS 'obj', 'f'",
+    );
+    assert_display_propagates_write_errors(&stmt, &[" SUPPORT "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(
+        create.support,
+        Some(ObjectName::from(vec![
+            Ident::new("public"),
+            Ident::new("f_support")
+        ]))
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS INT SUPPORT f_support COST 1 AS 'obj', 'f'",
+        "CREATE FUNCTION f(INT) RETURNS INT COST 1 SUPPORT f_support AS 'obj', 'f'",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT SUPPORT a SUPPORT b AS 'obj', 'f'",
+            "SUPPORT specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT SUPPORT",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_leakproof() {
+    for (sql, leakproof) in [
+        (
+            "CREATE FUNCTION f(INT) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE STRICT LEAKPROOF COST 1 RETURN true",
+            true,
+        ),
+        (
+            "CREATE FUNCTION f(INT) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE NOT LEAKPROOF RETURN true",
+            false,
+        ),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        assert_display_propagates_write_errors(&stmt, &[" LEAKPROOF"]);
+        let Statement::CreateFunction(create) = stmt else {
+            unreachable!()
+        };
+        assert_eq!(create.leakproof, Some(leakproof), "{sql}");
+    }
+    assert_display_propagates_write_errors(
+        &pg_and_generic()
+            .verified_stmt("CREATE FUNCTION f() RETURNS BOOLEAN NOT LEAKPROOF RETURN true"),
+        &[" NOT"],
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS BOOLEAN LEAKPROOF STRICT RETURN true",
+        "CREATE FUNCTION f(INT) RETURNS BOOLEAN STRICT LEAKPROOF RETURN true",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN LEAKPROOF NOT LEAKPROOF RETURN true",
+            "[NOT] LEAKPROOF specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN NOT LEAKPROOF LEAKPROOF RETURN true",
+            "[NOT] LEAKPROOF specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN NOT RETURN true",
+            "Expected: end of statement, found: NOT",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_window() {
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c WINDOW IMMUTABLE AS 'obj', 'f'",
+    );
+    assert_display_propagates_write_errors(&stmt, &[" WINDOW"]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert!(create.window);
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS INT IMMUTABLE WINDOW AS 'obj', 'f'",
+        "CREATE FUNCTION f(INT) RETURNS INT WINDOW IMMUTABLE AS 'obj', 'f'",
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE FUNCTION f() RETURNS INT WINDOW WINDOW AS 'obj', 'f'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: WINDOW specified more than once"
+    );
+}
+
+#[test]
+fn parse_grant_maintain() {
+    // https://www.postgresql.org/docs/17/sql-grant.html
+    match pg().verified_stmt("GRANT MAINTAIN ON t TO r") {
+        Statement::Grant(grant) => assert_eq!(
+            grant.privileges,
+            Privileges::Actions(vec![Action::Maintain])
+        ),
+        _ => unreachable!(),
+    }
+    pg().verified_stmt("GRANT SELECT, MAINTAIN ON t TO r WITH GRANT OPTION");
+    pg().verified_stmt("REVOKE MAINTAIN ON t FROM r");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT MAINTAIN ON TABLES TO r");
+
+    assert_eq!(
+        pg().parse_sql_statements("GRANT MAINTAIN (a) ON t TO r")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: ("
+    );
+}
+
+#[test]
+fn display_maintain_privilege_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter;
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == "MAINTAIN" {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    assert_eq!(
+        write!(RejectingWriter, "{}", Action::Maintain),
+        Err(fmt::Error)
+    );
 }

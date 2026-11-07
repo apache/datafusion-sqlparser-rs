@@ -6141,6 +6141,11 @@ impl<'a> Parser<'a> {
             called_on_null: Option<FunctionCalledOnNull>,
             parallel: Option<FunctionParallel>,
             security: Option<FunctionSecurity>,
+            leakproof: Option<bool>,
+            window: Option<()>,
+            cost: Option<Expr>,
+            rows: Option<Expr>,
+            support: Option<ObjectName>,
         }
         let mut body = Body::default();
         let mut set_params: Vec<FunctionDefinitionSetParam> = Vec::new();
@@ -6209,6 +6214,24 @@ impl<'a> Parser<'a> {
                 } else {
                     return self.expected_ref("DEFINER or INVOKER", self.peek_token_ref());
                 }
+            } else if self.parse_keyword(Keyword::LEAKPROOF) {
+                ensure_not_set(&body.leakproof, "[NOT] LEAKPROOF")?;
+                body.leakproof = Some(true);
+            } else if self.parse_keywords(&[Keyword::NOT, Keyword::LEAKPROOF]) {
+                ensure_not_set(&body.leakproof, "[NOT] LEAKPROOF")?;
+                body.leakproof = Some(false);
+            } else if self.parse_keyword(Keyword::WINDOW) {
+                ensure_not_set(&body.window, "WINDOW")?;
+                body.window = Some(());
+            } else if self.parse_keyword(Keyword::COST) {
+                ensure_not_set(&body.cost, "COST")?;
+                body.cost = Some(self.parse_number()?);
+            } else if self.parse_keyword(Keyword::ROWS) {
+                ensure_not_set(&body.rows, "ROWS")?;
+                body.rows = Some(self.parse_number()?);
+            } else if self.parse_keyword(Keyword::SUPPORT) {
+                ensure_not_set(&body.support, "SUPPORT")?;
+                body.support = Some(self.parse_object_name(false)?);
             } else if self.parse_keyword(Keyword::SET) {
                 let name = self.parse_object_name(false)?;
                 let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
@@ -6247,6 +6270,11 @@ impl<'a> Parser<'a> {
             called_on_null: body.called_on_null,
             parallel: body.parallel,
             security: body.security,
+            leakproof: body.leakproof,
+            window: body.window.is_some(),
+            cost: body.cost,
+            rows: body.rows,
+            support: body.support,
             set_params,
             language: body.language,
             function_body: body.function_body,
@@ -6286,6 +6314,11 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             language: None,
             determinism_specifier: None,
@@ -6370,6 +6403,11 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
         })
     }
@@ -6461,6 +6499,11 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
         })
     }
@@ -19227,6 +19270,8 @@ impl<'a> Parser<'a> {
             Ok(Action::Insert {
                 columns: parse_columns(self)?,
             })
+        } else if self.parse_keyword(Keyword::MAINTAIN) {
+            Ok(Action::Maintain)
         } else if self.parse_keyword(Keyword::MANAGE) {
             let manage_type = self.parse_action_manage_type()?;
             Ok(Action::Manage { manage_type })

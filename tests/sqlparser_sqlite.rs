@@ -30,8 +30,8 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{AnsiDialect, GenericDialect, SQLiteDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::{Span, Token};
 
 #[test]
 fn pragma_no_value() {
@@ -124,6 +124,106 @@ fn pragma_eq_placeholder_style() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn pragma_values() {
+    // signed-literal
+    let statement = sqlite_and_generic().verified_stmt("PRAGMA case_sensitive_like = true");
+    assert!(matches!(
+        statement,
+        Statement::Pragma {
+            value: Some(Expr::Value(ValueWithSpan {
+                value: Value::Boolean(true),
+                ..
+            })),
+            is_eq: true,
+            ..
+        }
+    ));
+
+    // name: kept verbatim as an identifier
+    for spelling in [
+        "ON", "OFF", "YES", "NO", "WAL", "DELETE", "NORMAL", "FULL", "MEMORY",
+    ] {
+        let sql = format!("PRAGMA case_sensitive_like = {spelling}");
+        let Statement::Pragma {
+            value: Some(Expr::Identifier(ident)),
+            is_eq: true,
+            ..
+        } = sqlite_and_generic().verified_stmt(&sql)
+        else {
+            panic!("expected identifier pragma value for {spelling}");
+        };
+        assert_eq!(spelling, ident.value);
+        assert_eq!(None, ident.quote_style);
+    }
+
+    // identifier value keeps its span
+    let statements =
+        Parser::parse_sql(&SQLiteDialect {}, "PRAGMA case_sensitive_like = oN").unwrap();
+    let [Statement::Pragma {
+        value: Some(Expr::Identifier(ident)),
+        is_eq: true,
+        ..
+    }] = statements.as_slice()
+    else {
+        panic!("Expected equality-form PRAGMA")
+    };
+    assert_eq!("oN", ident.value);
+    assert_eq!(Span::new((1, 30).into(), (1, 32).into()), ident.span);
+
+    // signed-number
+    let statement = sqlite_and_generic().verified_stmt("PRAGMA cache_size = -2000");
+    assert!(matches!(
+        statement,
+        Statement::Pragma {
+            value: Some(Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                ..
+            }),
+            is_eq: true,
+            ..
+        }
+    ));
+    sqlite_and_generic().verified_stmt("PRAGMA cache_size = +2000");
+
+    sqlite_and_generic().verified_stmt("PRAGMA optimize = 0x10002");
+
+    // function-call form with a name argument
+    let statement = sqlite_and_generic().verified_stmt("PRAGMA wal_checkpoint(TRUNCATE)");
+    assert!(matches!(
+        statement,
+        Statement::Pragma {
+            value: Some(Expr::Identifier(_)),
+            is_eq: false,
+            ..
+        }
+    ));
+    // values SQLite rejects
+    for (sql, error) in [
+        ("PRAGMA x = -'str'", "Expected: number, found: 'str'"),
+        ("PRAGMA x = +'str'", "Expected: number, found: 'str'"),
+        (
+            "PRAGMA x = NULL",
+            "Expected: number, name or string, found: NULL",
+        ),
+        ("PRAGMA x()", "Expected: identifier, found: )"),
+        ("PRAGMA x = )", "Expected: identifier, found: )"),
+        ("PRAGMA x(=)", "Expected: identifier, found: ="),
+    ] {
+        let actual = sqlite_and_generic().parse_sql_statements(sql).unwrap_err();
+        assert!(actual.to_string().contains(error), "{sql}: {actual}");
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+#[test]
+fn pragma_values_reject_unrepresentable_signed_numbers() {
+    let error = sqlite_and_generic()
+        .parse_sql_statements("PRAGMA x = -1e999999999999999999999999")
+        .unwrap_err();
+    assert!(matches!(error, ParserError::ParserError(_)));
 }
 
 #[test]
@@ -2009,4 +2109,27 @@ fn parse_create_table_string_literal_column_with_dangling_constraint_name() {
             .to_string(),
         "sql parser error: Expected: constraint details after CONSTRAINT <name>, found: )"
     );
+}
+
+#[test]
+fn pragma_hexadecimal_numbers_round_trip() {
+    for sql in [
+        "PRAGMA user_version = 0x10",
+        "PRAGMA user_version = +0x10",
+        "PRAGMA user_version = -0x10",
+        "PRAGMA user_version(0xffffffffffffffff)",
+    ] {
+        sqlite_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn pragma_rejects_blob_literals() {
+    for sql in [
+        "PRAGMA user_version = X'10'",
+        "PRAGMA user_version = +X'10'",
+        "PRAGMA user_version = -X'10'",
+    ] {
+        sqlite_and_generic().parse_sql_statements(sql).unwrap_err();
+    }
 }

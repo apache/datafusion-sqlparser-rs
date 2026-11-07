@@ -209,6 +209,10 @@ const PERIOD_PREC: u8 = 200;
 const DOUBLE_COLON_PREC: u8 = 140;
 const BRACKET_PREC: u8 = 130;
 const COLLATE_PREC: u8 = 120;
+// `UMINUS` sits between `COLLATE`/`AT` and `'[' ']'` in gram.y, so a unary `+`/`-` operand may
+// still take `.`, `::` and `[]`, but no other operator:
+// <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE>
+const UNARY_OPERAND_PREC: u8 = COLLATE_PREC;
 const AT_TZ_PREC: u8 = 110;
 const CARET_PREC: u8 = 100;
 const MUL_DIV_MOD_OP_PREC: u8 = 90;
@@ -388,6 +392,10 @@ impl Dialect for PostgreSqlDialect {
             Precedence::And => AND_PREC,
             Precedence::Or => OR_PREC,
         }
+    }
+
+    fn unary_operand_precedence(&self) -> u8 {
+        UNARY_OPERAND_PREC
     }
 
     fn allow_extract_custom(&self) -> bool {

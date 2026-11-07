@@ -13430,3 +13430,47 @@ fn display_maintain_privilege_propagates_formatter_errors() {
         Err(fmt::Error)
     );
 }
+
+#[test]
+fn parse_unary_operand_binds_tighter_than_exponentiation() {
+    // `UMINUS` is declared above `^` in gram.y, so `-1 ^ 0` means `(-1) ^ 0`.
+    let minus_one = Expr::UnaryOp {
+        op: UnaryOperator::Minus,
+        expr: Box::new(Expr::value(number("1"))),
+    };
+    let plus_two = Expr::UnaryOp {
+        op: UnaryOperator::Plus,
+        expr: Box::new(Expr::value(number("2"))),
+    };
+
+    assert_eq!(
+        pg().verified_expr("-1 ^ 0"),
+        Expr::BinaryOp {
+            left: Box::new(minus_one),
+            op: BinaryOperator::PGExp,
+            right: Box::new(Expr::value(number("0"))),
+        }
+    );
+    assert_eq!(
+        pg().verified_expr("+2 ^ 2"),
+        Expr::BinaryOp {
+            left: Box::new(plus_two),
+            op: BinaryOperator::PGExp,
+            right: Box::new(Expr::value(number("2"))),
+        }
+    );
+
+    // Operators that bind looser than `^` keep the unary operator on the left-hand side.
+    let minus_a = Expr::UnaryOp {
+        op: UnaryOperator::Minus,
+        expr: Box::new(Expr::Identifier(Ident::new("a"))),
+    };
+    assert_eq!(
+        pg().verified_expr("-a * b"),
+        Expr::BinaryOp {
+            left: Box::new(minus_a),
+            op: BinaryOperator::Multiply,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
+        }
+    );
+}

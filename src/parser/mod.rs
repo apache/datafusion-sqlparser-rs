@@ -2017,9 +2017,7 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::MulDivModOp))?,
-                    ),
+                    expr: Box::new(self.parse_subexpr(self.dialect.unary_operand_precedence())?),
                 })
             }
             Token::ExclamationMark if dialect.supports_bang_not_operator() => Ok(Expr::UnaryOp {

@@ -13555,7 +13555,7 @@ fn parse_alter_database_rename() {
         ),
         (
             "ALTER DATABASE d",
-            "Expected: RENAME TO, OWNER TO, SET or RESET after ALTER DATABASE, found: EOF",
+            "Expected: RENAME TO, OWNER TO, SET, RESET or REFRESH COLLATION VERSION after ALTER DATABASE, found: EOF",
         ),
     ] {
         assert_eq!(
@@ -13762,5 +13762,23 @@ fn parse_alter_database_set_tablespace() {
             .parse_sql_statements("ALTER DATABASE d SET TABLESPACE")
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+}
+
+#[test]
+fn parse_alter_database_refresh_collation_version() {
+    let dialects = pg_and_generic();
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE d REFRESH COLLATION VERSION"),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("d")]),
+            operation: AlterDatabaseOperation::RefreshCollationVersion,
+        })
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER DATABASE d REFRESH COLLATION VERSION x")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: x".to_string())
     );
 }

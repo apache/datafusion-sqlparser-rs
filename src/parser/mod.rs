@@ -12522,9 +12522,11 @@ impl<'a> Parser<'a> {
             })
         } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
             AlterDatabaseOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::REFRESH, Keyword::COLLATION, Keyword::VERSION]) {
+            AlterDatabaseOperation::RefreshCollationVersion
         } else {
             return self.expected_ref(
-                "RENAME TO, OWNER TO, SET or RESET after ALTER DATABASE",
+                "RENAME TO, OWNER TO, SET, RESET or REFRESH COLLATION VERSION after ALTER DATABASE",
                 self.peek_token_ref(),
             );
         };

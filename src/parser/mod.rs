@@ -6774,8 +6774,12 @@ impl<'a> Parser<'a> {
         let mut statements = None;
         if self.parse_keyword(Keyword::EXECUTE) {
             exec_body = Some(self.parse_trigger_exec_body()?);
-        } else {
+        } else if self.peek_keyword(Keyword::BEGIN) {
             statements = Some(self.parse_conditional_statements(&[Keyword::END])?);
+        } else {
+            statements = Some(ConditionalStatements::Sequence {
+                statements: vec![self.parse_statement()?],
+            });
         }
 
         Ok(CreateTrigger {

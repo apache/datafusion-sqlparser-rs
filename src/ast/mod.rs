@@ -3943,6 +3943,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
     AlterCollation(AlterCollation),
     /// ```sql
+    /// ALTER SEQUENCE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altersequence.html)
+    AlterSequence(AlterSequence),
+    /// ```sql
     /// ALTER OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteroperator.html)
@@ -5785,6 +5790,7 @@ impl fmt::Display for Statement {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
             Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
+            Statement::AlterSequence(alter_sequence) => write!(f, "{alter_sequence}"),
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
             Statement::AlterOperatorFamily(alter_operator_family) => {
                 write!(f, "{alter_operator_family}")
@@ -6713,6 +6719,58 @@ impl fmt::Display for SequenceOptions {
             }
             SequenceOptions::OwnedBy(None) => {
                 write!(f, " OWNED BY NONE")
+            }
+        }
+    }
+}
+
+/// ALTER SEQUENCE statement.
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-altersequence.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterSequence {
+    /// `IF EXISTS` flag.
+    pub if_exists: bool,
+    /// Name of the sequence being altered.
+    pub name: ObjectName,
+    /// The operation to perform on the sequence.
+    pub operation: AlterSequenceOperation,
+}
+
+/// Operations supported by `ALTER SEQUENCE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterSequenceOperation {
+    /// Move the sequence to another schema.
+    ///
+    /// ```sql
+    /// ALTER SEQUENCE name SET SCHEMA new_schema
+    /// ```
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
+}
+
+impl fmt::Display for AlterSequence {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.if_exists {
+            write!(f, "ALTER SEQUENCE IF EXISTS {}", self.name)?;
+        } else {
+            write!(f, "ALTER SEQUENCE {}", self.name)?;
+        }
+        write!(f, " {}", self.operation)
+    }
+}
+
+impl fmt::Display for AlterSequenceOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterSequenceOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
             }
         }
     }
@@ -12764,6 +12822,12 @@ impl From<AlterType> for Statement {
 impl From<AlterCollation> for Statement {
     fn from(a: AlterCollation) -> Self {
         Self::AlterCollation(a)
+    }
+}
+
+impl From<AlterSequence> for Statement {
+    fn from(a: AlterSequence) -> Self {
+        Self::AlterSequence(a)
     }
 }
 

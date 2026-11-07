@@ -118,6 +118,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clickhouse-lexer-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ab8e9ad9fce2c5a71474b8c2dffd9542a1d1a802cbcf71a1c0365be115c526"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -197,6 +206,7 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 name = "fuzz"
 version = "0.1.0"
 dependencies = [
+ "clickhouse-lexer-sys",
  "libduckdb-sys",
  "libfuzzer-sys",
  "libsqlite3-sys",
@@ -785,7 +795,7 @@ checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
 name = "sqlparser"
-version = "0.63.0"
+version = "0.64.0"
 dependencies = [
  "log",
  "recursive",

@@ -29,7 +29,7 @@ libfuzzer-sys = "0.4"
 libsqlite3-sys = { version = "0.39", features = ["bundled"], optional = true }
 pg_query = { version = "6.2", optional = true }
 libduckdb-sys = { version = "1.10505.0", features = ["bundled", "json"], optional = true }
-clickhouse-lexer-sys = { version = "0.1", optional = true }
+clickhouse-lexer-sys = { version = "0.1.1", optional = true }
 serde_json = { version = "1", optional = true }
 sqlparser = { path = ".." }
 

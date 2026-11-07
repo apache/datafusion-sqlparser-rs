@@ -977,9 +977,15 @@ impl Spanned for AlterColumnOperation {
             AlterColumnOperation::DropDefault => Span::empty(),
             AlterColumnOperation::SetDataType {
                 data_type: _,
+                collation,
                 using,
                 had_set: _,
-            } => using.as_ref().map_or(Span::empty(), |u| u.span()),
+            } => union_spans(
+                collation
+                    .iter()
+                    .map(|c| c.span())
+                    .chain(using.iter().map(|u| u.span())),
+            ),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
             AlterColumnOperation::GenericOptions { options } => {
                 union_spans(options.iter().map(|option| option.span()))

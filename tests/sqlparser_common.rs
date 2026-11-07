@@ -6087,6 +6087,7 @@ fn parse_alter_table_alter_column_type() {
                 op,
                 AlterColumnOperation::SetDataType {
                     data_type: DataType::Text,
+                    collation: None,
                     using: None,
                     had_set: true,
                 }
@@ -6095,6 +6096,9 @@ fn parse_alter_table_alter_column_type() {
         _ => unreachable!(),
     }
     verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
+    verified_stmt(&format!(
+        "{alter_stmt} ALTER COLUMN is_active TYPE TEXT COLLATE en_US"
+    ));
 
     let dialects = all_dialects_where(|d| d.supports_alter_column_type_using());
     dialects.verified_stmt(&format!(

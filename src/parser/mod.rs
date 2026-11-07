@@ -11966,6 +11966,11 @@ impl<'a> Parser<'a> {
 
     fn parse_set_data_type(&mut self, had_set: bool) -> Result<AlterColumnOperation, ParserError> {
         let data_type = self.parse_data_type()?;
+        let collation = if self.parse_keyword(Keyword::COLLATE) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
         let using = if self.dialect.supports_alter_column_type_using()
             && self.parse_keyword(Keyword::USING)
         {
@@ -11975,6 +11980,7 @@ impl<'a> Parser<'a> {
         };
         Ok(AlterColumnOperation::SetDataType {
             data_type,
+            collation,
             using,
             had_set,
         })

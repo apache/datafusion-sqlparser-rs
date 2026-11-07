@@ -128,7 +128,7 @@ impl Dialect for SQLiteDialect {
             Precedence::Period => 100,
             Precedence::DoubleColon => 50,
             Precedence::AtTz => 41,
-            Precedence::MulDivModOp => 40,
+            Precedence::MulDivModOp | Precedence::UnaryPlusMinus => 40,
             Precedence::PlusMinus => 30,
             Precedence::Xor => 25,
             Precedence::Ampersand => 24,

@@ -33,6 +33,7 @@ use std::ffi::{c_int, CStr};
 use std::ptr;
 
 const SQLITE: Grammar = Grammar {
+    // Spelled as sqlparser prints them, since SQLite's constant reuse compares token text.
     atoms: &[
         "1",
         "2",
@@ -42,11 +43,11 @@ const SQLITE: Grammar = Grammar {
         "1e3",
         "'a'",
         "NULL",
-        "TRUE",
-        "FALSE",
+        "true",
+        "false",
         "a",
         "t.b",
-        "x'01'",
+        "X'01'",
         "?1",
         "CURRENT_DATE",
         "9223372036854775808",

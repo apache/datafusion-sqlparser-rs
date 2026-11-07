@@ -13430,3 +13430,13 @@ fn display_maintain_privilege_propagates_formatter_errors() {
         Err(fmt::Error)
     );
 }
+
+#[test]
+fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
+    // PostgreSQL reads the second `END` as a bare column alias
+    assert_eq!(
+        pg().parse_sql_statements("SELECT CASE 1 WHEN 1 THEN 1 END END FROM t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: END".to_string())
+    );
+}

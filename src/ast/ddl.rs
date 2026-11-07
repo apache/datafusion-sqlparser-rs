@@ -1193,6 +1193,8 @@ impl fmt::Display for AlterIndexOperation {
 }
 
 /// An `ALTER TYPE` statement (`Statement::AlterType`)
+///
+/// [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertype.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -1214,6 +1216,11 @@ pub enum AlterTypeOperation {
     AddValue(AlterTypeAddValue),
     /// Rename an existing value of the type.
     RenameValue(AlterTypeRenameValue),
+    /// Move the type to another schema.
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
 }
 
 /// See [AlterTypeOperation::Rename]
@@ -1290,6 +1297,7 @@ impl fmt::Display for AlterTypeOperation {
             Self::RenameValue(AlterTypeRenameValue { from, to }) => {
                 write!(f, "RENAME VALUE {from} TO {to}")
             }
+            Self::SetSchema { schema_name } => write!(f, "SET SCHEMA {schema_name}"),
         }
     }
 }

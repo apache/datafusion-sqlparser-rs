@@ -13518,3 +13518,19 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_alter_type_set_schema() {
+    pg_and_generic().verified_stmt("ALTER TYPE public.ty SET SCHEMA other.schema");
+
+    let stmt = pg_and_generic().verified_stmt("ALTER TYPE en SET SCHEMA other");
+    assert_eq!(
+        stmt,
+        Statement::AlterType(AlterType {
+            name: ObjectName::from(Ident::new("en")),
+            operation: AlterTypeOperation::SetSchema {
+                schema_name: ObjectName::from(Ident::new("other")),
+            },
+        })
+    );
+}

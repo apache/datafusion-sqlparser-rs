@@ -13522,6 +13522,10 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 #[test]
 fn parse_alter_sequence() {
     let dialects = pg_and_generic();
+    dialects.verified_stmt("ALTER SEQUENCE s SET LOGGED");
+    dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s SET LOGGED");
+    dialects.verified_stmt("ALTER SEQUENCE s SET UNLOGGED");
+    dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s SET UNLOGGED");
     dialects.verified_stmt("ALTER SEQUENCE s OWNER TO r1");
     dialects.verified_stmt("ALTER SEQUENCE s OWNER TO CURRENT_ROLE");
     dialects.verified_stmt("ALTER SEQUENCE s OWNER TO CURRENT_USER");
@@ -13552,6 +13556,15 @@ fn parse_alter_sequence_ast() {
         .parse_sql_statements("ALTER SEQUENCE s SET SCHEMA other")
         .unwrap();
     assert_eq!(statements[0].span(), Span::empty());
+    assert_eq!(
+        pg().parse_sql_statements("ALTER SEQUENCE s SET UNLOGGED")
+            .unwrap(),
+        vec![Statement::AlterSequence(AlterSequence {
+            if_exists: false,
+            name: ObjectName::from(vec!["s".into()]),
+            operation: AlterSequenceOperation::SetUnlogged,
+        })]
+    );
 }
 
 #[test]
@@ -13563,11 +13576,11 @@ fn parse_alter_sequence_errors() {
         ),
         (
             "ALTER SEQUENCE s",
-            "Expected: OWNER TO, RENAME TO, or SET SCHEMA after the sequence name, found: EOF",
+            "Expected: OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name, found: EOF",
         ),
         (
             "ALTER SEQUENCE s SET",
-            "Expected: OWNER TO, RENAME TO, or SET SCHEMA after the sequence name, found: SET",
+            "Expected: OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name, found: SET",
         ),
         (
             "ALTER SEQUENCE s SET SCHEMA",

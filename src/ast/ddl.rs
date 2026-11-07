@@ -3241,6 +3241,9 @@ pub struct CreateTable {
     /// PostgreSQL partition bound specification for PARTITION OF.
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
     pub for_values: Option<ForValues>,
+    /// PostgreSQL `OF type_name` clause of a typed table, naming its composite type.
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub of_type: Option<ObjectName>,
     /// Snowflake "COPY GRANTS" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub copy_grants: bool,
@@ -3375,6 +3378,9 @@ impl fmt::Display for CreateTable {
         if let Some(partition_of) = &self.partition_of {
             write!(f, " PARTITION OF {partition_of}")?;
         }
+        if let Some(of_type) = &self.of_type {
+            write!(f, " OF {of_type}")?;
+        }
         if let Some(on_cluster) = &self.on_cluster {
             write!(f, " ON CLUSTER {on_cluster}")?;
         }
@@ -3393,6 +3399,7 @@ impl fmt::Display for CreateTable {
             && self.like.is_none()
             && self.clone.is_none()
             && self.partition_of.is_none()
+            && self.of_type.is_none()
         {
             // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
             f.write_str(" ()")?;

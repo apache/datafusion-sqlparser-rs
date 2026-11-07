@@ -13518,3 +13518,23 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_alter_database_rename() {
+    let dialects = pg_and_generic();
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE d RENAME TO \"Weird\""),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("d")]),
+            operation: AlterDatabaseOperation::RenameTo {
+                new_name: Ident::with_quote('"', "Weird"),
+            },
+        })
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER DATABASE d RENAME TO")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+}

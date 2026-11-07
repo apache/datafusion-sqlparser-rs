@@ -97,6 +97,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Rust Toolchain
         uses: ./.github/actions/setup-builder
       - run: rustup component add llvm-tools-preview

@@ -18,7 +18,9 @@
 //! Unparenthesized operator chains for the expression shape targets.
 
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
-use sqlparser::ast::{visit_expressions_mut, BinaryOperator, Expr, Statement};
+use sqlparser::ast::{
+    visit_expressions_mut, BinaryOperator, Expr, Ident, Statement, Value, ValueWithSpan,
+};
 use std::fmt::Write;
 use std::ops::ControlFlow;
 
@@ -192,12 +194,20 @@ impl Primary {
 /// Wraps every compound expression of `statement` in parentheses, so its text spells out the tree sqlparser built.
 ///
 /// A custom operator prints as `OPERATOR(name)`, so its name reaches the engine even when the bare text would lex differently.
+/// Booleans print as `TRUE` and `FALSE` like the generated text, since SQLite's constant reuse compares token text.
 pub fn parenthesize(statement: &mut Statement) {
     let _ = visit_expressions_mut(statement, |expr| {
         if let Expr::BinaryOp { op, .. } = expr {
             if let BinaryOperator::Custom(name) = op {
                 *op = BinaryOperator::PGCustomBinaryOperator(vec![std::mem::take(name)]);
             }
+        }
+        if let Expr::Value(ValueWithSpan {
+            value: Value::Boolean(b),
+            ..
+        }) = expr
+        {
+            *expr = Expr::Identifier(Ident::new(if *b { "TRUE" } else { "FALSE" }));
         }
         // These already print inside their own parentheses or are single tokens.
         if !matches!(

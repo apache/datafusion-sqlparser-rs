@@ -23481,3 +23481,57 @@ fn parse_trailing_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_set_schema() {
+    let dialects = all_dialects_where(|d| d.supports_set_schema());
+    match dialects.verified_stmt("SET SCHEMA 'other'") {
+        Statement::Set(Set::SetSchema { scope, value }) => {
+            assert_eq!(scope, None);
+            assert_eq!(
+                value,
+                Expr::Value((Value::SingleQuotedString("other".into())).with_empty_span())
+            );
+        }
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt("SET LOCAL SCHEMA 'other'") {
+        Statement::Set(Set::SetSchema { scope, .. }) => {
+            assert_eq!(scope, Some(ContextModifier::Local));
+        }
+        _ => unreachable!(),
+    }
+    dialects.verified_stmt("SET SESSION SCHEMA 'other'");
+
+    // `schema` stays usable as a variable name.
+    match dialects.verified_stmt("SET schema = 'other'") {
+        Statement::Set(Set::SingleAssignment { variable, .. }) => {
+            assert_eq!(variable, ObjectName::from(vec![Ident::new("schema")]));
+        }
+        _ => unreachable!(),
+    }
+    dialects.one_statement_parses_to("SET schema TO 'other'", "SET schema = 'other'");
+
+    for (sql, expected) in [
+        (
+            "SET SCHEMA 'a', 'b'",
+            "Expected: end of statement, found: ,",
+        ),
+        ("SET SCHEMA", "Expected: an expression, found: EOF"),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+
+    let dialects =
+        all_dialects_where(|d| !d.supports_set_schema() && !d.supports_set_stmt_without_operator());
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SET SCHEMA 'other'")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: equals sign or TO, found: 'other'".to_string())
+    );
+}

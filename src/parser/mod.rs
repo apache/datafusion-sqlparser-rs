@@ -16782,6 +16782,24 @@ impl<'a> Parser<'a> {
                 }
                 .into());
             }
+        } else if self.dialect.supports_set_schema()
+            && !hivevar
+            && self.peek_keyword(Keyword::SCHEMA)
+            && !matches!(
+                self.peek_nth_token_ref(1).token,
+                Token::Eq
+                    | Token::Word(Word {
+                        keyword: Keyword::TO,
+                        ..
+                    })
+            )
+        {
+            self.advance_token();
+            return Ok(Set::SetSchema {
+                scope,
+                value: self.parse_expr()?,
+            }
+            .into());
         } else if self.dialect.supports_set_names() && self.parse_keyword(Keyword::NAMES) {
             if self.parse_keyword(Keyword::DEFAULT) {
                 return Ok(Set::SetNamesDefault {}.into());

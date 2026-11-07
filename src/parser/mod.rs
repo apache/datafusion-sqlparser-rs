@@ -12451,6 +12451,18 @@ impl<'a> Parser<'a> {
                 to,
                 drop_behavior: self.parse_optional_drop_behavior(),
             })
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(|parser| {
+                let key = ObjectName::from(parser.parse_identifier()?);
+                parser.expect_token(&Token::Eq)?;
+                Ok(SqlOption::KeyValue {
+                    key,
+                    value: parser.parse_expr()?,
+                })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            AlterTypeOperation::SetOptions { options }
         } else if self.parse_keywords(&[Keyword::ADD, Keyword::VALUE]) {
             let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
             let new_enum_value = self.parse_identifier()?;
@@ -12486,7 +12498,8 @@ impl<'a> Parser<'a> {
         } else {
             return self.expected_ref(
                 "OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
-                 DROP ATTRIBUTE, ALTER ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE",
+                 DROP ATTRIBUTE, ALTER ATTRIBUTE, ADD VALUE, RENAME VALUE, or SET (...) \
+                 after ALTER TYPE",
                 self.peek_token_ref(),
             );
         };

@@ -9694,17 +9694,46 @@ impl<'a> Parser<'a> {
         {
             if self.parse_keyword(Keyword::LIKE) {
                 let name = self.parse_object_name(allow_unquoted_hyphen)?;
-                let defaults = if self.parse_keywords(&[Keyword::INCLUDING, Keyword::DEFAULTS]) {
-                    Some(CreateTableLikeDefaults::Including)
-                } else if self.parse_keywords(&[Keyword::EXCLUDING, Keyword::DEFAULTS]) {
-                    Some(CreateTableLikeDefaults::Excluding)
-                } else {
-                    None
-                };
+                let mut options = Vec::new();
+                while let Some(keyword) =
+                    self.parse_one_of_keywords(&[Keyword::INCLUDING, Keyword::EXCLUDING])
+                {
+                    let property = match self.expect_one_of_keywords(&[
+                        Keyword::ALL,
+                        Keyword::COMMENTS,
+                        Keyword::COMPRESSION,
+                        Keyword::CONSTRAINTS,
+                        Keyword::DEFAULTS,
+                        Keyword::GENERATED,
+                        Keyword::IDENTITY,
+                        Keyword::INDEXES,
+                        Keyword::STATISTICS,
+                        Keyword::STORAGE,
+                    ])? {
+                        Keyword::ALL => CreateTableLikeProperty::All,
+                        Keyword::COMMENTS => CreateTableLikeProperty::Comments,
+                        Keyword::COMPRESSION => CreateTableLikeProperty::Compression,
+                        Keyword::CONSTRAINTS => CreateTableLikeProperty::Constraints,
+                        Keyword::DEFAULTS => CreateTableLikeProperty::Defaults,
+                        Keyword::GENERATED => CreateTableLikeProperty::Generated,
+                        Keyword::IDENTITY => CreateTableLikeProperty::Identity,
+                        Keyword::INDEXES => CreateTableLikeProperty::Indexes,
+                        Keyword::STATISTICS => CreateTableLikeProperty::Statistics,
+                        Keyword::STORAGE => CreateTableLikeProperty::Storage,
+                        unexpected_keyword => return Err(ParserError::ParserError(format!(
+                            "Internal parser error: unexpected LIKE option {unexpected_keyword:?}"
+                        ))),
+                    };
+                    options.push(if keyword == Keyword::INCLUDING {
+                        CreateTableLikeOption::Including(property)
+                    } else {
+                        CreateTableLikeOption::Excluding(property)
+                    });
+                }
                 self.expect_token(&Token::RParen)?;
                 Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
                     name,
-                    defaults,
+                    options,
                 }))
             } else {
                 // Rollback the '(' it's probably the columns list
@@ -9715,7 +9744,7 @@ impl<'a> Parser<'a> {
             let name = self.parse_object_name(allow_unquoted_hyphen)?;
             Some(CreateTableLikeKind::Plain(CreateTableLike {
                 name,
-                defaults: None,
+                options: vec![],
             }))
         } else {
             None

@@ -12299,23 +12299,69 @@ pub enum CreateTableLikeKind {
     Plain(CreateTableLike),
 }
 
+/// An option of a `CREATE TABLE ... (LIKE ...)` clause. A later option overrides an earlier one.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// Controls whether defaults are included when creating a table FROM/LILE another.
-pub enum CreateTableLikeDefaults {
-    /// Include default values from the source table.
-    Including,
-    /// Exclude default values from the source table.
-    Excluding,
+pub enum CreateTableLikeOption {
+    /// `INCLUDING <property>`
+    Including(CreateTableLikeProperty),
+    /// `EXCLUDING <property>`
+    Excluding(CreateTableLikeProperty),
 }
 
-impl fmt::Display for CreateTableLikeDefaults {
+impl fmt::Display for CreateTableLikeOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CreateTableLikeDefaults::Including => write!(f, "INCLUDING DEFAULTS"),
-            CreateTableLikeDefaults::Excluding => write!(f, "EXCLUDING DEFAULTS"),
+            CreateTableLikeOption::Including(property) => write!(f, "INCLUDING {property}"),
+            CreateTableLikeOption::Excluding(property) => write!(f, "EXCLUDING {property}"),
         }
+    }
+}
+
+/// The part of the source table a [`CreateTableLikeOption`] includes or excludes.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTableLikeProperty {
+    /// `ALL`
+    All,
+    /// `COMMENTS`
+    Comments,
+    /// `COMPRESSION`
+    Compression,
+    /// `CONSTRAINTS`
+    Constraints,
+    /// `DEFAULTS`
+    Defaults,
+    /// `GENERATED`
+    Generated,
+    /// `IDENTITY`
+    Identity,
+    /// `INDEXES`
+    Indexes,
+    /// `STATISTICS`
+    Statistics,
+    /// `STORAGE`
+    Storage,
+}
+
+impl fmt::Display for CreateTableLikeProperty {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            CreateTableLikeProperty::All => "ALL",
+            CreateTableLikeProperty::Comments => "COMMENTS",
+            CreateTableLikeProperty::Compression => "COMPRESSION",
+            CreateTableLikeProperty::Constraints => "CONSTRAINTS",
+            CreateTableLikeProperty::Defaults => "DEFAULTS",
+            CreateTableLikeProperty::Generated => "GENERATED",
+            CreateTableLikeProperty::Identity => "IDENTITY",
+            CreateTableLikeProperty::Indexes => "INDEXES",
+            CreateTableLikeProperty::Statistics => "STATISTICS",
+            CreateTableLikeProperty::Storage => "STORAGE",
+        })
     }
 }
 
@@ -12326,15 +12372,15 @@ impl fmt::Display for CreateTableLikeDefaults {
 pub struct CreateTableLike {
     /// The source table name to copy the schema from.
     pub name: ObjectName,
-    /// Optional behavior controlling whether defaults are copied.
-    pub defaults: Option<CreateTableLikeDefaults>,
+    /// `INCLUDING` and `EXCLUDING` options in the order written.
+    pub options: Vec<CreateTableLikeOption>,
 }
 
 impl fmt::Display for CreateTableLike {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "LIKE {}", self.name)?;
-        if let Some(defaults) = &self.defaults {
-            write!(f, " {defaults}")?;
+        for option in &self.options {
+            write!(f, " {option}")?;
         }
         Ok(())
     }

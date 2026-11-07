@@ -20269,7 +20269,7 @@ fn parse_create_table_like() {
                 stmt.like,
                 Some(CreateTableLikeKind::Plain(CreateTableLike {
                     name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    defaults: None,
+                    options: vec![],
                 }))
             )
         }
@@ -20287,7 +20287,7 @@ fn parse_create_table_like() {
                 stmt.like,
                 Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
                     name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    defaults: None,
+                    options: vec![],
                 }))
             )
         }
@@ -20304,7 +20304,9 @@ fn parse_create_table_like() {
                 stmt.like,
                 Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
                     name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    defaults: Some(CreateTableLikeDefaults::Including),
+                    options: vec![CreateTableLikeOption::Including(
+                        CreateTableLikeProperty::Defaults
+                    )],
                 }))
             )
         }
@@ -20321,7 +20323,9 @@ fn parse_create_table_like() {
                 stmt.like,
                 Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
                     name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    defaults: Some(CreateTableLikeDefaults::Excluding),
+                    options: vec![CreateTableLikeOption::Excluding(
+                        CreateTableLikeProperty::Defaults
+                    )],
                 }))
             )
         }

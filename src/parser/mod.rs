@@ -5532,9 +5532,7 @@ impl<'a> Parser<'a> {
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
-        // `or_replace` is caught by an earlier arm. It stays so that reordering cannot bypass it.
-        let has_modifier = or_replace
-            || or_alter
+        let has_other_modifier = or_alter
             || temporary
             || global.is_some()
             || transient
@@ -5542,6 +5540,8 @@ impl<'a> Parser<'a> {
             || multiset.is_some()
             || persistent
             || create_view_params.is_some();
+        // `or_replace` is caught by an earlier arm. It stays so that reordering cannot bypass it.
+        let has_modifier = or_replace || has_other_modifier;
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
@@ -5604,9 +5604,19 @@ impl<'a> Parser<'a> {
             self.parse_create_schema(or_replace)
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
             self.parse_create_warehouse(or_replace).map(Into::into)
+        } else if self.parse_keyword(Keyword::PROCEDURE)
+            || self.dialect.supports_create_proc_syntax() && self.parse_keyword(Keyword::PROC)
+        {
+            if or_replace && has_other_modifier {
+                return parser_err!(
+                    "CREATE OR REPLACE PROCEDURE does not accept this modifier",
+                    modifier_loc
+                );
+            }
+            self.parse_create_procedure(or_alter, or_replace)
         } else if or_replace {
             self.expected_ref(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE or SCHEMA or WAREHOUSE after CREATE OR REPLACE",
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or PROCEDURE or AGGREGATE or SCHEMA or WAREHOUSE after CREATE OR REPLACE",
                 self.peek_token_ref(),
             )
         } else if self.parse_keyword(Keyword::EXTENSION) {
@@ -5629,10 +5639,6 @@ impl<'a> Parser<'a> {
             self.parse_create_collation().map(Into::into)
         } else if self.parse_keyword(Keyword::TYPE) {
             self.parse_create_type()
-        } else if self.parse_keyword(Keyword::PROCEDURE)
-            || self.dialect.supports_create_proc_syntax() && self.parse_keyword(Keyword::PROC)
-        {
-            self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             self.parse_create_connector().map(Into::into)
         } else if self.parse_keyword(Keyword::OPERATOR) {
@@ -22310,7 +22316,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE PROCEDURE` statement.
-    pub fn parse_create_procedure(&mut self, or_alter: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_procedure(
+        &mut self,
+        or_alter: bool,
+        or_replace: bool,
+    ) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
 
@@ -22345,6 +22355,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::CreateProcedure {
             name,
             or_alter,
+            or_replace,
             params,
             language,
             body,

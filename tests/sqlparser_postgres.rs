@@ -8009,7 +8009,8 @@ fn parse_alter_type() {
             .unwrap_err(),
         ParserError::ParserError(
             "Expected: OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
-             DROP ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE, found: FOO"
+             DROP ATTRIBUTE, ALTER ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE, \
+             found: FOO"
                 .to_string()
         )
     );
@@ -13694,7 +13695,11 @@ fn parse_alter_type_attribute_actions() {
         "ALTER TYPE t ADD ATTRIBUTE a INT4 COLLATE pg_catalog.default CASCADE",
         "ALTER TYPE t DROP ATTRIBUTE a",
         "ALTER TYPE t DROP ATTRIBUTE IF EXISTS a RESTRICT",
+        "ALTER TYPE t ALTER ATTRIBUTE a SET DATA TYPE INT",
+        "ALTER TYPE t ALTER ATTRIBUTE a TYPE TEXT COLLATE \"C\"",
         "ALTER TYPE t ADD ATTRIBUTE a INT, DROP ATTRIBUTE b CASCADE",
+        "ALTER TYPE t ADD ATTRIBUTE a INT, DROP ATTRIBUTE b, ALTER ATTRIBUTE c TYPE TEXT",
+        "ALTER TYPE t ALTER ATTRIBUTE a TYPE INT CASCADE",
     ] {
         pg_and_generic().verified_stmt(sql);
     }
@@ -13714,6 +13719,22 @@ fn parse_alter_type_attribute_actions() {
         ),
         (
             "ALTER TYPE t DROP ATTRIBUTE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ALTER ATTRIBUTE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ALTER ATTRIBUTE a",
+            "Expected: TYPE, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ALTER ATTRIBUTE a TYPE",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ALTER ATTRIBUTE a TYPE INT COLLATE",
             "Expected: identifier, found: EOF",
         ),
     ] {
@@ -13749,7 +13770,9 @@ fn parse_alter_type_attribute_actions() {
         pg().parse_sql_statements("ALTER TYPE t ADD FOO")
             .unwrap_err(),
         ParserError::ParserError(
-            "Expected: ADD ATTRIBUTE, or DROP ATTRIBUTE after ALTER TYPE, found: ADD".to_string()
+            "Expected: ADD ATTRIBUTE, DROP ATTRIBUTE, or ALTER ATTRIBUTE \
+             after ALTER TYPE, found: ADD"
+                .to_string()
         )
     );
 }
@@ -13792,7 +13815,7 @@ fn display_alter_type_attribute_action_propagates_formatter_errors() {
 }
 
 #[test]
-fn display_alter_type_attribute_action_drop_propagates_formatter_errors() {
+fn display_alter_type_attribute_action_drop_alter_propagates_formatter_errors() {
     use core::fmt::{self, Write};
 
     struct RejectingWriter(&'static str);
@@ -13834,6 +13857,55 @@ fn display_alter_type_attribute_action_drop_propagates_formatter_errors() {
     };
     assert_eq!(
         write!(RejectingWriter("CASCADE"), "{drop_cascade}"),
+        Err(fmt::Error)
+    );
+
+    let alter = AlterTypeAttributeAction::Alter {
+        name: Ident::new("c"),
+        set_data: false,
+        data_type: DataType::Int(None),
+        collate: None,
+        drop_behavior: None,
+    };
+    assert_eq!(
+        write!(RejectingWriter("ALTER ATTRIBUTE"), "{alter}"),
+        Err(fmt::Error)
+    );
+    assert_eq!(write!(RejectingWriter("TYPE"), "{alter}"), Err(fmt::Error));
+
+    let alter_set_data = AlterTypeAttributeAction::Alter {
+        name: Ident::new("c"),
+        set_data: true,
+        data_type: DataType::Int(None),
+        collate: None,
+        drop_behavior: None,
+    };
+    assert_eq!(
+        write!(RejectingWriter("SET DATA"), "{alter_set_data}"),
+        Err(fmt::Error)
+    );
+
+    let alter_collate = AlterTypeAttributeAction::Alter {
+        name: Ident::new("c"),
+        set_data: false,
+        data_type: DataType::Int(None),
+        collate: Some(ObjectName::from(Ident::new("C"))),
+        drop_behavior: None,
+    };
+    assert_eq!(
+        write!(RejectingWriter("COLLATE"), "{alter_collate}"),
+        Err(fmt::Error)
+    );
+
+    let alter_cascade = AlterTypeAttributeAction::Alter {
+        name: Ident::new("c"),
+        set_data: false,
+        data_type: DataType::Int(None),
+        collate: None,
+        drop_behavior: Some(DropBehavior::Cascade),
+    };
+    assert_eq!(
+        write!(RejectingWriter("CASCADE"), "{alter_cascade}"),
         Err(fmt::Error)
     );
 }

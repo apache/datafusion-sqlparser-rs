@@ -13570,4 +13570,32 @@ fn parse_create_table_like_options() {
             .unwrap_err(),
         ParserError::ParserError("Expected: ), found: COMMENTS".to_string())
     );
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE new (LIKE)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
+}
+
+#[test]
+fn display_create_table_like_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = pg().verified_stmt("CREATE TABLE new (LIKE old INCLUDING ALL)");
+    for rejected in ["LIKE", "INCLUDING", "ALL"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
 }

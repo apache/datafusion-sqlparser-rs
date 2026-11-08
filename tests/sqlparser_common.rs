@@ -20331,6 +20331,12 @@ fn parse_create_table_like() {
         }
         _ => unreachable!(),
     }
+    assert_eq!(
+        all_dialects_except(|d| d.supports_create_table_like_parenthesized())
+            .parse_sql_statements("CREATE TABLE new LIKE")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }
 
 #[test]

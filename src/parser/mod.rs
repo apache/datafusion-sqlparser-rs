@@ -9720,9 +9720,11 @@ impl<'a> Parser<'a> {
                         Keyword::INDEXES => CreateTableLikeProperty::Indexes,
                         Keyword::STATISTICS => CreateTableLikeProperty::Statistics,
                         Keyword::STORAGE => CreateTableLikeProperty::Storage,
-                        unexpected_keyword => return Err(ParserError::ParserError(format!(
-                            "Internal parser error: unexpected LIKE option {unexpected_keyword:?}"
-                        ))),
+                        other => {
+                            return Err(ParserError::ParserError(format!(
+                                "Internal parser error: unexpected LIKE option {other:?}"
+                            )))
+                        }
                     };
                     options.push(if keyword == Keyword::INCLUDING {
                         CreateTableLikeOption::Including(property)

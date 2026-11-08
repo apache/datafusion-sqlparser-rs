@@ -22028,7 +22028,10 @@ impl<'a> Parser<'a> {
                 self.expect_keyword_is(Keyword::AS)?;
                 if matches!(
                     self.peek_token_ref().token,
-                    Token::SingleQuotedString(_) | Token::DollarQuotedString(_)
+                    Token::SingleQuotedString(_)
+                        | Token::DollarQuotedString(_)
+                        | Token::EscapedStringLiteral(_)
+                        | Token::UnicodeStringLiteral(_)
                 ) {
                     let (body, link_symbol) = self.parse_definition_string()?;
                     if language.is_none() && self.parse_keyword(Keyword::LANGUAGE) {

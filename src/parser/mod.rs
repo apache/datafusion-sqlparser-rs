@@ -554,15 +554,8 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            match &self.peek_token_ref().token {
-                Token::EOF => break,
-                // end of statement
-                Token::Word(word)
-                    if expecting_statement_delimiter && word.keyword == Keyword::END =>
-                {
-                    break;
-                }
-                _ => {}
+            if self.peek_token_ref().token == Token::EOF {
+                break;
             }
 
             if expecting_statement_delimiter {
@@ -11014,6 +11007,23 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(None)
                 }
+            }
+            Token::Word(w)
+                if w.keyword == Keyword::NOT
+                    && self.dialect.supports_table_not_null_constraint()
+                    && self.peek_keyword(Keyword::NULL) =>
+            {
+                self.advance_token(); // NULL
+                let column = self.parse_identifier()?;
+                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
+                Ok(Some(
+                    NotNullConstraint {
+                        name,
+                        column,
+                        no_inherit,
+                    }
+                    .into(),
+                ))
             }
             _ => {
                 if name.is_some() {

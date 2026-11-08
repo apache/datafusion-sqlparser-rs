@@ -23549,6 +23549,10 @@ fn parse_create_procedure_string_body() {
     );
     pg_and_generic().verified_stmt("CREATE PROCEDURE p () LANGUAGE sql AS $body$ SELECT 1 $body$");
     pg_and_generic().one_statement_parses_to(
+        "CREATE PROCEDURE p () LANGUAGE sql AS E'SELECT 1'",
+        "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1'",
+    );
+    pg_and_generic().one_statement_parses_to(
         r#"CREATE PROCEDURE insert_data(a integer, b integer)
 LANGUAGE SQL
 AS $$

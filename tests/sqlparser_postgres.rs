@@ -13549,4 +13549,10 @@ fn parse_alter_type_set_schema() {
             },
         })
     );
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TYPE t SET SCHEMA")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }

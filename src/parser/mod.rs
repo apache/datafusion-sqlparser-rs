@@ -12513,13 +12513,17 @@ impl<'a> Parser<'a> {
 
         let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
             AlterSequenceOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterSequenceOperation::RenameTo {
+                new_name: self.parse_identifier()?,
+            }
         } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
             AlterSequenceOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
         } else {
             self.expected_ref(
-                "OWNER TO or SET SCHEMA after the sequence name",
+                "OWNER TO, RENAME TO, or SET SCHEMA after the sequence name",
                 self.peek_token_ref(),
             )?
         };

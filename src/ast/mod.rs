@@ -6750,6 +6750,15 @@ pub enum AlterSequenceOperation {
     /// ALTER SEQUENCE name OWNER TO role_name
     /// ```
     OwnerTo(Owner),
+    /// Rename the sequence.
+    ///
+    /// ```sql
+    /// ALTER SEQUENCE name RENAME TO new_name
+    /// ```
+    RenameTo {
+        /// New sequence name.
+        new_name: Ident,
+    },
     /// Move the sequence to another schema.
     ///
     /// ```sql
@@ -6776,6 +6785,7 @@ impl fmt::Display for AlterSequenceOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterSequenceOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterSequenceOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
             AlterSequenceOperation::SetSchema { schema_name } => {
                 write!(f, "SET SCHEMA {schema_name}")
             }

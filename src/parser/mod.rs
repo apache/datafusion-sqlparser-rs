@@ -2045,9 +2045,7 @@ impl<'a> Parser<'a> {
             }
             Token::Tilde => Ok(Expr::UnaryOp {
                 op: UnaryOperator::BitwiseNot,
-                expr: Box::new(
-                    self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
-                ),
+                expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?),
             }),
             tok @ Token::Sharp
             | tok @ Token::AtDashAt

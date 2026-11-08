@@ -13522,6 +13522,11 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 #[test]
 fn parse_alter_sequence() {
     let dialects = pg_and_generic();
+    dialects.verified_stmt("ALTER SEQUENCE s OWNER TO r1");
+    dialects.verified_stmt("ALTER SEQUENCE s OWNER TO CURRENT_ROLE");
+    dialects.verified_stmt("ALTER SEQUENCE s OWNER TO CURRENT_USER");
+    dialects.verified_stmt("ALTER SEQUENCE s OWNER TO SESSION_USER");
+    dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s OWNER TO r1");
     dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA other");
     dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s SET SCHEMA other");
     dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA a.b");
@@ -13550,18 +13555,25 @@ fn parse_alter_sequence_ast() {
 #[test]
 fn parse_alter_sequence_errors() {
     for (sql, expected) in [
-        ("ALTER SEQUENCE", "Expected: identifier, found: EOF"),
+        (
+            "ALTER SEQUENCE",
+            "Expected: identifier, found: EOF",
+        ),
         (
             "ALTER SEQUENCE s",
-            "Expected: SET SCHEMA after the sequence name, found: EOF",
+            "Expected: OWNER TO or SET SCHEMA after the sequence name, found: EOF",
         ),
         (
             "ALTER SEQUENCE s SET",
-            "Expected: SET SCHEMA after the sequence name, found: SET",
+            "Expected: OWNER TO or SET SCHEMA after the sequence name, found: SET",
         ),
         (
             "ALTER SEQUENCE s SET SCHEMA",
             "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER SEQUENCE s OWNER TO",
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF",
         ),
     ] {
         assert_eq!(

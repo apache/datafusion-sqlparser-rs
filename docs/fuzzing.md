@@ -37,7 +37,7 @@ rendered statement no longer parses.
 
 `fuzz_duckdb_accepts` parses the input with DuckDB's own parser and fails when DuckDB accepts a `SELECT` that `DuckDbDialect` rejects.
 
-`fuzz_postgres_expr` and `fuzz_sqlite_expr` generate operator chains from a small token grammar, print sqlparser's tree fully parenthesized, and fail when the engine reads that text differently from the original. Custom operators print as `OPERATOR(name)` so lexing differences show up too.
+`fuzz_postgres_expr` and `fuzz_sqlite_expr` generate operator chains from a small token grammar. They fail when the engine reads sqlparser's printed statement differently from the original, which catches misreads and printing bugs, and then when it reads the fully parenthesized print differently from the plain one, which catches grouping bugs. Custom operators print as `OPERATOR(name)` so lexing differences show up too.
 
 The oracle targets compile their engine from source, so each builds only with its feature, `sqlite`, `postgres` or `duckdb`, as in `cargo +nightly fuzz run --features sqlite fuzz_sqlite_accepts fuzz_seeds`. `cargo +nightly fuzz build --all-features` builds every target.
 

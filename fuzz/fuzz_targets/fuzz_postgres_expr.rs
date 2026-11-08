@@ -23,10 +23,13 @@
 #![no_main]
 
 mod expression;
+#[path = "expression/postgres.rs"]
+mod spelling;
 
 use expression::{parenthesize, Case, Grammar};
 use libfuzzer_sys::fuzz_target;
 use serde_json::Value;
+use spelling::spell_custom_operators;
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 
@@ -244,24 +247,36 @@ fuzz_target!(|case: Case| {
     let [statement] = statements.as_mut_slice() else {
         return;
     };
+    spell_custom_operators(statement);
+    let printed = statement.to_string();
+    let version = original.protobuf.version;
+    let reading = || original.deparse().unwrap_or_default();
+    let expected = tree(&original);
+    match pg_query::parse(&printed) {
+        Ok(baseline) if tree(&baseline) == expected => {}
+        Ok(baseline) => panic!(
+            "sqlparser reads or prints the statement differently from PostgreSQL {version}\n  sql:       {sql}\n  printed:   {printed}\n  postgres:  {}\n  sqlparser: {}",
+            reading(),
+            baseline.deparse().unwrap_or_default(),
+        ),
+        Err(err) => panic!(
+            "PostgreSQL {version} rejects sqlparser's printing of SQL it accepts\n  sql:      {sql}\n  printed:  {printed}\n  postgres: {}\n  error:    {err}",
+            reading(),
+        ),
+    }
+    // `printed` and `grouped` differ only in parentheses, so any difference left is grouping.
     parenthesize(statement);
     let grouped = statement.to_string();
-    let regrouped = pg_query::parse(&grouped);
-    if regrouped
-        .as_ref()
-        .is_ok_and(|regrouped| tree(&original) == tree(regrouped))
-    {
-        return;
-    }
-    let version = original.protobuf.version;
-    let reading = original.deparse().unwrap_or_default();
-    match regrouped {
-        Err(err) => panic!(
-            "PostgreSQL {version} rejects sqlparser's grouping of SQL it accepts\n  sql:      {sql}\n  grouped:  {grouped}\n  postgres: {reading}\n  error:    {err}"
-        ),
+    match pg_query::parse(&grouped) {
+        Ok(regrouped) if tree(&regrouped) == expected => {}
         Ok(regrouped) => panic!(
-            "sqlparser groups the expression differently from PostgreSQL {version}\n  sql:       {sql}\n  postgres:  {reading}\n  sqlparser: {}",
+            "sqlparser groups the expression differently from PostgreSQL {version}\n  sql:       {sql}\n  postgres:  {}\n  sqlparser: {}",
+            reading(),
             regrouped.deparse().unwrap_or(grouped),
+        ),
+        Err(err) => panic!(
+            "PostgreSQL {version} rejects sqlparser's grouping of SQL it accepts\n  sql:      {sql}\n  grouped:  {grouped}\n  postgres: {}\n  error:    {err}",
+            reading(),
         ),
     }
 });

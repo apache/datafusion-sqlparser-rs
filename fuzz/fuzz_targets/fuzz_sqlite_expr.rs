@@ -23,10 +23,13 @@
 #![no_main]
 
 mod expression;
+#[path = "expression/sqlite.rs"]
+mod spelling;
 
 use expression::{parenthesize, Case, Grammar};
 use libfuzzer_sys::fuzz_target;
 use libsqlite3_sys as ffi;
+use spelling::fold_booleans;
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 use std::ffi::{c_int, CStr};
@@ -200,9 +203,9 @@ impl Db {
     }
 
     /// Compiles `EXPLAIN sql` and returns its program, or SQLite's error message.
-    fn explain(&self, sql: &[u8]) -> Result<Vec<Instruction>, Rejected> {
+    fn explain(&self, sql: &str) -> Result<Vec<Instruction>, Rejected> {
         let mut text = b"EXPLAIN ".to_vec();
-        text.extend_from_slice(sql);
+        text.extend_from_slice(fold_booleans(sql).as_bytes());
         let len = c_int::try_from(text.len()).expect("SQL fits a c_int");
         let mut stmt = ptr::null_mut();
         // SAFETY: SQLite reads at most `len` bytes of `text`, which outlives the call.
@@ -263,7 +266,7 @@ thread_local! {
 
 fn check(db: &Db, case: &Case) {
     let sql = case.render(&SQLITE);
-    let Ok(original) = db.explain(sql.as_bytes()) else {
+    let Ok(original) = db.explain(&sql) else {
         return;
     };
     let Ok(mut statements) = Parser::parse_sql(&SQLiteDialect {}, &sql) else {
@@ -272,17 +275,28 @@ fn check(db: &Db, case: &Case) {
     let [statement] = statements.as_mut_slice() else {
         return;
     };
-    parenthesize(statement);
-    let grouped = statement.to_string();
+    let printed = statement.to_string();
     // SAFETY: sqlite3_libversion returns a static NUL terminated string.
     let version = unsafe { CStr::from_ptr(ffi::sqlite3_libversion()) };
-    match db.explain(grouped.as_bytes()) {
+    let baseline = match db.explain(&printed) {
+        Ok(baseline) if baseline == original => baseline,
+        Ok(_) => panic!(
+            "sqlparser reads or prints the statement differently from SQLite {version:?}\n  sql:     {sql}\n  printed: {printed}"
+        ),
+        Err(err) => panic!(
+            "SQLite {version:?} rejects sqlparser's printing of SQL it accepts\n  sql:     {sql}\n  printed: {printed}\n  error:   {err}"
+        ),
+    };
+    // `printed` and `grouped` differ only in parentheses, so any difference left is grouping.
+    parenthesize(statement);
+    let grouped = statement.to_string();
+    match db.explain(&grouped) {
+        Ok(regrouped) => assert!(
+            regrouped == baseline,
+            "sqlparser groups the expression differently from SQLite {version:?}\n  sql:     {sql}\n  grouped: {grouped}"
+        ),
         Err(err) => panic!(
             "SQLite {version:?} rejects sqlparser's grouping of SQL it accepts\n  sql:     {sql}\n  grouped: {grouped}\n  error:   {err}"
-        ),
-        Ok(regrouped) => assert!(
-            original == regrouped,
-            "sqlparser groups the expression differently from SQLite {version:?}\n  sql:     {sql}\n  grouped: {grouped}"
         ),
     }
 }

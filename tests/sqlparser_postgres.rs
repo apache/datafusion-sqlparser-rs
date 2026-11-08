@@ -13716,6 +13716,10 @@ fn parse_alter_type_attribute_actions() {
             "ALTER TYPE t DROP ATTRIBUTE",
             "Expected: identifier, found: EOF",
         ),
+        (
+            "ALTER TYPE t ADD FOO",
+            "Expected: ADD ATTRIBUTE, or DROP ATTRIBUTE after ALTER TYPE, found: ADD",
+        ),
     ] {
         assert_eq!(
             pg().parse_sql_statements(sql).unwrap_err(),
@@ -13743,14 +13747,6 @@ fn parse_alter_type_attribute_actions() {
                 },
             ]),
         })
-    );
-
-    assert_eq!(
-        pg().parse_sql_statements("ALTER TYPE t ADD FOO")
-            .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: ADD ATTRIBUTE, or DROP ATTRIBUTE after ALTER TYPE, found: ADD".to_string()
-        )
     );
 }
 

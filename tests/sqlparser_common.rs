@@ -23481,3 +23481,26 @@ fn parse_trailing_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_word_before_list_end_is_identifier() {
+    let dialects = all_dialects();
+    let select = dialects.verified_only_select("SELECT a, f(b)");
+    assert_eq!(
+        expr_from_projection(&select.projection[0]),
+        &Expr::Identifier(Ident::new("a"))
+    );
+    dialects.verified_stmt("SELECT a");
+    dialects.one_statement_parses_to("SELECT a;", "SELECT a");
+}
+
+#[test]
+fn parse_select_item_rejects_mixed_case_from() {
+    let dialects = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a, FrOm t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression, found: FrOm".to_string())
+    );
+}

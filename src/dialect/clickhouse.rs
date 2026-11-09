@@ -15,9 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use core::iter::Peekable;
+use core::str::Chars;
+
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::Parser;
+use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -90,6 +94,26 @@ impl Dialect for ClickHouseDialect {
 
     fn supports_numeric_literal_underscores(&self) -> bool {
         true
+    }
+
+    fn supports_numeric_prefix(&self) -> bool {
+        true
+    }
+
+    /// Undocumented; the lexer reads digits followed by word characters as one bare word
+    /// unless the run is a number, see "Try to parse it to a identifier" in `Lexer.cpp`.
+    fn is_digit_leading_identifier(
+        &self,
+        chars: &Peekable<Chars<'_>>,
+        prev_token: Option<&Token>,
+    ) -> bool {
+        let run = chars.clone().take_while(|&ch| self.is_identifier_part(ch));
+        // After a period the lexer reads only a plain integer as a number, so `t.12e34` is a word.
+        if prev_token == Some(&Token::Period) {
+            !is_digit_run(run, |ch| ch.is_ascii_digit())
+        } else {
+            !is_number_run(run)
+        }
     }
 
     fn supports_partition_by_after_order_by(&self) -> bool {
@@ -218,5 +242,71 @@ impl Dialect for ClickHouseDialect {
     /// See <https://clickhouse.com/docs/sql-reference/data-types/tuple#addressing-tuple-elements>
     fn supports_tuple_element_access(&self) -> bool {
         true
+    }
+}
+
+/// Whether a run of identifier characters is a number: digit groups joined by single
+/// underscores, with an optional `0x` or `0b` prefix or decimal exponent. A bare exponent
+/// marker counts (`1e`), so that `1e+5` is still read by the number path.
+fn is_number_run(run: impl Iterator<Item = char> + Clone) -> bool {
+    let mut prefix = run.clone();
+    let is_radix_digit: Option<fn(char) -> bool> = match (prefix.next(), prefix.next()) {
+        (Some('0'), Some('x' | 'X')) => Some(|ch| ch.is_ascii_hexdigit()),
+        (Some('0'), Some('b' | 'B')) => Some(|ch| ch == '0' || ch == '1'),
+        _ => None,
+    };
+    if let Some(is_digit) = is_radix_digit {
+        return is_digit_run(prefix, is_digit);
+    }
+    let mut chars = run.peekable();
+    digit_groups(&mut chars, |ch| ch.is_ascii_digit())
+        && match chars.next() {
+            None => true,
+            Some('e' | 'E') => {
+                chars.peek().is_none() || is_digit_run(chars, |ch| ch.is_ascii_digit())
+            }
+            Some(_) => false,
+        }
+}
+
+/// Digit groups joined by single underscores, e.g. `1_000`.
+fn is_digit_run(run: impl Iterator<Item = char>, is_digit: impl Fn(char) -> bool) -> bool {
+    let mut chars = run.peekable();
+    digit_groups(&mut chars, is_digit) && chars.next().is_none()
+}
+
+/// Consumes leading digit groups joined by single underscores; false on a stray `_`.
+fn digit_groups(
+    chars: &mut Peekable<impl Iterator<Item = char>>,
+    is_digit: impl Fn(char) -> bool,
+) -> bool {
+    let mut after_digit = false;
+    while let Some(ch) = chars.next_if(|&ch| ch == '_' || is_digit(ch)) {
+        if ch == '_' && !after_digit {
+            return false;
+        }
+        after_digit = ch != '_';
+    }
+    after_digit
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_number_run;
+
+    #[test]
+    fn number_runs() {
+        for run in [
+            "0", "8", "1_000", "1_0_0", "1e5", "1E5", "1e1_0", "1e", "0x1F", "0Xff_ff", "0b101",
+            "0B1_0",
+        ] {
+            assert!(is_number_run(run.chars()), "{run}");
+        }
+        for run in [
+            "", "_", "_1", "1_", "1__0", "8_e", "8large", "1_a", "1L", "1e_1", "1e1_", "1e3a",
+            "1ea", "1e5e3", "0x", "0x_1", "0x1_", "0xg", "0b", "0b2", "0b1_", "1$",
+        ] {
+            assert!(!is_number_run(run.chars()), "{run}");
+        }
     }
 }

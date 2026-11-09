@@ -1,0 +1,1 @@
+SELECT * RENAME (a AS b) REPLACE (a + 1 AS a) FROM (SELECT a FROM t)

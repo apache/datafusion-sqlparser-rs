@@ -1538,18 +1538,6 @@ fn test_select_wildcard_with_replace_and_rename() {
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);
-
-    // rename cannot precede replace
-    // https://docs.snowflake.com/en/sql-reference/sql/select#parameters
-    assert_eq!(
-        snowflake_and_generic()
-            .parse_sql_statements(
-                "SELECT * RENAME (col_z AS col_zz) REPLACE (col_z || col_z AS col_z) FROM data"
-            )
-            .unwrap_err()
-            .to_string(),
-        "sql parser error: Expected: end of statement, found: REPLACE"
-    );
 }
 
 #[test]
@@ -5040,5 +5028,36 @@ fn test_stage_name_delimiters() {
             .parse_sql_statements("SELECT * FROM @.stage")
             .unwrap_err(),
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
+    );
+}
+
+#[test]
+fn test_select_wildcard_with_rename_before_replace() {
+    let canonical = snowflake_and_generic().verified_only_select(
+        "SELECT * REPLACE (a + 1 AS a) RENAME (a AS b) FROM (SELECT a FROM t)",
+    );
+    let reversed = snowflake_and_generic().verified_only_select_with_canonical(
+        "SELECT * RENAME (a AS b) REPLACE (a + 1 AS a) FROM (SELECT a FROM t)",
+        "SELECT * REPLACE (a + 1 AS a) RENAME (a AS b) FROM (SELECT a FROM t)",
+    );
+    assert_eq!(canonical, reversed);
+
+    let canonical = snowflake_and_generic().verified_only_select(
+        "SELECT * REPLACE (col_z || col_z AS col_z) RENAME (col_z AS col_zz) FROM data",
+    );
+    let reversed = snowflake_and_generic().verified_only_select_with_canonical(
+        "SELECT * RENAME (col_z AS col_zz) REPLACE (col_z || col_z AS col_z) FROM data",
+        "SELECT * REPLACE (col_z || col_z AS col_z) RENAME (col_z AS col_zz) FROM data",
+    );
+    assert_eq!(canonical, reversed);
+
+    assert_eq!(
+        snowflake_and_generic()
+            .parse_sql_statements(
+                "SELECT * REPLACE (a + 1 AS a) REPLACE (a + 2 AS a) FROM (SELECT a FROM t)"
+            )
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: REPLACE"
     );
 }

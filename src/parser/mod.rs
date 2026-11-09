@@ -20560,16 +20560,27 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_replace = if self.dialect.supports_select_wildcard_replace() {
-            self.parse_optional_select_item_replace()?
-        } else {
-            None
-        };
-        let opt_rename = if self.dialect.supports_select_wildcard_rename() {
-            self.parse_optional_select_item_rename()?
-        } else {
-            None
-        };
+
+        let mut opt_replace = None;
+        let mut opt_rename = None;
+        loop {
+            let mut parsed_any = false;
+            if opt_replace.is_none() && self.dialect.supports_select_wildcard_replace() {
+                if let Some(replace) = self.parse_optional_select_item_replace()? {
+                    opt_replace = Some(replace);
+                    parsed_any = true;
+                }
+            }
+            if opt_rename.is_none() && self.dialect.supports_select_wildcard_rename() {
+                if let Some(rename) = self.parse_optional_select_item_rename()? {
+                    opt_rename = Some(rename);
+                    parsed_any = true;
+                }
+            }
+            if !parsed_any {
+                break;
+            }
+        }
 
         let opt_alias = if self.dialect.supports_select_wildcard_with_alias() {
             self.maybe_parse_select_item_alias()?

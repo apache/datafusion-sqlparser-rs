@@ -2391,3 +2391,8 @@ fn parse_digit_leading_identifiers() {
     .parse_sql_statements("SELECT 8_e")
     .unwrap_err();
 }
+
+#[test]
+fn parse_digit_leading_identifier_after_period() {
+    clickhouse().verified_stmt("SELECT t.12e34 FROM t");
+}

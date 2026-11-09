@@ -22773,3 +22773,10 @@ fn display_create_procedure_parameter_list_propagates_write_errors() {
     let mut writer = RejectingWriter(" (");
     assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
 }
+
+#[test]
+fn parse_long_suffix_with_numeric_prefix() {
+    all_dialects_where(|d| d.supports_numeric_prefix())
+        .one_statement_parses_to("SELECT 1.5L", "SELECT 1.5 AS L");
+    all_dialects_where(|d| !d.supports_numeric_prefix()).verified_stmt("SELECT 1.5L");
+}

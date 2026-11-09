@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use alloc::string::String;
 use core::iter::Peekable;
 use core::str::Chars;
 
@@ -108,15 +107,12 @@ impl Dialect for ClickHouseDialect {
         chars: &Peekable<Chars<'_>>,
         prev_token: Option<&Token>,
     ) -> bool {
-        let run: String = chars
-            .clone()
-            .take_while(|&ch| self.is_identifier_part(ch))
-            .collect();
+        let run = chars.clone().take_while(|&ch| self.is_identifier_part(ch));
         // After a period the lexer reads only a plain integer as a number, so `t.12e34` is a word.
         if prev_token == Some(&Token::Period) {
-            !is_digit_run(&run, |ch| ch.is_ascii_digit())
+            !is_digit_run(run, |ch| ch.is_ascii_digit())
         } else {
-            !is_number_run(&run)
+            !is_number_run(run)
         }
     }
 
@@ -252,23 +248,46 @@ impl Dialect for ClickHouseDialect {
 /// Whether a run of identifier characters is a number: digit groups joined by single
 /// underscores, with an optional `0x` or `0b` prefix or decimal exponent. A bare exponent
 /// marker counts (`1e`), so that `1e+5` is still read by the number path.
-fn is_number_run(run: &str) -> bool {
-    if let Some(hex) = run.strip_prefix("0x").or_else(|| run.strip_prefix("0X")) {
-        return is_digit_run(hex, |ch| ch.is_ascii_hexdigit());
+fn is_number_run(run: impl Iterator<Item = char> + Clone) -> bool {
+    let mut prefix = run.clone();
+    let is_radix_digit: Option<fn(char) -> bool> = match (prefix.next(), prefix.next()) {
+        (Some('0'), Some('x' | 'X')) => Some(|ch| ch.is_ascii_hexdigit()),
+        (Some('0'), Some('b' | 'B')) => Some(|ch| ch == '0' || ch == '1'),
+        _ => None,
+    };
+    if let Some(is_digit) = is_radix_digit {
+        return is_digit_run(prefix, is_digit);
     }
-    if let Some(bin) = run.strip_prefix("0b").or_else(|| run.strip_prefix("0B")) {
-        return is_digit_run(bin, |ch| ch == '0' || ch == '1');
-    }
-    let (mantissa, exponent) = run.split_once(['e', 'E']).unwrap_or((run, ""));
-    is_digit_run(mantissa, |ch| ch.is_ascii_digit())
-        && (exponent.is_empty() || is_digit_run(exponent, |ch| ch.is_ascii_digit()))
+    let mut chars = run.peekable();
+    digit_groups(&mut chars, |ch| ch.is_ascii_digit())
+        && match chars.next() {
+            None => true,
+            Some('e' | 'E') => {
+                chars.peek().is_none() || is_digit_run(chars, |ch| ch.is_ascii_digit())
+            }
+            Some(_) => false,
+        }
 }
 
 /// Digit groups joined by single underscores, e.g. `1_000`.
-fn is_digit_run(s: &str, is_digit: impl Fn(char) -> bool) -> bool {
-    !s.is_empty()
-        && s.split('_')
-            .all(|group| !group.is_empty() && group.chars().all(&is_digit))
+fn is_digit_run(run: impl Iterator<Item = char>, is_digit: impl Fn(char) -> bool) -> bool {
+    let mut chars = run.peekable();
+    digit_groups(&mut chars, is_digit) && chars.next().is_none()
+}
+
+/// Consumes leading digit groups joined by single underscores; false on a stray `_`.
+fn digit_groups(
+    chars: &mut Peekable<impl Iterator<Item = char>>,
+    is_digit: impl Fn(char) -> bool,
+) -> bool {
+    let mut after_digit = false;
+    while let Some(ch) = chars.next_if(|&ch| ch == '_' || is_digit(ch)) {
+        if ch == '_' && !after_digit {
+            return false;
+        }
+        after_digit = ch != '_';
+    }
+    after_digit
 }
 
 #[cfg(test)]
@@ -281,13 +300,13 @@ mod tests {
             "0", "8", "1_000", "1_0_0", "1e5", "1E5", "1e1_0", "1e", "0x1F", "0Xff_ff", "0b101",
             "0B1_0",
         ] {
-            assert!(is_number_run(run), "{run}");
+            assert!(is_number_run(run.chars()), "{run}");
         }
         for run in [
             "", "_", "_1", "1_", "1__0", "8_e", "8large", "1_a", "1L", "1e_1", "1e1_", "1e3a",
             "1ea", "1e5e3", "0x", "0x_1", "0x1_", "0xg", "0b", "0b2", "0b1_", "1$",
         ] {
-            assert!(!is_number_run(run), "{run}");
+            assert!(!is_number_run(run.chars()), "{run}");
         }
     }
 }

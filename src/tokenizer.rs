@@ -1701,12 +1701,14 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
-                    let long = if chars.peek() == Some(&'L') {
-                        chars.next();
-                        true
-                    } else {
-                        false
-                    };
+                    // Where digits can start an identifier, `1.5L` is `1.5` followed by `L`.
+                    let long =
+                        if chars.peek() == Some(&'L') && !self.dialect.supports_numeric_prefix() {
+                            chars.next();
+                            true
+                        } else {
+                            false
+                        };
                     Ok(Some(Token::Number(s, long)))
                 }
                 // punctuation

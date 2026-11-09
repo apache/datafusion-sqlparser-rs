@@ -5259,5 +5259,15 @@ fn parse_digit_leading_identifiers() {
         "SELECT 1e3 AS a, 1e5 AS x"
     };
     mysql().one_statement_parses_to("SELECT 1e3a, 1e5x", canonical);
-    mysql().one_statement_parses_to("SELECT 1.5abc", "SELECT 1.5 AS abc");
+    mysql().one_statement_parses_to("SELECT 1.5abc, 1.5L", "SELECT 1.5 AS abc, 1.5 AS L");
+}
+
+#[test]
+fn parse_long_suffix_as_alias() {
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 0 AS L1, 100000 AS L, 0.5 AS L"
+    } else {
+        "SELECT 0. AS L1, 1e5 AS L, .5 AS L"
+    };
+    mysql().one_statement_parses_to("SELECT 0.L1, 1e5L, .5L", canonical);
 }

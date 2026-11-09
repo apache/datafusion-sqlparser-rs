@@ -261,6 +261,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_set_schema(&self) -> bool {
+        true
+    }
+
     fn supports_comma_separated_set_assignments(&self) -> bool {
         true
     }

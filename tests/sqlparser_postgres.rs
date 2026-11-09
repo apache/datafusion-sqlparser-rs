@@ -11852,6 +11852,12 @@ fn display_create_function_begin_atomic_propagates_write_errors() {
 }
 
 #[test]
+fn display_set_schema_propagates_write_errors() {
+    let stmt = pg_and_generic().verified_stmt("SET LOCAL SCHEMA 'other'");
+    assert_display_propagates_write_errors(&stmt, &["SET ", "LOCAL "]);
+}
+
+#[test]
 fn parse_named_argument_with_assignment_operator() {
     let select = pg().verified_only_select("SELECT f(x := 1, y => 2)");
     let Expr::Function(Function {

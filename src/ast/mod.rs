@@ -3429,6 +3429,19 @@ pub enum Set {
         value: Expr,
     },
     /// ```sql
+    /// SET [ SESSION | LOCAL ] SCHEMA <value>
+    /// ```
+    ///
+    /// An alias for `SET search_path TO <value>` in PostgreSQL.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-set.html>
+    SetSchema {
+        /// Optional scope modifier (`SESSION` / `LOCAL`).
+        scope: Option<ContextModifier>,
+        /// Schema name value.
+        value: Expr,
+    },
+    /// ```sql
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
     /// ```
     SetNames {
@@ -3505,6 +3518,13 @@ impl Display for Set {
                     f.write_str("LOCAL ")?;
                 }
                 write!(f, "TIME ZONE {value}")
+            }
+            Self::SetSchema { scope, value } => {
+                f.write_str("SET ")?;
+                if let Some(scope) = scope {
+                    write!(f, "{scope}")?;
+                }
+                write!(f, "SCHEMA {value}")
             }
             Self::SetNames {
                 charset_name,

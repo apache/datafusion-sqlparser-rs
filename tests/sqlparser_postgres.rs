@@ -25,7 +25,8 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    Dialect, GenericDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
+    SnowflakeDialect,
 };
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Location, Span, Token, Tokenizer};
@@ -496,15 +497,15 @@ fn parse_create_table_with_defaults() {
                 with_options,
                 vec![
                     SqlOption::KeyValue {
-                        key: "fillfactor".into(),
+                        key: Ident::new("fillfactor").into(),
                         value: Expr::value(number("20"))
                     },
                     SqlOption::KeyValue {
-                        key: "user_catalog_table".into(),
+                        key: Ident::new("user_catalog_table").into(),
                         value: Expr::Value((Value::Boolean(true)).with_empty_span())
                     },
                     SqlOption::KeyValue {
-                        key: "autovacuum_vacuum_threshold".into(),
+                        key: Ident::new("autovacuum_vacuum_threshold").into(),
                         value: Expr::value(number("100"))
                     },
                 ]
@@ -885,6 +886,94 @@ fn parse_create_extension() {
     pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH VERSION version CASCADE");
     pg_and_generic()
         .verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name VERSION version");
+
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name SCHEMA schema_name");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name VERSION version");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name CASCADE");
+    pg_and_generic().verified_stmt(
+        "CREATE EXTENSION IF NOT EXISTS extension_name SCHEMA schema_name VERSION version CASCADE",
+    );
+    pg_and_generic().verified_stmt("CREATE EXTENSION \"uuid-ossp\" VERSION '1.1'");
+    pg_and_generic().one_statement_parses_to(
+        "CREATE EXTENSION pgcrypto WITH VERSION '1.3' SCHEMA exts",
+        "CREATE EXTENSION pgcrypto WITH SCHEMA exts VERSION '1.3'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE EXTENSION pgcrypto CASCADE SCHEMA exts",
+        "CREATE EXTENSION pgcrypto SCHEMA exts CASCADE",
+    );
+
+    for sql in [
+        "CREATE EXTENSION extension_name WITH SCHEMA schema_name",
+        "CREATE EXTENSION extension_name SCHEMA schema_name",
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::CreateExtension(CreateExtension { schema, .. }) => {
+                assert_eq!(schema, Some(Ident::new("schema_name")));
+            }
+            other => panic!("unexpected statement: {other:?}"),
+        }
+    }
+
+    for (sql, error) in [
+        (
+            "CREATE EXTENSION extension_name WITH WITH SCHEMA schema_name",
+            "Expected: end of statement, found: WITH",
+        ),
+        ("CREATE EXTENSION", "Expected: identifier, found: EOF"),
+        (
+            "CREATE EXTENSION e SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE EXTENSION e VERSION",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+    for (sql, keyword) in [
+        ("CREATE EXTENSION e SCHEMA a SCHEMA b", "SCHEMA"),
+        ("CREATE EXTENSION e VERSION a CASCADE VERSION b", "VERSION"),
+        (
+            "CREATE EXTENSION e WITH CASCADE SCHEMA a CASCADE",
+            "CASCADE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("{keyword} specified more than once")),
+        );
+    }
+}
+
+#[test]
+fn display_create_extension_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement =
+        pg_and_generic().verified_stmt("CREATE EXTENSION e WITH SCHEMA s VERSION v CASCADE");
+    for rejected in ["CREATE", "WITH", "SCHEMA", "VERSION", "CASCADE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
 }
 
 #[test]
@@ -991,11 +1080,11 @@ fn parse_create_collation() {
             name: ObjectName::from(vec![Ident::new("test3")]),
             definition: CreateCollationDefinition::Options(vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("provider"),
+                    key: Ident::new("provider").into(),
                     value: Expr::Identifier(Ident::new("icu")),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("lc_collate"),
+                    key: Ident::new("lc_collate").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("en_US.utf8".to_string()).with_empty_span(),
                     ),
@@ -1023,11 +1112,11 @@ fn parse_create_collation() {
             name: ObjectName::from(vec![Ident::new("testx")]),
             definition: CreateCollationDefinition::Options(vec![
                 SqlOption::KeyValue {
-                    key: Ident::new("provider"),
+                    key: Ident::new("provider").into(),
                     value: Expr::Identifier(Ident::new("icu")),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::new("locale"),
+                    key: Ident::new("locale").into(),
                     value: Expr::Value(
                         Value::SingleQuotedString("nonsense-nowhere".to_string()).with_empty_span(),
                     ),
@@ -4464,6 +4553,16 @@ fn parse_xml_typed_string() {
     }
 }
 
+#[test]
+fn parse_do_statement() {
+    let dialects = pg();
+    dialects.verified_stmt("DO LANGUAGE plpgsql LANGUAGE sql $$BEGIN NULL; END$$");
+    dialects.one_statement_parses_to(
+        "DO LANGUAGE N'BEGIN NULL; END'",
+        "DO LANGUAGE nchar 'BEGIN NULL; END'",
+    );
+}
+
 fn pg() -> TestedDialects {
     TestedDialects::new(vec![Box::new(PostgreSqlDialect {})])
 }
@@ -4739,11 +4838,11 @@ fn parse_operator_empty_parens_rejected() {
 
 #[test]
 fn parse_create_role() {
-    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    let sql = "CREATE ROLE mysql_a, mysql_b";
     match pg().verified_stmt(sql) {
         Statement::CreateRole(create_role) => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
-            assert!(create_role.if_not_exists);
+            assert!(!create_role.if_not_exists);
         }
         _ => unreachable!(),
     }
@@ -4832,6 +4931,67 @@ fn parse_create_role() {
             )))
         );
     }
+}
+
+#[test]
+fn parse_create_group() {
+    // `GROUP` names the same object as `ROLE` in PostgreSQL, but the keyword is preserved.
+    pg().verified_stmt("CREATE GROUP g");
+    pg().verified_stmt("CREATE GROUP staff SUPERUSER LOGIN CONNECTION LIMIT 5 USER karl, john");
+    pg().one_statement_parses_to(
+        "CREATE GROUP staff WITH SUPERUSER",
+        "CREATE GROUP staff SUPERUSER",
+    );
+
+    match pg().verified_stmt("CREATE GROUP staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Group);
+            assert_eq_vec(&["staff"], &create_role.names);
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+
+    // The `ROLE` spelling is unaffected.
+    match pg().verified_stmt("CREATE ROLE staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Role)
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE GROUP IF NOT EXISTS g"),
+        Err(ParserError::ParserError(
+            "IF NOT EXISTS is not supported for CREATE GROUP".to_string()
+        ))
+    );
+    pg().verified_stmt(r#"CREATE GROUP "IF""#);
+}
+
+#[test]
+fn parse_create_group_is_dialect_gated() {
+    let others = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(MySqlDialect {}),
+        Box::new(MsSqlDialect {}),
+    ]);
+    assert_eq!(
+        others.parse_sql_statements("CREATE GROUP staff"),
+        Err(ParserError::ParserError(
+            "Expected: an object type after CREATE, found: GROUP".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_role_if_not_exists_rejected() {
+    assert_eq!(
+        pg().parse_sql_statements("CREATE ROLE IF NOT EXISTS r"),
+        Err(ParserError::ParserError(
+            "IF NOT EXISTS is not supported for CREATE ROLE".to_string()
+        ))
+    );
+    pg().verified_stmt(r#"CREATE ROLE "IF""#);
 }
 
 #[test]
@@ -5103,6 +5263,179 @@ fn parse_alter_user() {
 }
 
 #[test]
+fn parse_alter_default_privileges() {
+    // What `pg_dump -s` emits for a default ACL.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO app_user");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE a, b IN SCHEMA s1, s2 GRANT SELECT, INSERT ON TABLES TO app WITH GRANT OPTION");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT ALL PRIVILEGES ON SEQUENCES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON ROUTINES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE ON TYPES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE, CREATE ON SCHEMAS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR ALL ON TABLES FROM app CASCADE",
+    );
+    // `FOR USER` normalises to `FOR ROLE`.
+    pg().one_statement_parses_to(
+        "ALTER DEFAULT PRIVILEGES FOR USER bob GRANT SELECT ON TABLES TO app",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE bob GRANT SELECT ON TABLES TO app",
+    );
+
+    // Options keep the order written.
+    for (sql, options) in [
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA s FOR ROLE r GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+            ],
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO app",
+            vec![
+                DefaultPrivilegesOption::ForRole(vec![Ident::new("r")]),
+                DefaultPrivilegesOption::InSchema(vec![ObjectName::from(Ident::new("s"))]),
+            ],
+        ),
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::AlterDefaultPrivileges(stmt) => assert_eq!(stmt.options, options, "{sql}"),
+            _ => unreachable!(),
+        }
+    }
+    // `LARGE OBJECTS` is a valid object type for both `GRANT` and `REVOKE`.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT, UPDATE ON LARGE OBJECTS TO app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON LARGE OBJECTS FROM app CASCADE",
+    );
+    // The grammar accepts a repeated option, which PostgreSQL rejects only when executing.
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE a FOR ROLE b GRANT SELECT ON TABLES TO app",
+    );
+}
+
+#[test]
+fn parse_alter_default_privileges_rejects_malformed_statements() {
+    for (sql, expected) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE a",
+            "Expected: GRANT or REVOKE, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ALL GRANT SELECT ON TABLES TO app",
+            "Expected: one of ROLE or USER, found: ALL",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT ON TABLES TO app",
+            "Expected: a privilege keyword, found: ON",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT TO app",
+            "Expected: ON, found: TO",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON INDEXES TO app",
+            "Expected: TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES, SCHEMAS or LARGE OBJECTS, found: INDEXES",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}
+
+#[test]
+fn parse_alter_default_privileges_spans() {
+    for (sql, start, end) in [
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g",
+            35,
+            76,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM g",
+            55,
+            56,
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE r GRANT SELECT ON TABLES TO PUBLIC",
+            35,
+            36,
+        ),
+    ] {
+        let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+        assert_eq!(
+            statements[0].span(),
+            Span::new(Location::new(1, start), Location::new(1, end)),
+            "span for {sql}"
+        );
+    }
+    let sql = "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM 'bob'@'localhost'";
+    let statements = Parser::parse_sql(&sqlparser::dialect::GenericDialect {}, sql).unwrap();
+    assert_eq!(
+        statements[0].span(),
+        Span::new(Location::new(1, 55), Location::new(1, 72))
+    );
+}
+
+#[test]
+fn display_alter_default_privileges_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let grant = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE r IN SCHEMA s GRANT SELECT ON TABLES TO g WITH GRANT OPTION",
+    );
+    for rejected in [
+        "ALTER DEFAULT PRIVILEGES",
+        "FOR ROLE ",
+        "GRANT ",
+        " WITH GRANT OPTION",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{grant}"), Err(fmt::Error), "{rejected}");
+    }
+
+    let revoke = pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR SELECT ON TABLES FROM g CASCADE",
+    );
+    for rejected in ["REVOKE ", "GRANT OPTION FOR ", " FROM ", "CASCADE"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{revoke}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     pg().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
@@ -5164,6 +5497,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5207,6 +5545,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5254,6 +5597,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5301,6 +5649,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5341,6 +5694,11 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5387,6 +5745,11 @@ fn parse_create_function() {
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -5529,6 +5892,11 @@ fn parse_create_function_c_with_module_pathname() {
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
@@ -6718,13 +7086,13 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").into(),
                         value: Expr::Value(
                             (Value::SingleQuotedString("bar".into())).with_empty_span()
                         ),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").into(),
                         value: Expr::value(number("123")),
                     },
                 ],
@@ -7376,6 +7744,11 @@ fn parse_trigger_related_functions() {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             using: None,
             language: Some(Ident::new("plpgsql")),
@@ -9060,9 +9433,9 @@ fn parse_create_text_search() {
         )
     );
 
-    // CREATE options are key-value pairs in PostgreSQL syntax.
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
+        all_dialects_where(|d| !d.supports_sql_option_without_value())
+            .parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
             .unwrap_err(),
         ParserError::ParserError("Expected: =, found: )".to_string())
     );
@@ -10917,6 +11290,45 @@ fn parse_create_foreign_data_wrapper() {
 }
 
 #[test]
+fn parse_drop_group() {
+    for (sql, expected_names, expected_if_exists) in [
+        ("DROP GROUP staff", vec!["staff"], false),
+        (
+            "DROP GROUP IF EXISTS staff, workers",
+            vec!["staff", "workers"],
+            true,
+        ),
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::Drop {
+                object_type,
+                if_exists,
+                names,
+                ..
+            } => {
+                assert_eq!(object_type, ObjectType::Group);
+                assert_eq_vec(&expected_names, &names);
+                assert_eq!(if_exists, expected_if_exists);
+            }
+            other => panic!("expected DROP statement, got {other:?}"),
+        }
+    }
+    pg().verified_stmt(r#"DROP GROUP "Mixed Name", "GROUP""#);
+}
+
+#[test]
+fn parse_drop_group_rejects_drop_behaviors() {
+    for behavior in ["CASCADE", "RESTRICT", "PURGE"] {
+        assert_eq!(
+            pg().parse_sql_statements(&format!("DROP GROUP staff {behavior}")),
+            Err(ParserError::ParserError(
+                "Cannot specify CASCADE, RESTRICT, or PURGE in DROP GROUP".to_string()
+            ))
+        );
+    }
+}
+
+#[test]
 fn foreign_data_wrapper_display_and_span() {
     let ident = |value: &str, start: u64, end: u64| Ident {
         value: value.to_string(),
@@ -11114,4 +11526,1995 @@ fn display_column_unique_nulls_distinct_propagates_formatter_errors() {
 
     let stmt = pg_and_generic().verified_stmt("CREATE TABLE t (u INT UNIQUE NULLS NOT DISTINCT)");
     assert_eq!(write!(RejectingWriter, "{stmt}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_alter_table_attach_partition_of() {
+    let sql =
+        "ALTER TABLE ONLY public.root ATTACH PARTITION public.part FOR VALUES FROM (0) TO (10)";
+    let Statement::AlterTable(alter) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::AttachPartitionOf {
+            partition: ObjectName::from(vec![Ident::new("public"), Ident::new("part")]),
+            for_values: ForValues::From {
+                from: vec![PartitionBoundValue::Expr(Expr::value(number("0")))],
+                to: vec![PartitionBoundValue::Expr(Expr::value(number("10")))],
+            },
+        }]
+    );
+
+    pg().verified_stmt("ALTER TABLE root ATTACH PARTITION part DEFAULT");
+    pg().verified_stmt("ALTER TABLE root ATTACH PARTITION part FOR VALUES IN (1, 2)");
+    // As written by pg_dump.
+    pg().one_statement_parses_to(
+        "ALTER TABLE ONLY public.hroot ATTACH PARTITION public.part4 FOR VALUES WITH (modulus 4, remainder 0)",
+        "ALTER TABLE ONLY public.hroot ATTACH PARTITION public.part4 FOR VALUES WITH (MODULUS 4, REMAINDER 0)",
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE root ATTACH PARTITION part",
+            "Expected: FOR, found: EOF",
+        ),
+        (
+            "ALTER TABLE root ATTACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE root ATTACH PARTITION part FOR VALUES IN ()",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "ALTER TABLE root ATTACH PARTITION part FOR VALUES",
+            "Expected: IN, FROM, or WITH after FOR VALUES, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_drop_foreign_table() {
+    match pg_and_generic().verified_stmt("DROP FOREIGN TABLE IF EXISTS ft, public.other CASCADE") {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+            restrict,
+            ..
+        } => {
+            assert_eq!(object_type, ObjectType::ForeignTable);
+            assert!(if_exists);
+            assert_eq!(
+                names,
+                vec![
+                    ObjectName::from(vec![Ident::new("ft")]),
+                    ObjectName::from(vec![Ident::new("public"), Ident::new("other")]),
+                ]
+            );
+            assert!(cascade);
+            assert!(!restrict);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("DROP FOREIGN TABLE ft RESTRICT");
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("DROP FOREIGN ft")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
+    );
+    for (sql, expected) in [
+        ("DROP FOREIGN TABLE", "Expected: identifier, found: EOF"),
+        (
+            "DROP FOREIGN TABLE ft CASCADE RESTRICT",
+            "Cannot specify both CASCADE and RESTRICT in DROP",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_comment_on_foreign_table() {
+    match pg_and_generic().verified_stmt("COMMENT ON FOREIGN TABLE public.ft IS 'remote orders'") {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(object_type, CommentObject::ForeignTable);
+            assert_eq!(
+                object_name,
+                ObjectName::from(vec![Ident::new("public"), Ident::new("ft")])
+            );
+            assert_eq!(comment, Some("remote orders".to_string()));
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("COMMENT ON FOREIGN TABLE ft IS NULL");
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN ft IS 'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TABLE, found: ft"
+    );
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN TABLE ft 'x'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: IS, found: 'x'"
+    );
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("COMMENT ON FOREIGN TABLE")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_drop_foreign_table_rejects_modifiers() {
+    for sql in [
+        "DROP TEMPORARY FOREIGN TABLE ft",
+        "DROP FOREIGN TABLE ft PURGE",
+        "DROP FOREIGN TABLE ft ON t",
+    ] {
+        for dialect in all_dialects().dialects {
+            assert!(
+                Parser::parse_sql(dialect.as_ref(), sql).is_err(),
+                "{sql} with {dialect:?}"
+            );
+        }
+    }
+    for sql in ["DROP FOREIGN TABLE ft PURGE", "DROP FOREIGN TABLE ft ON t"] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            "sql parser error: Cannot specify TEMPORARY, PURGE, or ON in DROP FOREIGN TABLE",
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_non_decimal_integer_literals() {
+    let sql = "SELECT 0x1F, 0X1F, 0o17, 0O17, 0b101, 0B101, 0x_1F, 0xFF_FF, 0xFFFFFFFFFFFFFFFFFFFF";
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 31, 31, 15, 15, 5, 5, 31, 65535, 1208925819614629174706175"
+    } else {
+        sql
+    };
+    let select = pg().verified_only_select_with_canonical(sql, canonical);
+    for item in &select.projection {
+        assert!(
+            matches!(
+                item,
+                SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+                    value: Value::Number(_, false),
+                    ..
+                }))
+            ),
+            "{item:?}"
+        );
+    }
+
+    assert_eq!(
+        expr_from_projection(&pg().verified_only_select("SELECT X'1F'").projection[0]),
+        &Expr::Value(Value::HexStringLiteral("1F".to_string()).with_empty_span())
+    );
+
+    for (sql, message) in [
+        ("SELECT 0x", "Expected a hexadecimal digit after '0x'"),
+        ("SELECT 0Xg", "Expected a hexadecimal digit after '0X'"),
+        ("SELECT 0o8", "Expected an octal digit after '0o'"),
+        ("SELECT 0b2", "Expected a binary digit after '0b'"),
+        ("SELECT 0x_", "Expected a hexadecimal digit after '0x'"),
+        ("SELECT 0x__1", "Unexpected character '_'"),
+        ("SELECT 0x1_", "Unexpected character '_'"),
+    ] {
+        let err = pg().parse_sql_statements(sql).unwrap_err().to_string();
+        assert!(err.contains(message), "{sql}: {err}");
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+#[test]
+fn parse_non_decimal_integer_token_with_invalid_digits() {
+    let err = Parser::new(&PostgreSqlDialect {})
+        .with_tokens(vec![Token::Number("0xZZ".to_string(), false)])
+        .parse_value()
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ParserError::ParserError("Could not parse '0xZZ' as an integer".to_string())
+    );
+}
+
+#[test]
+fn parse_create_function_begin_atomic() {
+    let sql = "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END";
+    pg_and_generic().verified_stmt(sql);
+    match pg_and_generic().run_parser_method(sql, |parser| parser.parse_statement().unwrap()) {
+        Statement::CreateFunction(CreateFunction {
+            function_body: Some(CreateFunctionBody::BeginAtomic(body)),
+            ..
+        }) => {
+            assert_eq!(
+                body.statements,
+                vec![pg_and_generic().verified_stmt("SELECT 1")]
+            );
+            assert_eq!(
+                body.span(),
+                Span::new(Location::new(1, 46), Location::new(1, 72))
+            );
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for sql in [
+        "CREATE FUNCTION f(a INT) RETURNS INT LANGUAGE sql IMMUTABLE BEGIN ATOMIC SELECT a; RETURN a + 1; END",
+        "CREATE OR REPLACE FUNCTION f(a INT) RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT CASE WHEN a > 0 THEN 1 END; END",
+        "CREATE FUNCTION f() RETURNS VOID LANGUAGE sql BEGIN ATOMIC END",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE OR REPLACE FUNCTION public.f(a integer)
+ RETURNS integer
+ LANGUAGE sql
+BEGIN ATOMIC
+ INSERT INTO t VALUES (a);
+ RETURN a;
+END"#,
+        "CREATE OR REPLACE FUNCTION public.f(a INTEGER) RETURNS INTEGER LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (a); RETURN a; END",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1;",
+            "Expected: END, found: EOF",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1 END",
+            "Expected: ;, found: END",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql RETURN 1 BEGIN ATOMIC SELECT 1; END",
+            "BEGIN ATOMIC specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN SELECT 1; END",
+            "Expected: end of statement, found: BEGIN",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+/// Asserts that displaying `stmt` fails whenever the writer rejects one of `fragments`.
+fn assert_display_propagates_write_errors(stmt: &Statement, fragments: &[&str]) {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for rejected in fragments {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn display_create_function_begin_atomic_propagates_write_errors() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END");
+    assert_display_propagates_write_errors(&stmt, &[" BEGIN ATOMIC", " ", ";", " END"]);
+}
+
+#[test]
+fn parse_named_argument_with_assignment_operator() {
+    let select = pg().verified_only_select("SELECT f(x := 1, y => 2)");
+    let Expr::Function(Function {
+        args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+        ..
+    }) = expr_from_projection(only(&select.projection))
+    else {
+        panic!("expected a function call");
+    };
+    assert_eq!(
+        args,
+        &[
+            FunctionArg::ExprNamed {
+                name: Expr::Identifier(Ident::new("x")),
+                arg: FunctionArgExpr::Expr(Expr::value(number("1"))),
+                operator: FunctionArgOperator::Assignment,
+            },
+            FunctionArg::ExprNamed {
+                name: Expr::Identifier(Ident::new("y")),
+                arg: FunctionArgExpr::Expr(Expr::value(number("2"))),
+                operator: FunctionArgOperator::RightArrow,
+            },
+        ]
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT x := 1")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: :="
+    );
+}
+
+#[test]
+fn parse_create_foreign_table_inherits() {
+    let sql = "CREATE FOREIGN TABLE child (id INT) INHERITS (parent, public.other) SERVER s OPTIONS (schema_name 'public')";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.inherits,
+        Some(vec![
+            ObjectName::from(vec![Ident::new("parent")]),
+            ObjectName::from(vec![Ident::new("public"), Ident::new("other")]),
+        ])
+    );
+
+    // As written by pg_dump.
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN TABLE public.child (\n)\nINHERITS (public.parent)\nSERVER s",
+        "CREATE FOREIGN TABLE public.child () INHERITS (public.parent) SERVER s",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE child INHERITS (parent) SERVER s",
+            "Expected: '(' before the column list of CREATE FOREIGN TABLE, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () INHERITS () SERVER s",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () INHERITS parent SERVER s",
+            "Expected: a list of columns in parentheses, found: parent",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () INHERITS (parent) OPTIONS (schema_name 'public')",
+            "Expected: SERVER, found: OPTIONS",
+        ),
+        (
+            "CREATE FOREIGN TABLE child () SERVER s INHERITS (parent)",
+            "Expected: end of statement, found: INHERITS",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_inherits_span() {
+    let sql = "CREATE FOREIGN TABLE child (id INT) INHERITS (parent, public.other) SERVER s OPTIONS (schema_name 'public')";
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(sql)
+        .unwrap();
+    let Statement::CreateForeignTable(stmt) = parser.parse_statement().unwrap() else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.span(),
+        Span::new(Location::new(1, 22), Location::new(1, 107)),
+    );
+}
+
+#[test]
+fn display_create_foreign_table_inherits_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt =
+        pg_and_generic().verified_stmt("CREATE FOREIGN TABLE child () INHERITS (parent) SERVER s");
+    for rejected in [")", " INHERITS (", " SERVER "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_drop_group_is_dialect_gated() {
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_drop_group())
+            .parse_sql_statements("DROP GROUP staff"),
+        Err(ParserError::ParserError(
+            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_interval_followed_by_alias() {
+    for alias in [
+        "WEEK", "WEEKS", "DAYS", "YEARS", "DECADE", "QUARTER", "EPOCH",
+    ] {
+        let select = pg().verified_only_select_with_canonical(
+            &format!("SELECT INTERVAL '1' {alias}"),
+            &format!("SELECT INTERVAL '1' AS {alias}"),
+        );
+        match only(&select.projection) {
+            SelectItem::ExprWithAlias {
+                expr: Expr::Interval(interval),
+                alias: ident,
+            } => {
+                assert_eq!(interval.leading_field, None);
+                assert_eq!(ident.value, alias);
+            }
+            item => panic!("unexpected projection: {item:?}"),
+        }
+    }
+
+    let select = pg().verified_only_select("SELECT INTERVAL '1' DAY");
+    assert!(matches!(
+        only(&select.projection),
+        SelectItem::UnnamedExpr(Expr::Interval(Interval {
+            leading_field: Some(DateTimeField::Day),
+            ..
+        }))
+    ));
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT 1 WHERE x > INTERVAL '1' WEEK")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: WEEK".to_string())
+    );
+}
+
+#[test]
+fn parse_storage_parameters_without_value() {
+    let dialects = all_dialects_where(|d| d.supports_sql_option_without_value());
+    let bare = SqlOption::Ident(Ident::new("security_barrier").into());
+    let key_value = SqlOption::KeyValue {
+        key: Ident::new("security_invoker").into(),
+        value: Expr::Value(Value::Boolean(true).with_empty_span()),
+    };
+
+    match dialects
+        .verified_stmt("CREATE VIEW v WITH (security_invoker = true, security_barrier) AS SELECT 1")
+    {
+        Statement::CreateView(CreateView { options, .. }) => assert_eq!(
+            options,
+            CreateTableOptions::With(vec![key_value.clone(), bare.clone()])
+        ),
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt("CREATE TABLE t (a INT) WITH (security_barrier)") {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            assert_eq!(table_options, CreateTableOptions::With(vec![bare.clone()]))
+        }
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt("ALTER TABLE t SET (security_barrier, security_invoker = true)") {
+        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
+            operations,
+            [AlterTableOperation::SetOptionsParens {
+                options: vec![bare, key_value],
+            }]
+        ),
+        _ => unreachable!(),
+    }
+    dialects.verified_stmt("CREATE MATERIALIZED VIEW m WITH (autovacuum_enabled) AS SELECT 1");
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (fillfactor 70)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: 70".to_string())
+    );
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_sql_option_without_value())
+            .parse_sql_statements("ALTER TABLE t SET (autovacuum_enabled)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: )".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (fillfactor =)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER TABLE t SET TBLPROPERTIES (fillfactor 70)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: =, found: 70".to_string())
+    );
+}
+
+#[test]
+fn parse_namespaced_storage_parameters() {
+    let expected = vec![SqlOption::KeyValue {
+        key: ObjectName::from(vec![Ident::new("toast"), Ident::new("autovacuum_enabled")]),
+        value: Expr::Value(Value::Boolean(false).with_empty_span()),
+    }];
+
+    match pg().verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)") {
+        Statement::CreateTable(CreateTable {
+            table_options: CreateTableOptions::With(options),
+            ..
+        }) => assert_eq!(options, expected),
+        _ => unreachable!(),
+    }
+
+    match alter_table_op(
+        pg().verified_stmt("ALTER TABLE tab SET (toast.autovacuum_enabled = false)"),
+    ) {
+        AlterTableOperation::SetOptionsParens { options } => assert_eq!(options, expected),
+        _ => unreachable!(),
+    }
+
+    match pg().verified_stmt(
+        "CREATE MATERIALIZED VIEW m WITH (toast.autovacuum_enabled = false) AS SELECT 1",
+    ) {
+        Statement::CreateView(create_view) => {
+            assert_eq!(create_view.options, CreateTableOptions::With(expected))
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE t (a INT) WITH (toast. = false)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: ="
+    );
+}
+
+#[test]
+fn parse_table_inheritance_markers() {
+    fn assert_relation(
+        relation: &TableFactor,
+        expected_name: &str,
+        expected_alias: Option<&str>,
+        expected_inheritance: Option<TableInheritance>,
+    ) {
+        match relation {
+            TableFactor::Table {
+                name,
+                alias,
+                inheritance,
+                ..
+            } => {
+                assert_eq!(name.to_string(), expected_name);
+                assert_eq!(
+                    alias.as_ref().map(|a| a.name.value.as_str()),
+                    expected_alias
+                );
+                assert_eq!(*inheritance, expected_inheritance);
+            }
+            other => panic!("expected a table, got {other:?}"),
+        }
+    }
+
+    let only = Some(TableInheritance::Only {
+        parenthesized: false,
+    });
+    let only_parenthesized = Some(TableInheritance::Only {
+        parenthesized: true,
+    });
+    let descendants = Some(TableInheritance::IncludeDescendants);
+
+    for (sql, name, alias, inheritance) in [
+        ("SELECT * FROM ONLY t", "t", None, only),
+        ("SELECT * FROM ONLY t AS x", "t", Some("x"), only),
+        ("SELECT * FROM ONLY (t)", "t", None, only_parenthesized),
+        (
+            "SELECT * FROM ONLY (app.t) x",
+            "app.t",
+            Some("x"),
+            only_parenthesized,
+        ),
+        ("SELECT * FROM t *", "t", None, descendants),
+        (
+            "SELECT * FROM app.t * AS x",
+            "app.t",
+            Some("x"),
+            descendants,
+        ),
+        ("SELECT * FROM \"only\"", "\"only\"", None, None),
+    ] {
+        let select = pg_and_generic().verified_only_select(sql);
+        assert_relation(&select.from[0].relation, name, alias, inheritance);
+    }
+
+    let select =
+        pg_and_generic().verified_only_select("SELECT * FROM ONLY a JOIN b * ON a.id = b.id");
+    assert_relation(&select.from[0].relation, "a", None, only);
+    assert_relation(&select.from[0].joins[0].relation, "b", None, descendants);
+
+    for (sql, inheritance) in [
+        ("UPDATE ONLY t SET id = 1", only),
+        ("UPDATE ONLY (t) SET id = 1", only_parenthesized),
+        ("UPDATE t * SET id = 1", descendants),
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::Update(Update { table, .. }) => {
+                assert_relation(&table.relation, "t", None, inheritance)
+            }
+            other => panic!("expected an update, got {other:?}"),
+        }
+    }
+
+    for (sql, inheritance) in [
+        ("DELETE FROM ONLY t", only),
+        ("DELETE FROM ONLY (t)", only_parenthesized),
+        ("DELETE FROM t *", descendants),
+    ] {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::Delete(Delete {
+                from: FromTable::WithFromKeyword(from),
+                ..
+            }) => assert_relation(&from[0].relation, "t", None, inheritance),
+            other => panic!("expected a delete, got {other:?}"),
+        }
+    }
+
+    pg_and_generic().one_statement_parses_to("SELECT * FROM t*", "SELECT * FROM t *");
+    pg_and_generic().one_statement_parses_to("SELECT * FROM ONLY(t)", "SELECT * FROM ONLY (t)");
+    pg_and_generic().one_statement_parses_to("UPDATE t* SET id = 1", "UPDATE t * SET id = 1");
+    pg_and_generic().one_statement_parses_to("DELETE FROM t*", "DELETE FROM t *");
+
+    for sql in [
+        "SELECT * FROM ONLY",
+        "SELECT * FROM ONLY t *",
+        "SELECT * FROM ONLY (t *)",
+        "SELECT * FROM ONLY (t",
+        "SELECT * FROM ONLY ()",
+    ] {
+        assert!(pg_and_generic().parse_sql_statements(sql).is_err(), "{sql}");
+    }
+
+    let other_dialects = all_dialects_where(|d| !d.supports_table_inheritance_markers());
+    for sql in [
+        "SELECT * FROM t *",
+        "UPDATE t * SET id = 1",
+        "DELETE FROM t *",
+    ] {
+        for dialect in &other_dialects.dialects {
+            assert!(
+                Parser::parse_sql(dialect.as_ref(), sql).is_err(),
+                "{sql} with {dialect:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn display_table_inheritance_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for (sql, rejected) in [
+        ("SELECT * FROM ONLY (t)", "ONLY ("),
+        ("SELECT * FROM ONLY t", "ONLY "),
+        ("SELECT * FROM t *", " *"),
+        ("SELECT * FROM t", "t"),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{sql}");
+    }
+}
+
+#[test]
+fn parse_create_user_mapping() {
+    let sql =
+        r#"CREATE USER MAPPING FOR app SERVER s OPTIONS ("user" 'remote', password 'secret')"#;
+    let Statement::CreateUserMapping(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt,
+        CreateUserMapping {
+            if_not_exists: false,
+            user: UserMappingUser::Name(Ident::new("app")),
+            server_name: Ident::new("s"),
+            options: Some(vec![
+                CreateServerOption {
+                    key: Ident::with_quote('"', "user"),
+                    value: Ident::with_quote('\'', "remote"),
+                },
+                CreateServerOption {
+                    key: Ident::new("password"),
+                    value: Ident::with_quote('\'', "secret"),
+                },
+            ]),
+        }
+    );
+
+    for (sql, user) in [
+        (
+            "CREATE USER MAPPING IF NOT EXISTS FOR USER SERVER s",
+            UserMappingUser::User,
+        ),
+        (
+            "CREATE USER MAPPING FOR CURRENT_ROLE SERVER s",
+            UserMappingUser::CurrentRole,
+        ),
+        (
+            "CREATE USER MAPPING FOR CURRENT_USER SERVER s",
+            UserMappingUser::CurrentUser,
+        ),
+        (
+            "CREATE USER MAPPING FOR SESSION_USER SERVER s",
+            UserMappingUser::SessionUser,
+        ),
+        (
+            "CREATE USER MAPPING FOR PUBLIC SERVER s",
+            UserMappingUser::Public,
+        ),
+    ] {
+        let Statement::CreateUserMapping(stmt) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(stmt.user, user);
+    }
+    // As written by pg_dump.
+    pg_and_generic().one_statement_parses_to(
+        "CREATE USER MAPPING FOR public SERVER s",
+        "CREATE USER MAPPING FOR PUBLIC SERVER s",
+    );
+
+    // A user named `mapping`.
+    assert!(matches!(
+        pg_and_generic().verified_stmt("CREATE USER mapping"),
+        Statement::CreateUser(_)
+    ));
+
+    for (sql, expected) in [
+        (
+            "CREATE USER MAPPING FOR app",
+            "Expected: SERVER, found: EOF",
+        ),
+        (
+            "CREATE USER MAPPING FOR",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE USER MAPPING FOR app SERVER",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE USER MAPPING IF NOT EXISTS app SERVER s",
+            "Expected: FOR, found: app",
+        ),
+        (
+            "CREATE USER MAPPING FOR app SERVER s OPTIONS (password)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE OR REPLACE USER MAPPING FOR app SERVER s",
+            "CREATE USER MAPPING does not accept this modifier",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_create_user_mapping_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE USER MAPPING FOR app SERVER s OPTIONS (password 'secret')");
+    for rejected in ["CREATE USER MAPPING ", " OPTIONS ("] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_namespaced_storage_parameters_without_value() {
+    let dialects = all_dialects_where(|d| d.supports_sql_option_without_value());
+    let bare = SqlOption::Ident(ObjectName::from(vec![
+        Ident::new("toast"),
+        Ident::new("autovacuum_enabled"),
+    ]));
+
+    match dialects.verified_stmt("CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled)") {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            assert_eq!(table_options, CreateTableOptions::With(vec![bare.clone()]))
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER TABLE t SET (toast.autovacuum_enabled, fillfactor = 70)") {
+        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
+            operations,
+            [AlterTableOperation::SetOptionsParens {
+                options: vec![
+                    bare,
+                    SqlOption::KeyValue {
+                        key: ObjectName::from(vec![Ident::new("fillfactor")]),
+                        value: Expr::value(number("70")),
+                    },
+                ],
+            }]
+        ),
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (a INT) WITH (toast.)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
+}
+
+#[test]
+fn parse_create_table_partition_of_untyped_columns() {
+    let column = |name: &str, options: Vec<ColumnOptionDef>| ColumnDef {
+        name: Ident::new(name),
+        data_type: DataType::Unspecified,
+        options,
+    };
+    let option = |option| ColumnOptionDef { name: None, option };
+    let create_table = |sql: &str| match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => create_table,
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    };
+
+    assert_eq!(
+        create_table(
+            "CREATE TABLE part PARTITION OF root (id NOT NULL, note DEFAULT 'x', flag) DEFAULT"
+        )
+        .columns,
+        vec![
+            column("id", vec![option(ColumnOption::NotNull)]),
+            column(
+                "note",
+                vec![option(ColumnOption::Default(Expr::value(
+                    Value::SingleQuotedString("x".to_string())
+                )))]
+            ),
+            column("flag", vec![]),
+        ]
+    );
+
+    let stmt = create_table(
+        "CREATE TABLE part PARTITION OF root (id CONSTRAINT id_present NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1)",
+    );
+    assert_eq!(
+        stmt.columns,
+        vec![column(
+            "id",
+            vec![ColumnOptionDef {
+                name: Some(Ident::new("id_present")),
+                option: ColumnOption::NotNull,
+            }]
+        )]
+    );
+    assert_eq!(stmt.constraints.len(), 1);
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE TABLE part PARTITION OF root (id WITH OPTIONS NOT NULL, flag WITH OPTIONS) DEFAULT",
+        "CREATE TABLE part PARTITION OF root (id NOT NULL, flag) DEFAULT",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE TABLE part PARTITION OF root (id INT) DEFAULT",
+            "Expected: ',' or ')' after column definition, found: INT",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id WITH NOT NULL) DEFAULT",
+            "Expected: ',' or ')' after column definition, found: WITH",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id CONSTRAINT c) DEFAULT",
+            "Expected: constraint details after CONSTRAINT <name>, found: )",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (id CONSTRAINT c COLLATE) DEFAULT",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE TABLE part PARTITION OF root (42) DEFAULT",
+            "Expected: column name or constraint definition, found: 42",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_column_generic_options() {
+    let sql = r#"CREATE FOREIGN TABLE ft (id INT OPTIONS (column_name 'remote_id') NOT NULL, b TEXT OPTIONS (column_name 'rb', "x" 'y') COLLATE "C") SERVER s"#;
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.columns[0].options,
+        vec![
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::GenericOptions(vec![CreateServerOption {
+                    key: Ident::new("column_name"),
+                    value: Ident::with_quote('\'', "remote_id"),
+                }]),
+            },
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::NotNull,
+            },
+        ]
+    );
+    assert_eq!(
+        stmt.columns[1].options[0].option,
+        ColumnOption::GenericOptions(vec![
+            CreateServerOption {
+                key: Ident::new("column_name"),
+                value: Ident::with_quote('\'', "rb"),
+            },
+            CreateServerOption {
+                key: Ident::with_quote('"', "x"),
+                value: Ident::with_quote('\'', "y"),
+            },
+        ])
+    );
+
+    // PostgreSQL rejects column options on a table that is not foreign only at execution.
+    pg().verified_stmt("CREATE TABLE t (id INT OPTIONS (column_name 'remote_id'))");
+    pg().verified_stmt("ALTER TABLE t ADD COLUMN note TEXT OPTIONS (column_name 'memo')");
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE ft (id INT OPTIONS (column_name)) SERVER s",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (id INT OPTIONS ()) SERVER s",
+            "Expected: identifier, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_foreign_table() {
+    for sql in [
+        "ALTER FOREIGN TABLE ft ADD COLUMN note TEXT",
+        "ALTER FOREIGN TABLE ft DROP COLUMN IF EXISTS note CASCADE",
+        "ALTER FOREIGN TABLE ft RENAME COLUMN note TO memo",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id TYPE BIGINT",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET DEFAULT 0",
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id SET NOT NULL",
+        "ALTER FOREIGN TABLE ft ADD CONSTRAINT positive CHECK (id > 0) NOT VALID",
+        "ALTER FOREIGN TABLE ft VALIDATE CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft DROP CONSTRAINT positive",
+        "ALTER FOREIGN TABLE ft OWNER TO app",
+        "ALTER FOREIGN TABLE ft RENAME TO archive",
+        "ALTER FOREIGN TABLE IF EXISTS ONLY public.ft ADD COLUMN a INT, DROP COLUMN b",
+    ] {
+        let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(alter.table_type, Some(AlterTableType::Foreign));
+    }
+
+    let option = |key: &str, value: &str| CreateServerOption {
+        key: Ident::new(key),
+        value: Ident::with_quote('\'', value),
+    };
+    let sql = "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100', SET batch_size '10', DROP updatable, use_remote_estimate 'true')";
+    let Statement::AlterTable(alter) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("fetch_size", "100"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("batch_size", "10")),
+                AlterGenericOption::Drop(Ident::new("updatable")),
+                AlterGenericOption::Add {
+                    option: option("use_remote_estimate", "true"),
+                    add_keyword: false,
+                },
+            ],
+        }]
+    );
+
+    // As written by pg_dump.
+    let stmt = pg_and_generic().one_statement_parses_to(
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (\n    column_name 'remote_id'\n)",
+        "ALTER FOREIGN TABLE ONLY public.colopts ALTER COLUMN id OPTIONS (column_name 'remote_id')",
+    );
+    let Statement::AlterTable(alter) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::AlterColumn {
+            column_name: Ident::new("id"),
+            op: AlterColumnOperation::GenericOptions {
+                options: vec![AlterGenericOption::Add {
+                    option: option("column_name", "remote_id"),
+                    add_keyword: false,
+                }],
+            },
+        }]
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS (SET column_name 'remote_id', DROP other)",
+    );
+
+    // `ADD`, `SET` and `DROP` before a string literal name a plain option.
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (add 'x', set 'y', drop 'z')")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: ["add", "set", "drop"]
+                .into_iter()
+                .zip(["x", "y", "z"])
+                .map(|(key, value)| AlterGenericOption::Add {
+                    option: option(key, value),
+                    add_keyword: false,
+                })
+                .collect(),
+        }]
+    );
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD add 'x', SET set 'y', DROP drop)")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::GenericOptions {
+            options: vec![
+                AlterGenericOption::Add {
+                    option: option("add", "x"),
+                    add_keyword: true,
+                },
+                AlterGenericOption::Set(option("set", "y")),
+                AlterGenericOption::Drop(Ident::new("drop")),
+            ],
+        }]
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP fetch_size '100')",
+            "Expected: ), found: '100'",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (SET fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (DROP)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100'",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft OPTIONS ADD fetch_size '100'",
+            "Expected: (, found: ADD",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ALTER COLUMN id OPTIONS column_name 'remote_id'",
+            "Expected: (, found: column_name",
+        ),
+        (
+            "ALTER FOREIGN ft OWNER TO app",
+            "Expected: TABLE, found: ft",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN, found: RESET"
+    );
+}
+
+#[test]
+fn display_alter_foreign_table_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt =
+        pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft OPTIONS (ADD fetch_size '100')");
+    for rejected in ["ALTER FOREIGN TABLE ", "ADD "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_options_errors() {
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS schema_name 'public'",
+            "Expected: (, found: schema_name",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE ft (a INT) SERVER s OPTIONS (schema_name 'public'",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_foreign_table_rejects_clauses() {
+    for (sql, expected) in [
+        (
+            "ALTER FOREIGN TABLE ft ON CLUSTER c ADD COLUMN x INT",
+            "Cannot specify ON CLUSTER in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+        (
+            "ALTER FOREIGN TABLE ft ADD COLUMN x INT SET LOCATION 's3://x'",
+            "Cannot specify LOCATION in ALTER FOREIGN TABLE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_materialized_view() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW IF EXISTS s.m OWNER TO alice"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("s"), Ident::new("m")]),
+            if_exists: true,
+            operation: AlterViewOperation::OwnerTo(Owner::Ident(Ident::new("alice"))),
+        })
+    );
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m SET (fillfactor = 70)"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("m")]),
+            if_exists: false,
+            operation: AlterViewOperation::SetOptions {
+                options: vec![SqlOption::KeyValue {
+                    key: ObjectName::from(vec![Ident::new("fillfactor")]),
+                    value: Expr::value(number("70")),
+                }],
+            },
+        })
+    );
+    for sql in [
+        "ALTER MATERIALIZED VIEW m RESET (fillfactor, autovacuum_enabled)",
+        "ALTER MATERIALIZED VIEW m RENAME TO m2",
+        "ALTER MATERIALIZED VIEW m RENAME COLUMN a TO b",
+        "ALTER MATERIALIZED VIEW m SET SCHEMA s",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m ALTER COLUMN c SET DEFAULT 1"),
+        Statement::AlterView(AlterView {
+            materialized: true,
+            name: ObjectName::from(vec![Ident::new("m")]),
+            if_exists: false,
+            operation: AlterViewOperation::AlterColumn {
+                column_name: Ident::new("c"),
+                op: AlterColumnOperation::SetDefault {
+                    value: Expr::value(number("1")),
+                },
+            },
+        })
+    );
+    pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m ALTER COLUMN c DROP DEFAULT");
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("ALTER MATERIALIZED m OWNER TO alice")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: VIEW, found: m".to_string())
+    );
+}
+
+#[test]
+fn display_alter_materialized_view_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let materialized = pg_and_generic().verified_stmt("ALTER MATERIALIZED VIEW m RENAME TO m2");
+    for rejected in ["ALTER ", "MATERIALIZED ", "VIEW "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(
+            write!(writer, "{materialized}"),
+            Err(fmt::Error),
+            "{rejected:?}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_foreign_table_partition_of() {
+    let sql = "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES FROM (0) TO (10) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.partition_of,
+        Some(ObjectName::from(vec![Ident::new("root")]))
+    );
+    assert_eq!(
+        stmt.for_values,
+        Some(ForValues::From {
+            from: vec![PartitionBoundValue::Expr(Expr::value(number("0")))],
+            to: vec![PartitionBoundValue::Expr(Expr::value(number("10")))],
+        })
+    );
+    assert!(stmt.columns.is_empty());
+
+    let sql = "CREATE FOREIGN TABLE part PARTITION OF public.root (id NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES FROM (MINVALUE) TO (MAXVALUE) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.columns,
+        vec![ColumnDef {
+            name: Ident::new("id"),
+            data_type: DataType::Unspecified,
+            options: vec![ColumnOptionDef {
+                name: None,
+                option: ColumnOption::NotNull,
+            }],
+        }]
+    );
+    assert_eq!(stmt.constraints.len(), 1);
+    assert_eq!(
+        stmt.for_values,
+        Some(ForValues::From {
+            from: vec![PartitionBoundValue::MinValue],
+            to: vec![PartitionBoundValue::MaxValue],
+        })
+    );
+
+    for sql in [
+        "CREATE FOREIGN TABLE IF NOT EXISTS part PARTITION OF root DEFAULT SERVER s OPTIONS (table_name 'remote')",
+        "CREATE FOREIGN TABLE part PARTITION OF root (CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1, 2) SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES WITH (MODULUS 4, REMAINDER 0) SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) FOR VALUES IN (3) SERVER s",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FOREIGN TABLE part PARTITION OF root (id WITH OPTIONS NOT NULL) DEFAULT SERVER s",
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) DEFAULT SERVER s",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root SERVER s",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: SERVER",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root DEFAULT INHERITS (other) SERVER s",
+            "Expected: SERVER, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root INHERITS (other) FOR VALUES IN (1) SERVER s",
+            "Expected: FOR VALUES or DEFAULT after PARTITION OF, found: INHERITS",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES IN (1)",
+            "Expected: SERVER, found: EOF",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES IN () SERVER s",
+            "Expected: at least one value, found: )",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root FOR VALUES SERVER s",
+            "Expected: IN, FROM, or WITH after FOR VALUES, found: SERVER",
+        ),
+        (
+            "CREATE FOREIGN TABLE part (id INT) PARTITION OF root DEFAULT SERVER s",
+            "Expected: SERVER, found: PARTITION",
+        ),
+        (
+            "CREATE FOREIGN TABLE part PARTITION OF root (id INT) DEFAULT SERVER s",
+            "Expected: ',' or ')' after column definition, found: INT",
+        ),
+        (
+            "CREATE FOREIGN TABLE part (id) SERVER s",
+            "Expected: a data type name, found: )",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn visit_relations_create_foreign_table_partition_of() {
+    let stmts = pg()
+        .parse_sql_statements("CREATE FOREIGN TABLE part PARTITION OF public.root DEFAULT SERVER s")
+        .unwrap();
+    let mut relations = vec![];
+    let _ = sqlparser::ast::visit_relations(&stmts, |relation| {
+        relations.push(relation.to_string());
+        core::ops::ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(relations, ["part", "public.root"]);
+}
+
+#[test]
+fn display_create_foreign_table_partition_of_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL, CONSTRAINT positive CHECK (id > 0)) FOR VALUES IN (1) SERVER s",
+    );
+    for rejected in [
+        "CREATE FOREIGN TABLE ",
+        " PARTITION OF ",
+        " (",
+        ", ",
+        ")",
+        "FOR VALUES IN (",
+        " SERVER ",
+    ] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_alter_table_detach_partition_of() {
+    for (suffix, mode) in [
+        ("", None),
+        (" CONCURRENTLY", Some(DetachPartitionMode::Concurrently)),
+        (" FINALIZE", Some(DetachPartitionMode::Finalize)),
+    ] {
+        let sql =
+            format!("ALTER TABLE IF EXISTS ONLY public.root DETACH PARTITION public.part{suffix}");
+        let Statement::AlterTable(alter) = pg().verified_stmt(&sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            alter.operations,
+            vec![AlterTableOperation::DetachPartitionOf {
+                partition: ObjectName::from(vec![Ident::new("public"), Ident::new("part")]),
+                mode,
+            }]
+        );
+        let Statement::AlterTable(located) = Parser::parse_sql(&PostgreSqlDialect {}, &sql)
+            .unwrap()
+            .remove(0)
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            located.operations[0].span(),
+            Span::new(Location::new(1, 57), Location::new(1, 68))
+        );
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE root DETACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TABLE root DETACH PARTITION part CONCURRENTLY FINALIZE",
+            "Expected: end of statement, found: FINALIZE",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_table_inherit() {
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER TABLE IF EXISTS ONLY c INHERIT public.p, ADD COLUMN x INT")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0],
+        AlterTableOperation::Inherit {
+            parent: ObjectName::from(vec![Ident::new("public"), Ident::new("p")]),
+        }
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 23), Location::new(1, 31))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft INHERIT p");
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TABLE c INHERIT")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn parse_alter_table_no_inherit() {
+    let Statement::AlterTable(alter) = pg_and_generic()
+        .verified_stmt("ALTER TABLE IF EXISTS ONLY c NO INHERIT public.p, INHERIT q")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0],
+        AlterTableOperation::NoInherit {
+            parent: ObjectName::from(vec![Ident::new("public"), Ident::new("p")]),
+        }
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE c NO INHERIT public.p")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 26), Location::new(1, 34))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft NO INHERIT p");
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE c NO INHERIT",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER TABLE c NO p", "Expected: INHERIT, found: p"),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_cost() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE FUNCTION f() RETURNS INT LANGUAGE sql STABLE COST 2.5 RETURN 1");
+    assert_display_propagates_write_errors(&stmt, &[" COST "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(create.cost, Some(Expr::value(number("2.5"))));
+
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE OR REPLACE FUNCTION pg_catalog.timestamptz(date, time without time zone)
+ RETURNS timestamp with time zone
+ LANGUAGE sql
+ STABLE PARALLEL SAFE STRICT COST 1
+RETURN (($1 + $2))::timestamp with time zone"#,
+        "CREATE OR REPLACE FUNCTION pg_catalog.timestamptz(DATE, TIME WITHOUT TIME ZONE) RETURNS TIMESTAMP WITH TIME ZONE LANGUAGE sql STABLE STRICT PARALLEL SAFE COST 1 RETURN (($1 + $2))::TIMESTAMP WITH TIME ZONE",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT COST 1 COST 2 RETURN 1",
+            "COST specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT COST RETURN 1",
+            "Expected: a concrete value, found: RETURN",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_table_not_null_constraint() {
+    let dialects = pg_and_generic();
+
+    match dialects.verified_stmt("CREATE TABLE t (a INT, CONSTRAINT nn NOT NULL a NO INHERIT)") {
+        Statement::CreateTable(create_table) => assert_eq!(
+            create_table.constraints,
+            vec![NotNullConstraint {
+                name: Some(Ident::new("nn")),
+                column: Ident::new("a"),
+                no_inherit: true,
+            }
+            .into()]
+        ),
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER TABLE t ADD NOT NULL a NOT VALID") {
+        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
+            operations,
+            vec![AlterTableOperation::AddConstraint {
+                constraint: NotNullConstraint {
+                    name: None,
+                    column: Ident::new("a"),
+                    no_inherit: false,
+                }
+                .into(),
+                not_valid: true,
+            }]
+        ),
+        _ => unreachable!(),
+    }
+
+    for sql in [
+        "CREATE TABLE t (a INT, NOT NULL a)",
+        "CREATE TABLE t (a INT NOT NULL, b INT, CONSTRAINT nn NOT NULL b)",
+        "ALTER TABLE t ADD CONSTRAINT nn NOT NULL a NO INHERIT NOT VALID",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    for (sql, expected) in [
+        (
+            "CREATE TABLE t (a INT, NOT NULL)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER TABLE t ADD CONSTRAINT nn NOT NULL (a)",
+            "Expected: identifier, found: (",
+        ),
+        (
+            "CREATE TABLE t (a INT, NOT NULL a DEFERRABLE)",
+            "Expected: ',' or ')' after column definition, found: DEFERRABLE",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_table_not_null_constraint())
+            .parse_sql_statements("CREATE TABLE t (a INT, CONSTRAINT nn NOT NULL a)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE, found: NOT"
+    );
+}
+
+#[test]
+fn display_table_not_null_constraint_propagates_write_errors() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT, CONSTRAINT nn NOT NULL a NO INHERIT)");
+    assert_display_propagates_write_errors(&stmt, &["NOT NULL ", " NO INHERIT"]);
+}
+
+#[test]
+fn parse_create_function_rows() {
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f() RETURNS SETOF INT LANGUAGE sql COST 2 ROWS 10 AS 'SELECT 1'",
+    );
+    assert_display_propagates_write_errors(&stmt, &[" ROWS "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(create.rows, Some(Expr::value(number("10"))));
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f() RETURNS SETOF INT ROWS 10 COST 2 AS 'SELECT 1'",
+        "CREATE FUNCTION f() RETURNS SETOF INT COST 2 ROWS 10 AS 'SELECT 1'",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS SETOF INT ROWS 1 ROWS 2 AS 'SELECT 1'",
+            "ROWS specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS SETOF INT ROWS AS 'SELECT 1'",
+            "Expected: a concrete value, found: AS",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_support() {
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c IMMUTABLE STRICT SUPPORT public.f_support AS 'obj', 'f'",
+    );
+    assert_display_propagates_write_errors(&stmt, &[" SUPPORT "]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert_eq!(
+        create.support,
+        Some(ObjectName::from(vec![
+            Ident::new("public"),
+            Ident::new("f_support")
+        ]))
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS INT SUPPORT f_support COST 1 AS 'obj', 'f'",
+        "CREATE FUNCTION f(INT) RETURNS INT COST 1 SUPPORT f_support AS 'obj', 'f'",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS INT SUPPORT a SUPPORT b AS 'obj', 'f'",
+            "SUPPORT specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS INT SUPPORT",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_leakproof() {
+    for (sql, leakproof) in [
+        (
+            "CREATE FUNCTION f(INT) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE STRICT LEAKPROOF COST 1 RETURN true",
+            true,
+        ),
+        (
+            "CREATE FUNCTION f(INT) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE NOT LEAKPROOF RETURN true",
+            false,
+        ),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        assert_display_propagates_write_errors(&stmt, &[" LEAKPROOF"]);
+        let Statement::CreateFunction(create) = stmt else {
+            unreachable!()
+        };
+        assert_eq!(create.leakproof, Some(leakproof), "{sql}");
+    }
+    assert_display_propagates_write_errors(
+        &pg_and_generic()
+            .verified_stmt("CREATE FUNCTION f() RETURNS BOOLEAN NOT LEAKPROOF RETURN true"),
+        &[" NOT"],
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS BOOLEAN LEAKPROOF STRICT RETURN true",
+        "CREATE FUNCTION f(INT) RETURNS BOOLEAN STRICT LEAKPROOF RETURN true",
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN LEAKPROOF NOT LEAKPROOF RETURN true",
+            "[NOT] LEAKPROOF specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN NOT LEAKPROOF LEAKPROOF RETURN true",
+            "[NOT] LEAKPROOF specified more than once",
+        ),
+        (
+            "CREATE FUNCTION f() RETURNS BOOLEAN NOT RETURN true",
+            "Expected: end of statement, found: NOT",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_function_window() {
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE c WINDOW IMMUTABLE AS 'obj', 'f'",
+    );
+    assert_display_propagates_write_errors(&stmt, &[" WINDOW"]);
+    let Statement::CreateFunction(create) = stmt else {
+        unreachable!()
+    };
+    assert!(create.window);
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE FUNCTION f(INT) RETURNS INT IMMUTABLE WINDOW AS 'obj', 'f'",
+        "CREATE FUNCTION f(INT) RETURNS INT WINDOW IMMUTABLE AS 'obj', 'f'",
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE FUNCTION f() RETURNS INT WINDOW WINDOW AS 'obj', 'f'")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: WINDOW specified more than once"
+    );
+}
+
+#[test]
+fn parse_grant_maintain() {
+    // https://www.postgresql.org/docs/17/sql-grant.html
+    match pg().verified_stmt("GRANT MAINTAIN ON t TO r") {
+        Statement::Grant(grant) => assert_eq!(
+            grant.privileges,
+            Privileges::Actions(vec![Action::Maintain])
+        ),
+        _ => unreachable!(),
+    }
+    pg().verified_stmt("GRANT SELECT, MAINTAIN ON t TO r WITH GRANT OPTION");
+    pg().verified_stmt("REVOKE MAINTAIN ON t FROM r");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT MAINTAIN ON TABLES TO r");
+
+    assert_eq!(
+        pg().parse_sql_statements("GRANT MAINTAIN (a) ON t TO r")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: ("
+    );
+}
+
+#[test]
+fn display_maintain_privilege_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter;
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == "MAINTAIN" {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    assert_eq!(
+        write!(RejectingWriter, "{}", Action::Maintain),
+        Err(fmt::Error)
+    );
+}
+
+#[test]
+fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
+    // PostgreSQL reads the second `END` as a bare column alias
+    assert_eq!(
+        pg().parse_sql_statements("SELECT CASE 1 WHEN 1 THEN 1 END END FROM t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: END".to_string())
+    );
 }

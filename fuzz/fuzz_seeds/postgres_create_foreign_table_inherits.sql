@@ -1,0 +1,1 @@
+CREATE FOREIGN TABLE child () INHERITS (parent, public.other) SERVER s

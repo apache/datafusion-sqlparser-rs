@@ -29,27 +29,29 @@ use crate::tokenizer::Span;
 
 use super::{
     comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, AlterTrigger, AlterTriggerOperation, Analyze, Array,
-    Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
+    AlterGenericOption, AlterIndexOperation, AlterTableOperation, AlterTrigger,
+    AlterTriggerOperation, AlterView, AlterViewOperation, Analyze, Array, Assignment,
+    AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
-    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, Cte, Delete,
-    DoUpdate, ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias,
-    Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
-    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
-    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
-    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement,
-    Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor,
-    TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values,
-    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithExpression, WithFill,
-    XmlNamespaceDefinition,
+    CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
+    Cte, Delete, DoOption, DoStatement, DoUpdate, DropRule, ExceptSelectItem,
+    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
+    IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
+    JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge,
+    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
+    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr,
+    OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
+    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
+    Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithExpression,
+    WithFill, XmlNamespaceDefinition,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -322,6 +324,7 @@ impl Spanned for Values {
 /// - [Statement::Grant]
 /// - [Statement::Revoke]
 /// - [Statement::GrantRole]
+/// - [Statement::RevokeRole]
 /// - [Statement::Deallocate]
 /// - [Statement::Execute]
 /// - [Statement::Prepare]
@@ -417,6 +420,7 @@ impl Spanned for Statement {
             Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateForeignTable(stmt) => stmt.span(),
             Statement::CreateForeignDataWrapper(stmt) => stmt.span(),
+            Statement::CreateUserMapping(stmt) => stmt.span(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {
@@ -426,17 +430,7 @@ impl Spanned for Statement {
             Statement::CreateTextSearch(create_text_search) => create_text_search.span(),
             Statement::AlterTable(alter_table) => alter_table.span(),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
-            Statement::AlterView {
-                name,
-                columns,
-                query,
-                with_options,
-            } => union_spans(
-                core::iter::once(name.span())
-                    .chain(columns.iter().map(|i| i.span))
-                    .chain(core::iter::once(query.span()))
-                    .chain(with_options.iter().map(|i| i.span())),
-            ),
+            Statement::AlterView(alter_view) => alter_view.span(),
             // These statements need to be implemented
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
@@ -490,6 +484,8 @@ impl Spanned for Statement {
             Statement::Deny { .. } => Span::empty(),
             Statement::Revoke { .. } => Span::empty(),
             Statement::GrantRole { .. } => Span::empty(),
+            Statement::RevokeRole { .. } => Span::empty(),
+            Statement::AlterDefaultPrivileges(privileges) => privileges.span(),
             Statement::Deallocate { .. } => Span::empty(),
             Statement::Execute { .. } => Span::empty(),
             Statement::Prepare { .. } => Span::empty(),
@@ -515,6 +511,7 @@ impl Spanned for Statement {
             Statement::AlterTrigger(trigger) => trigger.span(),
             Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
+            Statement::DropRule(rule) => rule.span(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowCatalogs { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
@@ -523,6 +520,7 @@ impl Spanned for Statement {
             Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
             Statement::LISTEN { .. } => Span::empty(),
+            Statement::Do(s) => s.span(),
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
@@ -549,6 +547,7 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::RefreshMaterializedView(refresh) => refresh.span(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
     }
@@ -569,6 +568,12 @@ impl Spanned for AlterTriggerOperation {
             Self::Rename { new_name } => new_name.span,
             Self::DependsOnExtension { extension_name, .. } => extension_name.span(),
         }
+    }
+}
+
+impl Spanned for DropRule {
+    fn span(&self) -> Span {
+        self.name.span.union(&self.table_name.span())
     }
 }
 
@@ -726,6 +731,7 @@ impl Spanned for TableConstraint {
             TableConstraint::PrimaryKeyUsingIndex(constraint)
             | TableConstraint::UniqueUsingIndex(constraint) => constraint.span(),
             TableConstraint::Exclude(constraint) => constraint.span(),
+            TableConstraint::NotNull(constraint) => constraint.span(),
         }
     }
 }
@@ -917,6 +923,11 @@ impl Spanned for ColumnOption {
             ColumnOption::OnUpdate(expr) => expr.span(),
             ColumnOption::Generated { .. } => Span::empty(),
             ColumnOption::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
+            ColumnOption::GenericOptions(options) => union_spans(
+                options
+                    .iter()
+                    .map(|option| option.key.span.union(&option.value.span)),
+            ),
             ColumnOption::Identity(..) => Span::empty(),
             ColumnOption::OnConflict(..) => Span::empty(),
             ColumnOption::Policy(..) => Span::empty(),
@@ -963,6 +974,12 @@ impl Spanned for Analyze {
     }
 }
 
+impl Spanned for RefreshMaterializedView {
+    fn span(&self) -> Span {
+        self.name.span()
+    }
+}
+
 /// # partial span
 ///
 /// Missing spans:
@@ -983,6 +1000,20 @@ impl Spanned for AlterColumnOperation {
                 had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
+            AlterColumnOperation::GenericOptions { options } => {
+                union_spans(options.iter().map(|option| option.span()))
+            }
+        }
+    }
+}
+
+impl Spanned for AlterGenericOption {
+    fn span(&self) -> Span {
+        match self {
+            AlterGenericOption::Add { option, .. } | AlterGenericOption::Set(option) => {
+                option.key.span.union(&option.value.span)
+            }
+            AlterGenericOption::Drop(key) => key.span,
         }
     }
 }
@@ -1117,8 +1148,8 @@ impl Spanned for SqlOption {
     fn span(&self) -> Span {
         match self {
             SqlOption::Clustered(table_options_clustered) => table_options_clustered.span(),
-            SqlOption::Ident(ident) => ident.span,
-            SqlOption::KeyValue { key, value } => key.span.union(&value.span()),
+            SqlOption::Ident(ident) => ident.span(),
+            SqlOption::KeyValue { key, value } => key.span().union(&value.span()),
             SqlOption::Partition {
                 column_name,
                 range_direction: _,
@@ -1179,6 +1210,50 @@ impl Spanned for CreateTableOptions {
     }
 }
 
+impl Spanned for AlterView {
+    fn span(&self) -> Span {
+        self.name.span().union(&self.operation.span())
+    }
+}
+
+/// # partial span
+///
+/// Missing spans:
+/// - [AlterViewOperation::OwnerTo]
+impl Spanned for AlterViewOperation {
+    fn span(&self) -> Span {
+        match self {
+            AlterViewOperation::As {
+                columns,
+                query,
+                with_options,
+            } => union_spans(
+                columns
+                    .iter()
+                    .map(|i| i.span)
+                    .chain(core::iter::once(query.span()))
+                    .chain(with_options.iter().map(|i| i.span())),
+            ),
+            AlterViewOperation::AlterColumn { column_name, op } => {
+                column_name.span.union(&op.span())
+            }
+            AlterViewOperation::OwnerTo(_) => Span::empty(),
+            AlterViewOperation::RenameColumn {
+                old_column_name,
+                new_column_name,
+            } => old_column_name.span.union(&new_column_name.span),
+            AlterViewOperation::RenameTo { new_name } => new_name.span(),
+            AlterViewOperation::SetSchema { schema_name } => schema_name.span(),
+            AlterViewOperation::SetOptions { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
+            AlterViewOperation::ResetOptions { options } => {
+                union_spans(options.iter().map(|i| i.span))
+            }
+        }
+    }
+}
+
 /// # partial span
 ///
 /// Missing spans:
@@ -1227,7 +1302,12 @@ impl Spanned for AlterTableOperation {
                 drop_behavior: _,
             } => union_spans(column_names.iter().map(|i| i.span)),
             AlterTableOperation::AttachPartition { partition } => partition.span(),
+            AlterTableOperation::AttachPartitionOf {
+                partition,
+                for_values,
+            } => partition.span().union(&for_values.span()),
             AlterTableOperation::DetachPartition { partition } => partition.span(),
+            AlterTableOperation::DetachPartitionOf { partition, .. } => partition.span(),
             AlterTableOperation::FreezePartition {
                 partition,
                 with_name,
@@ -1322,8 +1402,17 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
             AlterTableOperation::ValidateConstraint { name } => name.span,
+            AlterTableOperation::Inherit { parent } | AlterTableOperation::NoInherit { parent } => {
+                parent.span()
+            }
             AlterTableOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
+            }
+            AlterTableOperation::ResetOptions { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
+            AlterTableOperation::GenericOptions { options } => {
+                union_spans(options.iter().map(|option| option.span()))
             }
         }
     }
@@ -2069,6 +2158,7 @@ impl Spanned for TableFactor {
                 json_path: _,
                 sample: _,
                 index_directives: _,
+                inheritance: _,
             } => union_spans(
                 name.0
                     .iter()
@@ -2786,6 +2876,38 @@ impl Spanned for comments::CommentWithSpan {
     }
 }
 
+impl Spanned for CreateUserMapping {
+    fn span(&self) -> Span {
+        let user = match &self.user {
+            UserMappingUser::Name(name) => name.span,
+            _ => Span::empty(),
+        };
+        Span::union_iter(
+            [user, self.server_name.span].into_iter().chain(
+                self.options
+                    .iter()
+                    .flatten()
+                    .flat_map(|option| [option.key.span, option.value.span]),
+            ),
+        )
+    }
+}
+
+impl Spanned for DoStatement {
+    fn span(&self) -> Span {
+        union_spans(self.options.iter().map(|option| option.span()))
+    }
+}
+
+impl Spanned for DoOption {
+    fn span(&self) -> Span {
+        match self {
+            DoOption::Language(language) => language.span,
+            DoOption::LanguageLiteral(value) | DoOption::Code(value) => value.span,
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::ast::Value;
@@ -3395,6 +3517,36 @@ SETTINGS update_parallel_mode = 'auto'"#;
     }
 
     #[test]
+    fn test_alter_foreign_table_option_spans() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "ALTER FOREIGN TABLE ft OPTIONS (ADD a '1', DROP b), ALTER COLUMN c OPTIONS (SET d '2')";
+        let mut test = SpanTest::new(dialect, sql);
+
+        let operations = match test.0.parse_statement().unwrap() {
+            Statement::AlterTable(alter) => alter.operations,
+            stmt => panic!("expected ALTER FOREIGN TABLE, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(operations[0].span()), "a '1', DROP b");
+        assert_eq!(
+            test.get_source(operations[1].span()),
+            "c OPTIONS (SET d '2'"
+        );
+    }
+
+    #[test]
+    fn test_create_foreign_table_partition_of_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql =
+            "CREATE FOREIGN TABLE part PARTITION OF root (id NOT NULL) FOR VALUES IN (1) SERVER s";
+        let test = SpanTest::new(dialect, sql);
+        let r = Parser::parse_sql(dialect, sql).unwrap();
+        assert_eq!(
+            test.get_source(r[0].span()),
+            "part PARTITION OF root (id NOT NULL) FOR VALUES IN (1) SERVER s"
+        );
+    }
+
+    #[test]
     fn test_alter_table_modify_order_by_span() {
         let dialect = &crate::dialect::ClickHouseDialect {};
         let sql = "ALTER TABLE t MODIFY ORDER BY (a, b.c)";
@@ -3438,6 +3590,83 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let mut test = SpanTest::new(dialect, sql);
             let expr = test.0.parse_expr().unwrap();
             assert_eq!(test.get_source(expr.span()), expected, "{sql}");
+        }
+    }
+
+    #[test]
+    fn test_namespaced_storage_parameter_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "CREATE TABLE t (a INT) WITH (toast.autovacuum_enabled = false)";
+        let mut test = SpanTest::new(dialect, sql);
+        let options = match test.0.parse_statement().unwrap() {
+            Statement::CreateTable(crate::ast::CreateTable {
+                table_options: crate::ast::CreateTableOptions::With(options),
+                ..
+            }) => options,
+            stmt => panic!("expected CREATE TABLE WITH, got {stmt:?}"),
+        };
+        assert_eq!(
+            test.get_source(options[0].span()),
+            "toast.autovacuum_enabled = false"
+        );
+    }
+
+    #[test]
+    fn test_alter_view_spans() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            (
+                "ALTER VIEW v (a) WITH (k = 1) AS SELECT 1",
+                "v (a) WITH (k = 1) AS SELECT 1",
+            ),
+            (
+                "ALTER VIEW v ALTER COLUMN c SET DEFAULT 1",
+                "v ALTER COLUMN c SET DEFAULT 1",
+            ),
+            ("ALTER VIEW IF EXISTS s.v OWNER TO o", "s.v"),
+            (
+                "ALTER VIEW v RENAME COLUMN a TO b",
+                "v RENAME COLUMN a TO b",
+            ),
+            ("ALTER VIEW v RENAME TO w", "v RENAME TO w"),
+            ("ALTER VIEW v SET SCHEMA s", "v SET SCHEMA s"),
+            ("ALTER VIEW v SET (a = 1, b)", "v SET (a = 1, b"),
+            ("ALTER VIEW v RESET (a, b)", "v RESET (a, b"),
+        ] {
+            let test = SpanTest::new(dialect, sql);
+            let stmt = &Parser::parse_sql(dialect, sql).unwrap()[0];
+            assert_eq!(test.get_source(stmt.span()), expected, "{sql}");
+        }
+    }
+
+    #[test]
+    fn test_do_statement_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "DO LANGUAGE plpgsql $$BEGIN NULL; END$$";
+        let test = SpanTest::new(dialect, sql);
+        let r = Parser::parse_sql(dialect, sql).unwrap();
+        assert_eq!(test.get_source(r[0].span()), "plpgsql $$BEGIN NULL; END$$");
+
+        let sql = "DO LANGUAGE N'BEGIN NULL; END'";
+        let test = SpanTest::new(dialect, sql);
+        let options = match Parser::parse_sql(dialect, sql).unwrap().remove(0) {
+            Statement::Do(DoStatement { options }) => options,
+            stmt => panic!("expected DO, got {stmt:?}"),
+        };
+        assert_eq!(test.get_source(options[0].span()), "N");
+        assert_eq!(test.get_source(options[1].span()), "'BEGIN NULL; END'");
+    }
+
+    #[test]
+    fn test_table_not_null_constraint_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            ("CONSTRAINT nn NOT NULL a NO INHERIT", "nn NOT NULL a"),
+            ("NOT NULL a", "a"),
+        ] {
+            let mut test = SpanTest::new(dialect, sql);
+            let constraint = test.0.parse_optional_table_constraint().unwrap().unwrap();
+            assert_eq!(test.get_source(constraint.span()), expected, "{sql}");
         }
     }
 }

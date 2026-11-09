@@ -2367,3 +2367,34 @@ fn parse_create_table_engine_name_quoting() {
     clickhouse_and_generic().verified_stmt("CREATE TABLE t (a INT) ENGINE = ``");
     clickhouse().verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree");
 }
+
+#[test]
+fn parse_unterminated_dollar_tag_as_identifier() {
+    // Not in the syntax docs; clickhouse-local 26.9 runs `SELECT $a$ x FROM t`.
+    let select = clickhouse().verified_only_select("SELECT $a$ AS x, $b$c$ FROM t");
+    assert_eq!(
+        select.projection,
+        vec![
+            SelectItem::ExprWithAlias {
+                expr: Identifier(Ident::new("$a$")),
+                alias: Ident::new("x"),
+            },
+            UnnamedExpr(Identifier(Ident::new("$b$c$"))),
+        ]
+    );
+    clickhouse().one_statement_parses_to("SELECT $a$ x", "SELECT $a$ AS x");
+
+    // A matching closing tag still makes a dollar-quoted string.
+    clickhouse().verified_stmt("SELECT $a$ x $a$");
+    clickhouse()
+        .parse_sql_statements("SELECT $$ x")
+        .unwrap_err();
+
+    all_dialects_where(|d| {
+        !d.supports_unterminated_dollar_tag_as_word()
+            && !d.supports_dollar_placeholder()
+            && !d.is_identifier_start('$')
+    })
+    .parse_sql_statements("SELECT $a$ x")
+    .unwrap_err();
+}

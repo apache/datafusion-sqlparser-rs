@@ -92,6 +92,12 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    /// Undocumented; the lexer reads a heredoc only up to a matching closing tag, and
+    /// otherwise reads the tag as a bare word, see "start of heredoc" in `Lexer.cpp`.
+    fn supports_unterminated_dollar_tag_as_word(&self) -> bool {
+        true
+    }
+
     fn supports_partition_by_after_order_by(&self) -> bool {
         true
     }

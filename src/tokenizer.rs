@@ -2240,6 +2240,17 @@ impl<'a> Tokenizer<'a> {
                 let mut temp = String::new();
                 let end_delimiter = format!("${value}$");
 
+                if self.dialect.supports_unterminated_dollar_tag_as_word()
+                    && !chars
+                        .peekable
+                        .clone()
+                        .collect::<String>()
+                        .contains(&end_delimiter)
+                {
+                    let word = self.tokenize_word(end_delimiter, chars);
+                    return Ok(Token::make_word(&word, None));
+                }
+
                 loop {
                     match chars.next() {
                         Some(ch) => {

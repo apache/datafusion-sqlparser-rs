@@ -75,7 +75,8 @@ fn parse_table_time_travel() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![]
         },]
@@ -133,7 +134,7 @@ fn parse_create_procedure() {
         ms().verified_stmt(sql),
         Statement::CreateProcedure {
             or_alter: true,
-            body: ConditionalStatements::BeginEnd(BeginEndStatements {
+            body: CreateProcedureBody::As(ConditionalStatements::BeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
                 statements: vec![Statement::Query(Box::new(Query {
                     with: None,
@@ -175,7 +176,7 @@ fn parse_create_procedure() {
                     })))
                 }))],
                 end_token: AttachedToken::empty(),
-            }),
+            })),
             params: Some(vec![
                 ProcedureParam {
                     name: Ident {
@@ -275,6 +276,11 @@ fn parse_create_function() {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             using: None,
             language: None,
@@ -450,6 +456,11 @@ fn parse_create_function_parameter_default_values() {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             using: None,
             language: None,
@@ -495,7 +506,8 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -549,7 +561,8 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -603,7 +616,8 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
-                index_directives: vec![]
+                index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -658,6 +672,7 @@ fn parse_mssql_openjson() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -692,6 +707,7 @@ fn parse_mssql_openjson() {
                 json_path: None,
                 sample: None,
                 index_directives: vec![],
+                inheritance: None,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -1739,7 +1755,7 @@ fn parse_create_table_with_valid_options() {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
                         span: Span::empty(),
-                    },
+                    }.into(),
                     value: Expr::Identifier(Ident {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
@@ -1818,7 +1834,7 @@ fn parse_create_table_with_valid_options() {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
                         span: Span::empty(),
-                    },
+                    }.into(),
                     value: Expr::Function(
                         Function {
                             name: ObjectName::from(
@@ -1869,7 +1885,7 @@ fn parse_create_table_with_valid_options() {
                         },
                     ),
                 },
-                SqlOption::Ident("HEAP".into()),
+                SqlOption::Ident(ObjectName::from(vec![Ident::new("HEAP")])),
             ],
          ),
     ];

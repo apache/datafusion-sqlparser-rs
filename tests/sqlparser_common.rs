@@ -23494,6 +23494,7 @@ fn parse_national_character_string_types() {
         "NATIONAL CHAR VARYING(4)",
         "NCHAR",
         "NCHAR(4)",
+        "NCHAR VARYING(4)",
     ] {
         dialects.verified_stmt(&format!("CREATE TABLE t (c {data_type})"));
         dialects.verified_expr(&format!("CAST('ab' AS {data_type})"));

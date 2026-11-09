@@ -13877,7 +13877,15 @@ impl<'a> Parser<'a> {
                         ))
                     }
                 }
-                Keyword::NCHAR => Ok(DataType::Nchar(self.parse_optional_character_length()?)),
+                Keyword::NCHAR => {
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NcharVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::Nchar(self.parse_optional_character_length()?))
+                    }
+                }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
                 Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_binary_length()?)),
@@ -23100,6 +23108,7 @@ mod tests {
             );
             test_parse_data_type!(dialect, "NCHAR", DataType::Nchar(None));
             test_parse_data_type!(dialect, "NCHAR(20)", DataType::Nchar(length));
+            test_parse_data_type!(dialect, "NCHAR VARYING(20)", DataType::NcharVarying(length));
         }
 
         #[test]

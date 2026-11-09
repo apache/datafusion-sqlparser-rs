@@ -1883,6 +1883,8 @@ pub enum TableSampleMethod {
     System,
     /// `BLOCK` sampling method.
     Block,
+    /// `RESERVOIR` sampling method.
+    Reservoir,
 }
 
 impl fmt::Display for TableSampleMethod {
@@ -1892,6 +1894,7 @@ impl fmt::Display for TableSampleMethod {
             TableSampleMethod::Row => write!(f, "ROW"),
             TableSampleMethod::System => write!(f, "SYSTEM"),
             TableSampleMethod::Block => write!(f, "BLOCK"),
+            TableSampleMethod::Reservoir => write!(f, "RESERVOIR"),
         }
     }
 }

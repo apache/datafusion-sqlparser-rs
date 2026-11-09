@@ -17628,6 +17628,14 @@ fn test_table_sample() {
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE RESERVOIR (50 ROWS)");
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT * FROM tbl TABLESAMPLE RESERVOIR ()")
+            .unwrap_err(),
+        ParserError::ParserError("Expecting number or byte length e.g. 100M".to_string())
+    );
 }
 
 #[test]

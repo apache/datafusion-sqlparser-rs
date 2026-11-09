@@ -13855,9 +13855,15 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::NATIONAL if self.peek_keyword(Keyword::CHARACTER) => {
                     let _ = self.parse_keyword(Keyword::CHARACTER);
-                    Ok(DataType::NationalCharacter(
-                        self.parse_optional_character_length()?,
-                    ))
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NationalCharacterVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::NationalCharacter(
+                            self.parse_optional_character_length()?,
+                        ))
+                    }
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
@@ -23064,6 +23070,11 @@ mod tests {
                 dialect,
                 "NATIONAL CHARACTER(20)",
                 DataType::NationalCharacter(length)
+            );
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER VARYING(20)",
+                DataType::NationalCharacterVarying(length)
             );
         }
 

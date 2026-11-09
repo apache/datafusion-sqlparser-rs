@@ -2239,24 +2239,18 @@ impl<'a> Tokenizer<'a> {
 
                 let mut temp = String::new();
                 let end_delimiter = format!("${value}$");
-
-                if self.dialect.supports_unterminated_dollar_tag_as_word()
-                    && !chars
-                        .peekable
-                        .clone()
-                        .collect::<String>()
-                        .contains(&end_delimiter)
-                {
-                    let word = self.tokenize_word(end_delimiter, chars);
-                    return Ok(Token::make_word(&word, None));
-                }
+                let mut lookahead = State {
+                    peekable: chars.peekable.clone(),
+                    line: chars.line,
+                    col: chars.col,
+                };
 
                 loop {
-                    match chars.next() {
+                    match lookahead.next() {
                         Some(ch) => {
                             temp.push(ch);
 
-                            if temp.ends_with(&end_delimiter) {
+                            if ch == '$' && temp.ends_with(&end_delimiter) {
                                 if let Some(temp) = temp.strip_suffix(&end_delimiter) {
                                     s.push_str(temp);
                                 }
@@ -2271,13 +2265,19 @@ impl<'a> Tokenizer<'a> {
                                 break;
                             }
 
+                            if self.dialect.supports_unterminated_dollar_tag_as_word() {
+                                let word = self.tokenize_word(end_delimiter, chars);
+                                return Ok(Token::make_word(&word, None));
+                            }
+
                             return self.tokenizer_error(
-                                chars.location(),
+                                lookahead.location(),
                                 "Unterminated dollar-quoted, expected $",
                             );
                         }
                     }
                 }
+                *chars = lookahead;
             } else {
                 return Ok(Token::Placeholder(format!("${value}")));
             }

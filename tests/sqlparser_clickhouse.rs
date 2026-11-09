@@ -2383,18 +2383,65 @@ fn parse_unterminated_dollar_tag_as_identifier() {
         ]
     );
     clickhouse().one_statement_parses_to("SELECT $a$ x", "SELECT $a$ AS x");
+    for sql in [
+        "SELECT $a$",
+        "SELECT 1 AS $a$",
+        "SELECT $a$$ FROM t",
+        "SELECT $1$ FROM t",
+        "SELECT $a$b$c FROM t",
+        "SELECT $a_1$ FROM t",
+        "SELECT $a$.x FROM t",
+        "SELECT f($a$)",
+    ] {
+        clickhouse().verified_stmt(sql);
+    }
+    // ClickHouse rejects non-ASCII tags; accepted, as with a closing tag.
+    clickhouse().one_statement_parses_to("SELECT $é$ x", "SELECT $é$ AS x");
 
-    // A matching closing tag still makes a dollar-quoted string.
+    // Any later matching tag closes a dollar-quoted string.
+    let select = clickhouse().verified_only_select("SELECT $a$ x, $a$ AS y");
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::ExprWithAlias {
+            expr: Expr::Value(
+                Value::DollarQuotedString(DollarQuotedString {
+                    value: " x, ".to_string(),
+                    tag: Some("a".to_string()),
+                })
+                .with_empty_span()
+            ),
+            alias: Ident::new("y"),
+        }]
+    );
     clickhouse().verified_stmt("SELECT $a$ x $a$");
-    clickhouse()
-        .parse_sql_statements("SELECT $$ x")
-        .unwrap_err();
+    clickhouse().verified_stmt("SELECT $a$$a$");
 
-    all_dialects_where(|d| {
-        !d.supports_unterminated_dollar_tag_as_word()
-            && !d.supports_dollar_placeholder()
-            && !d.is_identifier_start('$')
-    })
-    .parse_sql_statements("SELECT $a$ x")
-    .unwrap_err();
+    assert_eq!(
+        clickhouse()
+            .parse_sql_statements("SELECT $$ x")
+            .unwrap_err(),
+        sqlparser::parser::ParserError::TokenizerError(
+            "Unterminated dollar-quoted string at Line: 1, Column: 12".to_string()
+        )
+    );
+    // Two different tags are two words, which ClickHouse rejects too.
+    assert_eq!(
+        clickhouse()
+            .parse_sql_statements("SELECT $a$ x $b$")
+            .unwrap_err(),
+        ParserError("Expected: end of statement, found: $b$".to_string())
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| {
+            !d.supports_unterminated_dollar_tag_as_word()
+                && !d.supports_dollar_placeholder()
+                && !d.is_identifier_start('$')
+        })
+        .parse_sql_statements("SELECT $a$ x")
+        .unwrap_err(),
+        sqlparser::parser::ParserError::TokenizerError(
+            "Unterminated dollar-quoted, expected $ at Line: 1, Column: 13".to_string()
+        )
+    );
 }

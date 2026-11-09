@@ -13238,6 +13238,84 @@ RETURN (($1 + $2))::timestamp with time zone"#,
 }
 
 #[test]
+fn parse_table_not_null_constraint() {
+    let dialects = pg_and_generic();
+
+    match dialects.verified_stmt("CREATE TABLE t (a INT, CONSTRAINT nn NOT NULL a NO INHERIT)") {
+        Statement::CreateTable(create_table) => assert_eq!(
+            create_table.constraints,
+            vec![NotNullConstraint {
+                name: Some(Ident::new("nn")),
+                column: Ident::new("a"),
+                no_inherit: true,
+            }
+            .into()]
+        ),
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER TABLE t ADD NOT NULL a NOT VALID") {
+        Statement::AlterTable(AlterTable { operations, .. }) => assert_eq!(
+            operations,
+            vec![AlterTableOperation::AddConstraint {
+                constraint: NotNullConstraint {
+                    name: None,
+                    column: Ident::new("a"),
+                    no_inherit: false,
+                }
+                .into(),
+                not_valid: true,
+            }]
+        ),
+        _ => unreachable!(),
+    }
+
+    for sql in [
+        "CREATE TABLE t (a INT, NOT NULL a)",
+        "CREATE TABLE t (a INT NOT NULL, b INT, CONSTRAINT nn NOT NULL b)",
+        "ALTER TABLE t ADD CONSTRAINT nn NOT NULL a NO INHERIT NOT VALID",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    for (sql, expected) in [
+        (
+            "CREATE TABLE t (a INT, NOT NULL)",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER TABLE t ADD CONSTRAINT nn NOT NULL (a)",
+            "Expected: identifier, found: (",
+        ),
+        (
+            "CREATE TABLE t (a INT, NOT NULL a DEFERRABLE)",
+            "Expected: ',' or ')' after column definition, found: DEFERRABLE",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_table_not_null_constraint())
+            .parse_sql_statements("CREATE TABLE t (a INT, CONSTRAINT nn NOT NULL a)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE, found: NOT"
+    );
+}
+
+#[test]
+fn display_table_not_null_constraint_propagates_write_errors() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT, CONSTRAINT nn NOT NULL a NO INHERIT)");
+    assert_display_propagates_write_errors(&stmt, &["NOT NULL ", " NO INHERIT"]);
+}
+
+#[test]
 fn parse_create_function_rows() {
     let stmt = pg_and_generic().verified_stmt(
         "CREATE FUNCTION f() RETURNS SETOF INT LANGUAGE sql COST 2 ROWS 10 AS 'SELECT 1'",
@@ -13428,5 +13506,15 @@ fn display_maintain_privilege_propagates_formatter_errors() {
     assert_eq!(
         write!(RejectingWriter, "{}", Action::Maintain),
         Err(fmt::Error)
+    );
+}
+
+#[test]
+fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
+    // PostgreSQL reads the second `END` as a bare column alias
+    assert_eq!(
+        pg().parse_sql_statements("SELECT CASE 1 WHEN 1 THEN 1 END END FROM t")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }

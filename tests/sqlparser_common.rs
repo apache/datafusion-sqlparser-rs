@@ -23470,3 +23470,14 @@ fn parse_do_statement() {
         ParserError::ParserError("Expected: an SQL statement, found: DO".to_string())
     );
 }
+
+#[test]
+fn parse_trailing_end_keyword_is_not_silently_dropped() {
+    let dialects = all_dialects();
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a FROM t1 WHERE a = b END")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: END".to_string())
+    );
+}

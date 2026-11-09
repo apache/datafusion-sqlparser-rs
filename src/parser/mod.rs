@@ -1895,12 +1895,20 @@ impl<'a> Parser<'a> {
         // Note also that naively `SELECT date` looks like a syntax error because the `date` type
         // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
         // expression that should parse as the column name "date".
-        let loc = self.peek_token_ref().span.start;
         let first_keyword = match &self.peek_token_ref().token {
             Token::Word(w) => Some(w.keyword),
             _ => None,
         };
         let opt_expr = self.maybe_parse(|parser| {
+            // A non-keyword word directly before one of these tokens cannot start a typed string.
+            if matches!(&parser.peek_token_ref().token, Token::Word(w) if w.keyword == Keyword::NoKeyword)
+                && matches!(
+                    parser.peek_nth_token_ref(1).token,
+                    Token::Comma | Token::RParen | Token::SemiColon | Token::EOF
+                )
+            {
+                return Err(ParserError::ParserError(String::new()));
+            }
             match parser.parse_data_type()? {
                 DataType::Interval { .. } => parser.parse_interval(),
                 // Custom names need dialect consent, else `NOT 'a'` would read as a typed string.
@@ -1917,7 +1925,7 @@ impl<'a> Parser<'a> {
                         uses_odbc_syntax: false,
                     }))
                 }
-                DataType::Custom(..) => parser_err!("dummy", loc),
+                DataType::Custom(..) => Err(ParserError::ParserError(String::new())),
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
                     Ok(Expr::Cast {
@@ -20472,7 +20480,9 @@ impl<'a> Parser<'a> {
             Expr::Wildcard(token) => Ok(SelectItem::Wildcard(
                 self.parse_wildcard_additional_options(token.0)?,
             )),
-            Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none() => {
+            Expr::Identifier(v)
+                if v.value.eq_ignore_ascii_case("from") && v.quote_style.is_none() =>
+            {
                 parser_err!(
                     format!("Expected an expression, found: {}", v),
                     self.peek_token_ref().span.start
@@ -20485,7 +20495,7 @@ impl<'a> Parser<'a> {
             } if self.dialect.supports_eq_alias_assignment()
                 && matches!(left.as_ref(), Expr::Identifier(_)) =>
             {
-                if matches!(right.as_ref(), Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none())
+                if matches!(right.as_ref(), Expr::Identifier(v) if v.value.eq_ignore_ascii_case("from") && v.quote_style.is_none())
                 {
                     return parser_err!(
                         format!("Expected an expression, found: {right}"),

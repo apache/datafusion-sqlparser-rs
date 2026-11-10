@@ -388,3 +388,73 @@ fn custom_data_type_parser() -> Result<(), ParserError> {
     );
     Ok(())
 }
+
+#[test]
+fn custom_create_function_parser() {
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            ch.is_alphabetic()
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            ch.is_alphanumeric()
+        }
+
+        fn parse_create_function(
+            &self,
+            _parser: &mut Parser,
+            or_alter: bool,
+            or_replace: bool,
+            temporary: bool,
+        ) -> Option<Result<sqlparser::ast::Statement, ParserError>> {
+            Some(Err(ParserError::ParserError(format!(
+                "or_alter={or_alter} or_replace={or_replace} temporary={temporary}"
+            ))))
+        }
+    }
+
+    let error =
+        Parser::parse_sql(&MyDialect {}, "CREATE OR REPLACE TEMPORARY FUNCTION f").unwrap_err();
+    assert_eq!(
+        error,
+        ParserError::ParserError("or_alter=false or_replace=true temporary=true".to_string())
+    );
+}
+
+#[test]
+fn custom_use_parser() {
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            ch.is_alphabetic()
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            ch.is_alphanumeric()
+        }
+
+        fn parse_use(
+            &self,
+            parser: &mut Parser,
+        ) -> Option<Result<sqlparser::ast::Statement, ParserError>> {
+            parser
+                .parse_keyword(sqlparser::keywords::Keyword::DEFAULT)
+                .then_some(Ok(sqlparser::ast::Statement::Use(
+                    sqlparser::ast::Use::Default,
+                )))
+        }
+    }
+
+    let dialect = MyDialect {};
+    let statements = Parser::parse_sql(&dialect, "USE DEFAULT").unwrap();
+    assert_eq!(statements[0].to_string(), "USE DEFAULT");
+
+    // A `None` from the hook falls back to the core rule.
+    let statements = Parser::parse_sql(&dialect, "USE mydb").unwrap();
+    assert_eq!(statements[0].to_string(), "USE mydb");
+}

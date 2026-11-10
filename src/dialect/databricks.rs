@@ -15,9 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::ast::Statement;
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
-use crate::parser::Parser;
+use crate::parser::{Parser, ParserError};
 
 /// A [`Dialect`] for [Databricks SQL](https://www.databricks.com/)
 ///
@@ -27,6 +28,13 @@ use crate::parser::Parser;
 pub struct DatabricksDialect;
 
 impl Dialect for DatabricksDialect {
+    /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-ddl-use-catalog.html>
+    fn parse_use(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        let keyword =
+            parser.parse_one_of_keywords(&[Keyword::CATALOG, Keyword::DATABASE, Keyword::SCHEMA]);
+        Some(parser.parse_use_target(keyword))
+    }
+
     // see https://docs.databricks.com/en/sql/language-manual/sql-ref-identifiers.html
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

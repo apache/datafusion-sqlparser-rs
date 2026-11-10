@@ -6080,10 +6080,14 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         temporary: bool,
     ) -> Result<Statement, ParserError> {
-        if dialect_of!(self is HiveDialect) {
-            self.parse_hive_create_function(or_replace, temporary)
-                .map(Into::into)
-        } else if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+        if let Some(statement) = self
+            .dialect
+            .parse_create_function(self, or_alter, or_replace, temporary)
+        {
+            return statement;
+        }
+
+        if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
             self.parse_postgres_create_function(or_replace, temporary)
                 .map(Into::into)
         } else if dialect_of!(self is DuckDbDialect) {
@@ -6271,47 +6275,6 @@ impl<'a> Parser<'a> {
             function_body: body.function_body,
             if_not_exists: false,
             using: None,
-            determinism_specifier: None,
-            options: None,
-            remote_connection: None,
-        })
-    }
-
-    /// Parse `CREATE FUNCTION` for [Hive]
-    ///
-    /// [Hive]: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
-    fn parse_hive_create_function(
-        &mut self,
-        or_replace: bool,
-        temporary: bool,
-    ) -> Result<CreateFunction, ParserError> {
-        let name = self.parse_object_name(false)?;
-        self.expect_keyword_is(Keyword::AS)?;
-
-        let body = self.parse_create_function_body_string()?;
-        let using = self.parse_optional_create_function_using()?;
-
-        Ok(CreateFunction {
-            or_alter: false,
-            or_replace,
-            temporary,
-            name,
-            function_body: Some(body),
-            using,
-            if_not_exists: false,
-            args: None,
-            return_type: None,
-            behavior: None,
-            called_on_null: None,
-            parallel: None,
-            security: None,
-            leakproof: None,
-            window: false,
-            cost: None,
-            rows: None,
-            support: None,
-            set_params: vec![],
-            language: None,
             determinism_specifier: None,
             options: None,
             remote_connection: None,
@@ -13514,7 +13477,9 @@ impl<'a> Parser<'a> {
 
     /// Parse the body of a `CREATE FUNCTION` specified as a string.
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
-    fn parse_create_function_body_string(&mut self) -> Result<CreateFunctionBody, ParserError> {
+    pub(crate) fn parse_create_function_body_string(
+        &mut self,
+    ) -> Result<CreateFunctionBody, ParserError> {
         let parse_string_expr = |parser: &mut Parser| -> Result<Expr, ParserError> {
             let peek_token = parser.peek_token();
             let span = peek_token.span;
@@ -17216,16 +17181,12 @@ impl<'a> Parser<'a> {
 
     /// Parse a `USE` statement (database/catalog/schema/warehouse/role selection).
     pub fn parse_use(&mut self) -> Result<Statement, ParserError> {
+        if let Some(statement) = self.dialect.parse_use(self) {
+            return statement;
+        }
+
         // Determine which keywords are recognized by the current dialect
-        let parsed_keyword = if dialect_of!(self is HiveDialect) {
-            // HiveDialect accepts USE DEFAULT; statement without any db specified
-            if self.parse_keyword(Keyword::DEFAULT) {
-                return Ok(Statement::Use(Use::Default));
-            }
-            None // HiveDialect doesn't expect any other specific keyword after `USE`
-        } else if dialect_of!(self is DatabricksDialect) {
-            self.parse_one_of_keywords(&[Keyword::CATALOG, Keyword::DATABASE, Keyword::SCHEMA])
-        } else if dialect_of!(self is SnowflakeDialect) {
+        let parsed_keyword = if dialect_of!(self is SnowflakeDialect) {
             self.parse_one_of_keywords(&[
                 Keyword::DATABASE,
                 Keyword::SCHEMA,
@@ -17237,6 +17198,14 @@ impl<'a> Parser<'a> {
             None // No specific keywords for other dialects, including GenericDialect
         };
 
+        self.parse_use_target(parsed_keyword)
+    }
+
+    /// Parse the target of a `USE` statement, after any object type keyword.
+    pub(crate) fn parse_use_target(
+        &mut self,
+        parsed_keyword: Option<Keyword>,
+    ) -> Result<Statement, ParserError> {
         let result = if matches!(parsed_keyword, Some(Keyword::SECONDARY)) {
             self.parse_secondary_roles()?
         } else {

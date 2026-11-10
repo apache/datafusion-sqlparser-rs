@@ -1116,6 +1116,31 @@ pub trait Dialect: Debug + Any {
         }
     }
 
+    /// Dialect-specific `CREATE FUNCTION` parser override.
+    ///
+    /// Called once `CREATE [OR ALTER] [OR REPLACE] [TEMPORARY] FUNCTION` has been
+    /// consumed.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
+    fn parse_create_function(
+        &self,
+        _parser: &mut Parser,
+        _or_alter: bool,
+        _or_replace: bool,
+        _temporary: bool,
+    ) -> Option<Result<Statement, ParserError>> {
+        None
+    }
+
+    /// Dialect-specific `USE` parser override.
+    ///
+    /// Called once the `USE` keyword has been consumed.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
+    fn parse_use(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        None
+    }
+
     /// Dialect-specific statement parser override
     ///
     /// This method is called to parse the next statement.

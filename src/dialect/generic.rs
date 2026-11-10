@@ -381,6 +381,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_alter_table_mutations(&self) -> bool {
+        true
+    }
+
     fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }

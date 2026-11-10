@@ -21,10 +21,11 @@ name: labeler
 # runs from the default branch when `pull_request_signal.yml` starts, so it
 # never runs pull request code. See that file for details.
 #
-# `issues` and `issue_comment` already run from the default branch and are
-# unchanged.
+# `issues` and `issue_comment` already run from the default branch.
+# Their concurrency group uses `github.run_id` so a later comment on the
+# same issue does not cancel an in-progress labeling run.
 concurrency:
-  group: ${{ github.repository }}-${{ github.event.workflow_run.head_repository.full_name || github.event.issue.number }}-${{ github.event.workflow_run.head_branch || github.event_name }}-${{ github.workflow }}
+  group: ${{ github.repository }}-${{ github.event_name == 'workflow_run' && format('{0}-{1}', github.event.workflow_run.head_repository.full_name, github.event.workflow_run.head_branch) || github.run_id }}-${{ github.workflow }}
   cancel-in-progress: true
 
 on:

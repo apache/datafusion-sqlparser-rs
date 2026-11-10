@@ -13570,3 +13570,159 @@ fn parse_array_slice_with_subscript_bounds() {
     pg_and_generic().verified_expr("INT[] '{1,2}'");
     pg_and_generic().verified_expr(":bounds");
 }
+
+#[test]
+fn parse_array_slice_preserves_typed_placeholders() {
+    let dialects = all_dialects_where(|d| d.supports_array_typedef_with_brackets());
+    for (sql_type, data_type) in [
+        ("INT", DataType::Int(None)),
+        ("DATE", DataType::Date),
+        (
+            "INT[]",
+            DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Int(None)),
+                None,
+            )),
+        ),
+        (
+            "INT[2]",
+            DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Int(None)),
+                Some(2),
+            )),
+        ),
+        (
+            "ARRAY<INT>",
+            DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(DataType::Int(
+                None,
+            )))),
+        ),
+    ] {
+        for placeholder in [":items", "$1"] {
+            let typed = Expr::TypedString(TypedString {
+                data_type: data_type.clone(),
+                value: Value::Placeholder(placeholder.into()).with_empty_span(),
+                uses_odbc_syntax: false,
+            });
+            let sql = format!("{sql_type} {placeholder}");
+            assert_eq!(dialects.verified_expr(&sql), typed, "{sql}");
+            assert_eq!(
+                dialects.verified_expr(&format!("1 + {sql}")),
+                Expr::BinaryOp {
+                    left: Box::new(Expr::value(number("1"))),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(typed),
+                }
+            );
+        }
+    }
+
+    let dialects =
+        all_dialects_where(|d| d.supports_array_typedef_with_brackets() && !d.supports_partiql());
+    for sql in [
+        "tags[(INT[2] :items)]",
+        "tags[cardinality(INT[2] :items):bounds[2]]",
+        "tags[1:cardinality(INT[2] :items):steps[1]]",
+        "tags[(SELECT INT[2] :items)]",
+        "tags[bounds[1]:bounds[2]] + INT[2] :items",
+        "tags[INT[] :items]",
+        "tags[INT[][2] :items]",
+        "tags[ARRAY<INT> :items]",
+        "tags[INT ARRAY[2] :items]",
+    ] {
+        dialects.verified_expr(sql);
+    }
+
+    pg().verified_expr("INT[] @items");
+    pg_and_generic().verified_expr("XML :items");
+    assert_eq!(
+        all_dialects().verified_expr(":items"),
+        Expr::value(Value::Placeholder(":items".into()))
+    );
+}
+
+#[test]
+fn parse_array_slice_bound_expressions() {
+    let dialects =
+        all_dialects_where(|d| d.supports_array_typedef_with_brackets() && !d.supports_partiql());
+    for (lower, upper, stride) in [
+        (Some("1 + bounds[1]"), Some("bounds[2] - 1"), None),
+        (Some("bounds[1][2]"), Some("bounds[2][1]"), Some("steps[1]")),
+        (Some("bounds[1]::INT"), Some("bounds[2]::INT"), None),
+        (Some("COALESCE(bounds[1], 1)"), Some("bounds[2]"), None),
+        (
+            Some("tags[bounds[1]:bounds[2]][1]"),
+            Some("bounds[2]"),
+            None,
+        ),
+        (Some("bounds[1]"), None, None),
+        (None, Some("bounds[2]"), Some("steps[1]")),
+        (None, None, None),
+        (Some("1"), Some("5"), Some("2")),
+    ] {
+        let mut sql = format!("tags[{}:{}", lower.unwrap_or(""), upper.unwrap_or(""));
+        if let Some(stride) = stride {
+            sql.push(':');
+            sql.push_str(stride);
+        }
+        sql.push(']');
+        assert_eq!(
+            dialects.verified_expr(&sql),
+            Expr::CompoundFieldAccess {
+                root: Box::new(Expr::Identifier(Ident::new("tags"))),
+                access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                    lower_bound: lower.map(|bound| dialects.verified_expr(bound)),
+                    upper_bound: upper.map(|bound| dialects.verified_expr(bound)),
+                    stride: stride.map(|bound| dialects.verified_expr(bound)),
+                })],
+            },
+            "{sql}"
+        );
+    }
+    dialects.one_statement_parses_to(
+        "SELECT tags[bounds[1] /* lower */ : bounds[2]] FROM events;",
+        "SELECT tags[bounds[1]:bounds[2]] FROM events",
+    );
+}
+
+#[test]
+fn parse_array_slice_rejects_malformed_bounds() {
+    for (sql, expected) in [
+        ("SELECT tags[bounds[1]:bounds[2]", "Expected: :, found: EOF"),
+        (
+            "SELECT tags[bounds[1]:bounds[2]:1:2]",
+            "Expected: ], found: :",
+        ),
+        (
+            "SELECT tags[bounds[1]:bounds[]]",
+            "Expected: an expression, found: ]",
+        ),
+        (
+            "SELECT tags[bounds[1]:bounds[2]::]",
+            "Expected: a data type name, found: ]",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.into()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_array_slice_failure_does_not_poison_array_expression() {
+    let dialect = PostgreSqlDialect {};
+    for sql in ["[TRIM[1]:items]", "[NOT TRIM[1]:items]"] {
+        let expected = Parser::new(&dialect)
+            .try_with_sql(sql)
+            .unwrap()
+            .parse_expr()
+            .unwrap();
+        let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+        parser
+            .try_parse(|parser| parser.parse_multi_dim_subscript(&mut vec![]))
+            .unwrap_err();
+        assert_eq!(parser.parse_expr().unwrap(), expected, "{sql}");
+    }
+}

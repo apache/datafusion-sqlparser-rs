@@ -1927,11 +1927,21 @@ impl<'a> Parser<'a> {
                         format: None,
                     })
                 }
-                data_type => Ok(Expr::TypedString(TypedString {
-                    data_type,
-                    value: parser.parse_value()?,
-                    uses_odbc_syntax: false,
-                })),
+                data_type => {
+                    let value = parser.parse_value()?;
+                    if matches!(
+                        (&data_type, &value.value),
+                        (DataType::Array(_), Value::Placeholder(placeholder))
+                            if placeholder.starts_with(':')
+                    ) {
+                        return parser_err!("dummy", loc);
+                    }
+                    Ok(Expr::TypedString(TypedString {
+                        data_type,
+                        value,
+                        uses_odbc_syntax: false,
+                    }))
+                }
             }
         })?;
 

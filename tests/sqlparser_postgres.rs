@@ -13518,3 +13518,55 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_array_slice_with_subscript_bounds() {
+    fn bound(index: &str) -> Expr {
+        Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Identifier(Ident::new("bounds"))),
+            access_chain: vec![AccessExpr::Subscript(Subscript::Index {
+                index: Expr::value(number(index)),
+            })],
+        }
+    }
+
+    fn slice(lower_bound: Expr, upper_bound: Expr) -> Expr {
+        Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Identifier(Ident::new("tags"))),
+            access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                lower_bound: Some(lower_bound),
+                upper_bound: Some(upper_bound),
+                stride: None,
+            })],
+        }
+    }
+
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[bounds[1]:bounds[2]]"),
+        slice(bound("1"), bound("2"))
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[(bounds[1]):bounds[2]]"),
+        slice(Expr::Nested(Box::new(bound("1"))), bound("2"),)
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[bounds[1]:(bounds[2])]"),
+        slice(bound("1"), Expr::Nested(Box::new(bound("2"))),)
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[(bounds[1]):(bounds[2])]"),
+        slice(
+            Expr::Nested(Box::new(bound("1"))),
+            Expr::Nested(Box::new(bound("2"))),
+        )
+    );
+
+    pg_and_generic().verified_expr("tags[:bounds[2]]");
+    pg_and_generic().verified_expr("tags[bounds[1]:]");
+    pg_and_generic().verified_expr("tags[bounds[1]::INT:bounds[2]]");
+    pg_and_generic().verified_expr("tags[bounds[1]:bounds[2]:bounds[3]][bounds[4]:bounds[5]]");
+    pg_and_generic().verified_expr("tags[bounds[1]]");
+    pg_and_generic().verified_expr("bounds::INT[]");
+    pg_and_generic().verified_expr("INT[] '{1,2}'");
+    pg_and_generic().verified_expr(":bounds");
+}

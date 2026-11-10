@@ -2121,6 +2121,36 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `COMMENT 'text'` may directly follow the column
+    /// definitions of a `CREATE TABLE`.
+    ///
+    /// [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-CreateTable)
+    fn supports_create_table_comment_after_columns(&self) -> bool {
+        false
+    }
+
+    /// Returns true if a `CREATE TABLE` may end with plain `KEY = value`
+    /// options.
+    fn supports_create_table_plain_options(&self) -> bool {
+        true
+    }
+
+    /// Returns true if `CREATE TABLE` accepts a
+    /// `CLUSTERED BY (...) [SORTED BY (...)] INTO n BUCKETS` clause.
+    ///
+    /// [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-BucketedSortedTables)
+    fn supports_create_table_clustered_by(&self) -> bool {
+        false
+    }
+
+    /// Returns true if `INSERT` accepts a column list after its `PARTITION`
+    /// clause.
+    ///
+    /// [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+dml)
+    fn supports_insert_columns_after_partition(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `DETACH` statement.
     ///
     /// Example:

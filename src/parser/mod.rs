@@ -9451,16 +9451,17 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_columns()?
         };
-        let comment_after_column_def =
-            if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
-                let next_token = self.next_token();
-                match next_token.token {
-                    Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
-                    _ => self.expected("comment", next_token)?,
-                }
-            } else {
-                None
-            };
+        let comment_after_column_def = if self.dialect.supports_create_table_comment_after_columns()
+            && self.parse_keyword(Keyword::COMMENT)
+        {
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
+                _ => self.expected("comment", next_token)?,
+            }
+        } else {
+            None
+        };
 
         // PostgreSQL PARTITION OF: partition bound specification
         let for_values = if partition_of.is_some() {
@@ -9851,7 +9852,9 @@ impl<'a> Parser<'a> {
             };
         }
 
-        if !dialect_of!(self is HiveDialect) && table_options == CreateTableOptions::None {
+        if self.dialect.supports_create_table_plain_options()
+            && table_options == CreateTableOptions::None
+        {
             let plain_options = self.parse_plain_options()?;
             if !plain_options.is_empty() {
                 table_options = CreateTableOptions::Plain(plain_options)
@@ -10638,7 +10641,7 @@ impl<'a> Parser<'a> {
 
     /// Parse optional `CLUSTERED BY` clause for Hive/Generic dialects.
     pub fn parse_optional_clustered_by(&mut self) -> Result<Option<ClusteredBy>, ParserError> {
-        let clustered_by = if dialect_of!(self is HiveDialect|GenericDialect)
+        let clustered_by = if self.dialect.supports_create_table_clustered_by()
             && self.parse_keywords(&[Keyword::CLUSTERED, Keyword::BY])
         {
             let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
@@ -19793,7 +19796,7 @@ impl<'a> Parser<'a> {
                     let partitioned = self.parse_insert_partition()?;
                     by_name = self.parse_keywords(&[Keyword::BY, Keyword::NAME]);
                     // Hive allows you to specify columns after partitions as well if you want.
-                    let after_columns = if dialect_of!(self is HiveDialect) {
+                    let after_columns = if self.dialect.supports_insert_columns_after_partition() {
                         self.parse_parenthesized_column_list(Optional, false)?
                     } else {
                         vec![]

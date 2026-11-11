@@ -13541,6 +13541,8 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(IN INT)"),
         format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(ORDER BY TEXT)"),
         format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(INT ORDER BY TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} CAST (INT AS TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} CAST (src AS tgt)"),
         format!("ALTER EXTENSION ext_name {action} COLLATION en_US"),
         format!("ALTER EXTENSION ext_name {action} COLLATION schema.en_US"),
         format!("ALTER EXTENSION ext_name {action} CONVERSION conv"),
@@ -13739,6 +13741,27 @@ fn parse_alter_extension_add_member() {
         })
     );
 
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD CAST (src AS tgt)") {
+        Statement::AlterExtension(AlterExtension {
+            operation:
+                AlterExtensionOperation::Add(AlterExtensionMember::Cast {
+                    source_type,
+                    target_type,
+                }),
+            ..
+        }) => {
+            assert_eq!(
+                source_type,
+                DataType::Custom(ObjectName::from(Ident::new("src")), vec![])
+            );
+            assert_eq!(
+                target_type,
+                DataType::Custom(ObjectName::from(Ident::new("tgt")), vec![])
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
     match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD FUNCTION f(INT)") {
         Statement::AlterExtension(AlterExtension {
             operation: AlterExtensionOperation::Add(AlterExtensionMember::Function(function)),
@@ -13808,6 +13831,10 @@ fn parse_alter_extension_add_member() {
             "Expected: identifier, found: 1",
         ),
         (
+            "ALTER EXTENSION ext_name ADD CAST (INT)",
+            "Expected: AS, found: )",
+        ),
+        (
             "ALTER EXTENSION ext_name ADD OPERATOR +",
             "Expected: (, found: EOF",
         ),
@@ -13818,6 +13845,22 @@ fn parse_alter_extension_add_member() {
         (
             "ALTER EXTENSION ext_name ADD OPERATOR CLASS oc USING",
             "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST",
+            "Expected: (, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST (1)",
+            "Expected: a data type name, found: 1",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST (INT AS)",
+            "Expected: a data type name, found: )",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST (INT AS INT",
+            "Expected: ), found: EOF",
         ),
         (
             "ALTER EXTENSION ext_name ADD OPERATOR CLASS",

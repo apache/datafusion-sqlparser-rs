@@ -13584,6 +13584,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH PARSER pgrm"),
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH TEMPLATE tpl"),
         format!("ALTER EXTENSION ext_name {action} TRANSFORM FOR my_type LANGUAGE plpgsql"),
+        format!("ALTER EXTENSION ext_name {action} TYPE my_type"),
         format!("ALTER EXTENSION ext_name {action} VIEW v"),
     ];
     for sql in sqls {
@@ -13910,6 +13911,10 @@ fn parse_alter_extension_add_member() {
         (
             "ALTER EXTENSION ext_name ADD TRANSFORM FOR my_type LANGUAGE",
             "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TYPE",
+            "Expected: a data type name, found: EOF",
         ),
     ] {
         assert_eq!(

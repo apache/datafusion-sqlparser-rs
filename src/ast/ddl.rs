@@ -5021,6 +5021,8 @@ pub enum AlterExtensionMember {
         /// Language name.
         language: Ident,
     },
+    /// `TYPE object_name`
+    Type(DataType),
     /// `VIEW object_name`
     View(ObjectName),
 }
@@ -5104,6 +5106,7 @@ impl fmt::Display for AlterExtensionMember {
                 type_name,
                 language,
             } => write!(f, "TRANSFORM FOR {type_name} LANGUAGE {language}"),
+            AlterExtensionMember::Type(data_type) => write!(f, "TYPE {data_type}"),
             AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }
     }

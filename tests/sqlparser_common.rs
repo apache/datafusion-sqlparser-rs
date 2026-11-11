@@ -21948,9 +21948,9 @@ fn parse_quoted_placeholders_roundtrip() {
     for sql in [
         "SELECT :x",
         "SELECT :`a`",
-        "SELECT :\"a\"",
+        r#"SELECT :"a""#,
         "SELECT :` a` AS a",
-        "SELECT :\"a b c\", :\"a\"\"b\"",
+        r#"SELECT :"a b c", :"a""b""#,
     ] {
         dialects.verified_stmt(sql);
     }
@@ -21958,8 +21958,8 @@ fn parse_quoted_placeholders_roundtrip() {
     for sql in [
         "SELECT @x",
         "SELECT @`a`",
-        "SELECT @\"a\"",
-        "SELECT @\"a b c\"",
+        r#"SELECT @"a""#,
+        r#"SELECT @"a b c""#,
     ] {
         ansi.verified_stmt(sql);
     }

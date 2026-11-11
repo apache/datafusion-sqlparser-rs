@@ -2046,7 +2046,10 @@ fn parse_tuple_element_access() {
     );
 
     clickhouse().verified_stmt("SELECT 1.5, 1 + 0.5");
+    #[cfg(feature = "bigdecimal")]
     clickhouse().one_statement_parses_to("SELECT .5, 1e3", "SELECT 0.5, 1000");
+    #[cfg(not(feature = "bigdecimal"))]
+    clickhouse().verified_stmt("SELECT .5, 1e3");
 
     assert_eq!(
         clickhouse().parse_sql_statements("SELECT t."),

@@ -12556,6 +12556,8 @@ impl<'a> Parser<'a> {
             ))
         } else if self.parse_keyword(Keyword::DATABASE) {
             Ok(AlterExtensionMember::Database(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::DOMAIN) {
+            Ok(AlterExtensionMember::Domain(self.parse_data_type()?))
         } else if self.parse_keywords(&[Keyword::EVENT, Keyword::TRIGGER]) {
             Ok(AlterExtensionMember::EventTrigger(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::EXTENSION) {

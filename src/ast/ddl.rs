@@ -4967,6 +4967,8 @@ pub enum AlterExtensionMember {
     Sequence(ObjectName),
     /// `SERVER object_name`
     Server(Ident),
+    /// `STATISTICS object_name`
+    Statistics(ObjectName),
     /// `TABLE object_name`
     Table(ObjectName),
     /// `TEXT SEARCH CONFIGURATION object_name`
@@ -5027,6 +5029,7 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::Schema(name) => write!(f, "SCHEMA {name}"),
             AlterExtensionMember::Sequence(name) => write!(f, "SEQUENCE {name}"),
             AlterExtensionMember::Server(name) => write!(f, "SERVER {name}"),
+            AlterExtensionMember::Statistics(name) => write!(f, "STATISTICS {name}"),
             AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
             AlterExtensionMember::TextSearchConfiguration(name) => {
                 write!(f, "TEXT SEARCH CONFIGURATION {name}")

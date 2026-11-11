@@ -13538,6 +13538,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} MATERIALIZED VIEW mv"),
         format!("ALTER EXTENSION ext_name {action} SCHEMA schema_name"),
         format!("ALTER EXTENSION ext_name {action} SEQUENCE seq"),
+        format!("ALTER EXTENSION ext_name {action} SERVER srv"),
         format!("ALTER EXTENSION ext_name {action} TABLE t"),
         format!("ALTER EXTENSION ext_name {action} TABLE schema.t"),
         format!("ALTER EXTENSION ext_name {action} VIEW v"),
@@ -13725,6 +13726,7 @@ fn parse_alter_extension_add_member() {
         "PROCEDURAL LANGUAGE",
         "SCHEMA",
         "SEQUENCE",
+        "SERVER",
         "TABLE",
         "VIEW",
     ] {

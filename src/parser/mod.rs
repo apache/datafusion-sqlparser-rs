@@ -12571,6 +12571,8 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::Sequence(
                 self.parse_object_name(false)?,
             ))
+        } else if self.parse_keyword(Keyword::SERVER) {
+            Ok(AlterExtensionMember::Server(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::TABLE) {
             Ok(AlterExtensionMember::Table(self.parse_object_name(false)?))
         } else if self.parse_keyword(Keyword::VIEW) {

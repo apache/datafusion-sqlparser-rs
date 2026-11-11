@@ -4961,6 +4961,8 @@ pub enum AlterExtensionMember {
     TextSearchDictionary(ObjectName),
     /// `TEXT SEARCH PARSER object_name`
     TextSearchParser(ObjectName),
+    /// `TEXT SEARCH TEMPLATE object_name`
+    TextSearchTemplate(ObjectName),
     /// `VIEW object_name`
     View(ObjectName),
 }
@@ -5014,6 +5016,9 @@ impl fmt::Display for AlterExtensionMember {
                 write!(f, "TEXT SEARCH DICTIONARY {name}")
             }
             AlterExtensionMember::TextSearchParser(name) => write!(f, "TEXT SEARCH PARSER {name}"),
+            AlterExtensionMember::TextSearchTemplate(name) => {
+                write!(f, "TEXT SEARCH TEMPLATE {name}")
+            }
             AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }
     }

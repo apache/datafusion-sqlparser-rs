@@ -13528,6 +13528,7 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 
 fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
+        format!("ALTER EXTENSION ext_name {action} MATERIALIZED VIEW mv"),
         format!("ALTER EXTENSION ext_name {action} TABLE t"),
         format!("ALTER EXTENSION ext_name {action} TABLE schema.t"),
         format!("ALTER EXTENSION ext_name {action} VIEW v"),
@@ -13675,7 +13676,7 @@ fn parse_alter_extension_add_member() {
         );
     }
 
-    for member in ["TABLE", "VIEW"] {
+    for member in ["MATERIALIZED VIEW", "TABLE", "VIEW"] {
         let sql = format!("ALTER EXTENSION ext_name ADD {member}");
         assert_eq!(
             pg_and_generic().parse_sql_statements(&sql).unwrap_err(),

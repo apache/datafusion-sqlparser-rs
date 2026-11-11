@@ -13558,6 +13558,8 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} LANGUAGE plpgsql"),
         format!("ALTER EXTENSION ext_name {action} PROCEDURAL LANGUAGE plpgsql"),
         format!("ALTER EXTENSION ext_name {action} MATERIALIZED VIEW mv"),
+        format!("ALTER EXTENSION ext_name {action} OPERATOR + (INT, TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} OPERATOR - (NONE, INT)"),
         format!("ALTER EXTENSION ext_name {action} PROCEDURE p"),
         format!("ALTER EXTENSION ext_name {action} PROCEDURE p()"),
         format!("ALTER EXTENSION ext_name {action} PROCEDURE p(INT)"),
@@ -13762,6 +13764,18 @@ fn parse_alter_extension_add_member() {
         other => panic!("unexpected statement: {other:?}"),
     }
 
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD OPERATOR - (NONE, INT)") {
+        Statement::AlterExtension(AlterExtension {
+            operation: AlterExtensionOperation::Add(AlterExtensionMember::Operator(signature)),
+            ..
+        }) => {
+            assert_eq!(signature.name, ObjectName::from(Ident::new("-")));
+            assert_eq!(signature.left_type, None);
+            assert_eq!(signature.right_type, DataType::Int(None));
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
     for (sql, error) in [
         (
             "ALTER EXTENSION ext_name ADD",
@@ -13790,6 +13804,10 @@ fn parse_alter_extension_add_member() {
         (
             "ALTER EXTENSION ext_name ADD ROUTINE 1",
             "Expected: identifier, found: 1",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR +",
+            "Expected: (, found: EOF",
         ),
     ] {
         assert_eq!(

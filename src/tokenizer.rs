@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{DollarQuotedString, QuoteDelimitedString};
+use crate::ast::{DollarQuotedString, NumberSuffix, QuoteDelimitedString};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
@@ -62,6 +62,8 @@ pub enum Token {
     Word(Word),
     /// An unsigned numeric literal
     Number(String, bool),
+    /// An unsigned numeric literal with a type suffix, e.g. `1Y`
+    SuffixedNumber(String, NumberSuffix),
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
@@ -303,6 +305,7 @@ impl fmt::Display for Token {
             Token::EOF => f.write_str("EOF"),
             Token::Word(ref w) => write!(f, "{w}"),
             Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
+            Token::SuffixedNumber(ref n, suffix) => write!(f, "{n}{suffix}"),
             Token::Char(ref c) => write!(f, "{c}"),
             Token::SingleQuotedString(ref s) => write!(f, "'{s}'"),
             Token::TripleSingleQuotedString(ref s) => write!(f, "'''{s}'''"),
@@ -1707,6 +1710,10 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
+                    if self.dialect.supports_numeric_literal_suffixes() {
+                        return Ok(Some(self.tokenize_number_suffix(chars, s)));
+                    }
+
                     let long = if chars.peek() == Some(&'L') {
                         chars.next();
                         true
@@ -2340,6 +2347,39 @@ impl<'a> Tokenizer<'a> {
         }
         s.push_str(&digits);
         Ok(Token::Number(s, false))
+    }
+
+    /// Tokenizes the number `s` with its type suffix if one follows, as in `1Y` or
+    /// `1.5BD`. A suffix directly followed by an identifier character is not one.
+    fn tokenize_number_suffix(&self, chars: &mut State, s: String) -> Token {
+        let is_integer = !s.contains(['.', 'e', 'E']);
+        let mut ahead = chars.peekable.clone();
+        // `None` is the `L` of a long number.
+        let (suffix, len) = match ahead.next().map(|ch| ch.to_ascii_uppercase()) {
+            Some('L') if is_integer => (None, 1),
+            Some('S') if is_integer => (Some(NumberSuffix::SmallInt), 1),
+            Some('Y') if is_integer => (Some(NumberSuffix::TinyInt), 1),
+            Some('F') => (Some(NumberSuffix::Float), 1),
+            Some('D') => (Some(NumberSuffix::Double), 1),
+            Some('B') if ahead.peek().is_some_and(|ch| ch.eq_ignore_ascii_case(&'D')) => {
+                ahead.next();
+                (Some(NumberSuffix::Decimal), 2)
+            }
+            _ => return Token::Number(s, false),
+        };
+        if ahead
+            .next()
+            .is_some_and(|ch| self.dialect.is_identifier_part(ch))
+        {
+            return Token::Number(s, false);
+        }
+        for _ in 0..len {
+            chars.next();
+        }
+        match suffix {
+            Some(suffix) => Token::SuffixedNumber(s, suffix),
+            None => Token::Number(s, true),
+        }
     }
 
     // Consume characters until newline

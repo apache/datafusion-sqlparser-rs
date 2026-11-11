@@ -146,6 +146,13 @@ pub enum Value {
     /// but fail on CI with the `--all-features` flag enabled
     /// Numeric literal (uses `BigDecimal` when the `bigdecimal` feature is enabled).
     Number(BigDecimal, bool),
+    /// Numeric literal with a type suffix, e.g. `1Y` or `1.5BD`. The string is the
+    /// number as written without the suffix, also with the `bigdecimal` feature.
+    ///
+    /// See [`Dialect::supports_numeric_literal_suffixes`].
+    ///
+    /// [`Dialect::supports_numeric_literal_suffixes`]: crate::dialect::Dialect::supports_numeric_literal_suffixes
+    SuffixedNumber(String, NumberSuffix),
     /// 'string value'
     SingleQuotedString(String),
     /// Dollar-quoted string literal, e.g. `$$...$$` or `$tag$...$tag$` (Postgres syntax).
@@ -262,6 +269,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
+            Value::SuffixedNumber(v, suffix) => write!(f, "{v}{suffix}"),
             Value::DoubleQuotedString(v) => write!(f, "\"{}\"", escape_double_quote_string(v)),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::TripleSingleQuotedString(v) => {
@@ -535,6 +543,38 @@ impl fmt::Display for NormalizationForm {
             NormalizationForm::NFKC => write!(f, "NFKC"),
             NormalizationForm::NFKD => write!(f, "NFKD"),
         }
+    }
+}
+
+/// The type suffix of a [`Value::SuffixedNumber`]. An `L` suffix makes a
+/// [`Value::Number`] long instead.
+///
+/// See [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-literals.html#numeric-literal).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum NumberSuffix {
+    /// `Y`, a `TINYINT`
+    TinyInt,
+    /// `S`, a `SMALLINT`
+    SmallInt,
+    /// `F`, a `FLOAT`
+    Float,
+    /// `D`, a `DOUBLE`
+    Double,
+    /// `BD`, a `DECIMAL`
+    Decimal,
+}
+
+impl fmt::Display for NumberSuffix {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            NumberSuffix::TinyInt => "Y",
+            NumberSuffix::SmallInt => "S",
+            NumberSuffix::Float => "F",
+            NumberSuffix::Double => "D",
+            NumberSuffix::Decimal => "BD",
+        })
     }
 }
 

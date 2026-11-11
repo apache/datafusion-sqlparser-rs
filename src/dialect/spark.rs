@@ -112,6 +112,11 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
+    /// See <https://spark.apache.org/docs/latest/sql-ref-literals.html#numeric-literal>
+    fn supports_numeric_literal_suffixes(&self) -> bool {
+        true
+    }
+
     fn require_interval_qualifier(&self) -> bool {
         true
     }

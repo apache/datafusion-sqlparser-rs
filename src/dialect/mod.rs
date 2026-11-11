@@ -615,6 +615,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a case-insensitive suffix gives a numeric literal its type:
+    /// `L`, `S` or `Y` after an integer, as in `1Y`, and `F`, `D` or `BD` after
+    /// any number, as in `1.5BD`. See [`NumberSuffix`].
+    ///
+    /// [`NumberSuffix`]: crate::ast::NumberSuffix
+    fn supports_numeric_literal_suffixes(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports integer literals in hexadecimal,
     /// octal and binary, e.g. `0x1F`, `0o17` and `0b101`, which then parse as
     /// numbers instead of `0x` hexadecimal strings.

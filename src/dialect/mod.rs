@@ -615,6 +615,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if `suffix`, the identifier characters directly after the
+    /// numeric literal `number`, is a type suffix of the number, such as the `Y`
+    /// of `10Y` in Spark SQL. The suffix stays in the number's text, so `10Y`
+    /// fails to parse with the `bigdecimal` feature. An `L` suffix, in either
+    /// case, makes the number long instead.
+    fn is_numeric_literal_suffix(&self, _number: &str, _suffix: &str) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports integer literals in hexadecimal,
     /// octal and binary, e.g. `0x1F`, `0o17` and `0b101`, which then parse as
     /// numbers instead of `0x` hexadecimal strings.

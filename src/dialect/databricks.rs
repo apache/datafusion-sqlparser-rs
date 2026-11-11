@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, SparkSqlDialect};
 use crate::keywords::Keyword;
 use crate::parser::Parser;
 
@@ -70,6 +70,13 @@ impl Dialect for DatabricksDialect {
 
     fn supports_numeric_prefix(&self) -> bool {
         true
+    }
+
+    /// The same suffixes as in Spark SQL, as in `+1Y`.
+    ///
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/data-types/tinyint-type>
+    fn is_numeric_literal_suffix(&self, number: &str, suffix: &str) -> bool {
+        SparkSqlDialect {}.is_numeric_literal_suffix(number, suffix)
     }
 
     fn supports_filter_during_aggregation(&self) -> bool {

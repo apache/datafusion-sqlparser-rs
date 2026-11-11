@@ -545,3 +545,14 @@ fn parse_non_reserved_keyword_table_names() {
     oracle().verified_stmt("SELECT * FROM limit");
     oracle().verified_stmt("SELECT * FROM t JOIN limit ON TRUE");
 }
+
+#[test]
+fn parse_numeric_literal_suffixes() {
+    #[cfg(not(feature = "bigdecimal"))]
+    oracle().verified_stmt("SELECT 25f, +6.34F, 0.5d, -1D, 1e3d FROM dual");
+
+    oracle().one_statement_parses_to(
+        "SELECT 10Y, 1.5BD FROM dual",
+        "SELECT 10 AS Y, 1.5 AS BD FROM dual",
+    );
+}

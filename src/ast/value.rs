@@ -137,7 +137,10 @@ impl DerefMut for ValueWithSpan {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Value {
-    /// Numeric literal
+    /// Numeric literal, with any type suffix such as the `Y` of `10Y`.
+    /// See [`Dialect::is_numeric_literal_suffix`].
+    ///
+    /// [`Dialect::is_numeric_literal_suffix`]: crate::dialect::Dialect::is_numeric_literal_suffix
     #[cfg(not(feature = "bigdecimal"))]
     Number(String, bool),
     #[cfg(feature = "bigdecimal")]

@@ -381,3 +381,28 @@ fn test_substring() {
 fn test_pipe_operator() {
     spark().verified_stmt("SELECT * FROM t |> WHERE x > 1 |> SELECT x AS y |> ORDER BY y");
 }
+
+#[test]
+fn parse_numeric_literal_suffixes() {
+    #[cfg(not(feature = "bigdecimal"))]
+    {
+        spark().verified_stmt("SELECT 10Y, 10s, 1.5F, 1.5d, 1.5BD, .5bd, 5.F, 1e5D, -32Y");
+        assert_eq!(spark().verified_expr("1.5BD"), Expr::value(number("1.5BD")));
+    }
+    // A `BigDecimal` can't hold the suffix.
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        spark().parse_sql_statements("SELECT 10Y").unwrap_err(),
+        sqlparser::parser::ParserError::ParserError(
+            "Could not parse '10Y' as bigdecimal::BigDecimal: invalid digit found in string"
+                .to_string()
+        )
+    );
+
+    spark().one_statement_parses_to("SELECT 10l", "SELECT 10L");
+    // `L`, `S` and `Y` only follow an integer, and a suffix ends the word.
+    spark().one_statement_parses_to(
+        "SELECT 1.5S, 1.5Y, 1Dx, 1B, 1BDx",
+        "SELECT 1.5 AS S, 1.5 AS Y, 1 AS Dx, 1 AS B, 1 AS BDx",
+    );
+}

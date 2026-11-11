@@ -1884,6 +1884,10 @@ pub enum TableSampleMethod {
     /// `BLOCK` sampling method.
     Block,
     /// `RESERVOIR` sampling method.
+    ///
+    /// Picks a fixed number of rows (`n ROWS`) at random, or every row when the input has fewer.
+    ///
+    /// [Spanner](https://cloud.google.com/spanner/docs/reference/standard-sql/query-syntax#tablesample_operator)
     Reservoir,
 }
 

@@ -264,6 +264,7 @@ define_keywords!(
     CONTACT,
     CONTAINS,
     CONTINUE,
+    CONVERSION,
     CONVERT,
     COPY,
     COPY_OPTIONS,

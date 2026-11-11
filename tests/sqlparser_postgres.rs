@@ -13550,6 +13550,8 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} PROCEDURE p()"),
         format!("ALTER EXTENSION ext_name {action} PROCEDURE p(INT)"),
         format!("ALTER EXTENSION ext_name {action} PUBLICATION pub"),
+        format!("ALTER EXTENSION ext_name {action} ROUTINE r"),
+        format!("ALTER EXTENSION ext_name {action} ROUTINE r()"),
         format!("ALTER EXTENSION ext_name {action} ROLE role_name"),
         format!("ALTER EXTENSION ext_name {action} SCHEMA schema_name"),
         format!("ALTER EXTENSION ext_name {action} SEQUENCE seq"),
@@ -13750,6 +13752,10 @@ fn parse_alter_extension_add_member() {
         ),
         (
             "ALTER EXTENSION ext_name ADD PROCEDURE 1",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD ROUTINE 1",
             "Expected: identifier, found: 1",
         ),
     ] {

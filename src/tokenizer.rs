@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{DollarQuotedString, NumberSuffix, QuoteDelimitedString};
+use crate::ast::{DollarQuotedString, QuoteDelimitedString};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
@@ -60,10 +60,9 @@ pub enum Token {
     EOF,
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),
-    /// An unsigned numeric literal
+    /// An unsigned numeric literal, with any type suffix that
+    /// [`Dialect::is_numeric_literal_suffix`] accepts, and whether it is long, as in `1L`
     Number(String, bool),
-    /// An unsigned numeric literal with a type suffix, e.g. `1Y`
-    SuffixedNumber(String, NumberSuffix),
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
@@ -305,7 +304,6 @@ impl fmt::Display for Token {
             Token::EOF => f.write_str("EOF"),
             Token::Word(ref w) => write!(f, "{w}"),
             Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
-            Token::SuffixedNumber(ref n, suffix) => write!(f, "{n}{suffix}"),
             Token::Char(ref c) => write!(f, "{c}"),
             Token::SingleQuotedString(ref s) => write!(f, "'{s}'"),
             Token::TripleSingleQuotedString(ref s) => write!(f, "'''{s}'''"),
@@ -1689,6 +1687,26 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
+                    // After a period, as in `t.1D`, the number may start a column name.
+                    if prev_token != Some(&Token::Period) {
+                        let suffix: String = chars
+                            .peekable
+                            .clone()
+                            .take_while(|&ch| self.dialect.is_identifier_part(ch))
+                            .collect();
+                        if !suffix.is_empty() && self.dialect.is_numeric_literal_suffix(&s, &suffix)
+                        {
+                            for _ in 0..suffix.chars().count() {
+                                chars.next();
+                            }
+                            if suffix.eq_ignore_ascii_case("L") {
+                                return Ok(Some(Token::Number(s, true)));
+                            }
+                            s += &suffix;
+                            return Ok(Some(Token::Number(s, false)));
+                        }
+                    }
+
                     // If the dialect supports identifiers that start with a numeric prefix,
                     // we need to check if the value is in fact an identifier and must thus
                     // be tokenized as a word.
@@ -1708,10 +1726,6 @@ impl<'a> Tokenizer<'a> {
                             // the value we have is part of an identifier.
                             return Ok(Some(Token::make_word_owned(s, None)));
                         }
-                    }
-
-                    if self.dialect.supports_numeric_literal_suffixes() {
-                        return Ok(Some(self.tokenize_number_suffix(chars, s)));
                     }
 
                     let long = if chars.peek() == Some(&'L') {
@@ -2349,39 +2363,6 @@ impl<'a> Tokenizer<'a> {
         Ok(Token::Number(s, false))
     }
 
-    /// Tokenizes the number `s` with its type suffix if one follows, as in `1Y` or
-    /// `1.5BD`. A suffix directly followed by an identifier character is not one.
-    fn tokenize_number_suffix(&self, chars: &mut State, s: String) -> Token {
-        let is_integer = !s.contains(['.', 'e', 'E']);
-        let mut ahead = chars.peekable.clone();
-        // `None` is the `L` of a long number.
-        let (suffix, len) = match ahead.next().map(|ch| ch.to_ascii_uppercase()) {
-            Some('L') if is_integer => (None, 1),
-            Some('S') if is_integer => (Some(NumberSuffix::SmallInt), 1),
-            Some('Y') if is_integer => (Some(NumberSuffix::TinyInt), 1),
-            Some('F') => (Some(NumberSuffix::Float), 1),
-            Some('D') => (Some(NumberSuffix::Double), 1),
-            Some('B') if ahead.peek().is_some_and(|ch| ch.eq_ignore_ascii_case(&'D')) => {
-                ahead.next();
-                (Some(NumberSuffix::Decimal), 2)
-            }
-            _ => return Token::Number(s, false),
-        };
-        if ahead
-            .next()
-            .is_some_and(|ch| self.dialect.is_identifier_part(ch))
-        {
-            return Token::Number(s, false);
-        }
-        for _ in 0..len {
-            chars.next();
-        }
-        match suffix {
-            Some(suffix) => Token::SuffixedNumber(s, suffix),
-            None => Token::Number(s, true),
-        }
-    }
-
     // Consume characters until newline
     fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
         peeking_take_while(chars, |ch| match ch {
@@ -2975,7 +2956,7 @@ mod tests {
     use super::*;
     use crate::dialect::{
         BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect,
-        PostgreSqlDialect, SQLiteDialect,
+        PostgreSqlDialect, SQLiteDialect, SparkSqlDialect,
     };
     use crate::test_utils::{all_dialects, all_dialects_except, all_dialects_where};
     use core::fmt::Debug;
@@ -5206,5 +5187,39 @@ mod tests {
                 "{sql}"
             );
         }
+    }
+
+    #[test]
+    fn tokenize_numeric_literal_suffix() {
+        let number = |n: &str, long| Token::Number(n.to_string(), long);
+        let space = || Token::Whitespace(Whitespace::Space);
+        compare(
+            vec![
+                number("10Y", false),
+                space(),
+                number("1.5bd", false),
+                space(),
+                number("10", true),
+                space(),
+                number("1", false),
+                Token::make_word("Dx", None),
+            ],
+            Tokenizer::new(&SparkSqlDialect {}, "10Y 1.5bd 10l 1Dx")
+                .tokenize()
+                .unwrap(),
+        );
+        // With numeric prefixes, a column name can follow a period.
+        compare(
+            vec![
+                Token::make_word("t", None),
+                Token::Period,
+                Token::make_word("1D", None),
+                space(),
+                number("1D", false),
+            ],
+            Tokenizer::new(&HiveDialect {}, "t.1D 1D")
+                .tokenize()
+                .unwrap(),
+        );
     }
 }

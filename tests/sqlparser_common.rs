@@ -23481,3 +23481,9 @@ fn parse_trailing_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_number_without_suffix() {
+    all_dialects_where(|d| !d.supports_numeric_prefix() && !d.is_numeric_literal_suffix("1", "D"))
+        .one_statement_parses_to("SELECT 1D", "SELECT 1 AS D");
+}

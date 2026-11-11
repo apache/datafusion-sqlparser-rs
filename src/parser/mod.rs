@@ -2083,7 +2083,6 @@ impl<'a> Parser<'a> {
                 Ok(Expr::Value(self.parse_value()?))
             }
             Token::Number(_, _)
-            | Token::SuffixedNumber(_, _)
             | Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
             | Token::TripleSingleQuotedString(_)
@@ -13328,7 +13327,6 @@ impl<'a> Parser<'a> {
             Token::Number(n, l) => {
                 ok_value(Value::Number(Self::parse_number_literal(n, span.start)?, l))
             }
-            Token::SuffixedNumber(n, suffix) => ok_value(Value::SuffixedNumber(n, suffix)),
             Token::SingleQuotedString(ref s) => ok_value(Value::SingleQuotedString(
                 self.maybe_concat_string_literal(s.to_string()),
             )),

@@ -19,7 +19,7 @@
 //! Test SQL syntax specific to Apache Spark SQL.
 
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, SparkSqlDialect};
+use sqlparser::dialect::SparkSqlDialect;
 use test_utils::*;
 
 #[macro_use]
@@ -383,51 +383,26 @@ fn test_pipe_operator() {
 }
 
 #[test]
-fn test_numeric_literal_suffixes() {
-    let suffixed = |n: &str, suffix| Expr::value(Value::SuffixedNumber(n.into(), suffix));
+fn parse_numeric_literal_suffixes() {
+    #[cfg(not(feature = "bigdecimal"))]
+    {
+        spark().verified_stmt("SELECT 10Y, 10s, 1.5F, 1.5d, 1.5BD, .5bd, 5.F, 1e5D, -32Y");
+        assert_eq!(spark().verified_expr("1.5BD"), Expr::value(number("1.5BD")));
+    }
+    // A `BigDecimal` can't hold the suffix.
+    #[cfg(feature = "bigdecimal")]
     assert_eq!(
-        spark().verified_expr("10Y"),
-        suffixed("10", NumberSuffix::TinyInt)
-    );
-    assert_eq!(
-        spark().verified_expr("10S"),
-        suffixed("10", NumberSuffix::SmallInt)
-    );
-    assert_eq!(
-        spark().verified_expr("1e5F"),
-        suffixed("1e5", NumberSuffix::Float)
-    );
-    assert_eq!(
-        spark().verified_expr("1.5D"),
-        suffixed("1.5", NumberSuffix::Double)
-    );
-    assert_eq!(
-        spark().verified_expr(".5BD"),
-        suffixed(".5", NumberSuffix::Decimal)
-    );
-    assert_eq!(
-        spark().verified_expr("10L"),
-        Expr::value(Value::Number("10".parse().unwrap(), true))
+        spark().parse_sql_statements("SELECT 10Y").unwrap_err(),
+        sqlparser::parser::ParserError::ParserError(
+            "Could not parse '10Y' as bigdecimal::BigDecimal: invalid digit found in string"
+                .to_string()
+        )
     );
 
-    spark().verified_stmt("SELECT 1Y, 1S, 1L, 1F, 1D, 1BD");
-    spark().verified_stmt("SELECT 1.5F, 1.5D, 1.5BD, 5.F, 1.5E-3BD, -32Y");
-    spark().verified_stmt("SELECT 2 * 1.5D - 1Y FROM t WHERE x > 1BD");
+    spark().one_statement_parses_to("SELECT 10l", "SELECT 10L");
+    // `L`, `S` and `Y` only follow an integer, and a suffix ends the word.
     spark().one_statement_parses_to(
-        "SELECT 1y, 1s, 1l, 1f, 1d, 1bd, 1.5bD, 9223372036854775807l",
-        "SELECT 1Y, 1S, 1L, 1F, 1D, 1BD, 1.5BD, 9223372036854775807L",
+        "SELECT 1.5S, 1.5Y, 1Dx, 1B, 1BDx",
+        "SELECT 1.5 AS S, 1.5 AS Y, 1 AS Dx, 1 AS B, 1 AS BDx",
     );
-
-    // `L`, `S` and `Y` only follow an integer, and no suffix runs into an identifier.
-    spark().one_statement_parses_to(
-        "SELECT 1.5S, 1.5Y, 1.5L, 1Dx, 1D5, 1B, 1BDx, 1La",
-        "SELECT 1.5 AS S, 1.5 AS Y, 1.5 AS L, 1 AS Dx, 1 AS D5, 1 AS B, 1 AS BDx, 1 AS La",
-    );
-    assert_eq!(
-        spark().parse_sql_statements("SELECT 1e5L").unwrap(),
-        spark().parse_sql_statements("SELECT 1e5 AS L").unwrap()
-    );
-
-    TestedDialects::new(vec![Box::new(GenericDialect {})])
-        .one_statement_parses_to("SELECT 1D, 1Y, 1l, 1L", "SELECT 1 AS D, 1 AS Y, 1 AS l, 1L");
 }

@@ -52,6 +52,14 @@ impl Dialect for OracleDialect {
         ch.is_alphanumeric() || ch == '_' || ch == '$' || ch == '#' || ch == '@'
     }
 
+    /// `F` for `BINARY_FLOAT` and `D` for `BINARY_DOUBLE`, after any number, in
+    /// any case.
+    ///
+    /// See <https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/Literals.html>
+    fn is_numeric_literal_suffix(&self, _number: &str, suffix: &str) -> bool {
+        matches!(suffix.as_bytes(), [b'F' | b'f' | b'D' | b'd'])
+    }
+
     /// LIMIT is not a reserved word in Oracle SQL.
     /// See <https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Oracle-SQL-Reserved-Words.html>
     fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {

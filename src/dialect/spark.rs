@@ -107,13 +107,20 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
-    /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html>
-    fn supports_values_as_table_factor(&self) -> bool {
-        true
+    /// `L`, `S` and `Y` after an integer, and `F`, `D` and `BD` after any number,
+    /// in any case.
+    ///
+    /// See <https://spark.apache.org/docs/latest/sql-ref-literals.html#numeric-literal>
+    fn is_numeric_literal_suffix(&self, number: &str, suffix: &str) -> bool {
+        match suffix.as_bytes() {
+            [b'L' | b'l' | b'S' | b's' | b'Y' | b'y'] => !number.contains(['.', 'e', 'E']),
+            [b'F' | b'f' | b'D' | b'd'] | [b'B' | b'b', b'D' | b'd'] => true,
+            _ => false,
+        }
     }
 
-    /// See <https://spark.apache.org/docs/latest/sql-ref-literals.html#numeric-literal>
-    fn supports_numeric_literal_suffixes(&self) -> bool {
+    /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html>
+    fn supports_values_as_table_factor(&self) -> bool {
         true
     }
 

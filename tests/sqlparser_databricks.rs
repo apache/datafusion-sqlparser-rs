@@ -797,3 +797,23 @@ fn parse_databricks_collated_data_types() {
         ))
     );
 }
+
+#[test]
+fn parse_numeric_literal_suffixes() {
+    #[cfg(not(feature = "bigdecimal"))]
+    databricks().verified_stmt("SELECT +1Y, 10S, 1.5F, 1.5D, 1.5BD");
+
+    assert_eq!(
+        databricks().verified_expr("1L"),
+        Expr::value(Value::Number("1".parse().unwrap(), true))
+    );
+    assert_eq!(
+        databricks()
+            .verified_only_select("SELECT 1La, 1Dx")
+            .projection,
+        vec![
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1La"))),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("1Dx"))),
+        ]
+    );
+}

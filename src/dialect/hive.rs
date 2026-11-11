@@ -78,6 +78,18 @@ impl Dialect for HiveDialect {
         true
     }
 
+    /// `L`, `S` and `Y` after an integer, and `D` and `BD` after any number, in
+    /// any case.
+    ///
+    /// See `IntegralLiteral` and `NumberLiteral` in <https://github.com/apache/hive/blob/d1282396679bc07d4dc45ca27677155d18b32a0c/parser/src/java/org/apache/hadoop/hive/ql/parse/HiveLexerParent.g#L496-L504>
+    fn is_numeric_literal_suffix(&self, number: &str, suffix: &str) -> bool {
+        match suffix.as_bytes() {
+            [b'L' | b'l' | b'S' | b's' | b'Y' | b'y'] => !number.contains(['.', 'e', 'E']),
+            [b'D' | b'd'] | [b'B' | b'b', b'D' | b'd'] => true,
+            _ => false,
+        }
+    }
+
     fn require_interval_qualifier(&self) -> bool {
         true
     }

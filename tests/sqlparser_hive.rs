@@ -22,7 +22,7 @@
 
 use sqlparser::ast::{
     ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
-    Expr, Ident, ObjectName, OrderByExpr, OrderByOptions, OrderBySort, Set, Statement,
+    Expr, Ident, ObjectName, OrderByExpr, OrderByOptions, OrderBySort, SelectItem, Set, Statement,
     UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{AnsiDialect, GenericDialect, HiveDialect};
@@ -517,4 +517,18 @@ fn hive() -> TestedDialects {
 
 fn hive_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})])
+}
+
+#[test]
+fn parse_numeric_literal_suffixes() {
+    #[cfg(not(feature = "bigdecimal"))]
+    hive().verified_stmt("SELECT 10Y, 10S, 1.5D, 1.5BD, 1e5d");
+
+    // Hive has no `F` suffix, so `1.5F` is a column name.
+    assert_eq!(
+        hive().verified_only_select("SELECT 1.5F").projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
+            "1.5F"
+        )))]
+    );
 }

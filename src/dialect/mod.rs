@@ -615,12 +615,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if a case-insensitive suffix gives a numeric literal its type:
-    /// `L`, `S` or `Y` after an integer, as in `1Y`, and `F`, `D` or `BD` after
-    /// any number, as in `1.5BD`. See [`NumberSuffix`].
-    ///
-    /// [`NumberSuffix`]: crate::ast::NumberSuffix
-    fn supports_numeric_literal_suffixes(&self) -> bool {
+    /// Returns true if `suffix`, the identifier characters directly after the
+    /// numeric literal `number`, is a type suffix of the number, such as the `Y`
+    /// of `10Y` in Spark SQL. The suffix stays in the number's text, so `10Y`
+    /// fails to parse with the `bigdecimal` feature. An `L` suffix, in either
+    /// case, makes the number long instead.
+    fn is_numeric_literal_suffix(&self, _number: &str, _suffix: &str) -> bool {
         false
     }
 

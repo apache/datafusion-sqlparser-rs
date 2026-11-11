@@ -12577,9 +12577,16 @@ impl<'a> Parser<'a> {
                 self.parse_object_name(false)?,
             ))
         } else if self.parse_keyword(Keyword::OPERATOR) {
-            Ok(AlterExtensionMember::Operator(
-                self.parse_drop_operator_signature()?,
-            ))
+            if self.parse_keyword(Keyword::CLASS) {
+                let name = self.parse_object_name(false)?;
+                self.expect_keyword_is(Keyword::USING)?;
+                let using = self.parse_identifier()?;
+                Ok(AlterExtensionMember::OperatorClass { name, using })
+            } else {
+                Ok(AlterExtensionMember::Operator(
+                    self.parse_drop_operator_signature()?,
+                ))
+            }
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             Ok(AlterExtensionMember::Procedure(self.parse_function_desc()?))
         } else if self.parse_keyword(Keyword::PUBLICATION) {

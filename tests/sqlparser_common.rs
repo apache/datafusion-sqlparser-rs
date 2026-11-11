@@ -21945,9 +21945,24 @@ fn parse_quoted_placeholders_roundtrip() {
         Box::new(SnowflakeDialect {}),
         Box::new(SQLiteDialect {}),
     ]);
-    dialects.verified_stmt("SELECT :\"a b c\", :\"a\"\"b\"");
+    for sql in [
+        "SELECT :x",
+        "SELECT :`a`",
+        "SELECT :\"a\"",
+        "SELECT :` a` AS a",
+        "SELECT :\"a b c\", :\"a\"\"b\"",
+    ] {
+        dialects.verified_stmt(sql);
+    }
     let ansi = TestedDialects::new(vec![Box::new(AnsiDialect {})]);
-    ansi.verified_stmt("SELECT @\"a b c\"");
+    for sql in [
+        "SELECT @x",
+        "SELECT @`a`",
+        "SELECT @\"a\"",
+        "SELECT @\"a b c\"",
+    ] {
+        ansi.verified_stmt(sql);
+    }
 }
 
 #[test]

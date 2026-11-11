@@ -4946,6 +4946,8 @@ pub enum AlterExtensionMember {
     ForeignDataWrapper(Ident),
     /// `FOREIGN TABLE object_name`
     ForeignTable(ObjectName),
+    /// `FUNCTION function_name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]`
+    Function(FunctionDesc),
     /// `INDEX object_name`
     Index(ObjectName),
     /// `[ PROCEDURAL ] LANGUAGE object_name`
@@ -5019,6 +5021,7 @@ impl fmt::Display for AlterExtensionMember {
                 write!(f, "FOREIGN DATA WRAPPER {name}")
             }
             AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
+            AlterExtensionMember::Function(function) => write!(f, "FUNCTION {function}"),
             AlterExtensionMember::Index(name) => write!(f, "INDEX {name}"),
             AlterExtensionMember::Language { procedural, name } => {
                 if *procedural {

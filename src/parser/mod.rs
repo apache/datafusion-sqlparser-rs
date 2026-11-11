@@ -12591,6 +12591,10 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::TextSearchDictionary(
                 self.parse_object_name(false)?,
             ))
+        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH, Keyword::PARSER]) {
+            Ok(AlterExtensionMember::TextSearchParser(
+                self.parse_object_name(false)?,
+            ))
         } else if self.parse_keyword(Keyword::VIEW) {
             Ok(AlterExtensionMember::View(self.parse_object_name(false)?))
         } else {

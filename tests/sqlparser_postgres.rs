@@ -13530,6 +13530,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
         format!("ALTER EXTENSION ext_name {action} ACCESS METHOD btree"),
         format!("ALTER EXTENSION ext_name {action} EVENT TRIGGER trg"),
+        format!("ALTER EXTENSION ext_name {action} FOREIGN DATA WRAPPER fdw"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE ft"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE schema.ft"),
         format!("ALTER EXTENSION ext_name {action} LANGUAGE plpgsql"),
@@ -13717,6 +13718,7 @@ fn parse_alter_extension_add_member() {
     for member in [
         "ACCESS METHOD",
         "EVENT TRIGGER",
+        "FOREIGN DATA WRAPPER",
         "FOREIGN TABLE",
         "LANGUAGE",
         "MATERIALIZED VIEW",

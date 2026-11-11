@@ -4930,6 +4930,8 @@ pub enum AlterExtensionMember {
     AccessMethod(Ident),
     /// `EVENT TRIGGER object_name`
     EventTrigger(Ident),
+    /// `FOREIGN DATA WRAPPER object_name`
+    ForeignDataWrapper(Ident),
     /// `FOREIGN TABLE object_name`
     ForeignTable(ObjectName),
     /// `[ PROCEDURAL ] LANGUAGE object_name`
@@ -4975,6 +4977,9 @@ impl fmt::Display for AlterExtensionMember {
         match self {
             AlterExtensionMember::AccessMethod(name) => write!(f, "ACCESS METHOD {name}"),
             AlterExtensionMember::EventTrigger(name) => write!(f, "EVENT TRIGGER {name}"),
+            AlterExtensionMember::ForeignDataWrapper(name) => {
+                write!(f, "FOREIGN DATA WRAPPER {name}")
+            }
             AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
             AlterExtensionMember::Language { procedural, name } => {
                 if *procedural {

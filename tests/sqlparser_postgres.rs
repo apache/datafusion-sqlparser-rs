@@ -13530,6 +13530,8 @@ fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE ft"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE schema.ft"),
+        format!("ALTER EXTENSION ext_name {action} LANGUAGE plpgsql"),
+        format!("ALTER EXTENSION ext_name {action} PROCEDURAL LANGUAGE plpgsql"),
         format!("ALTER EXTENSION ext_name {action} MATERIALIZED VIEW mv"),
         format!("ALTER EXTENSION ext_name {action} SCHEMA schema_name"),
         format!("ALTER EXTENSION ext_name {action} SEQUENCE seq"),
@@ -13663,6 +13665,19 @@ fn parse_alter_extension_set_schema() {
 fn parse_alter_extension_add_member() {
     alter_extension_member_round_trip_forms("ADD");
 
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD PROCEDURAL LANGUAGE plpgsql")
+    {
+        Statement::AlterExtension(AlterExtension {
+            operation:
+                AlterExtensionOperation::Add(AlterExtensionMember::Language { procedural, name }),
+            ..
+        }) => {
+            assert!(procedural);
+            assert_eq!(name, Ident::new("plpgsql"));
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
     for (sql, error) in [
         (
             "ALTER EXTENSION ext_name ADD",
@@ -13686,7 +13701,9 @@ fn parse_alter_extension_add_member() {
 
     for member in [
         "FOREIGN TABLE",
+        "LANGUAGE",
         "MATERIALIZED VIEW",
+        "PROCEDURAL LANGUAGE",
         "SCHEMA",
         "SEQUENCE",
         "TABLE",

@@ -12644,6 +12644,14 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::TextSearchTemplate(
                 self.parse_object_name(false)?,
             ))
+        } else if self.parse_keywords(&[Keyword::TRANSFORM, Keyword::FOR]) {
+            let type_name = self.parse_data_type()?;
+            self.expect_keyword_is(Keyword::LANGUAGE)?;
+            let language = self.parse_identifier()?;
+            Ok(AlterExtensionMember::Transform {
+                type_name,
+                language,
+            })
         } else if self.parse_keyword(Keyword::VIEW) {
             Ok(AlterExtensionMember::View(self.parse_object_name(false)?))
         } else {

@@ -5056,8 +5056,7 @@ fn test_select_wildcard_with_rename_before_replace() {
             .parse_sql_statements(
                 "SELECT * REPLACE (a + 1 AS a) REPLACE (a + 2 AS a) FROM (SELECT a FROM t)"
             )
-            .unwrap_err()
-            .to_string(),
-        "sql parser error: Expected: end of statement, found: REPLACE"
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: REPLACE".to_string()),
     );
 }

@@ -12563,6 +12563,8 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::ForeignTable(
                 self.parse_object_name(false)?,
             ))
+        } else if self.parse_keyword(Keyword::INDEX) {
+            Ok(AlterExtensionMember::Index(self.parse_object_name(false)?))
         } else if self.parse_keywords(&[Keyword::PROCEDURAL, Keyword::LANGUAGE]) {
             Ok(AlterExtensionMember::Language {
                 procedural: true,

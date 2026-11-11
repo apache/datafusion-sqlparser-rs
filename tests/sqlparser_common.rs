@@ -21954,6 +21954,11 @@ fn parse_quoted_placeholders_roundtrip() {
     ] {
         dialects.verified_stmt(sql);
     }
+    let select = dialects.verified_only_select(r#"SELECT :"a b c""#);
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::value(Value::Placeholder(r#":"a b c""#.to_string()))
+    );
     let ansi = TestedDialects::new(vec![Box::new(AnsiDialect {})]);
     for sql in [
         "SELECT @x",

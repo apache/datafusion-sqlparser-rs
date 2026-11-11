@@ -12581,6 +12581,8 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::MaterializedView(
                 self.parse_object_name(false)?,
             ))
+        } else if self.parse_keyword(Keyword::PROCEDURE) {
+            Ok(AlterExtensionMember::Procedure(self.parse_function_desc()?))
         } else if self.parse_keyword(Keyword::PUBLICATION) {
             Ok(AlterExtensionMember::Publication(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::ROLE) {

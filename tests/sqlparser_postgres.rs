@@ -13535,6 +13535,12 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
         format!("ALTER EXTENSION ext_name {action} ACCESS METHOD btree"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(*)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(INT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(INT, TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(IN INT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(ORDER BY TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(INT ORDER BY TEXT)"),
         format!("ALTER EXTENSION ext_name {action} COLLATION en_US"),
         format!("ALTER EXTENSION ext_name {action} COLLATION schema.en_US"),
         format!("ALTER EXTENSION ext_name {action} CONVERSION conv"),
@@ -13712,6 +13718,23 @@ fn parse_alter_extension_add_member() {
         other => panic!("unexpected statement: {other:?}"),
     }
 
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("ALTER EXTENSION ext_name ADD AGGREGATE agg(INT ORDER BY TEXT)"),
+        Statement::AlterExtension(AlterExtension {
+            name: Ident::new("ext_name"),
+            operation: AlterExtensionOperation::Add(AlterExtensionMember::Aggregate(
+                AggregateSignature {
+                    name: ObjectName::from(Ident::new("agg")),
+                    args: AggregateArgs::List {
+                        args: vec![OperateFunctionArg::unnamed(DataType::Int(None))],
+                        order_by: Some(vec![OperateFunctionArg::unnamed(DataType::Text)]),
+                    },
+                },
+            )),
+        })
+    );
+
     match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD FUNCTION f(INT)") {
         Statement::AlterExtension(AlterExtension {
             operation: AlterExtensionOperation::Add(AlterExtensionMember::Function(function)),
@@ -13751,6 +13774,10 @@ fn parse_alter_extension_add_member() {
         (
             "ALTER EXTENSION ext_name ADD SCHEMA a.b",
             "Expected: end of statement, found: .",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD AGGREGATE agg",
+            "Expected: (, found: EOF",
         ),
         (
             "ALTER EXTENSION ext_name ADD FUNCTION 1",
@@ -13932,4 +13959,10 @@ fn parse_alter_aggregate_signatures() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn display_alter_extension_aggregate_propagates_write_errors() {
+    let statement = pg().verified_stmt("ALTER EXTENSION ext_name ADD AGGREGATE agg(*)");
+    assert_display_propagates_write_errors(&statement, &["AGGREGATE "]);
 }

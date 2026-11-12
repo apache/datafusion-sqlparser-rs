@@ -12532,6 +12532,10 @@ impl<'a> Parser<'a> {
     fn parse_alter_extension_member(&mut self) -> Result<AlterExtensionMember, ParserError> {
         if self.parse_keywords(&[Keyword::ACCESS, Keyword::METHOD]) {
             Ok(AlterExtensionMember::AccessMethod(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::AGGREGATE) {
+            Ok(AlterExtensionMember::Aggregate(
+                self.parse_alter_aggregate_signature()?,
+            ))
         } else if self.parse_keyword(Keyword::COLLATION) {
             Ok(AlterExtensionMember::Collation(
                 self.parse_object_name(false)?,

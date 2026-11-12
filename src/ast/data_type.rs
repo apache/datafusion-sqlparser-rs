@@ -96,6 +96,10 @@ pub enum DataType {
     Varchar(Option<CharacterLength>),
     /// Variable-length character type, e.g. NVARCHAR(10).
     Nvarchar(Option<CharacterLength>),
+    /// National character type, e.g. NATIONAL CHARACTER(10), [SQL Standard].
+    ///
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#national-character-string-type
+    NationalCharacter(Option<CharacterLength>),
     /// Uuid type.
     Uuid,
     /// Large character object with optional length,
@@ -543,6 +547,9 @@ impl fmt::Display for DataType {
             DataType::CharVarying(size) => format_character_string_type(f, "CHAR VARYING", size),
             DataType::Varchar(size) => format_character_string_type(f, "VARCHAR", size),
             DataType::Nvarchar(size) => format_character_string_type(f, "NVARCHAR", size),
+            DataType::NationalCharacter(size) => {
+                format_character_string_type(f, "NATIONAL CHARACTER", size)
+            }
             DataType::Uuid => write!(f, "UUID"),
             DataType::CharacterLargeObject(size) => {
                 format_type_with_optional_length(f, "CHARACTER LARGE OBJECT", size, false)

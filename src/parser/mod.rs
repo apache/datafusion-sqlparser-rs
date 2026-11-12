@@ -13853,6 +13853,12 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Char(self.parse_optional_character_length()?))
                     }
                 }
+                Keyword::NATIONAL if self.peek_keyword(Keyword::CHARACTER) => {
+                    let _ = self.parse_keyword(Keyword::CHARACTER);
+                    Ok(DataType::NationalCharacter(
+                        self.parse_optional_character_length()?,
+                    ))
+                }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
                 Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_binary_length()?)),
@@ -23038,6 +23044,28 @@ mod tests {
                     length: 20,
                     unit: None
                 }))
+            );
+        }
+
+        #[test]
+        fn test_ansii_national_character_string_types() {
+            // National character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#national-character-string-type>
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let length = Some(CharacterLength::IntegerLength {
+                length: 20,
+                unit: None,
+            });
+
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER",
+                DataType::NationalCharacter(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER(20)",
+                DataType::NationalCharacter(length)
             );
         }
 

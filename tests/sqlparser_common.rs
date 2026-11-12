@@ -23480,3 +23480,28 @@ fn parse_trailing_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_national_character_string_types() {
+    let dialects = all_dialects();
+    for data_type in ["NATIONAL CHARACTER", "NATIONAL CHARACTER(4)"] {
+        dialects.verified_stmt(&format!("CREATE TABLE t (c {data_type})"));
+        dialects.verified_expr(&format!("CAST('ab' AS {data_type})"));
+    }
+
+    dialects.verified_stmt("SELECT national FROM t");
+    match dialects.verified_stmt("CREATE TABLE t (c national)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => assert_eq!(
+            columns[0].data_type,
+            DataType::Custom(ObjectName::from(vec![Ident::new("national")]), vec![])
+        ),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (c NATIONAL CHARACTER(4 OCTETS")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: EOF".to_string())
+    );
+}

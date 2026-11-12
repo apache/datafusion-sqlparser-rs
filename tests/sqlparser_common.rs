@@ -23484,7 +23484,12 @@ fn parse_trailing_end_keyword_is_not_silently_dropped() {
 #[test]
 fn parse_national_character_string_types() {
     let dialects = all_dialects();
-    for data_type in ["NATIONAL CHARACTER", "NATIONAL CHARACTER(4)"] {
+    for data_type in [
+        "NATIONAL CHARACTER",
+        "NATIONAL CHARACTER(4)",
+        "NATIONAL CHARACTER VARYING",
+        "NATIONAL CHARACTER VARYING(4)",
+    ] {
         dialects.verified_stmt(&format!("CREATE TABLE t (c {data_type})"));
         dialects.verified_expr(&format!("CAST('ab' AS {data_type})"));
     }

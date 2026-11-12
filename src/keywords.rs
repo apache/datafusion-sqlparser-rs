@@ -1146,6 +1146,7 @@ define_keywords!(
     UINT32,
     UINT64,
     UINT8,
+    UINTEGER,
     UNBOUNDED,
     UNCACHE,
     UNCOMMITTED,

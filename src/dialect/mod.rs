@@ -1336,6 +1336,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a dollar-quote opening tag with no matching closing tag, such as
+    /// `$a$` in `SELECT $a$ x`, is a word rather than an unterminated dollar-quoted string.
+    fn supports_unterminated_dollar_tag_as_word(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `$` as a prefix for money literals
     /// e.g. `SELECT $123.45` (SQL Server)
     fn supports_dollar_as_money_prefix(&self) -> bool {

@@ -976,3 +976,65 @@ fn display_create_macro_propagates_argument_list_errors() {
         }
     }
 }
+
+#[test]
+fn parse_map_type() {
+    for (sql, key, value) in [
+        (
+            "CREATE TABLE t (c MAP(INTEGER, DOUBLE))",
+            DataType::Integer(None),
+            DataType::Double(ExactNumberInfo::None),
+        ),
+        (
+            "CREATE TABLE t (c MAP(INTEGER, VARCHAR(8)))",
+            DataType::Integer(None),
+            DataType::Varchar(Some(CharacterLength::IntegerLength {
+                length: 8,
+                unit: None,
+            })),
+        ),
+        (
+            "CREATE TABLE t (c MAP(VARCHAR, INTEGER[]))",
+            DataType::Varchar(None),
+            DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Integer(None)),
+                None,
+            )),
+        ),
+        (
+            "CREATE TABLE t (c MAP(VARCHAR, MAP(INTEGER, VARCHAR)))",
+            DataType::Varchar(None),
+            DataType::Map(
+                Box::new(DataType::Integer(None)),
+                Box::new(DataType::Varchar(None)),
+                MapBracketKind::Parentheses,
+            ),
+        ),
+    ] {
+        let Statement::CreateTable(CreateTable { columns, .. }) =
+            duckdb().one_statement_parses_to(sql, &sql.replace("MAP(", "Map("))
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            columns[0].data_type,
+            DataType::Map(Box::new(key), Box::new(value), MapBracketKind::Parentheses)
+        );
+    }
+
+    duckdb().verified_expr("CAST(c AS Map(VARCHAR, INTEGER))");
+    duckdb().verified_stmt("SELECT map(k, v) FROM t");
+
+    assert_eq!(
+        duckdb()
+            .parse_sql_statements("CREATE TABLE t (c MAP(INTEGER))")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ,, found: )".to_string())
+    );
+    assert_eq!(
+        duckdb()
+            .parse_sql_statements("CREATE TABLE t (c MAP(INTEGER, VARCHAR NOT NULL))")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: NOT".to_string())
+    );
+}

@@ -12476,15 +12476,43 @@ impl<'a> Parser<'a> {
                 from: existing_enum_value,
                 to: new_enum_value,
             })
+        } else if self.peek_keyword(Keyword::ADD) {
+            AlterTypeOperation::AttributeActions(
+                self.parse_comma_separated(Parser::parse_alter_type_attribute_action)?,
+            )
         } else {
             return self.expected_ref(
-                "OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD VALUE, or RENAME VALUE \
-                 after ALTER TYPE",
+                "OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
+                 ADD VALUE, or RENAME VALUE after ALTER TYPE",
                 self.peek_token_ref(),
             );
         };
 
         Ok(Statement::AlterType(AlterType { name, operation }))
+    }
+
+    /// Parse one of the attribute actions of [Parser::parse_alter_type].
+    fn parse_alter_type_attribute_action(
+        &mut self,
+    ) -> Result<AlterTypeAttributeAction, ParserError> {
+        if self.parse_keywords(&[Keyword::ADD, Keyword::ATTRIBUTE]) {
+            let name = self.parse_identifier()?;
+            let data_type = self.parse_data_type()?;
+            let collate = if self.parse_keyword(Keyword::COLLATE) {
+                Some(self.parse_object_name(false)?)
+            } else {
+                None
+            };
+            let drop_behavior = self.parse_optional_drop_behavior();
+            Ok(AlterTypeAttributeAction::Add {
+                name,
+                data_type,
+                collate,
+                drop_behavior,
+            })
+        } else {
+            self.expected_ref("ADD ATTRIBUTE after ALTER TYPE", self.peek_token_ref())
+        }
     }
 
     /// Parse a [Statement::AlterCollation].

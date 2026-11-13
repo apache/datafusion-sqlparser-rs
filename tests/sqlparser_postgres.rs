@@ -8008,8 +8008,8 @@ fn parse_alter_type() {
         pg().parse_sql_statements("ALTER TYPE public.my_type FOO")
             .unwrap_err(),
         ParserError::ParserError(
-            "Expected: OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD VALUE, \
-             or RENAME VALUE after ALTER TYPE, found: FOO"
+            "Expected: OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
+             ADD VALUE, or RENAME VALUE after ALTER TYPE, found: FOO"
                 .to_string()
         )
     );
@@ -13671,4 +13671,89 @@ fn display_alter_type_rename_attribute_propagates_formatter_errors() {
         Err(fmt::Error)
     );
     assert_eq!(write!(RejectingWriter("CASCADE"), "{op}"), Err(fmt::Error));
+}
+
+#[test]
+fn parse_alter_type_attribute_actions() {
+    let stmt = pg_and_generic().verified_stmt("ALTER TYPE t ADD ATTRIBUTE a INT");
+    assert_eq!(
+        stmt,
+        Statement::AlterType(AlterType {
+            name: ObjectName::from(Ident::new("t")),
+            operation: AlterTypeOperation::AttributeActions(vec![AlterTypeAttributeAction::Add {
+                name: Ident::new("a"),
+                data_type: DataType::Int(None),
+                collate: None,
+                drop_behavior: None,
+            }]),
+        })
+    );
+
+    for sql in [
+        "ALTER TYPE t ADD ATTRIBUTE a INT COLLATE \"C\"",
+        "ALTER TYPE t ADD ATTRIBUTE a INT4 COLLATE pg_catalog.default CASCADE",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER TYPE t ADD ATTRIBUTE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ADD ATTRIBUTE a",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ADD ATTRIBUTE a INT COLLATE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ADD FOO",
+            "Expected: ADD ATTRIBUTE after ALTER TYPE, found: ADD",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string())
+        );
+    }
+}
+
+#[test]
+fn display_alter_type_attribute_action_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let action = AlterTypeAttributeAction::Add {
+        name: Ident::new("a"),
+        data_type: DataType::Int(None),
+        collate: Some(ObjectName::from(Ident::new("C"))),
+        drop_behavior: Some(DropBehavior::Cascade),
+    };
+
+    assert_eq!(
+        write!(RejectingWriter("ADD ATTRIBUTE"), "{action}"),
+        Err(fmt::Error)
+    );
+    assert_eq!(
+        write!(RejectingWriter("COLLATE"), "{action}"),
+        Err(fmt::Error)
+    );
+    assert_eq!(
+        write!(RejectingWriter("CASCADE"), "{action}"),
+        Err(fmt::Error)
+    );
 }

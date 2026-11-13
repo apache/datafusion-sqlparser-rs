@@ -13547,6 +13547,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} COLLATION schema.en_US"),
         format!("ALTER EXTENSION ext_name {action} CONVERSION conv"),
         format!("ALTER EXTENSION ext_name {action} DATABASE db_name"),
+        format!("ALTER EXTENSION ext_name {action} DOMAIN my_domain"),
         format!("ALTER EXTENSION ext_name {action} EVENT TRIGGER trg"),
         format!("ALTER EXTENSION ext_name {action} EXTENSION other_ext"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN DATA WRAPPER fdw"),
@@ -13887,6 +13888,10 @@ fn parse_alter_extension_add_member() {
         (
             "ALTER EXTENSION ext_name ADD CAST (INT AS INT",
             "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD DOMAIN",
+            "Expected: a data type name, found: EOF",
         ),
         (
             "ALTER EXTENSION ext_name ADD OPERATOR CLASS",

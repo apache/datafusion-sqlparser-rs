@@ -4973,6 +4973,8 @@ pub enum AlterExtensionMember {
     Subscription(Ident),
     /// `TABLE object_name`
     Table(ObjectName),
+    /// `TABLESPACE object_name`
+    TableSpace(Ident),
     /// `TEXT SEARCH CONFIGURATION object_name`
     TextSearchConfiguration(ObjectName),
     /// `TEXT SEARCH DICTIONARY object_name`
@@ -5034,6 +5036,7 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::Statistics(name) => write!(f, "STATISTICS {name}"),
             AlterExtensionMember::Subscription(name) => write!(f, "SUBSCRIPTION {name}"),
             AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
+            AlterExtensionMember::TableSpace(name) => write!(f, "TABLESPACE {name}"),
             AlterExtensionMember::TextSearchConfiguration(name) => {
                 write!(f, "TEXT SEARCH CONFIGURATION {name}")
             }

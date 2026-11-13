@@ -12599,6 +12599,8 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::Subscription(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::TABLE) {
             Ok(AlterExtensionMember::Table(self.parse_object_name(false)?))
+        } else if self.parse_keyword(Keyword::TABLESPACE) {
+            Ok(AlterExtensionMember::TableSpace(self.parse_identifier()?))
         } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH, Keyword::CONFIGURATION]) {
             Ok(AlterExtensionMember::TextSearchConfiguration(
                 self.parse_object_name(false)?,

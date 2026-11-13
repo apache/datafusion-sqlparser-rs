@@ -25,17 +25,18 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
+libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
 libsqlite3-sys = { version = "0.39", features = ["bundled"], optional = true }
 pg_query = { version = "6.2", optional = true }
 libduckdb-sys = { version = "1.10505.0", features = ["bundled", "json"], optional = true }
 serde_json = { version = "1", optional = true }
-sqlparser = { path = ".." }
+thiserror = { version = "2", optional = true }
+sqlparser = { path = "..", features = ["visitor"] }
 
 # The oracle targets build their engines from source, so each compiles only when its feature is on.
 [features]
-sqlite = ["dep:libsqlite3-sys"]
-postgres = ["dep:pg_query"]
+sqlite = ["dep:libsqlite3-sys", "dep:thiserror"]
+postgres = ["dep:pg_query", "dep:serde_json"]
 duckdb = ["dep:libduckdb-sys", "dep:serde_json"]
 
 # Prevent this from interfering with workspaces
@@ -76,6 +77,22 @@ bench = false
 name = "fuzz_duckdb_accepts"
 path = "fuzz_targets/fuzz_duckdb_accepts.rs"
 required-features = ["duckdb"]
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_sqlite_expr"
+path = "fuzz_targets/fuzz_sqlite_expr.rs"
+required-features = ["sqlite"]
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_postgres_expr"
+path = "fuzz_targets/fuzz_postgres_expr.rs"
+required-features = ["postgres"]
 test = false
 doc = false
 bench = false

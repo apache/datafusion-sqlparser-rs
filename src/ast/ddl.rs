@@ -4961,6 +4961,8 @@ pub enum AlterExtensionMember {
     },
     /// `MATERIALIZED VIEW object_name`
     MaterializedView(ObjectName),
+    /// `OPERATOR operator_name (left_type, right_type)`
+    Operator(DropOperatorSignature),
     /// `PROCEDURE procedure_name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]`
     Procedure(FunctionDesc),
     /// `PUBLICATION object_name`
@@ -5038,6 +5040,7 @@ impl fmt::Display for AlterExtensionMember {
                 }
             }
             AlterExtensionMember::MaterializedView(name) => write!(f, "MATERIALIZED VIEW {name}"),
+            AlterExtensionMember::Operator(signature) => write!(f, "OPERATOR {signature}"),
             AlterExtensionMember::Procedure(function) => write!(f, "PROCEDURE {function}"),
             AlterExtensionMember::Publication(name) => write!(f, "PUBLICATION {name}"),
             AlterExtensionMember::Routine(function) => write!(f, "ROUTINE {function}"),

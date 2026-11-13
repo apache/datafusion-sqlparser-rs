@@ -12536,6 +12536,16 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::Aggregate(
                 self.parse_alter_aggregate_signature()?,
             ))
+        } else if self.parse_keyword(Keyword::CAST) {
+            self.expect_token(&Token::LParen)?;
+            let source_type = self.parse_data_type()?;
+            self.expect_keyword_is(Keyword::AS)?;
+            let target_type = self.parse_data_type()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(AlterExtensionMember::Cast {
+                source_type,
+                target_type,
+            })
         } else if self.parse_keyword(Keyword::COLLATION) {
             Ok(AlterExtensionMember::Collation(
                 self.parse_object_name(false)?,

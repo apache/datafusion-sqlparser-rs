@@ -6087,43 +6087,79 @@ impl Spanned for AlterOperatorClass {
     }
 }
 
+/// An aggregate's name and argument signature.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AggregateSignature {
+    /// Aggregate name.
+    pub name: ObjectName,
+    /// Aggregate arguments.
+    pub args: AggregateArgs,
+}
+
+/// Arguments identifying an aggregate.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AggregateArgs {
+    /// The `*` signature.
+    Star,
+    /// Direct arguments with an optional ordered-set argument list.
+    List {
+        /// Direct arguments.
+        args: Vec<OperateFunctionArg>,
+        /// Arguments following `ORDER BY`.
+        order_by: Option<Vec<OperateFunctionArg>>,
+    },
+}
+
+impl fmt::Display for AggregateSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(", self.name)?;
+        match &self.args {
+            AggregateArgs::Star => write!(f, "*")?,
+            AggregateArgs::List { args, order_by } => {
+                write!(f, "{}", display_comma_separated(args))?;
+                if let Some(order_by) = order_by {
+                    if !args.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "ORDER BY {}", display_comma_separated(order_by))?;
+                }
+            }
+        }
+        write!(f, ")")
+    }
+}
+
 /// `ALTER FUNCTION` / `ALTER AGGREGATE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterFunction {
-    /// Object type being altered.
-    pub kind: AlterFunctionKind,
     /// Function or aggregate signature.
-    pub function: FunctionDesc,
-    /// `ORDER BY` argument list for aggregate signatures.
-    ///
-    /// This is only used for `ALTER AGGREGATE`.
-    pub aggregate_order_by: Option<Vec<OperateFunctionArg>>,
-    /// Whether the aggregate signature uses `*`.
-    ///
-    /// This is only used for `ALTER AGGREGATE`.
-    pub aggregate_star: bool,
+    pub signature: AlterFunctionSignature,
     /// Operation applied to the object.
     pub operation: AlterFunctionOperation,
 }
 
-/// Function-like object type used by [`AlterFunction`].
+/// The function or aggregate identified by [`AlterFunction`].
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum AlterFunctionKind {
-    /// `FUNCTION`
-    Function,
-    /// `AGGREGATE`
-    Aggregate,
+pub enum AlterFunctionSignature {
+    /// A function signature.
+    Function(FunctionDesc),
+    /// An aggregate signature.
+    Aggregate(AggregateSignature),
 }
 
-impl fmt::Display for AlterFunctionKind {
+impl fmt::Display for AlterFunctionSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Function => write!(f, "FUNCTION"),
-            Self::Aggregate => write!(f, "AGGREGATE"),
+            Self::Function(function) => write!(f, "FUNCTION {function}"),
+            Self::Aggregate(signature) => write!(f, "AGGREGATE {signature}"),
         }
     }
 }
@@ -6196,35 +6232,7 @@ pub enum AlterFunctionAction {
 
 impl fmt::Display for AlterFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ALTER {} ", self.kind)?;
-        match self.kind {
-            AlterFunctionKind::Function => {
-                write!(f, "{} ", self.function)?;
-            }
-            AlterFunctionKind::Aggregate => {
-                write!(f, "{}(", self.function.name)?;
-                if self.aggregate_star {
-                    write!(f, "*")?;
-                } else {
-                    if let Some(args) = &self.function.args {
-                        write!(f, "{}", display_comma_separated(args))?;
-                    }
-                    if let Some(order_by_args) = &self.aggregate_order_by {
-                        if self
-                            .function
-                            .args
-                            .as_ref()
-                            .is_some_and(|args| !args.is_empty())
-                        {
-                            write!(f, " ")?;
-                        }
-                        write!(f, "ORDER BY {}", display_comma_separated(order_by_args))?;
-                    }
-                }
-                write!(f, ") ")?;
-            }
-        }
-        write!(f, "{}", self.operation)
+        write!(f, "ALTER {} {}", self.signature, self.operation)
     }
 }
 

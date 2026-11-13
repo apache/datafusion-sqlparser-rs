@@ -9236,7 +9236,7 @@ fn parse_alter_function_and_aggregate() {
         assert!(matches!(
             statement,
             Statement::AlterFunction(AlterFunction {
-                kind: AlterFunctionKind::Aggregate,
+                signature: AlterFunctionSignature::Aggregate(_),
                 ..
             })
         ));
@@ -9376,7 +9376,7 @@ fn parse_alter_function_and_aggregate() {
         assert!(matches!(
             statement,
             Statement::AlterFunction(AlterFunction {
-                kind: AlterFunctionKind::Function,
+                signature: AlterFunctionSignature::Function(_),
                 ..
             })
         ));
@@ -10761,23 +10761,29 @@ fn parse_quoted_argument_names_in_function_signatures() {
     pg_and_generic().verified_stmt(r#"ALTER FUNCTION f("Role" TEXT) RENAME TO g"#);
     pg_and_generic().verified_stmt(r#"ALTER AGGREGATE my_agg("Role" TEXT) RENAME TO other_agg"#);
 
-    // An aggregate's `ORDER BY` arguments are parsed by the same reader as its
-    // direct ones.
+    // Aggregate arguments preserve quoted names in both lists.
     let sql = r#"ALTER AGGREGATE my_agg("A" INT ORDER BY "B" INT) OWNER TO some_role"#;
     let Statement::AlterFunction(alter) = pg_and_generic().verified_stmt(sql) else {
         panic!("expected an ALTER AGGREGATE statement");
     };
+    let AlterFunctionSignature::Aggregate(AggregateSignature {
+        args: AggregateArgs::List { args, order_by },
+        ..
+    }) = alter.signature
+    else {
+        panic!("expected an aggregate argument list");
+    };
     assert_eq!(
-        alter.function.args,
-        Some(vec![OperateFunctionArg {
+        args,
+        vec![OperateFunctionArg {
             mode: None,
             name: Some(Ident::with_quote('"', "A")),
             data_type: DataType::Int(None),
             default_expr: None,
-        }])
+        }]
     );
     assert_eq!(
-        alter.aggregate_order_by,
+        order_by,
         Some(vec![OperateFunctionArg {
             mode: None,
             name: Some(Ident::with_quote('"', "B")),
@@ -13834,6 +13840,95 @@ fn parse_alter_extension_drop_member() {
         assert_eq!(
             pg_and_generic().parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_aggregate_signature_propagates_write_errors() {
+    for (sql, fragments) in [
+        (
+            "ALTER AGGREGATE agg(*) RENAME TO other",
+            vec!["ALTER ", "AGGREGATE ", "agg", "(", "*", ")"],
+        ),
+        (
+            "ALTER AGGREGATE agg(INT ORDER BY TEXT) RENAME TO other",
+            vec!["INT", " ", "ORDER BY ", "TEXT"],
+        ),
+        (
+            "ALTER AGGREGATE agg(ORDER BY TEXT) RENAME TO other",
+            vec!["ORDER BY ", "TEXT"],
+        ),
+        (
+            "ALTER FUNCTION fun(INT) RENAME TO other",
+            vec!["FUNCTION ", "fun"],
+        ),
+    ] {
+        let statement = pg_and_generic().verified_stmt(sql);
+        assert_display_propagates_write_errors(&statement, &fragments);
+    }
+}
+
+#[test]
+fn parse_alter_aggregate_signatures() {
+    for (signature, args) in [
+        ("agg(*)", AggregateArgs::Star),
+        (
+            "agg()",
+            AggregateArgs::List {
+                args: vec![],
+                order_by: None,
+            },
+        ),
+        (
+            "agg(INT)",
+            AggregateArgs::List {
+                args: vec![OperateFunctionArg::unnamed(DataType::Int(None))],
+                order_by: None,
+            },
+        ),
+        (
+            "agg(ORDER BY TEXT)",
+            AggregateArgs::List {
+                args: vec![],
+                order_by: Some(vec![OperateFunctionArg::unnamed(DataType::Text)]),
+            },
+        ),
+    ] {
+        let statement =
+            pg_and_generic().verified_stmt(&format!("ALTER AGGREGATE {signature} RENAME TO other"));
+        assert_eq!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                signature: AlterFunctionSignature::Aggregate(AggregateSignature {
+                    name: ObjectName::from(Ident::new("agg")),
+                    args,
+                }),
+                operation: AlterFunctionOperation::RenameTo {
+                    new_name: Ident::new("other"),
+                },
+            })
+        );
+    }
+
+    for (sql, error) in [
+        ("ALTER FUNCTION 1", "Expected: identifier, found: 1"),
+        ("ALTER AGGREGATE 1", "Expected: identifier, found: 1"),
+        ("ALTER AGGREGATE agg", "Expected: (, found: EOF"),
+        ("ALTER AGGREGATE agg(*", "Expected: ), found: EOF"),
+        (
+            "ALTER AGGREGATE agg(ORDER BY)",
+            "Expected: a data type name, found: )",
+        ),
+        (
+            "ALTER FUNCTION fun() NO",
+            "Expected: DEPENDS after NO, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.into())),
             "{sql}"
         );
     }

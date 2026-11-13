@@ -8901,7 +8901,7 @@ fn parse_alter_operator_family() {
         // Invalid operator name (empty)
         ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1  (INT4, INT2)", "Expected: (, found: INT4"),
         // Invalid operator name (special characters)
-        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 @#$ (INT4, INT2)", "Expected: (, found: #"),
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 @#$ (INT4, INT2)", "Expected: (, found: $"),
         // Negative strategy number
         ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR -1 < (INT4, INT2)", "Expected: literal int, found: -"),
         // Non-integer strategy number
@@ -8916,7 +8916,7 @@ fn parse_alter_operator_family() {
         // Empty operator types
         ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < ()", "Expected: a data type name, found: )"),
         // Invalid data type (using punctuation)
-        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (@#$%, INT2)", "Expected: a data type name, found: @"),
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (@#$%, INT2)", "Expected: a data type name, found: @#"),
         // Incomplete FOR clause
         ("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR", "Expected: SEARCH or ORDER BY after FOR, found: EOF"),
         // Invalid FOR clause keyword
@@ -8942,7 +8942,7 @@ fn parse_alter_operator_family() {
         // Missing closing parenthesis in function arguments
         ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(INT4, INT2", "Expected: ), found: EOF"),
         // Invalid data type in function arguments
-        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(@#$%, INT2)", "Expected: a data type name, found: @"),
+        ("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(@#$%, INT2)", "Expected: a data type name, found: @#"),
         // DROP OPERATOR with FOR clause (not allowed)
         (
             "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2) FOR SEARCH",
@@ -10980,15 +10980,13 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
 
 #[test]
 fn parse_pg_abs_space_before_negative_operand() {
-    // `@-` tokenizes as a geometric operator prefix, so displaying PGAbs
+    // `@-` tokenizes as one operator name, so displaying PGAbs
     // without a space breaks re-parsing of a negative operand.
     pg().verified_stmt("SELECT @ -2");
     pg().one_statement_parses_to("SELECT @a", "SELECT @ a");
     let err = pg().parse_sql_statements("SELECT @-2").unwrap_err();
     assert_eq!(
-        ParserError::TokenizerError(
-            "Expected a valid binary operator after '@-' at Line: 1, Column: 10".to_string(),
-        ),
+        ParserError::ParserError("Expected: an expression, found: @-".to_string()),
         err
     );
 }
@@ -11017,8 +11015,8 @@ fn parse_postfix_factorial_spacing() {
     pg().verified_stmt("SELECT a! !");
     pg().verified_stmt("SELECT a! ! !");
     pg().verified_stmt("SELECT a! ! % 2");
-    pg().one_statement_parses_to("SELECT a! !%2", "SELECT a! ! % 2");
-    pg().one_statement_parses_to("SELECT -a, +b, a! !%2, a", "SELECT -a, +b, a! ! % 2, a");
+    pg().one_statement_parses_to("SELECT a! !%2", "SELECT a! !% 2");
+    pg().one_statement_parses_to("SELECT -a, +b, a! !%2, a", "SELECT -a, +b, a! !% 2, a");
 
     let err = pg().parse_sql_statements("SELECT a!!").unwrap_err();
     assert_eq!(
@@ -13517,4 +13515,45 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+#[test]
+fn parse_operator_name_spans_whole_operator_character_run() {
+    for op in ["===", "+~+", "!==", "^-", "@-", "|-", "!=-", "*@", "`"] {
+        test_operator(op, &pg(), BinaryOperator::Custom(op.to_string()));
+    }
+
+    // A trailing `+` or `-` leaves the name unless it holds one of `~ ! @ # % ^ & | ` ?`
+    for (sql, canonical) in [
+        ("SELECT 1>-1", "SELECT 1 > -1"),
+        ("SELECT 1=-1", "SELECT 1 = -1"),
+        ("SELECT 1<=-1", "SELECT 1 <= -1"),
+        ("SELECT 1<>-1", "SELECT 1 <> -1"),
+        ("SELECT 2*-1", "SELECT 2 * -1"),
+        ("SELECT 2/+1", "SELECT 2 / +1"),
+        ("SELECT 1<-+-1", "SELECT 1 < - + -1"),
+        ("SELECT + |/4", "SELECT + |/ 4"),
+        ("SELECT + ~1", "SELECT + ~ 1"),
+        ("SELECT 1+--c\n1", "SELECT 1 + 1"),
+        ("SELECT 1+/*c*/1", "SELECT 1 + 1"),
+        ("SELECT 1===/*c*/1", "SELECT 1 === 1"),
+        ("SELECT a ?--c\nb", "SELECT a ? b"),
+        ("SELECT a #--c\nb", "SELECT a # b"),
+        ("SELECT a |/*c*/b", "SELECT a | b"),
+        ("SELECT a ||/*c*/b", "SELECT a || b"),
+        ("SELECT a&>b", "SELECT a &> b"),
+        ("SELECT a&>-b", "SELECT a &>- b"),
+        ("SELECT a&>~b", "SELECT a &>~ b"),
+    ] {
+        pg().one_statement_parses_to(sql, canonical);
+    }
+
+    pg().verified_stmt("CREATE OPERATOR === (FUNCTION = int4eq, LEFTARG = INT4, RIGHTARG = INT4)");
+    pg().verified_stmt("CREATE OPERATOR app.+~+ (FUNCTION = f, LEFTARG = INT4, RIGHTARG = INT4)");
+    pg().verified_stmt(
+        "CREATE OPERATOR <<< (FUNCTION = f, LEFTARG = INT4, RIGHTARG = INT4, NEGATOR = !==)",
+    );
+    pg().verified_stmt("ALTER OPERATOR === (INT4, INT4) OWNER TO r");
+    pg().verified_stmt("DROP OPERATOR === (INT4, INT4)");
+    pg().verified_stmt("SELECT 1 OPERATOR(app.===) 2");
 }

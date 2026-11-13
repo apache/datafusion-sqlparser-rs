@@ -8005,9 +8005,11 @@ fn parse_alter_type() {
     });
 
     assert_eq!(
-        pg().parse_sql_statements("ALTER TYPE public.my_type FOO").unwrap_err(),
+        pg().parse_sql_statements("ALTER TYPE public.my_type FOO")
+            .unwrap_err(),
         ParserError::ParserError(
-            "Expected: RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE after ALTER TYPE, found: FOO"
+            "Expected: OWNER TO, RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE \
+             after ALTER TYPE, found: FOO"
                 .to_string()
         )
     );
@@ -13532,6 +13534,43 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         pg().parse_sql_statements("SELECT CASE 1 WHEN 1 THEN 1 END END FROM t")
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
+    );
+}
+
+#[test]
+fn parse_alter_type_owner_to() {
+    let stmt = pg_and_generic().verified_stmt("ALTER TYPE t OWNER TO u1");
+    assert_eq!(
+        stmt,
+        Statement::AlterType(AlterType {
+            name: ObjectName::from(Ident::new("t")),
+            operation: AlterTypeOperation::OwnerTo(Owner::Ident(Ident::new("u1"))),
+        })
+    );
+
+    for (sql, owner) in [
+        ("ALTER TYPE t OWNER TO CURRENT_ROLE", Owner::CurrentRole),
+        ("ALTER TYPE t OWNER TO CURRENT_USER", Owner::CurrentUser),
+        ("ALTER TYPE t OWNER TO SESSION_USER", Owner::SessionUser),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        assert_eq!(
+            stmt,
+            Statement::AlterType(AlterType {
+                name: ObjectName::from(Ident::new("t")),
+                operation: AlterTypeOperation::OwnerTo(owner),
+            })
+        );
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TYPE t OWNER TO")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. \
+             sql parser error: Expected: identifier, found: EOF"
+                .to_string()
+        )
     );
 }
 

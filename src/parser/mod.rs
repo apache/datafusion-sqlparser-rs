@@ -344,8 +344,6 @@ pub struct Parser<'a> {
     index: usize,
     /// The current state of the parser.
     state: ParserState,
-    /// Whether `:` ends the current array-subscript bound.
-    in_subscript_bound: bool,
     /// The SQL dialect to use.
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
@@ -356,10 +354,10 @@ pub struct Parser<'a> {
     recursion_counter: RecursionCounter,
     /// Cached failures from `parse_prefix` calls that returned `Err`. See
     /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
-    failed_prefix_positions: BTreeMap<(usize, bool), ExprPrefixError>,
+    failed_prefix_positions: BTreeMap<usize, ExprPrefixError>,
     /// Cached failures from the speculative reserved-word prefix arm. See
     /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
-    failed_reserved_word_prefix_positions: BTreeMap<(usize, bool), ExprPrefixError>,
+    failed_reserved_word_prefix_positions: BTreeMap<usize, ExprPrefixError>,
     /// Cached failures from the speculative derived-table arm of
     /// `parse_table_factor`. See [`Parser::parse_table_factor`] for the 2^N
     /// pattern this guards.
@@ -420,7 +418,6 @@ impl<'a> Parser<'a> {
             tokens: vec![],
             index: 0,
             state: ParserState::Normal,
-            in_subscript_bound: false,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
@@ -1433,19 +1430,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a new expression.
     pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
-        self.parse_subexpr_with_subscript_bound(self.dialect.prec_unknown(), false)
-    }
-
-    fn parse_subexpr_with_subscript_bound(
-        &mut self,
-        precedence: u8,
-        in_subscript_bound: bool,
-    ) -> Result<Expr, ParserError> {
-        let previous = self.in_subscript_bound;
-        self.in_subscript_bound = in_subscript_bound;
-        let result = self.parse_subexpr(precedence);
-        self.in_subscript_bound = previous;
-        result
+        self.parse_subexpr(self.dialect.prec_unknown())
     }
 
     /// Parse expression with optional alias and order by.
@@ -1870,13 +1855,13 @@ impl<'a> Parser<'a> {
         // The per-arm cache in `parse_prefix_inner` complements this for
         // chains where the reserved arm fails but the unreserved fallback
         // succeeds (e.g. `case-case-...c`).
-        let key = (self.index, self.in_subscript_bound);
-        if let Some(&cached) = self.failed_prefix_positions.get(&key) {
+        let start_index = self.index;
+        if let Some(&cached) = self.failed_prefix_positions.get(&start_index) {
             return self.cached_prefix_error(cached, self.peek_token_ref());
         }
         let result = self.parse_prefix_inner();
         if let Err(ref e) = result {
-            self.failed_prefix_positions.insert(key, e.into());
+            self.failed_prefix_positions.insert(start_index, e.into());
         }
         result
     }
@@ -1932,7 +1917,19 @@ impl<'a> Parser<'a> {
                         uses_odbc_syntax: false,
                     }))
                 }
-                DataType::Custom(..) => parser_err!("dummy", loc),
+                data_type
+                    if {
+                        let mut element_type = &data_type;
+                        while let DataType::Array(ArrayElemTypeDef::SquareBracket(inner, _)) =
+                            element_type
+                        {
+                            element_type = inner;
+                        }
+                        matches!(element_type, DataType::Custom(..))
+                    } =>
+                {
+                    parser_err!("dummy", loc)
+                }
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
                     Ok(Expr::Cast {
@@ -1942,27 +1939,11 @@ impl<'a> Parser<'a> {
                         format: None,
                     })
                 }
-                data_type => {
-                    if parser.in_subscript_bound
-                        && matches!(data_type, DataType::Array(_))
-                        && parser.peek_token_ref().token == Token::Colon
-                    {
-                        let mut element_type = &data_type;
-                        while let DataType::Array(ArrayElemTypeDef::SquareBracket(inner, Some(_))) =
-                            element_type
-                        {
-                            element_type = inner;
-                        }
-                        if !matches!(element_type, DataType::Array(_)) {
-                            return parser_err!("dummy", loc);
-                        }
-                    }
-                    Ok(Expr::TypedString(TypedString {
-                        data_type,
-                        value: parser.parse_value()?,
-                        uses_odbc_syntax: false,
-                    }))
-                }
+                data_type => Ok(Expr::TypedString(TypedString {
+                    data_type,
+                    value: parser.parse_value()?,
+                    uses_odbc_syntax: false,
+                })),
             }
         })?;
 
@@ -1996,9 +1977,9 @@ impl<'a> Parser<'a> {
                 // succeeds, the overall `parse_prefix` returns `Ok` and the
                 // outer cache never fires. Chains like `case-case-...c`
                 // need this per-arm cache to break the doubling.
-                let prefix_key = (next_token_index, self.in_subscript_bound);
-                let try_parse_result = if let Some(&cached) =
-                    self.failed_reserved_word_prefix_positions.get(&prefix_key)
+                let try_parse_result = if let Some(&cached) = self
+                    .failed_reserved_word_prefix_positions
+                    .get(&next_token_index)
                 {
                     self.cached_prefix_error(cached, self.get_current_token())
                 } else {
@@ -2019,7 +2000,7 @@ impl<'a> Parser<'a> {
                     // special expression (to maintain backwards compatibility of parsing errors).
                     Err(e) => {
                         self.failed_reserved_word_prefix_positions
-                            .insert(prefix_key, (&e).into());
+                            .insert(next_token_index, (&e).into());
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)
@@ -4426,10 +4407,7 @@ impl<'a> Parser<'a> {
             None
         } else {
             // parse expr until we hit a colon (or any token with lower precedence)
-            Some(self.parse_subexpr_with_subscript_bound(
-                self.dialect.prec_value(Precedence::Colon),
-                true,
-            )?)
+            Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)
         };
 
         // check for end
@@ -4458,10 +4436,7 @@ impl<'a> Parser<'a> {
             });
         } else {
             // parse expr until we hit a colon (or any token with lower precedence)
-            Some(self.parse_subexpr_with_subscript_bound(
-                self.dialect.prec_value(Precedence::Colon),
-                true,
-            )?)
+            Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)
         };
 
         // check for end

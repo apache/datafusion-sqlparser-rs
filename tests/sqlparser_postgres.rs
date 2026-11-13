@@ -25,8 +25,8 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    Dialect, GenericDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
-    SnowflakeDialect,
+    Dialect, DuckDbDialect, GenericDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect,
+    SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Location, Span, Token, Tokenizer};
@@ -13711,18 +13711,88 @@ fn parse_array_slice_rejects_malformed_bounds() {
 }
 
 #[test]
-fn parse_array_slice_failure_does_not_poison_array_expression() {
-    let dialect = PostgreSqlDialect {};
-    for sql in ["[TRIM[1]:items]", "[NOT TRIM[1]:items]"] {
-        let expected = Parser::new(&dialect)
-            .try_with_sql(sql)
-            .unwrap()
-            .parse_expr()
-            .unwrap();
-        let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
-        parser
-            .try_parse(|parser| parser.parse_multi_dim_subscript(&mut vec![]))
-            .unwrap_err();
-        assert_eq!(parser.parse_expr().unwrap(), expected, "{sql}");
+fn parse_array_slice_with_position_typed_placeholder() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(DuckDbDialect {}),
+    ]);
+    let position = Expr::Position {
+        expr: Box::new(Expr::TypedString(TypedString {
+            data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Int(None)),
+                Some(2),
+            )),
+            value: Value::Placeholder(":items".into()).with_empty_span(),
+            uses_odbc_syntax: false,
+        })),
+        r#in: Box::new(Expr::value(Value::SingleQuotedString("x".into()))),
+    };
+    for (sql, lower_bound, upper_bound) in [
+        (
+            "tags[POSITION(INT[2] :items IN 'x'):3]",
+            position.clone(),
+            Expr::value(number("3")),
+        ),
+        (
+            "tags[1:POSITION(INT[2] :items IN 'x')]",
+            Expr::value(number("1")),
+            position,
+        ),
+    ] {
+        assert_eq!(
+            dialects.verified_expr(sql),
+            Expr::CompoundFieldAccess {
+                root: Box::new(Expr::Identifier(Ident::new("tags"))),
+                access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                    lower_bound: Some(lower_bound),
+                    upper_bound: Some(upper_bound),
+                    stride: None,
+                })],
+            },
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_array_slice_with_map_typed_placeholder() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(DuckDbDialect {}),
+    ]);
+    let map = Expr::Map(Map {
+        entries: vec![MapEntry {
+            key: Box::new(Expr::TypedString(TypedString {
+                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                    Box::new(DataType::Int(None)),
+                    Some(2),
+                )),
+                value: Value::Placeholder(":a".into()).with_empty_span(),
+                uses_odbc_syntax: false,
+            })),
+            value: Box::new(Expr::value(number("1"))),
+        }],
+    });
+    for (sql, lower_bound, upper_bound) in [
+        (
+            "tags[MAP {INT[2] :a: 1}:4]",
+            map.clone(),
+            Expr::value(number("4")),
+        ),
+        ("tags[1:MAP {INT[2] :a: 1}]", Expr::value(number("1")), map),
+    ] {
+        assert_eq!(
+            dialects.verified_expr(sql),
+            Expr::CompoundFieldAccess {
+                root: Box::new(Expr::Identifier(Ident::new("tags"))),
+                access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                    lower_bound: Some(lower_bound),
+                    upper_bound: Some(upper_bound),
+                    stride: None,
+                })],
+            },
+            "{sql}"
+        );
     }
 }

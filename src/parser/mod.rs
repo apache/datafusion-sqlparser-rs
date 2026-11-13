@@ -12581,6 +12581,8 @@ impl<'a> Parser<'a> {
             ))
         } else if self.parse_keyword(Keyword::PUBLICATION) {
             Ok(AlterExtensionMember::Publication(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::ROLE) {
+            Ok(AlterExtensionMember::Role(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::SCHEMA) {
             Ok(AlterExtensionMember::Schema(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::SEQUENCE) {

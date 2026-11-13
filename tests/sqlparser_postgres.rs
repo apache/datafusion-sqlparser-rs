@@ -8324,7 +8324,7 @@ fn parse_foreign_key_match_with_actions() {
 
 #[test]
 fn parse_create_operator() {
-    let sql = "CREATE OPERATOR myschema.@@ (PROCEDURE = myschema.my_proc, LEFTARG = TIMESTAMP WITH TIME ZONE, RIGHTARG = VARCHAR(255), COMMUTATOR = schema.>, NEGATOR = schema.<=, RESTRICT = myschema.sel_func, JOIN = myschema.join_func, HASHES, MERGES)";
+    let sql = "CREATE OPERATOR myschema.@@ (PROCEDURE = myschema.my_proc, LEFTARG = TIMESTAMP WITH TIME ZONE, RIGHTARG = VARCHAR(255), COMMUTATOR = OPERATOR(schema.>), NEGATOR = OPERATOR(schema.<=), RESTRICT = myschema.sel_func, JOIN = myschema.join_func, HASHES, MERGES)";
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::CreateOperator(CreateOperator {
@@ -8353,8 +8353,8 @@ fn parse_create_operator() {
                     Ident::new("myschema"),
                     Ident::new("join_func")
                 ]))),
-                OperatorOption::Hashes,
-                OperatorOption::Merges,
+                OperatorOption::Hashes(None),
+                OperatorOption::Merges(None),
             ],
         })
     );
@@ -8711,12 +8711,12 @@ fn parse_alter_operator() {
 
     // Test ALTER OPERATOR ... SET with HASHES and MERGES (individually and combined)
     for (operator, options_sql, options_ast) in [
-        ("=", "HASHES", vec![OperatorOption::Hashes]),
-        ("<", "MERGES", vec![OperatorOption::Merges]),
+        ("=", "HASHES", vec![OperatorOption::Hashes(None)]),
+        ("<", "MERGES", vec![OperatorOption::Merges(None)]),
         (
             "<=",
             "HASHES, MERGES",
-            vec![OperatorOption::Hashes, OperatorOption::Merges],
+            vec![OperatorOption::Hashes(None), OperatorOption::Merges(None)],
         ),
     ] {
         let sql = format!(
@@ -8749,8 +8749,8 @@ fn parse_alter_operator() {
                 options: vec![
                     OperatorOption::Commutator(ObjectName::from(vec![Ident::new("+")])),
                     OperatorOption::Negator(ObjectName::from(vec![Ident::new("-")])),
-                    OperatorOption::Hashes,
-                    OperatorOption::Merges,
+                    OperatorOption::Hashes(None),
+                    OperatorOption::Merges(None),
                 ],
             },
         })
@@ -13517,4 +13517,90 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+#[test]
+fn parse_operator_hashes_and_merges_values() {
+    let create = "CREATE OPERATOR << (FUNCTION = f, LEFTARG = INT4, RIGHTARG = INT4, HASHES = true, MERGES = false)";
+    match pg_and_generic().verified_stmt(create) {
+        Statement::CreateOperator(CreateOperator { options, .. }) => assert_eq!(
+            options,
+            vec![
+                OperatorOption::Hashes(Some(true)),
+                OperatorOption::Merges(Some(false)),
+            ]
+        ),
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("ALTER OPERATOR << (INT4, INT4) SET (HASHES = false, MERGES)");
+
+    for (value, canonical) in [
+        ("TRUE", "true"),
+        ("on", "true"),
+        ("OFF", "false"),
+        ("1", "true"),
+        ("0", "false"),
+        ("'On'", "true"),
+        ("\"off\"", "false"),
+    ] {
+        pg_and_generic().one_statement_parses_to(
+            &format!("ALTER OPERATOR << (INT4, INT4) SET (MERGES = {value})"),
+            &format!("ALTER OPERATOR << (INT4, INT4) SET (MERGES = {canonical})"),
+        );
+    }
+
+    for value in ["2", "1.0", "'yes'", "NONE"] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(&format!(
+                    "CREATE OPERATOR << (FUNCTION = f, HASHES = {value})"
+                ))
+                .unwrap_err(),
+            ParserError::ParserError(format!("Expected: a Boolean value, found: {value}"))
+        );
+    }
+}
+
+#[test]
+fn parse_operator_commutator_and_negator_names() {
+    let alter = "ALTER OPERATOR app.<< (INT4, INT8) SET (COMMUTATOR = OPERATOR(app.>>), NEGATOR = OPERATOR(app.>=))";
+    match pg_and_generic().verified_stmt(alter) {
+        Statement::AlterOperator(AlterOperator {
+            operation: AlterOperatorOperation::Set { options },
+            ..
+        }) => assert_eq!(
+            options,
+            vec![
+                OperatorOption::Commutator(ObjectName::from(vec![
+                    Ident::new("app"),
+                    Ident::new(">>"),
+                ])),
+                OperatorOption::Negator(ObjectName::from(vec![
+                    Ident::new("app"),
+                    Ident::new(">="),
+                ])),
+            ]
+        ),
+        _ => unreachable!(),
+    }
+    pg_and_generic().one_statement_parses_to(
+        "ALTER OPERATOR << (INT4, INT4) SET (COMMUTATOR = OPERATOR(>>))",
+        "ALTER OPERATOR << (INT4, INT4) SET (COMMUTATOR = >>)",
+    );
+
+    for sql in [
+        "CREATE OPERATOR << (FUNCTION = f, COMMUTATOR = app.>>)",
+        "CREATE OPERATOR << (FUNCTION = f, NEGATOR = app.>>)",
+        "ALTER OPERATOR << (INT4, INT4) SET (COMMUTATOR = app.>>)",
+        "ALTER OPERATOR << (INT4, INT4) SET (NEGATOR = app.>>)",
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(
+                "Expected: OPERATOR(...) around a schema-qualified operator name, found: app.>>"
+                    .to_string()
+            ),
+            "{sql}"
+        );
+    }
 }

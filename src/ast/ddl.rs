@@ -4928,6 +4928,8 @@ pub enum AlterExtensionOperation {
 pub enum AlterExtensionMember {
     /// `ACCESS METHOD object_name`
     AccessMethod(Ident),
+    /// `EVENT TRIGGER object_name`
+    EventTrigger(Ident),
     /// `FOREIGN TABLE object_name`
     ForeignTable(ObjectName),
     /// `[ PROCEDURAL ] LANGUAGE object_name`
@@ -4972,6 +4974,7 @@ impl fmt::Display for AlterExtensionMember {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterExtensionMember::AccessMethod(name) => write!(f, "ACCESS METHOD {name}"),
+            AlterExtensionMember::EventTrigger(name) => write!(f, "EVENT TRIGGER {name}"),
             AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
             AlterExtensionMember::Language { procedural, name } => {
                 if *procedural {

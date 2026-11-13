@@ -290,6 +290,8 @@ pub enum DataType {
     Int4Unsigned(Option<u64>),
     /// Unsigned integer with optional display width, e.g. INTEGER UNSIGNED or INTEGER(11) UNSIGNED.
     IntegerUnsigned(Option<u64>),
+    /// Unsigned integer, e.g. UINTEGER.
+    UInteger,
     /// 128-bit integer type, e.g. HUGEINT.
     HugeInt,
     /// Unsigned 128-bit integer type, e.g. UHUGEINT.
@@ -688,6 +690,9 @@ impl fmt::Display for DataType {
             }
             DataType::USmallInt => {
                 write!(f, "USMALLINT")
+            }
+            DataType::UInteger => {
+                write!(f, "UINTEGER")
             }
             DataType::UBigInt => {
                 write!(f, "UBIGINT")

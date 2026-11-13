@@ -13817,6 +13817,7 @@ impl<'a> Parser<'a> {
                 Keyword::HUGEINT => Ok(DataType::HugeInt),
                 Keyword::UBIGINT => Ok(DataType::UBigInt),
                 Keyword::UHUGEINT => Ok(DataType::UHugeInt),
+                Keyword::UINTEGER => Ok(DataType::UInteger),
                 Keyword::USMALLINT => Ok(DataType::USmallInt),
                 Keyword::UTINYINT => Ok(DataType::UTinyInt),
                 Keyword::UINT8 => Ok(DataType::UInt8),

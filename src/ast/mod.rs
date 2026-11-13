@@ -5872,13 +5872,14 @@ impl fmt::Display for Statement {
             Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
             Statement::DropDomain(DropDomain {
                 if_exists,
-                name,
+                names,
                 drop_behavior,
             }) => {
                 write!(
                     f,
-                    "DROP DOMAIN{} {name}",
+                    "DROP DOMAIN{} {}",
                     if *if_exists { " IF EXISTS" } else { "" },
+                    display_comma_separated(names),
                 )?;
                 if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;
@@ -8299,8 +8300,8 @@ impl fmt::Display for CloseCursor {
 pub struct DropDomain {
     /// Whether to drop the domain if it exists
     pub if_exists: bool,
-    /// The name of the domain to drop
-    pub name: ObjectName,
+    /// The names of the domains to drop
+    pub names: Vec<ObjectName>,
     /// The behavior to apply when dropping the domain
     pub drop_behavior: Option<DropBehavior>,
 }

@@ -6023,11 +6023,11 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: true,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: None
         })
     );
@@ -6037,11 +6037,11 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: false,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: None
         })
     );
@@ -6051,11 +6051,11 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: true,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: Some(DropBehavior::Cascade)
         })
     );
@@ -6066,13 +6066,32 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: true,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: Some(DropBehavior::Restrict)
         })
+    );
+
+    assert_eq!(
+        pg().verified_stmt("DROP DOMAIN IF EXISTS s2.span, d2 CASCADE"),
+        Statement::DropDomain(DropDomain {
+            if_exists: true,
+            names: vec![
+                ObjectName::from(vec![Ident::new("s2"), Ident::new("span")]),
+                ObjectName::from(vec![Ident::new("d2")]),
+            ],
+            drop_behavior: Some(DropBehavior::Cascade)
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("DROP DOMAIN d1,")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
     );
 }
 

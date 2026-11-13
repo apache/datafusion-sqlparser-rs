@@ -12585,6 +12585,8 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::Procedure(self.parse_function_desc()?))
         } else if self.parse_keyword(Keyword::PUBLICATION) {
             Ok(AlterExtensionMember::Publication(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::ROUTINE) {
+            Ok(AlterExtensionMember::Routine(self.parse_function_desc()?))
         } else if self.parse_keyword(Keyword::ROLE) {
             Ok(AlterExtensionMember::Role(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::SCHEMA) {

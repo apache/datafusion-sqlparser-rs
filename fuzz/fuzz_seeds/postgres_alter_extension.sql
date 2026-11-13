@@ -1,0 +1,1 @@
+ALTER EXTENSION citext SET SCHEMA other;

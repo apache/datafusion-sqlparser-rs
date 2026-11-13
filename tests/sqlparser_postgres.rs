@@ -25,8 +25,8 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    Dialect, GenericDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
-    SnowflakeDialect,
+    Dialect, DuckDbDialect, GenericDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect,
+    SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Location, Span, Token, Tokenizer};
@@ -13517,4 +13517,282 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+#[test]
+fn parse_array_slice_with_subscript_bounds() {
+    fn bound(index: &str) -> Expr {
+        Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Identifier(Ident::new("bounds"))),
+            access_chain: vec![AccessExpr::Subscript(Subscript::Index {
+                index: Expr::value(number(index)),
+            })],
+        }
+    }
+
+    fn slice(lower_bound: Expr, upper_bound: Expr) -> Expr {
+        Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Identifier(Ident::new("tags"))),
+            access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                lower_bound: Some(lower_bound),
+                upper_bound: Some(upper_bound),
+                stride: None,
+            })],
+        }
+    }
+
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[bounds[1]:bounds[2]]"),
+        slice(bound("1"), bound("2"))
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[(bounds[1]):bounds[2]]"),
+        slice(Expr::Nested(Box::new(bound("1"))), bound("2"),)
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[bounds[1]:(bounds[2])]"),
+        slice(bound("1"), Expr::Nested(Box::new(bound("2"))),)
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("tags[(bounds[1]):(bounds[2])]"),
+        slice(
+            Expr::Nested(Box::new(bound("1"))),
+            Expr::Nested(Box::new(bound("2"))),
+        )
+    );
+
+    pg_and_generic().verified_expr("tags[:bounds[2]]");
+    pg_and_generic().verified_expr("tags[bounds[1]:]");
+    pg_and_generic().verified_expr("tags[bounds[1]::INT:bounds[2]]");
+    pg_and_generic().verified_expr("tags[bounds[1]:bounds[2]:bounds[3]][bounds[4]:bounds[5]]");
+    pg_and_generic().verified_expr("tags[bounds[1]]");
+    pg_and_generic().verified_expr("bounds::INT[]");
+    pg_and_generic().verified_expr("INT[] '{1,2}'");
+    pg_and_generic().verified_expr(":bounds");
+}
+
+#[test]
+fn parse_array_slice_preserves_typed_placeholders() {
+    let dialects = all_dialects_where(|d| d.supports_array_typedef_with_brackets());
+    for (sql_type, data_type) in [
+        ("INT", DataType::Int(None)),
+        ("DATE", DataType::Date),
+        (
+            "INT[]",
+            DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Int(None)),
+                None,
+            )),
+        ),
+        (
+            "INT[2]",
+            DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Int(None)),
+                Some(2),
+            )),
+        ),
+        (
+            "ARRAY<INT>",
+            DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(DataType::Int(
+                None,
+            )))),
+        ),
+    ] {
+        for placeholder in [":items", "$1"] {
+            let typed = Expr::TypedString(TypedString {
+                data_type: data_type.clone(),
+                value: Value::Placeholder(placeholder.into()).with_empty_span(),
+                uses_odbc_syntax: false,
+            });
+            let sql = format!("{sql_type} {placeholder}");
+            assert_eq!(dialects.verified_expr(&sql), typed, "{sql}");
+            assert_eq!(
+                dialects.verified_expr(&format!("1 + {sql}")),
+                Expr::BinaryOp {
+                    left: Box::new(Expr::value(number("1"))),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(typed),
+                }
+            );
+        }
+    }
+
+    let dialects =
+        all_dialects_where(|d| d.supports_array_typedef_with_brackets() && !d.supports_partiql());
+    for sql in [
+        "tags[(INT[2] :items)]",
+        "tags[cardinality(INT[2] :items):bounds[2]]",
+        "tags[1:cardinality(INT[2] :items):steps[1]]",
+        "tags[(SELECT INT[2] :items)]",
+        "tags[bounds[1]:bounds[2]] + INT[2] :items",
+        "tags[INT[] :items]",
+        "tags[INT[][2] :items]",
+        "tags[ARRAY<INT> :items]",
+        "tags[INT ARRAY[2] :items]",
+    ] {
+        dialects.verified_expr(sql);
+    }
+
+    pg().verified_expr("INT[] @items");
+    pg_and_generic().verified_expr("XML :items");
+    assert_eq!(
+        all_dialects().verified_expr(":items"),
+        Expr::value(Value::Placeholder(":items".into()))
+    );
+}
+
+#[test]
+fn parse_array_slice_bound_expressions() {
+    let dialects =
+        all_dialects_where(|d| d.supports_array_typedef_with_brackets() && !d.supports_partiql());
+    for (lower, upper, stride) in [
+        (Some("1 + bounds[1]"), Some("bounds[2] - 1"), None),
+        (Some("bounds[1][2]"), Some("bounds[2][1]"), Some("steps[1]")),
+        (Some("bounds[1]::INT"), Some("bounds[2]::INT"), None),
+        (Some("COALESCE(bounds[1], 1)"), Some("bounds[2]"), None),
+        (
+            Some("tags[bounds[1]:bounds[2]][1]"),
+            Some("bounds[2]"),
+            None,
+        ),
+        (Some("bounds[1]"), None, None),
+        (None, Some("bounds[2]"), Some("steps[1]")),
+        (None, None, None),
+        (Some("1"), Some("5"), Some("2")),
+    ] {
+        let mut sql = format!("tags[{}:{}", lower.unwrap_or(""), upper.unwrap_or(""));
+        if let Some(stride) = stride {
+            sql.push(':');
+            sql.push_str(stride);
+        }
+        sql.push(']');
+        assert_eq!(
+            dialects.verified_expr(&sql),
+            Expr::CompoundFieldAccess {
+                root: Box::new(Expr::Identifier(Ident::new("tags"))),
+                access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                    lower_bound: lower.map(|bound| dialects.verified_expr(bound)),
+                    upper_bound: upper.map(|bound| dialects.verified_expr(bound)),
+                    stride: stride.map(|bound| dialects.verified_expr(bound)),
+                })],
+            },
+            "{sql}"
+        );
+    }
+    dialects.one_statement_parses_to(
+        "SELECT tags[bounds[1] /* lower */ : bounds[2]] FROM events;",
+        "SELECT tags[bounds[1]:bounds[2]] FROM events",
+    );
+}
+
+#[test]
+fn parse_array_slice_rejects_malformed_bounds() {
+    for (sql, expected) in [
+        ("SELECT tags[bounds[1]:bounds[2]", "Expected: :, found: EOF"),
+        (
+            "SELECT tags[bounds[1]:bounds[2]:1:2]",
+            "Expected: ], found: :",
+        ),
+        (
+            "SELECT tags[bounds[1]:bounds[]]",
+            "Expected: an expression, found: ]",
+        ),
+        (
+            "SELECT tags[bounds[1]:bounds[2]::]",
+            "Expected: a data type name, found: ]",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.into()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_array_slice_with_position_typed_placeholder() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(DuckDbDialect {}),
+    ]);
+    let position = Expr::Position {
+        expr: Box::new(Expr::TypedString(TypedString {
+            data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Int(None)),
+                Some(2),
+            )),
+            value: Value::Placeholder(":items".into()).with_empty_span(),
+            uses_odbc_syntax: false,
+        })),
+        r#in: Box::new(Expr::value(Value::SingleQuotedString("x".into()))),
+    };
+    for (sql, lower_bound, upper_bound) in [
+        (
+            "tags[POSITION(INT[2] :items IN 'x'):3]",
+            position.clone(),
+            Expr::value(number("3")),
+        ),
+        (
+            "tags[1:POSITION(INT[2] :items IN 'x')]",
+            Expr::value(number("1")),
+            position,
+        ),
+    ] {
+        assert_eq!(
+            dialects.verified_expr(sql),
+            Expr::CompoundFieldAccess {
+                root: Box::new(Expr::Identifier(Ident::new("tags"))),
+                access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                    lower_bound: Some(lower_bound),
+                    upper_bound: Some(upper_bound),
+                    stride: None,
+                })],
+            },
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_array_slice_with_map_typed_placeholder() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(DuckDbDialect {}),
+    ]);
+    let map = Expr::Map(Map {
+        entries: vec![MapEntry {
+            key: Box::new(Expr::TypedString(TypedString {
+                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                    Box::new(DataType::Int(None)),
+                    Some(2),
+                )),
+                value: Value::Placeholder(":a".into()).with_empty_span(),
+                uses_odbc_syntax: false,
+            })),
+            value: Box::new(Expr::value(number("1"))),
+        }],
+    });
+    for (sql, lower_bound, upper_bound) in [
+        (
+            "tags[MAP {INT[2] :a: 1}:4]",
+            map.clone(),
+            Expr::value(number("4")),
+        ),
+        ("tags[1:MAP {INT[2] :a: 1}]", Expr::value(number("1")), map),
+    ] {
+        assert_eq!(
+            dialects.verified_expr(sql),
+            Expr::CompoundFieldAccess {
+                root: Box::new(Expr::Identifier(Ident::new("tags"))),
+                access_chain: vec![AccessExpr::Subscript(Subscript::Slice {
+                    lower_bound: Some(lower_bound),
+                    upper_bound: Some(upper_bound),
+                    stride: None,
+                })],
+            },
+            "{sql}"
+        );
+    }
 }

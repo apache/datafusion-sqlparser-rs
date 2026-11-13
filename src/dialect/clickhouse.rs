@@ -92,6 +92,12 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    /// `$tag$` starts a heredoc only if the same tag appears again later in the query, see
+    /// <https://clickhouse.com/docs/sql-reference/syntax#identifiers>.
+    fn supports_unterminated_dollar_tag_as_word(&self) -> bool {
+        true
+    }
+
     fn supports_partition_by_after_order_by(&self) -> bool {
         true
     }

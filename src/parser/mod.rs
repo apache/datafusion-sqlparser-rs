@@ -12652,6 +12652,8 @@ impl<'a> Parser<'a> {
                 type_name,
                 language,
             })
+        } else if self.parse_keyword(Keyword::TYPE) {
+            Ok(AlterExtensionMember::Type(self.parse_data_type()?))
         } else if self.parse_keyword(Keyword::VIEW) {
             Ok(AlterExtensionMember::View(self.parse_object_name(false)?))
         } else {

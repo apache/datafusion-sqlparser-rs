@@ -6744,6 +6744,12 @@ pub struct AlterSequence {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterSequenceOperation {
+    /// Change the sequence owner.
+    ///
+    /// ```sql
+    /// ALTER SEQUENCE name OWNER TO role_name
+    /// ```
+    OwnerTo(Owner),
     /// Move the sequence to another schema.
     ///
     /// ```sql
@@ -6769,6 +6775,7 @@ impl fmt::Display for AlterSequence {
 impl fmt::Display for AlterSequenceOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterSequenceOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
             AlterSequenceOperation::SetSchema { schema_name } => {
                 write!(f, "SET SCHEMA {schema_name}")
             }

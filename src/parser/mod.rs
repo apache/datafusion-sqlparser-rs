@@ -12511,12 +12511,17 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
 
-        let operation = if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+        let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterSequenceOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
             AlterSequenceOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
         } else {
-            self.expected_ref("SET SCHEMA after the sequence name", self.peek_token_ref())?
+            self.expected_ref(
+                "OWNER TO or SET SCHEMA after the sequence name",
+                self.peek_token_ref(),
+            )?
         };
 
         Ok(Statement::AlterSequence(AlterSequence {

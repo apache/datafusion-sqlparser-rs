@@ -39,6 +39,7 @@ use sqlparser_derive::{Visit, VisitMut};
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableConstraint {
     /// MySQL [definition][1] for `UNIQUE` constraints statements:\
     /// * `[CONSTRAINT [<name>]] UNIQUE <index_type_display> [<index_name>] [index_type] (<columns>) <index_options>`
@@ -198,6 +199,7 @@ impl fmt::Display for TableConstraint {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A `CHECK` constraint (`[ CONSTRAINT <name> ] CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CheckConstraint {
     /// Optional constraint name.
     pub name: Option<Ident>,
@@ -285,6 +287,7 @@ impl crate::ast::Spanned for NotNullConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ForeignKeyConstraint {
     /// Optional constraint name.
     pub name: Option<Ident>,
@@ -374,6 +377,7 @@ impl crate::ast::Spanned for ForeignKeyConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct FullTextOrSpatialConstraint {
     /// Whether this is a `FULLTEXT` (true) or `SPATIAL` (false) definition.
     pub fulltext: bool,
@@ -429,6 +433,7 @@ impl crate::ast::Spanned for FullTextOrSpatialConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct IndexConstraint {
     /// Whether this index starts with KEY (true) or INDEX (false), to maintain the same syntax.
     pub display_as_key: bool,
@@ -498,6 +503,7 @@ impl crate::ast::Spanned for IndexConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct PrimaryKeyConstraint {
     /// Constraint name.
     ///
@@ -566,6 +572,7 @@ impl crate::ast::Spanned for PrimaryKeyConstraint {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Unique constraint definition.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct UniqueConstraint {
     /// Constraint name.
     ///
@@ -645,6 +652,7 @@ impl crate::ast::Spanned for UniqueConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ConstraintUsingIndex {
     /// Optional constraint name.
     pub name: Option<Ident>,
@@ -692,6 +700,7 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ExcludeConstraintOperator {
     /// A single operator token, e.g. `=`, `&&`, `<->`.
     Token(String),
@@ -716,6 +725,7 @@ impl fmt::Display for ExcludeConstraintOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ExcludeConstraintElement {
     /// The index column (`{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]`).
     pub column: IndexColumn,
@@ -735,6 +745,7 @@ impl fmt::Display for ExcludeConstraintElement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ExcludeConstraint {
     /// Optional constraint name.
     pub name: Option<Ident>,

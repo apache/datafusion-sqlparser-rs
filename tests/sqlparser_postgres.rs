@@ -13544,6 +13544,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} SERVER srv"),
         format!("ALTER EXTENSION ext_name {action} TABLE t"),
         format!("ALTER EXTENSION ext_name {action} TABLE schema.t"),
+        format!("ALTER EXTENSION ext_name {action} TEXT SEARCH CONFIGURATION cfg"),
         format!("ALTER EXTENSION ext_name {action} VIEW v"),
     ];
     for sql in sqls {
@@ -13733,6 +13734,7 @@ fn parse_alter_extension_add_member() {
         "SEQUENCE",
         "SERVER",
         "TABLE",
+        "TEXT SEARCH CONFIGURATION",
         "VIEW",
     ] {
         let sql = format!("ALTER EXTENSION ext_name ADD {member}");

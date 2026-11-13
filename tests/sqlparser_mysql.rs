@@ -3546,7 +3546,7 @@ fn parse_table_column_option_on_update() {
             assert_eq!(
                 vec![ColumnDef {
                     name: Ident::with_quote('`', "modification_time"),
-                    data_type: DataType::Datetime(None),
+                    data_type: DataType::Datetime(None, None),
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::OnUpdate(call("CURRENT_TIMESTAMP", [])),
@@ -5246,4 +5246,17 @@ fn parse_key_constraint_index_type_before_columns() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_datetime_precision() {
+    assert_eq!(
+        mysql_and_generic().verified_expr("CAST(a AS DATETIME(6))"),
+        Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            data_type: DataType::Datetime(Some(6), None),
+            format: None,
+        }
+    );
 }

@@ -7155,7 +7155,7 @@ fn parse_literal_datetime() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString(TypedString {
-            data_type: DataType::Datetime(None),
+            data_type: DataType::Datetime(None, None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
                 span: Span::empty(),

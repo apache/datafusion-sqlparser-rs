@@ -842,7 +842,7 @@ fn parse_create_table_with_variant_default_expressions() {
                 vec![
                     ColumnDef {
                         name: Ident::new("a"),
-                        data_type: DataType::Datetime(None),
+                        data_type: DataType::Datetime(None, None),
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Materialized(Expr::Function(Function {
@@ -863,7 +863,7 @@ fn parse_create_table_with_variant_default_expressions() {
                     },
                     ColumnDef {
                         name: Ident::new("b"),
-                        data_type: DataType::Datetime(None),
+                        data_type: DataType::Datetime(None, None),
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
@@ -884,7 +884,7 @@ fn parse_create_table_with_variant_default_expressions() {
                     },
                     ColumnDef {
                         name: Ident::new("c"),
-                        data_type: DataType::Datetime(None),
+                        data_type: DataType::Datetime(None, None),
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Ephemeral(None)
@@ -2484,4 +2484,57 @@ fn parse_unterminated_dollar_tag_spans() {
             Span::new(Location::new(2, 14), Location::new(2, 15)),
         ]
     );
+}
+
+#[test]
+fn parse_datetime_precision_and_time_zone() {
+    for (data_type, expected) in [
+        ("DATETIME", DataType::Datetime(None, None)),
+        ("DATETIME(3)", DataType::Datetime(Some(3), None)),
+        (
+            "DATETIME('UTC')",
+            DataType::Datetime(None, Some("UTC".into())),
+        ),
+        (
+            "DATETIME(3, 'Europe/Rome')",
+            DataType::Datetime(Some(3), Some("Europe/Rome".into())),
+        ),
+    ] {
+        let sql = format!("CREATE TABLE t (a {data_type}) ENGINE = MergeTree ORDER BY a");
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
+                assert_eq!(columns, vec![column_def("a".into(), expected)]);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    clickhouse_and_generic().one_statement_parses_to(
+        "CREATE TABLE t (a Nullable(DateTime('Asia/Tokyo'))) ENGINE = MergeTree ORDER BY a",
+        "CREATE TABLE t (a Nullable(DATETIME('Asia/Tokyo'))) ENGINE = MergeTree ORDER BY a",
+    );
+
+    for (sql, error) in [
+        (
+            "SELECT CAST(a AS DATETIME())",
+            "Expected: literal string, found: )",
+        ),
+        (
+            "SELECT CAST(a AS DATETIME(3, 4))",
+            "Expected: literal string, found: 4",
+        ),
+        (
+            "SELECT CAST(a AS DATETIME('UTC', 3))",
+            "Expected: ), found: ,",
+        ),
+    ] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {error}"),
+            "{sql}"
+        );
+    }
 }

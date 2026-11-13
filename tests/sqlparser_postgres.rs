@@ -13528,6 +13528,7 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 
 fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
+        format!("ALTER EXTENSION ext_name {action} ACCESS METHOD btree"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE ft"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE schema.ft"),
         format!("ALTER EXTENSION ext_name {action} LANGUAGE plpgsql"),
@@ -13665,6 +13666,19 @@ fn parse_alter_extension_set_schema() {
 fn parse_alter_extension_add_member() {
     alter_extension_member_round_trip_forms("ADD");
 
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD ACCESS METHOD btree") {
+        Statement::AlterExtension(AlterExtension { name, operation }) => {
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(
+                operation,
+                AlterExtensionOperation::Add(AlterExtensionMember::AccessMethod(Ident::new(
+                    "btree"
+                )))
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
     match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD PROCEDURAL LANGUAGE plpgsql")
     {
         Statement::AlterExtension(AlterExtension {
@@ -13700,6 +13714,7 @@ fn parse_alter_extension_add_member() {
     }
 
     for member in [
+        "ACCESS METHOD",
         "FOREIGN TABLE",
         "LANGUAGE",
         "MATERIALIZED VIEW",

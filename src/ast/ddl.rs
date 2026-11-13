@@ -4926,6 +4926,8 @@ pub enum AlterExtensionOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterExtensionMember {
+    /// `ACCESS METHOD object_name`
+    AccessMethod(Ident),
     /// `FOREIGN TABLE object_name`
     ForeignTable(ObjectName),
     /// `[ PROCEDURAL ] LANGUAGE object_name`
@@ -4969,6 +4971,7 @@ impl fmt::Display for AlterExtensionOperation {
 impl fmt::Display for AlterExtensionMember {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterExtensionMember::AccessMethod(name) => write!(f, "ACCESS METHOD {name}"),
             AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
             AlterExtensionMember::Language { procedural, name } => {
                 if *procedural {

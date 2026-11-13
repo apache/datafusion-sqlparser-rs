@@ -13519,7 +13519,7 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 
 #[test]
 fn parse_operator_name_spans_whole_operator_character_run() {
-    for op in ["===", "+~+", "!==", "^-", "@-", "|-", "!=-", "*@"] {
+    for op in ["===", "+~+", "!==", "^-", "@-", "|-", "!=-", "*@", "`"] {
         test_operator(op, &pg(), BinaryOperator::Custom(op.to_string()));
     }
 
@@ -13541,6 +13541,9 @@ fn parse_operator_name_spans_whole_operator_character_run() {
         ("SELECT a #--c\nb", "SELECT a # b"),
         ("SELECT a |/*c*/b", "SELECT a | b"),
         ("SELECT a ||/*c*/b", "SELECT a || b"),
+        ("SELECT a&>b", "SELECT a &> b"),
+        ("SELECT a&>-b", "SELECT a &>- b"),
+        ("SELECT a&>~b", "SELECT a &>~ b"),
     ] {
         pg().one_statement_parses_to(sql, canonical);
     }

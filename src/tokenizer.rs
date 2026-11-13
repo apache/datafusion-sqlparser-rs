@@ -51,6 +51,9 @@ use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 /// Chars that may join a preceding prefix operator into one token.
 pub(crate) const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|`?";
 
+/// PostgreSQL rejects longer operator names, so no operator name scan looks further.
+const MAX_OPERATOR_NAME_CHARS: usize = 63;
+
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -810,8 +813,6 @@ struct State<'a> {
     peekable: Peekable<Chars<'a>>,
     line: u64,
     col: u64,
-    /// Signs ahead that each form a one-character operator, found while scanning their run
-    pending_sign_operators: usize,
 }
 
 impl State<'_> {
@@ -1046,7 +1047,6 @@ impl<'a> Tokenizer<'a> {
             peekable: self.query.chars().peekable(),
             line: 1,
             col: 1,
-            pending_sign_operators: 0,
         };
 
         let mut prev_non_ws = buf
@@ -1149,7 +1149,6 @@ impl<'a> Tokenizer<'a> {
             peekable: hint_content.chars().peekable(),
             line: span.start.line,
             col: span.start.column,
-            pending_sign_operators: 0,
         };
 
         // Tokenize the hint content and add tokens to the buffer
@@ -1270,7 +1269,6 @@ impl<'a> Tokenizer<'a> {
                 peekable: word.chars().peekable(),
                 line: 0,
                 col: 0,
-                pending_sign_operators: 0,
             };
             let mut s = peeking_take_while(&mut inner_state, |ch| matches!(ch, '0'..='9' | '.'));
             let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
@@ -1288,75 +1286,73 @@ impl<'a> Tokenizer<'a> {
         prev_token: Option<&Token>,
         prev_non_ws_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
-        let len = if chars.pending_sign_operators > 0 {
-            chars.pending_sign_operators -= 1;
-            1
-        } else {
-            let (len, scanned) = self.operator_name_len(chars);
-            chars.pending_sign_operators = scanned - len;
-            len
-        };
-        if len == 0 {
-            return self.next_token_unbounded(chars, prev_token, prev_non_ws_token);
-        }
-        // Scanning only the operator name keeps the branches of `next_token_unbounded` inside it
-        let mut single = [0u8; 4];
-        let owned: String;
-        let text: &str = match chars.peek() {
-            Some(&ch) if len == 1 => ch.encode_utf8(&mut single),
-            _ => {
-                owned = chars.peekable.clone().take(len).collect();
-                &owned
+        let mut buf;
+        let name = match chars.peek() {
+            Some(&ch) if self.dialect.is_custom_operator_part(ch) => {
+                buf = [0u8; 4 * MAX_OPERATOR_NAME_CHARS];
+                self.operator_name(chars, &mut buf)
             }
+            _ => None,
         };
-        let mut name = State {
-            peekable: text.chars().peekable(),
+        let Some(name) = name else {
+            return self.next_token_unbounded(chars, prev_token, prev_non_ws_token);
+        };
+        // Reading from the name alone keeps the operator branches from reading past its end
+        let mut bounded = State {
+            peekable: name.chars().peekable(),
             line: chars.line,
             col: chars.col,
-            pending_sign_operators: 0,
         };
-        let token = self.next_token_unbounded(&mut name, prev_token, prev_non_ws_token)?;
-        let token = match token {
-            Some(token) if name.peek().is_none() => token,
-            _ => Token::CustomBinaryOperator(text.to_string()),
+        let token = match self.next_token_unbounded(&mut bounded, prev_token, prev_non_ws_token) {
+            Ok(Some(token)) if bounded.peek().is_none() && !matches!(token, Token::Char(_)) => {
+                token
+            }
+            _ => Token::CustomBinaryOperator(name.to_string()),
         };
-        for _ in 0..len {
+        for _ in name.chars() {
             chars.next();
         }
         Ok(Some(token))
     }
 
-    /// Length of the custom operator name starting at `chars`, and of the operator characters
-    /// scanned to find it, following
+    /// The custom operator name starting at `chars`, written into `buf`, following
     /// <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-OPERATORS>
-    fn operator_name_len(&self, chars: &State) -> (usize, usize) {
+    fn operator_name<'b>(
+        &self,
+        chars: &State,
+        buf: &'b mut [u8; 4 * MAX_OPERATOR_NAME_CHARS],
+    ) -> Option<&'b str> {
         let mut lookahead = chars.peekable.clone();
-        let mut scanned = 0;
-        let mut trailing_signs = 0;
+        let mut count = 0;
+        let mut len = 0;
+        let mut len_without_trailing_signs = 0;
         let mut has_non_sign_special = false;
         while let Some(ch) = lookahead.next() {
-            if !self.dialect.is_custom_operator_part(ch)
+            if count == MAX_OPERATOR_NAME_CHARS
+                || !self.dialect.is_custom_operator_part(ch)
                 || matches!((ch, lookahead.peek()), ('-', Some('-')) | ('/', Some('*')))
             {
                 break;
             }
-            scanned += 1;
-            trailing_signs = if matches!(ch, '+' | '-') {
-                trailing_signs + 1
-            } else {
-                0
-            };
+            count += 1;
+            len += ch.encode_utf8(&mut buf[len..]).len();
+            if !matches!(ch, '+' | '-') {
+                len_without_trailing_signs = len;
+            }
             has_non_sign_special |= matches!(
                 ch,
                 '~' | '!' | '@' | '#' | '%' | '^' | '&' | '|' | '`' | '?'
             );
         }
         // A name ending in `+` or `-` keeps them only alongside a non-sign special character
-        if scanned > 1 && !has_non_sign_special {
-            ((scanned - trailing_signs).max(1), scanned)
-        } else {
-            (scanned, scanned)
+        if count > 1 && !has_non_sign_special {
+            // A name made only of signs keeps its first one
+            len = len_without_trailing_signs.max(1);
         }
+        if len == 0 {
+            return None;
+        }
+        core::str::from_utf8(&buf[..len]).ok()
     }
 
     /// Get the next token or return None, without bounding an operator to its custom operator name
@@ -2019,8 +2015,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the '&'
                     match chars.peek() {
                         Some('>') if self.dialect.supports_geometric_types() => {
-                            chars.next();
-                            self.consume_and_return(chars, Token::AmpersandRightAngleBracket)
+                            self.consume_for_binop(chars, "&>", Token::AmpersandRightAngleBracket)
                         }
                         Some('<') if self.dialect.supports_geometric_types() => {
                             chars.next(); // consume
@@ -2242,13 +2237,6 @@ impl<'a> Tokenizer<'a> {
         match (custom, default) {
             (Some(custom), _) => Ok(Token::CustomBinaryOperator(custom).into()),
             (None, Some(tok)) => Ok(Some(tok)),
-            (None, None)
-                if prefix
-                    .chars()
-                    .all(|ch| self.dialect.is_custom_operator_part(ch)) =>
-            {
-                Ok(Some(Token::CustomBinaryOperator(prefix.to_string())))
-            }
             (None, None) => self.tokenizer_error(
                 chars.location(),
                 format!("Expected a valid binary operator after '{prefix}'"),
@@ -2327,7 +2315,6 @@ impl<'a> Tokenizer<'a> {
                     peekable: chars.peekable.clone(),
                     line: chars.line,
                     col: chars.col,
-                    pending_sign_operators: chars.pending_sign_operators,
                 };
 
                 loop {
@@ -4210,7 +4197,6 @@ mod tests {
             peekable: s.chars().peekable(),
             line: 0,
             col: 0,
-            pending_sign_operators: 0,
         };
 
         assert_eq!(

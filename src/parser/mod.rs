@@ -13465,11 +13465,11 @@ impl<'a> Parser<'a> {
                 //    without any whitespace in between
                 let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
                 let ident = match next_token.token {
-                    Token::Word(w) if w.quote_style.is_none() => Ok(w.into_ident(next_token.span)),
+                    Token::Word(w) => Ok(w.into_ident(next_token.span)),
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
-                Ok(Value::Placeholder(format!("{tok}{}", ident.value))
+                Ok(Value::Placeholder(format!("{tok}{ident}"))
                     .with_span(Span::new(span.start, ident.span.end)))
             }
             unexpected => self.expected(
@@ -13925,6 +13925,39 @@ impl<'a> Parser<'a> {
                         Ok(DataType::CharLargeObject(self.parse_optional_precision()?))
                     } else {
                         Ok(DataType::Char(self.parse_optional_character_length()?))
+                    }
+                }
+                Keyword::NATIONAL if self.peek_keyword(Keyword::CHARACTER) => {
+                    let _ = self.parse_keyword(Keyword::CHARACTER);
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NationalCharacterVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::NationalCharacter(
+                            self.parse_optional_character_length()?,
+                        ))
+                    }
+                }
+                Keyword::NATIONAL if self.peek_keyword(Keyword::CHAR) => {
+                    let _ = self.parse_keyword(Keyword::CHAR);
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NationalCharVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::NationalChar(
+                            self.parse_optional_character_length()?,
+                        ))
+                    }
+                }
+                Keyword::NCHAR => {
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NcharVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::Nchar(self.parse_optional_character_length()?))
                     }
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
@@ -18015,11 +18048,13 @@ impl<'a> Parser<'a> {
             Keyword::ROW,
             Keyword::SYSTEM,
             Keyword::BLOCK,
+            Keyword::RESERVOIR,
         ]) {
             Some(Keyword::BERNOULLI) => Some(TableSampleMethod::Bernoulli),
             Some(Keyword::ROW) => Some(TableSampleMethod::Row),
             Some(Keyword::SYSTEM) => Some(TableSampleMethod::System),
             Some(Keyword::BLOCK) => Some(TableSampleMethod::Block),
+            Some(Keyword::RESERVOIR) => Some(TableSampleMethod::Reservoir),
             _ => None,
         };
 
@@ -23111,6 +23146,43 @@ mod tests {
                     unit: None
                 }))
             );
+        }
+
+        #[test]
+        fn test_ansii_national_character_string_types() {
+            // National character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#national-character-string-type>
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let length = Some(CharacterLength::IntegerLength {
+                length: 20,
+                unit: None,
+            });
+
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER",
+                DataType::NationalCharacter(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER(20)",
+                DataType::NationalCharacter(length)
+            );
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER VARYING(20)",
+                DataType::NationalCharacterVarying(length)
+            );
+            test_parse_data_type!(dialect, "NATIONAL CHAR", DataType::NationalChar(None));
+            test_parse_data_type!(dialect, "NATIONAL CHAR(20)", DataType::NationalChar(length));
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHAR VARYING(20)",
+                DataType::NationalCharVarying(length)
+            );
+            test_parse_data_type!(dialect, "NCHAR", DataType::Nchar(None));
+            test_parse_data_type!(dialect, "NCHAR(20)", DataType::Nchar(length));
+            test_parse_data_type!(dialect, "NCHAR VARYING(20)", DataType::NcharVarying(length));
         }
 
         #[test]

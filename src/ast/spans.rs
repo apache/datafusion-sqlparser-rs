@@ -3587,6 +3587,22 @@ SETTINGS update_parallel_mode = 'auto'"#;
     }
 
     #[test]
+    fn test_create_table_options_span() {
+        let dialect = &crate::dialect::BigQueryDialect {};
+        let sql =
+            "CREATE TABLE t (a INT64) OPTIONS (description = 'd', expiration_timestamp = NULL)";
+        let mut test = SpanTest::new(dialect, sql);
+        let options = match test.0.parse_statement().unwrap() {
+            Statement::CreateTable(crate::ast::CreateTable { table_options, .. }) => table_options,
+            stmt => panic!("expected CREATE TABLE, got {stmt:?}"),
+        };
+        assert_eq!(
+            test.get_source(options.span()),
+            "description = 'd', expiration_timestamp = NULL"
+        );
+    }
+
+    #[test]
     fn test_alter_view_spans() {
         let dialect = &crate::dialect::PostgreSqlDialect {};
         for (sql, expected) in [

@@ -12511,7 +12511,11 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
 
-        let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+        let operation = if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
+            AlterSequenceOperation::SetLogged
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
+            AlterSequenceOperation::SetUnlogged
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
             AlterSequenceOperation::OwnerTo(self.parse_owner()?)
         } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             AlterSequenceOperation::RenameTo {
@@ -12523,7 +12527,7 @@ impl<'a> Parser<'a> {
             }
         } else {
             self.expected_ref(
-                "OWNER TO, RENAME TO, or SET SCHEMA after the sequence name",
+                "OWNER TO, RENAME TO, SET LOGGED, SET UNLOGGED, or SET SCHEMA after the sequence name",
                 self.peek_token_ref(),
             )?
         };

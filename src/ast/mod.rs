@@ -6744,6 +6744,18 @@ pub struct AlterSequence {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterSequenceOperation {
+    /// Switch the sequence storage to logged.
+    ///
+    /// ```sql
+    /// ALTER SEQUENCE name SET LOGGED
+    /// ```
+    SetLogged,
+    /// Switch the sequence storage to unlogged.
+    ///
+    /// ```sql
+    /// ALTER SEQUENCE name SET UNLOGGED
+    /// ```
+    SetUnlogged,
     /// Change the sequence owner.
     ///
     /// ```sql
@@ -6784,6 +6796,8 @@ impl fmt::Display for AlterSequence {
 impl fmt::Display for AlterSequenceOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterSequenceOperation::SetLogged => write!(f, "SET LOGGED"),
+            AlterSequenceOperation::SetUnlogged => write!(f, "SET UNLOGGED"),
             AlterSequenceOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
             AlterSequenceOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
             AlterSequenceOperation::SetSchema { schema_name } => {

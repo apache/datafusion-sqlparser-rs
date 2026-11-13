@@ -1917,10 +1917,11 @@ impl<'a> Parser<'a> {
                         uses_odbc_syntax: false,
                     }))
                 }
+                DataType::Custom(..) => parser_err!("dummy", loc),
                 data_type
-                    if {
+                    if parser.peek_token_ref().token == Token::Colon && {
                         let mut element_type = &data_type;
-                        while let DataType::Array(ArrayElemTypeDef::SquareBracket(inner, _)) =
+                        while let DataType::Array(ArrayElemTypeDef::SquareBracket(inner, Some(_))) =
                             element_type
                         {
                             element_type = inner;

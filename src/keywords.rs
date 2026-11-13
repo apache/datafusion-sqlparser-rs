@@ -915,6 +915,7 @@ define_keywords!(
     REPLICATE,
     REPLICATION,
     REQUIRE,
+    RESERVOIR,
     RESET,
     RESOLVE,
     RESOURCE,

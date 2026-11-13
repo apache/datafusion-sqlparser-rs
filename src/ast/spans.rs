@@ -3592,13 +3592,10 @@ SETTINGS update_parallel_mode = 'auto'"#;
         let sql =
             "CREATE TABLE t (a INT64) OPTIONS (description = 'd', expiration_timestamp = NULL)";
         let mut test = SpanTest::new(dialect, sql);
-        let options = match test.0.parse_statement().unwrap() {
-            Statement::CreateTable(crate::ast::CreateTable { table_options, .. }) => table_options,
-            stmt => panic!("expected CREATE TABLE, got {stmt:?}"),
-        };
+        let stmt = test.0.parse_statement().unwrap();
         assert_eq!(
-            test.get_source(options.span()),
-            "description = 'd', expiration_timestamp = NULL"
+            test.get_source(stmt.span()),
+            "t (a INT64) OPTIONS (description = 'd', expiration_timestamp = NULL"
         );
     }
 

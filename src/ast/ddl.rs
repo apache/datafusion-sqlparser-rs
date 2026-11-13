@@ -1302,6 +1302,15 @@ pub enum AlterTypeAttributeAction {
         /// Optional `CASCADE` / `RESTRICT` behavior.
         drop_behavior: Option<DropBehavior>,
     },
+    /// `DROP ATTRIBUTE [ IF EXISTS ] name [ CASCADE | RESTRICT ]`
+    Drop {
+        /// If true, do not error when the attribute does not exist (`IF EXISTS`).
+        if_exists: bool,
+        /// Name of the attribute to drop.
+        name: Ident,
+        /// Optional `CASCADE` / `RESTRICT` behavior.
+        drop_behavior: Option<DropBehavior>,
+    },
 }
 
 impl fmt::Display for AlterTypeOperation {
@@ -1366,6 +1375,21 @@ impl fmt::Display for AlterTypeAttributeAction {
                 write!(f, "ADD ATTRIBUTE {name} {data_type}")?;
                 if let Some(collate) = collate {
                     write!(f, " COLLATE {collate}")?;
+                }
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            Self::Drop {
+                if_exists,
+                name,
+                drop_behavior,
+            } => {
+                if *if_exists {
+                    write!(f, "DROP ATTRIBUTE IF EXISTS {name}")?;
+                } else {
+                    write!(f, "DROP ATTRIBUTE {name}")?;
                 }
                 if let Some(drop_behavior) = drop_behavior {
                     write!(f, " {drop_behavior}")?;

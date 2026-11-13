@@ -12476,14 +12476,14 @@ impl<'a> Parser<'a> {
                 from: existing_enum_value,
                 to: new_enum_value,
             })
-        } else if self.peek_keyword(Keyword::ADD) {
+        } else if self.peek_keyword(Keyword::ADD) || self.peek_keyword(Keyword::DROP) {
             AlterTypeOperation::AttributeActions(
                 self.parse_comma_separated(Parser::parse_alter_type_attribute_action)?,
             )
         } else {
             return self.expected_ref(
                 "OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
-                 ADD VALUE, or RENAME VALUE after ALTER TYPE",
+                 DROP ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE",
                 self.peek_token_ref(),
             );
         };
@@ -12510,8 +12510,20 @@ impl<'a> Parser<'a> {
                 collate,
                 drop_behavior,
             })
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::ATTRIBUTE]) {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let name = self.parse_identifier()?;
+            let drop_behavior = self.parse_optional_drop_behavior();
+            Ok(AlterTypeAttributeAction::Drop {
+                if_exists,
+                name,
+                drop_behavior,
+            })
         } else {
-            self.expected_ref("ADD ATTRIBUTE after ALTER TYPE", self.peek_token_ref())
+            self.expected_ref(
+                "ADD ATTRIBUTE, or DROP ATTRIBUTE after ALTER TYPE",
+                self.peek_token_ref(),
+            )
         }
     }
 

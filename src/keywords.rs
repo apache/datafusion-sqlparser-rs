@@ -847,6 +847,7 @@ define_keywords!(
     PRIOR,
     PRIVILEGES,
     PROC,
+    PROCEDURAL,
     PROCEDURE,
     PROCEDURES,
     PROCESSLIST,

@@ -4928,6 +4928,13 @@ pub enum AlterExtensionOperation {
 pub enum AlterExtensionMember {
     /// `FOREIGN TABLE object_name`
     ForeignTable(ObjectName),
+    /// `[ PROCEDURAL ] LANGUAGE object_name`
+    Language {
+        /// Whether the `PROCEDURAL` keyword was present.
+        procedural: bool,
+        /// Language name.
+        name: Ident,
+    },
     /// `MATERIALIZED VIEW object_name`
     MaterializedView(ObjectName),
     /// `SCHEMA object_name`
@@ -4963,6 +4970,13 @@ impl fmt::Display for AlterExtensionMember {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
+            AlterExtensionMember::Language { procedural, name } => {
+                if *procedural {
+                    write!(f, "PROCEDURAL LANGUAGE {name}")
+                } else {
+                    write!(f, "LANGUAGE {name}")
+                }
+            }
             AlterExtensionMember::MaterializedView(name) => write!(f, "MATERIALIZED VIEW {name}"),
             AlterExtensionMember::Schema(name) => write!(f, "SCHEMA {name}"),
             AlterExtensionMember::Sequence(name) => write!(f, "SEQUENCE {name}"),

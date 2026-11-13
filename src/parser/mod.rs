@@ -12543,6 +12543,16 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::ForeignTable(
                 self.parse_object_name(false)?,
             ))
+        } else if self.parse_keywords(&[Keyword::PROCEDURAL, Keyword::LANGUAGE]) {
+            Ok(AlterExtensionMember::Language {
+                procedural: true,
+                name: self.parse_identifier()?,
+            })
+        } else if self.parse_keyword(Keyword::LANGUAGE) {
+            Ok(AlterExtensionMember::Language {
+                procedural: false,
+                name: self.parse_identifier()?,
+            })
         } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
             Ok(AlterExtensionMember::MaterializedView(
                 self.parse_object_name(false)?,

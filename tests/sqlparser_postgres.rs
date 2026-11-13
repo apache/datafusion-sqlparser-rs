@@ -8008,8 +8008,8 @@ fn parse_alter_type() {
         pg().parse_sql_statements("ALTER TYPE public.my_type FOO")
             .unwrap_err(),
         ParserError::ParserError(
-            "Expected: OWNER TO, RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE \
-             after ALTER TYPE, found: FOO"
+            "Expected: OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD VALUE, \
+             or RENAME VALUE after ALTER TYPE, found: FOO"
                 .to_string()
         )
     );
@@ -13594,4 +13594,81 @@ fn parse_alter_type_set_schema() {
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: EOF".to_string())
     );
+}
+
+#[test]
+fn parse_alter_type_rename_attribute() {
+    for (sql, drop_behavior) in [
+        ("ALTER TYPE t RENAME ATTRIBUTE a TO b", None),
+        (
+            "ALTER TYPE t RENAME ATTRIBUTE a TO b CASCADE",
+            Some(DropBehavior::Cascade),
+        ),
+        (
+            "ALTER TYPE t RENAME ATTRIBUTE a TO b RESTRICT",
+            Some(DropBehavior::Restrict),
+        ),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        assert_eq!(
+            stmt,
+            Statement::AlterType(AlterType {
+                name: ObjectName::from(Ident::new("t")),
+                operation: AlterTypeOperation::RenameAttribute(AlterTypeRenameAttribute {
+                    from: Ident::new("a"),
+                    to: Ident::new("b"),
+                    drop_behavior,
+                }),
+            })
+        );
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER TYPE t RENAME ATTRIBUTE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TYPE t RENAME ATTRIBUTE a",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "ALTER TYPE t RENAME ATTRIBUTE a TO",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string())
+        );
+    }
+}
+
+#[test]
+fn display_alter_type_rename_attribute_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let op = AlterTypeOperation::RenameAttribute(AlterTypeRenameAttribute {
+        from: Ident::new("a"),
+        to: Ident::new("b"),
+        drop_behavior: Some(DropBehavior::Cascade),
+    });
+
+    assert_eq!(
+        write!(RejectingWriter("RENAME ATTRIBUTE"), "{op}"),
+        Err(fmt::Error)
+    );
+    assert_eq!(write!(RejectingWriter("CASCADE"), "{op}"), Err(fmt::Error));
 }

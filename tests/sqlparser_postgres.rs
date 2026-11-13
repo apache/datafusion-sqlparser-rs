@@ -13547,6 +13547,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH CONFIGURATION cfg"),
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH DICTIONARY dict"),
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH PARSER pgrm"),
+        format!("ALTER EXTENSION ext_name {action} TEXT SEARCH TEMPLATE tpl"),
         format!("ALTER EXTENSION ext_name {action} VIEW v"),
     ];
     for sql in sqls {
@@ -13739,6 +13740,7 @@ fn parse_alter_extension_add_member() {
         "TEXT SEARCH CONFIGURATION",
         "TEXT SEARCH DICTIONARY",
         "TEXT SEARCH PARSER",
+        "TEXT SEARCH TEMPLATE",
         "VIEW",
     ] {
         let sql = format!("ALTER EXTENSION ext_name ADD {member}");

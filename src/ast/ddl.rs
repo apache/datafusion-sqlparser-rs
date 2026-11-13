@@ -4940,6 +4940,8 @@ pub enum AlterExtensionMember {
     Database(Ident),
     /// `EVENT TRIGGER object_name`
     EventTrigger(Ident),
+    /// `EXTENSION object_name`
+    Extension(Ident),
     /// `FOREIGN DATA WRAPPER object_name`
     ForeignDataWrapper(Ident),
     /// `FOREIGN TABLE object_name`
@@ -5000,6 +5002,7 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::Conversion(name) => write!(f, "CONVERSION {name}"),
             AlterExtensionMember::Database(name) => write!(f, "DATABASE {name}"),
             AlterExtensionMember::EventTrigger(name) => write!(f, "EVENT TRIGGER {name}"),
+            AlterExtensionMember::Extension(name) => write!(f, "EXTENSION {name}"),
             AlterExtensionMember::ForeignDataWrapper(name) => {
                 write!(f, "FOREIGN DATA WRAPPER {name}")
             }

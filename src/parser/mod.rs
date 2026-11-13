@@ -12553,6 +12553,8 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::Database(self.parse_identifier()?))
         } else if self.parse_keywords(&[Keyword::EVENT, Keyword::TRIGGER]) {
             Ok(AlterExtensionMember::EventTrigger(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::EXTENSION) {
+            Ok(AlterExtensionMember::Extension(self.parse_identifier()?))
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
             Ok(AlterExtensionMember::ForeignDataWrapper(
                 self.parse_identifier()?,

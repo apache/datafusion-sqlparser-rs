@@ -13908,7 +13908,10 @@ impl<'a> Parser<'a> {
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATE32 => Ok(DataType::Date32),
-                Keyword::DATETIME => Ok(DataType::Datetime(self.parse_optional_precision()?)),
+                Keyword::DATETIME => {
+                    let (precision, time_zone) = self.parse_optional_datetime_arguments()?;
+                    Ok(DataType::Datetime(precision, time_zone))
+                }
                 Keyword::DATETIME64 => {
                     self.prev_token();
                     let (precision, time_zone) = self.parse_datetime_64()?;
@@ -15214,6 +15217,30 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let precision = self.parse_literal_uint()?;
         let time_zone = if self.consume_token(&Token::Comma) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok((precision, time_zone))
+    }
+
+    /// Parse the optional `(precision)`, `(time_zone)` or `(precision, time_zone)`
+    /// of a `DATETIME` type, see [ClickHouse].
+    ///
+    /// [ClickHouse]: https://clickhouse.com/docs/sql-reference/data-types/datetime
+    fn parse_optional_datetime_arguments(
+        &mut self,
+    ) -> Result<(Option<u64>, Option<String>), ParserError> {
+        if !self.consume_token(&Token::LParen) {
+            return Ok((None, None));
+        }
+        let precision = if matches!(self.peek_token_ref().token, Token::Number(..)) {
+            Some(self.parse_literal_uint()?)
+        } else {
+            None
+        };
+        let time_zone = if precision.is_none() || self.consume_token(&Token::Comma) {
             Some(self.parse_literal_string()?)
         } else {
             None

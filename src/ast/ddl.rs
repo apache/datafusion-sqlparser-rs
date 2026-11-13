@@ -4946,6 +4946,8 @@ pub enum AlterExtensionMember {
     ForeignDataWrapper(Ident),
     /// `FOREIGN TABLE object_name`
     ForeignTable(ObjectName),
+    /// `INDEX object_name`
+    Index(ObjectName),
     /// `[ PROCEDURAL ] LANGUAGE object_name`
     Language {
         /// Whether the `PROCEDURAL` keyword was present.
@@ -5007,6 +5009,7 @@ impl fmt::Display for AlterExtensionMember {
                 write!(f, "FOREIGN DATA WRAPPER {name}")
             }
             AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
+            AlterExtensionMember::Index(name) => write!(f, "INDEX {name}"),
             AlterExtensionMember::Language { procedural, name } => {
                 if *procedural {
                     write!(f, "PROCEDURAL LANGUAGE {name}")

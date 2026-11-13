@@ -7983,6 +7983,14 @@ fn parse_alter_type() {
                 position: None,
             }),
         },
+        TestCase {
+            sql: "ALTER TYPE public.my_type RENAME VALUE 'old_label' TO 'new_label'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::RenameValue(AlterTypeRenameValue {
+                from: Ident::with_quote('\'', "old_label"),
+                to: Ident::with_quote('\'', "new_label"),
+            }),
+        },
     ]
     .into_iter()
     .enumerate()
@@ -7995,6 +8003,14 @@ fn parse_alter_type() {
             unreachable!("{:?} should parse to Statement::AlterType", tc.sql);
         }
     });
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TYPE public.my_type FOO").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE after ALTER TYPE, found: FOO"
+                .to_string()
+        )
+    );
 }
 
 #[test]
@@ -13516,5 +13532,27 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         pg().parse_sql_statements("SELECT CASE 1 WHEN 1 THEN 1 END END FROM t")
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
+    );
+}
+
+#[test]
+fn parse_alter_type_set_schema() {
+    pg_and_generic().verified_stmt("ALTER TYPE public.ty SET SCHEMA other.schema");
+
+    let stmt = pg_and_generic().verified_stmt("ALTER TYPE en SET SCHEMA other");
+    assert_eq!(
+        stmt,
+        Statement::AlterType(AlterType {
+            name: ObjectName::from(Ident::new("en")),
+            operation: AlterTypeOperation::SetSchema {
+                schema_name: ObjectName::from(Ident::new("other")),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TYPE t SET SCHEMA")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
     );
 }

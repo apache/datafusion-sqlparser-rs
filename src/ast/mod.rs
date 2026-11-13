@@ -6744,6 +6744,12 @@ pub struct AlterSequence {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterSequenceOperation {
+    /// Sequence options, in the order they were written.
+    ///
+    /// ```sql
+    /// ALTER SEQUENCE name INCREMENT BY 2 MINVALUE -5 MAXVALUE 50
+    /// ```
+    Options(Vec<SequenceOptions>),
     /// Switch the sequence storage to logged.
     ///
     /// ```sql
@@ -6789,13 +6795,23 @@ impl fmt::Display for AlterSequence {
         } else {
             write!(f, "ALTER SEQUENCE {}", self.name)?;
         }
-        write!(f, " {}", self.operation)
+        // sequence options already carry a leading space
+        match &self.operation {
+            AlterSequenceOperation::Options(_) => write!(f, "{}", self.operation),
+            operation => write!(f, " {operation}"),
+        }
     }
 }
 
 impl fmt::Display for AlterSequenceOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterSequenceOperation::Options(options) => {
+                for option in options {
+                    write!(f, "{option}")?;
+                }
+                Ok(())
+            }
             AlterSequenceOperation::SetLogged => write!(f, "SET LOGGED"),
             AlterSequenceOperation::SetUnlogged => write!(f, "SET UNLOGGED"),
             AlterSequenceOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),

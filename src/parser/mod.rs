@@ -12582,6 +12582,11 @@ impl<'a> Parser<'a> {
                 self.expect_keyword_is(Keyword::USING)?;
                 let using = self.parse_identifier()?;
                 Ok(AlterExtensionMember::OperatorClass { name, using })
+            } else if self.parse_keyword(Keyword::FAMILY) {
+                let name = self.parse_object_name(false)?;
+                self.expect_keyword_is(Keyword::USING)?;
+                let using = self.parse_identifier()?;
+                Ok(AlterExtensionMember::OperatorFamily { name, using })
             } else {
                 Ok(AlterExtensionMember::Operator(
                     self.parse_drop_operator_signature()?,

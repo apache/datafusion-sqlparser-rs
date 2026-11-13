@@ -1,0 +1,1 @@
+ALTER SEQUENCE IF EXISTS public.s SET SCHEMA other;

@@ -7745,6 +7745,52 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(parts))
     }
 
+    /// Parse the operator of `COMMUTATOR` or `NEGATOR`, which takes a schema only inside `OPERATOR(...)`
+    fn parse_operator_option_name(&mut self) -> Result<ObjectName, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.expect_token(&Token::LParen)?;
+            let name = self.parse_operator_name()?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(name);
+        }
+        let name = self.parse_operator_name()?;
+        if name.0.len() > 1 {
+            return Err(ParserError::ParserError(format!(
+                "Expected: OPERATOR(...) around a schema-qualified operator name, found: {name}"
+            )));
+        }
+        Ok(name)
+    }
+
+    /// Parse the optional `= boolean` of `HASHES` or `MERGES`, in the spellings PostgreSQL accepts
+    fn parse_operator_flag(&mut self) -> Result<Option<bool>, ParserError> {
+        if !self.consume_token(&Token::Eq) {
+            return Ok(None);
+        }
+        let token = self.next_token();
+        let is = |value: &str, spellings: [&str; 2]| {
+            spellings.iter().any(|s| value.eq_ignore_ascii_case(s))
+        };
+        let value = match &token.token {
+            Token::Word(Word { value, .. }) | Token::SingleQuotedString(value) => {
+                if is(value, ["true", "on"]) {
+                    Some(true)
+                } else if is(value, ["false", "off"]) {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            Token::Number(n, false) if n == "1" => Some(true),
+            Token::Number(n, false) if n == "0" => Some(false),
+            _ => None,
+        };
+        match value {
+            Some(value) => Ok(Some(value)),
+            None => self.expected("a Boolean value", token),
+        }
+    }
+
     /// Parse a [Statement::CreateOperator]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createoperator.html)
@@ -7773,11 +7819,19 @@ impl<'a> Parser<'a> {
             ])?;
 
             match keyword {
-                Keyword::HASHES if !options.iter().any(|o| matches!(o, OperatorOption::Hashes)) => {
-                    options.push(OperatorOption::Hashes);
+                Keyword::HASHES
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Hashes(_))) =>
+                {
+                    options.push(OperatorOption::Hashes(self.parse_operator_flag()?));
                 }
-                Keyword::MERGES if !options.iter().any(|o| matches!(o, OperatorOption::Merges)) => {
-                    options.push(OperatorOption::Merges);
+                Keyword::MERGES
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Merges(_))) =>
+                {
+                    options.push(OperatorOption::Merges(self.parse_operator_flag()?));
                 }
                 Keyword::FUNCTION | Keyword::PROCEDURE if function.is_none() => {
                     self.expect_token(&Token::Eq)?;
@@ -7798,14 +7852,9 @@ impl<'a> Parser<'a> {
                         .any(|o| matches!(o, OperatorOption::Commutator(_))) =>
                 {
                     self.expect_token(&Token::Eq)?;
-                    if self.parse_keyword(Keyword::OPERATOR) {
-                        self.expect_token(&Token::LParen)?;
-                        let op = self.parse_operator_name()?;
-                        self.expect_token(&Token::RParen)?;
-                        options.push(OperatorOption::Commutator(op));
-                    } else {
-                        options.push(OperatorOption::Commutator(self.parse_operator_name()?));
-                    }
+                    options.push(OperatorOption::Commutator(
+                        self.parse_operator_option_name()?,
+                    ));
                 }
                 Keyword::NEGATOR
                     if !options
@@ -7813,14 +7862,7 @@ impl<'a> Parser<'a> {
                         .any(|o| matches!(o, OperatorOption::Negator(_))) =>
                 {
                     self.expect_token(&Token::Eq)?;
-                    if self.parse_keyword(Keyword::OPERATOR) {
-                        self.expect_token(&Token::LParen)?;
-                        let op = self.parse_operator_name()?;
-                        self.expect_token(&Token::RParen)?;
-                        options.push(OperatorOption::Negator(op));
-                    } else {
-                        options.push(OperatorOption::Negator(self.parse_operator_name()?));
-                    }
+                    options.push(OperatorOption::Negator(self.parse_operator_option_name()?));
                 }
                 Keyword::RESTRICT
                     if !options
@@ -12572,19 +12614,19 @@ impl<'a> Parser<'a> {
                     }
                     Keyword::COMMUTATOR => {
                         self.expect_token(&Token::Eq)?;
-                        let op_name = self.parse_operator_name()?;
-                        options.push(OperatorOption::Commutator(op_name));
+                        options.push(OperatorOption::Commutator(
+                            self.parse_operator_option_name()?,
+                        ));
                     }
                     Keyword::NEGATOR => {
                         self.expect_token(&Token::Eq)?;
-                        let op_name = self.parse_operator_name()?;
-                        options.push(OperatorOption::Negator(op_name));
+                        options.push(OperatorOption::Negator(self.parse_operator_option_name()?));
                     }
                     Keyword::HASHES => {
-                        options.push(OperatorOption::Hashes);
+                        options.push(OperatorOption::Hashes(self.parse_operator_flag()?));
                     }
                     Keyword::MERGES => {
-                        options.push(OperatorOption::Merges);
+                        options.push(OperatorOption::Merges(self.parse_operator_flag()?));
                     }
                     unexpected_keyword => return Err(ParserError::ParserError(
                         format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in operator option"),

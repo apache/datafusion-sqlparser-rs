@@ -13530,6 +13530,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
         format!("ALTER EXTENSION ext_name {action} TABLE t"),
         format!("ALTER EXTENSION ext_name {action} TABLE schema.t"),
+        format!("ALTER EXTENSION ext_name {action} VIEW v"),
     ];
     for sql in sqls {
         pg_and_generic().verified_stmt(&sql);
@@ -13674,12 +13675,14 @@ fn parse_alter_extension_add_member() {
         );
     }
 
-    assert_eq!(
-        pg_and_generic()
-            .parse_sql_statements("ALTER EXTENSION ext_name ADD TABLE")
-            .unwrap_err(),
-        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
-    );
+    for member in ["TABLE", "VIEW"] {
+        let sql = format!("ALTER EXTENSION ext_name ADD {member}");
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(&sql).unwrap_err(),
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            "{sql}"
+        );
+    }
 }
 
 #[test]

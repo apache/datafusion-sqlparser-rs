@@ -1628,6 +1628,8 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Some(Expr::Value(self.parse_value()?)))
             }
+            // `current_schema()` is also an ordinary function call
+            Keyword::CURRENT_SCHEMA if self.peek_token_ref().token == Token::LParen => Ok(None),
             Keyword::CURRENT_CATALOG
             | Keyword::CURRENT_ROLE
             | Keyword::CURRENT_SCHEMA
@@ -1635,10 +1637,7 @@ impl<'a> Parser<'a> {
             | Keyword::SESSION_USER
             | Keyword::SYSTEM_USER
             | Keyword::USER
-            if dialect_of!(self is PostgreSqlDialect | GenericDialect)
-                // `current_schema()` is also an ordinary function call
-                && !(w.keyword == Keyword::CURRENT_SCHEMA
-                    && self.peek_token_ref().token == Token::LParen) =>
+            if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
                 {
                     Ok(Some(Expr::Function(Function {
                         name: ObjectName::from(vec![w.to_ident(w_span)]),

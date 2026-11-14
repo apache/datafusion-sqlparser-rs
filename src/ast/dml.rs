@@ -33,8 +33,8 @@ use super::{
     display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
     Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
     OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict,
-    TableAliasWithoutColumns, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind,
-    Values,
+    TableAliasWithoutColumns, TableFactor, TableObject, TableWithJoins, TargetColumn,
+    UpdateTableFromKind, Values,
 };
 
 /// The `OVERRIDING` clause of a PostgreSQL `INSERT`: whether values supplied for an identity
@@ -84,7 +84,7 @@ pub struct Insert {
     /// `table_name foo` (for Oracle)
     pub table_alias: Option<TableAliasWithoutColumns>,
     /// COLUMNS
-    pub columns: Vec<ObjectName>,
+    pub columns: Vec<TargetColumn>,
     /// `BY NAME` clause used by Databricks SQL.
     ///
     /// When present, columns from the source query are matched to columns in
@@ -784,7 +784,7 @@ pub struct MergeInsertExpr {
     /// INSERT (product, quantity) VALUES(product, quantity)
     /// INSERT (product, quantity) ROW
     /// ```
-    pub columns: Vec<ObjectName>,
+    pub columns: Vec<TargetColumn>,
     /// The token, `[VALUES | ROW]` starting `kind`.
     pub kind_token: AttachedToken,
     /// The insert type used by the statement.

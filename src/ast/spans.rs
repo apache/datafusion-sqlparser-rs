@@ -49,8 +49,9 @@ use super::{
     RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
     SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
     TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
-    Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    TableOptionsClustered, TableWithJoins, TargetColumn, Update, UpdateTableFromKind, Use,
+    UserMappingUser, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With,
+    WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -1620,9 +1621,17 @@ impl Spanned for Setting {
 impl Spanned for AssignmentTarget {
     fn span(&self) -> Span {
         match self {
-            AssignmentTarget::ColumnName(object_name) => object_name.span(),
+            AssignmentTarget::ColumnName(column) => column.span(),
             AssignmentTarget::Tuple(vec) => union_spans(vec.iter().map(|i| i.span())),
         }
+    }
+}
+
+impl Spanned for TargetColumn {
+    fn span(&self) -> Span {
+        let TargetColumn { name, access_chain } = self;
+
+        union_spans(iter::once(name.span()).chain(access_chain.iter().map(|i| i.span())))
     }
 }
 

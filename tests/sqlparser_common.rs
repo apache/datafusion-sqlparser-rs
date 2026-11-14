@@ -174,7 +174,7 @@ fn parse_insert_values() {
                 for (index, column) in columns.iter().enumerate() {
                     assert_eq!(
                         column,
-                        &ObjectName::from(Ident::new(expected_columns[index].clone()))
+                        &TargetColumn::from(Ident::new(expected_columns[index].clone()))
                     );
                 }
                 match *source.body {
@@ -470,15 +470,15 @@ fn parse_update() {
                 assignments,
                 vec![
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["a".into()])),
+                        target: AssignmentTarget::ColumnName(Ident::new("a").into()),
                         value: Expr::value(number("1")),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["b".into()])),
+                        target: AssignmentTarget::ColumnName(Ident::new("b").into()),
                         value: Expr::value(number("2")),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["c".into()])),
+                        target: AssignmentTarget::ColumnName(Ident::new("c").into()),
                         value: Expr::value(number("3")),
                     },
                 ]
@@ -530,7 +530,7 @@ fn parse_update_set_from() {
             },
             on_cluster: None,
             assignments: vec![Assignment {
-                target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("name")])),
+                target: AssignmentTarget::ColumnName(Ident::new("name").into()),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
             }],
             from: Some(UpdateTableFromKind::AfterSet(vec![TableWithJoins {
@@ -651,10 +651,9 @@ fn parse_update_with_table_alias() {
             );
             assert_eq!(
                 vec![Assignment {
-                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
-                        Ident::new("u"),
-                        Ident::new("username")
-                    ])),
+                    target: AssignmentTarget::ColumnName(
+                        ObjectName::from(vec![Ident::new("u"), Ident::new("username")]).into()
+                    ),
                     value: Expr::Value(
                         (Value::SingleQuotedString("new_user".to_string())).with_empty_span()
                     ),
@@ -11327,20 +11326,20 @@ fn parse_merge() {
                             update_token: AttachedToken::empty(),
                             kind: MergeUpdateKind::Set(vec![
                                 Assignment {
-                                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
-                                        Ident::new("dest"),
-                                        Ident::new("F")
-                                    ])),
+                                    target: AssignmentTarget::ColumnName(
+                                        ObjectName::from(vec![Ident::new("dest"), Ident::new("F")])
+                                            .into()
+                                    ),
                                     value: Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("F"),
                                     ]),
                                 },
                                 Assignment {
-                                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
-                                        Ident::new("dest"),
-                                        Ident::new("G")
-                                    ])),
+                                    target: AssignmentTarget::ColumnName(
+                                        ObjectName::from(vec![Ident::new("dest"), Ident::new("G")])
+                                            .into()
+                                    ),
                                     value: Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("G"),
@@ -23514,5 +23513,48 @@ fn parse_national_character_string_types() {
             .parse_sql_statements("CREATE TABLE t (c NATIONAL CHARACTER(4 OCTETS")
             .unwrap_err(),
         ParserError::ParserError("Expected: ), found: EOF".to_string())
+    );
+}
+
+#[test]
+fn parse_subscripted_assignment_targets() {
+    let dialects = all_dialects_except(|d| {
+        d.is::<MsSqlDialect>()
+            || d.is::<SnowflakeDialect>()
+            || d.is::<SQLiteDialect>()
+            || d.is::<RedshiftSqlDialect>()
+    });
+    for sql in [
+        "UPDATE u SET arr[1] = 5, arr[2:3] = '{6,7}', arr[:1] = '{1}', m[1][2] = 4",
+        "UPDATE u SET parr[1].x = 9, p.y = 3",
+        "UPDATE u SET (arr[1], p.x) = (11, 12)",
+        "INSERT INTO u (id, arr[1], arr[2:3], p.x, parr[1].y) VALUES (1, 10, '{20,30}', 7, 8)",
+        "INSERT INTO u (id) VALUES (1) ON CONFLICT(id) DO UPDATE SET arr[1] = 99",
+        "MERGE INTO u USING v ON u.id = v.id WHEN MATCHED THEN UPDATE SET arr[1] = 5 WHEN NOT MATCHED THEN INSERT (id, arr[2]) VALUES (v.id, 6)",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    match dialects.verified_stmt("UPDATE u SET parr[1].x = 9") {
+        Statement::Update(Update { assignments, .. }) => assert_eq!(
+            assignments[0].target,
+            AssignmentTarget::ColumnName(TargetColumn {
+                name: ObjectName::from(vec![Ident::new("parr")]),
+                access_chain: vec![
+                    AccessExpr::Subscript(Subscript::Index {
+                        index: Expr::value(number("1")),
+                    }),
+                    AccessExpr::Dot(Expr::Identifier(Ident::new("x"))),
+                ],
+            })
+        ),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("UPDATE u SET arr[1]. = 5")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: =".to_string())
     );
 }

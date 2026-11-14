@@ -15062,6 +15062,18 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parses a parenthesized comma-separated list of target columns.
+    /// For example: `(tbl.col1, arr[1], "col 2")`
+    fn parse_parenthesized_target_column_list(
+        &mut self,
+        optional: IsOptional,
+        allow_empty: bool,
+    ) -> Result<Vec<TargetColumn>, ParserError> {
+        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
+            p.parse_target_column(true)
+        })
+    }
+
     /// Parses a parenthesized comma-separated list of columns using
     /// the provided function to parse each element.
     fn parse_parenthesized_column_list_inner<F, T>(
@@ -19823,7 +19835,7 @@ impl<'a> Parser<'a> {
             } else {
                 let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
                     let columns =
-                        self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
+                        self.parse_parenthesized_target_column_list(Optional, is_mysql)?;
 
                     let partitioned = self.parse_insert_partition()?;
                     by_name = self.parse_keywords(&[Keyword::BY, Keyword::NAME]);
@@ -20190,13 +20202,28 @@ impl<'a> Parser<'a> {
     /// Parse the left-hand side of an assignment, used in an UPDATE statement
     pub fn parse_assignment_target(&mut self) -> Result<AssignmentTarget, ParserError> {
         if self.consume_token(&Token::LParen) {
-            let columns = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+            let columns = self.parse_comma_separated(|p| p.parse_target_column(false))?;
             self.expect_token(&Token::RParen)?;
             Ok(AssignmentTarget::Tuple(columns))
         } else {
-            let column = self.parse_object_name(false)?;
+            let column = self.parse_target_column(false)?;
             Ok(AssignmentTarget::ColumnName(column))
         }
+    }
+
+    /// Parse a column written by an assignment or an `INSERT`, e.g. `col` or `arr[1].x`.
+    fn parse_target_column(&mut self, in_table_clause: bool) -> Result<TargetColumn, ParserError> {
+        let name = self.parse_object_name(in_table_clause)?;
+        let mut access_chain = vec![];
+        if !self.dialect.supports_partiql() {
+            self.parse_multi_dim_subscript(&mut access_chain)?;
+            while !access_chain.is_empty() && self.consume_token(&Token::Period) {
+                let field = self.parse_identifier()?;
+                access_chain.push(AccessExpr::Dot(Expr::Identifier(field)));
+                self.parse_multi_dim_subscript(&mut access_chain)?;
+            }
+        }
+        Ok(TargetColumn { name, access_chain })
     }
 
     /// Parse a single function argument, handling named and unnamed variants.

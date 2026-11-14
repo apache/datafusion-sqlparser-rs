@@ -2653,9 +2653,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(
-                            vec!["dname".into()]
-                        )),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec!["dname".into()]).into()
+                        ),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
                     selection: None
@@ -2690,18 +2690,18 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
                         Assignment {
-                            target: AssignmentTarget::ColumnName(ObjectName::from(vec![
-                                "dname".into()
-                            ])),
+                            target: AssignmentTarget::ColumnName(
+                                ObjectName::from(vec!["dname".into()]).into()
+                            ),
                             value: Expr::CompoundIdentifier(vec![
                                 "EXCLUDED".into(),
                                 "dname".into()
                             ])
                         },
                         Assignment {
-                            target: AssignmentTarget::ColumnName(ObjectName::from(vec![
-                                "area".into()
-                            ])),
+                            target: AssignmentTarget::ColumnName(
+                                ObjectName::from(vec!["area".into()]).into()
+                            ),
                             value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
                         },
                     ],
@@ -2755,9 +2755,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(
-                            vec!["dname".into()]
-                        )),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec!["dname".into()]).into()
+                        ),
                         value: Expr::Value(
                             (Value::Placeholder("$1".to_string())).with_empty_span()
                         )
@@ -2802,9 +2802,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(
-                            vec!["dname".into()]
-                        )),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec!["dname".into()]).into()
+                        ),
                         value: Expr::Value(
                             (Value::Placeholder("$1".to_string())).with_empty_span()
                         )
@@ -6819,12 +6819,12 @@ fn test_simple_postgres_insert_with_alias() {
                 }
             }),
             columns: vec![
-                ObjectName::from(Ident {
+                TargetColumn::from(Ident {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 }),
-                ObjectName::from(Ident {
+                TargetColumn::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -6903,12 +6903,12 @@ fn test_simple_insert_with_quoted_alias() {
                 }
             }),
             columns: vec![
-                ObjectName::from(Ident {
+                TargetColumn::from(Ident {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 }),
-                ObjectName::from(Ident {
+                TargetColumn::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),

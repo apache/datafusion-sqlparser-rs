@@ -18,7 +18,7 @@ use alloc::{boxed::Box, format, vec, vec::Vec};
 use crate::{
     ast::{
         Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        MergeUpdateExpr, MergeUpdateKind, ObjectName, OutputClause, SetExpr,
+        MergeUpdateExpr, MergeUpdateKind, OutputClause, SetExpr, TargetColumn,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
@@ -239,8 +239,8 @@ impl Parser<'_> {
     fn parse_merge_clause_insert_columns(
         &mut self,
         allow_empty: bool,
-    ) -> Result<Vec<ObjectName>, ParserError> {
-        self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
+    ) -> Result<Vec<TargetColumn>, ParserError> {
+        self.parse_parenthesized_target_column_list(IsOptional::Optional, allow_empty)
     }
 
     /// Parses an `OUTPUT` clause if present (MSSQL).

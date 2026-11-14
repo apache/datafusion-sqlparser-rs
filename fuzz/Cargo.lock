@@ -121,6 +121,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clickhouse-lexer-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ab8e9ad9fce2c5a71474b8c2dffd9542a1d1a802cbcf71a1c0365be115c526"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -211,6 +220,7 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 name = "fuzz"
 version = "0.1.0"
 dependencies = [
+ "clickhouse-lexer-sys",
  "libduckdb-sys",
  "libfuzzer-sys",
  "libsqlite3-sys",

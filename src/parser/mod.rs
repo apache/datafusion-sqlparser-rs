@@ -2011,7 +2011,7 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op,
                     expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::MulDivModOp))?,
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryPlusMinus))?,
                     ),
                 })
             }

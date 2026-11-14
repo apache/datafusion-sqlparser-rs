@@ -21794,7 +21794,7 @@ impl<'a> Parser<'a> {
                 let restart = if with {
                     Some(self.parse_number()?)
                 } else {
-                    self.maybe_parse(|parser| parser.parse_number())?
+                    self.try_parse(|parser| parser.parse_number()).ok()
                 };
                 (SequenceOptions::Restart(restart, with), "RESTART")
             } else if self.parse_keyword(Keyword::CACHE) {

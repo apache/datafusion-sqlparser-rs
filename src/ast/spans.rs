@@ -635,6 +635,7 @@ impl Spanned for CreateTable {
             inherits: _,     // todo, PostgreSQL specific
             partition_of,
             for_values,
+            of_type,
             copy_grants: _,                     // bool
             enable_schema_evolution: _,         // bool
             change_tracking: _,                 // bool
@@ -675,7 +676,8 @@ impl Spanned for CreateTable {
                 .chain(query.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span()))
                 .chain(partition_of.iter().map(|i| i.span()))
-                .chain(for_values.iter().map(|i| i.span())),
+                .chain(for_values.iter().map(|i| i.span()))
+                .chain(of_type.iter().map(|i| i.span())),
         )
     }
 }

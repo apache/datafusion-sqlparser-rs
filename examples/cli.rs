@@ -52,6 +52,7 @@ $ cargo run --example cli - [--dialectname]
         "--postgres" => Box::new(PostgreSqlDialect {}),
         "--ms" => Box::new(MsSqlDialect {}),
         "--mysql" => Box::new(MySqlDialect {}),
+        "--doris" => Box::new(DorisDialect {}),
         "--snowflake" => Box::new(SnowflakeDialect {}),
         "--hive" => Box::new(HiveDialect {}),
         "--redshift" => Box::new(RedshiftSqlDialect {}),

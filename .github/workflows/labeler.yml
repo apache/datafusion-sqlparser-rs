@@ -17,14 +17,27 @@
 
 name: labeler
 
-# pull_request_target runs on the base branch, so the script below is never taken from the PR head.
+# `pull_request_target` is disabled by ASF infra policy. The pull request path
+# runs from the default branch when `pull_request_signal.yml` starts, so it
+# never runs pull request code. See that file for details.
+#
+# `issues` and `issue_comment` already run from the default branch.
+# Their concurrency group uses `github.run_id` so a later comment on the
+# same issue does not cancel an in-progress labeling run.
+concurrency:
+  group: ${{ github.repository }}-${{ github.event_name == 'workflow_run' && format('{0}-{1}', github.event.workflow_run.head_repository.full_name, github.event.workflow_run.head_branch) || github.run_id }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 on:
-  pull_request_target:
-    types: [opened, edited, reopened, synchronize]
+  workflow_run:
+    workflows: ["Pull request signal"]
+    types: [requested]
   issues:
     types: [opened, edited]
   issue_comment:
     types: [created]
+
+permissions: {}
 
 jobs:
   label-dialects:
@@ -32,13 +45,19 @@ jobs:
     # Bot edits and comments arrive in bursts and never carry a dialect.
     if: >-
       github.event.sender.type != 'Bot' &&
-      (github.event_name != 'issue_comment' || contains(github.event.comment.body, 'dialect'))
+      (
+        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')
+        || github.event_name == 'issues'
+        || (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'dialect'))
+      )
     runs-on: ubuntu-latest
+    # The token of a `workflow_run` workflow can update PRs from forks.
     permissions:
       contents: read
       issues: write
       pull-requests: write
     steps:
+      # This checks out the default branch for `workflow_run`, never the pull request.
       - uses: actions/checkout@v4
         with:
           sparse-checkout: .github/workflows/labeler
@@ -47,4 +66,11 @@ jobs:
         with:
           script: |
             const label = require('./.github/workflows/labeler/label_dialects.js');
-            await label({ github, context });
+            if (context.eventName === 'workflow_run') {
+              const pulls = await require('./.github/workflows/labeler/pull_requests_of_run.js')({ github, context });
+              for (const pull of pulls) {
+                await label({ github, context, pull });
+              }
+            } else {
+              await label({ github, context });
+            }

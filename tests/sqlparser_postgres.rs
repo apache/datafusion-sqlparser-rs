@@ -5858,6 +5858,13 @@ fn parse_create_function_with_set_params() {
         }
         _ => panic!("Expected CreateFunction"),
     }
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SET x")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: = or TO, found: EOF".to_string())
+    );
 }
 
 #[test]
@@ -9399,6 +9406,10 @@ fn parse_alter_function_and_aggregate() {
         (
             "ALTER AGGREGATE alt_func1(INT) IMMUTABLE",
             "Expected: RENAME TO, OWNER TO, or SET SCHEMA after ALTER AGGREGATE, found: IMMUTABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func1(INT) SET work_mem",
+            "Expected: = or TO, found: EOF",
         ),
     ] {
         assert_eq!(
@@ -13544,7 +13555,124 @@ fn parse_alter_database_rename() {
         ),
         (
             "ALTER DATABASE d",
-            "Expected: RENAME TO after ALTER DATABASE, found: EOF",
+            "Expected: RENAME TO or SET after ALTER DATABASE, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_database_set() {
+    let dialects = pg_and_generic();
+
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE tzq SET timezone = 'Asia/Tokyo'"),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("tzq")]),
+            operation: AlterDatabaseOperation::Set(ConfigurationSet::Parameter(
+                FunctionDefinitionSetParam {
+                    name: ObjectName::from(vec![Ident::new("timezone")]),
+                    value: FunctionSetValue::Values(vec![Expr::Value(
+                        Value::SingleQuotedString("Asia/Tokyo".to_string()).with_empty_span()
+                    )]),
+                }
+            )),
+        })
+    );
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE tzq SET TIME ZONE 'Europe/Rome'"),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("tzq")]),
+            operation: AlterDatabaseOperation::Set(ConfigurationSet::TimeZone(Expr::Value(
+                Value::SingleQuotedString("Europe/Rome".to_string()).with_empty_span()
+            ))),
+        })
+    );
+
+    // ROLE is both a `SET ROLE` form and an ordinary configuration parameter.
+    let set = |sql| match dialects.verified_stmt(sql) {
+        Statement::AlterDatabase(AlterDatabase {
+            operation: AlterDatabaseOperation::Set(set),
+            ..
+        }) => set,
+        _ => unreachable!(),
+    };
+    assert!(matches!(
+        set("ALTER DATABASE d SET ROLE r"),
+        ConfigurationSet::Role(_)
+    ));
+    assert!(matches!(
+        set("ALTER DATABASE d SET role = r"),
+        ConfigurationSet::Parameter(_)
+    ));
+    assert!(matches!(
+        set("ALTER DATABASE d SET role FROM CURRENT"),
+        ConfigurationSet::Parameter(_)
+    ));
+
+    for sql in [
+        "ALTER DATABASE d SET search_path = \"$user\", public",
+        "ALTER DATABASE d SET timezone = DEFAULT",
+        "ALTER DATABASE d SET TIME ZONE LOCAL",
+        "ALTER DATABASE d SET TIME ZONE INTERVAL '+01:00' HOUR TO MINUTE",
+        "ALTER DATABASE d SET SCHEMA 'x'",
+        "ALTER DATABASE d SET NAMES",
+        "ALTER DATABASE d SET NAMES 'UTF8'",
+        "ALTER DATABASE d SET SESSION AUTHORIZATION DEFAULT",
+        "ALTER DATABASE d SET SESSION AUTHORIZATION r",
+        "ALTER DATABASE d SET XML OPTION DOCUMENT",
+        "ALTER DATABASE d SET XML OPTION CONTENT",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    dialects.one_statement_parses_to(
+        "ALTER DATABASE d SET timezone TO 'UTC'",
+        "ALTER DATABASE d SET timezone = 'UTC'",
+    );
+
+    for (sql, error) in [
+        (
+            "ALTER DATABASE d SET timezone",
+            "Expected: = or TO, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d SET XML OPTION yes",
+            "Expected: one of DOCUMENT or CONTENT, found: yes",
+        ),
+        (
+            "ALTER DATABASE d SET TIME ZONE 'UTC', 'x'",
+            "Expected: end of statement, found: ,",
+        ),
+        ("ALTER DATABASE d SET", "Expected: identifier, found: EOF"),
+        (
+            "ALTER DATABASE d SET x =",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d SET TIME ZONE",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d SET SCHEMA",
+            "Expected: a value, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d SET ROLE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d SET NAMES ,",
+            "Expected: an expression, found: ,",
+        ),
+        (
+            "ALTER DATABASE d SET SESSION AUTHORIZATION",
+            "Expected: identifier, found: EOF",
         ),
     ] {
         assert_eq!(

@@ -6224,21 +6224,7 @@ impl<'a> Parser<'a> {
                 ensure_not_set(&body.support, "SUPPORT")?;
                 body.support = Some(self.parse_object_name(false)?);
             } else if self.parse_keyword(Keyword::SET) {
-                let name = self.parse_object_name(false)?;
-                let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
-                    FunctionSetValue::FromCurrent
-                } else {
-                    if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
-                        return self.expected_ref("= or TO", self.peek_token_ref());
-                    }
-                    if self.parse_keyword(Keyword::DEFAULT) {
-                        FunctionSetValue::Default
-                    } else {
-                        let values = self.parse_comma_separated(Parser::parse_expr)?;
-                        FunctionSetValue::Values(values)
-                    }
-                };
-                set_params.push(FunctionDefinitionSetParam { name, value });
+                set_params.push(self.parse_function_definition_set_param()?);
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.function_body, "RETURN")?;
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
@@ -12191,23 +12177,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SUPPORT) {
             Some(AlterFunctionAction::Support(self.parse_object_name(false)?))
         } else if self.parse_keyword(Keyword::SET) {
-            let name = self.parse_object_name(false)?;
-            let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
-                FunctionSetValue::FromCurrent
-            } else {
-                if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
-                    return self.expected_ref("= or TO", self.peek_token_ref());
-                }
-                if self.parse_keyword(Keyword::DEFAULT) {
-                    FunctionSetValue::Default
-                } else {
-                    FunctionSetValue::Values(self.parse_comma_separated(Parser::parse_expr)?)
-                }
-            };
-            Some(AlterFunctionAction::Set(FunctionDefinitionSetParam {
-                name,
-                value,
-            }))
+            Some(AlterFunctionAction::Set(
+                self.parse_function_definition_set_param()?,
+            ))
         } else if self.parse_keyword(Keyword::RESET) {
             let reset_config = if self.parse_keyword(Keyword::ALL) {
                 ResetConfig::ALL
@@ -12220,6 +12192,27 @@ impl<'a> Parser<'a> {
         };
 
         Ok(action)
+    }
+
+    /// Parse `configuration_parameter { TO | = } { value [, ...] | DEFAULT }` or
+    /// `configuration_parameter FROM CURRENT`, after `SET`.
+    fn parse_function_definition_set_param(
+        &mut self,
+    ) -> Result<FunctionDefinitionSetParam, ParserError> {
+        let name = self.parse_object_name(false)?;
+        let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
+            FunctionSetValue::FromCurrent
+        } else {
+            if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
+                return self.expected_ref("= or TO", self.peek_token_ref());
+            }
+            if self.parse_keyword(Keyword::DEFAULT) {
+                FunctionSetValue::Default
+            } else {
+                FunctionSetValue::Values(self.parse_comma_separated(Parser::parse_expr)?)
+            }
+        };
+        Ok(FunctionDefinitionSetParam { name, value })
     }
 
     fn parse_alter_function_actions(
@@ -12513,11 +12506,65 @@ impl<'a> Parser<'a> {
             AlterDatabaseOperation::RenameTo {
                 new_name: self.parse_identifier()?,
             }
+        } else if self.parse_keyword(Keyword::SET) {
+            AlterDatabaseOperation::Set(self.parse_configuration_set()?)
         } else {
-            return self.expected_ref("RENAME TO after ALTER DATABASE", self.peek_token_ref());
+            return self.expected_ref(
+                "RENAME TO or SET after ALTER DATABASE",
+                self.peek_token_ref(),
+            );
         };
 
         Ok(AlterDatabase { name, operation })
+    }
+
+    /// Parse the clause after `SET` that stores a configuration parameter
+    /// default, as in `ALTER DATABASE ... SET`.
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-set.html)
+    fn parse_configuration_set(&mut self) -> Result<ConfigurationSet, ParserError> {
+        let set = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
+            ConfigurationSet::TimeZone(self.parse_expr()?)
+        } else if self.parse_special_set_keyword(Keyword::SCHEMA) {
+            ConfigurationSet::Schema(self.parse_value()?)
+        } else if self.parse_special_set_keyword(Keyword::ROLE) {
+            ConfigurationSet::Role(self.parse_identifier()?)
+        } else if self.parse_special_set_keyword(Keyword::NAMES) {
+            ConfigurationSet::Names(
+                if matches!(self.peek_token_ref().token, Token::EOF | Token::SemiColon) {
+                    None
+                } else {
+                    Some(self.parse_expr()?)
+                },
+            )
+        } else if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
+            ConfigurationSet::SessionAuthorization(if self.parse_keyword(Keyword::DEFAULT) {
+                SetSessionAuthorizationParamKind::Default
+            } else {
+                SetSessionAuthorizationParamKind::User(self.parse_identifier()?)
+            })
+        } else if self.parse_keywords(&[Keyword::XML, Keyword::OPTION]) {
+            ConfigurationSet::XmlOption(
+                match self.expect_one_of_keywords(&[Keyword::DOCUMENT, Keyword::CONTENT])? {
+                    Keyword::DOCUMENT => XmlOption::Document,
+                    _ => XmlOption::Content,
+                },
+            )
+        } else {
+            ConfigurationSet::Parameter(self.parse_function_definition_set_param()?)
+        };
+        Ok(set)
+    }
+
+    /// Consume `keyword` unless it names the parameter of a
+    /// `SET name { TO | = | FROM CURRENT }` assignment.
+    fn parse_special_set_keyword(&mut self, keyword: Keyword) -> bool {
+        let assignment_follows = match &self.peek_nth_token_ref(1).token {
+            Token::Eq => true,
+            Token::Word(w) => matches!(w.keyword, Keyword::TO | Keyword::FROM),
+            _ => false,
+        };
+        !assignment_follows && self.parse_keyword(keyword)
     }
 
     /// Parse a [Statement::AlterOperator]

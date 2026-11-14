@@ -965,6 +965,7 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword_is(Keyword::ON)?;
         let token = self.next_token();
+        let mut parent_name = None;
 
         let (object_type, object_name) = match token.token {
             Token::Word(w) if w.keyword == Keyword::COLLATION => {
@@ -972,6 +973,17 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w) if w.keyword == Keyword::COLUMN => {
                 (CommentObject::Column, self.parse_object_name(false)?)
+            }
+            Token::Word(w) if w.keyword == Keyword::CONSTRAINT => {
+                let name = ObjectName::from(vec![self.parse_identifier()?]);
+                self.expect_keyword_is(Keyword::ON)?;
+                let object_type = if self.parse_keyword(Keyword::DOMAIN) {
+                    CommentObject::DomainConstraint
+                } else {
+                    CommentObject::Constraint
+                };
+                parent_name = Some(self.parse_object_name(false)?);
+                (object_type, name)
             }
             Token::Word(w) if w.keyword == Keyword::DATABASE => {
                 (CommentObject::Database, self.parse_object_name(false)?)
@@ -1035,6 +1047,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Comment {
             object_type,
             object_name,
+            parent_name,
             comment,
             if_exists,
         })

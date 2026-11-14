@@ -13522,6 +13522,10 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
 #[test]
 fn parse_alter_sequence() {
     let dialects = pg_and_generic();
+    dialects.verified_stmt("ALTER SEQUENCE s RESTART");
+    dialects.verified_stmt("ALTER SEQUENCE s RESTART WITH 5");
+    dialects.verified_stmt("ALTER SEQUENCE s RESTART 7");
+    dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s RESTART");
     dialects.verified_stmt("ALTER SEQUENCE s AS BIGINT");
     dialects.verified_stmt("ALTER SEQUENCE s AS DOUBLE PRECISION");
     dialects.verified_stmt("ALTER SEQUENCE s INCREMENT BY 2");
@@ -13556,6 +13560,7 @@ fn parse_alter_sequence() {
     dialects.verified_stmt(
         "ALTER SEQUENCE s INCREMENT BY 2 MINVALUE -5 MAXVALUE 50 START WITH 100 CACHE 3 NO CYCLE",
     );
+    dialects.verified_stmt("ALTER SEQUENCE s NO CYCLE NO MAXVALUE OWNED BY NONE RESTART WITH 20");
     dialects.verified_stmt("ALTER SEQUENCE s AS DOUBLE PRECISION INCREMENT 3 NO MINVALUE CYCLE");
 }
 
@@ -13577,6 +13582,27 @@ fn parse_alter_sequence_ast() {
         .parse_sql_statements("ALTER SEQUENCE s SET SCHEMA other")
         .unwrap();
     assert_eq!(statements[0].span(), Span::empty());
+    assert_eq!(
+        pg().parse_sql_statements("ALTER SEQUENCE s RESTART WITH 20 INCREMENT BY 3")
+            .unwrap(),
+        vec![Statement::AlterSequence(AlterSequence {
+            if_exists: false,
+            name: ObjectName::from(vec!["s".into()]),
+            operation: AlterSequenceOperation::Options(vec![
+                SequenceOptions::Restart(Some(Expr::value(number("20"))), true),
+                SequenceOptions::IncrementBy(Expr::value(number("3")), true),
+            ]),
+        })]
+    );
+    assert_eq!(
+        pg().parse_sql_statements("ALTER SEQUENCE s RESTART")
+            .unwrap(),
+        vec![Statement::AlterSequence(AlterSequence {
+            if_exists: false,
+            name: ObjectName::from(vec!["s".into()]),
+            operation: AlterSequenceOperation::Options(vec![SequenceOptions::Restart(None, false)]),
+        })]
+    );
     assert_eq!(
         pg().parse_sql_statements("ALTER SEQUENCE s SET UNLOGGED")
             .unwrap(),
@@ -13609,6 +13635,10 @@ fn parse_alter_sequence_errors() {
             "INCREMENT specified more than once",
         ),
         (
+            "ALTER SEQUENCE s RESTART RESTART WITH 2",
+            "RESTART specified more than once",
+        ),
+        (
             "ALTER SEQUENCE s SET SCHEMA",
             "Expected: identifier, found: EOF",
         ),
@@ -13623,6 +13653,18 @@ fn parse_alter_sequence_errors() {
         (
             "ALTER SEQUENCE s INCREMENT",
             "Expected: a value, found: EOF",
+        ),
+        (
+            "ALTER SEQUENCE s RESTART WITH",
+            "Expected: a value, found: EOF",
+        ),
+        (
+            "ALTER SEQUENCE s RESTART +",
+            "Expected: end of statement, found: +",
+        ),
+        (
+            "ALTER SEQUENCE s RESTART x",
+            "Expected: end of statement, found: x",
         ),
     ] {
         assert_eq!(

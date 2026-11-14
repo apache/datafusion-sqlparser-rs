@@ -797,3 +797,72 @@ fn parse_databricks_collated_data_types() {
         ))
     );
 }
+
+#[test]
+fn parse_databricks_multipart_table_query() {
+    for (sql, parts) in [
+        (
+            "CREATE VIEW copy AS TABLE main.raw.source",
+            vec![Ident::new("main"), Ident::new("raw"), Ident::new("source")],
+        ),
+        (
+            "CREATE VIEW copy AS TABLE `main.raw`.source",
+            vec![Ident::with_quote('`', "main.raw"), Ident::new("source")],
+        ),
+        (
+            "CREATE VIEW copy AS TABLE `a b`.raw.source",
+            vec![
+                Ident::with_quote('`', "a b"),
+                Ident::new("raw"),
+                Ident::new("source"),
+            ],
+        ),
+        (
+            "CREATE VIEW copy AS TABLE `main.raw`.`source table`",
+            vec![
+                Ident::with_quote('`', "main.raw"),
+                Ident::with_quote('`', "source table"),
+            ],
+        ),
+        (
+            "CREATE VIEW copy AS TABLE workspace.main.raw.source",
+            vec![
+                Ident::new("workspace"),
+                Ident::new("main"),
+                Ident::new("raw"),
+                Ident::new("source"),
+            ],
+        ),
+    ] {
+        let Statement::CreateView(view) = databricks().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(
+            *view.query.body,
+            SetExpr::Table(Box::new(Table {
+                name: Some(ObjectName::from(parts)),
+            })),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn reject_databricks_multipart_table_query_with_missing_name_part() {
+    for (sql, expected) in [
+        (
+            "CREATE VIEW copy AS TABLE main..source",
+            "Expected: identifier, found: .",
+        ),
+        (
+            "CREATE VIEW copy AS TABLE main.raw.",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            databricks().parse_sql_statements(sql),
+            Err(ParserError::ParserError(expected.to_owned())),
+            "{sql}"
+        );
+    }
+}

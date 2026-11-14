@@ -1442,6 +1442,7 @@ fn parse_select_count_wildcard() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
                 clauses: vec![],
@@ -1465,6 +1466,7 @@ fn parse_select_count_distinct() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
                     op: UnaryOperator::Plus,
@@ -3573,6 +3575,7 @@ fn parse_select_having() {
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
                     clauses: vec![],
@@ -3604,6 +3607,7 @@ fn parse_select_qualify() {
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     duplicate_treatment: None,
                     args: vec![],
                     clauses: vec![],
@@ -4025,6 +4029,7 @@ fn parse_listagg() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
                 args: vec![
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
@@ -6579,6 +6584,7 @@ fn parse_named_argument_function() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
@@ -6619,6 +6625,7 @@ fn parse_named_argument_function_with_eq_operator() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
@@ -6694,6 +6701,7 @@ fn parse_window_functions() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![],
                 clauses: vec![],
@@ -6836,6 +6844,8 @@ fn test_parse_named_window() {
                     uses_odbc_syntax: false,
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
+                        closing_token:
+                            sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                             Expr::Identifier(Ident {
@@ -6871,6 +6881,8 @@ fn test_parse_named_window() {
                     uses_odbc_syntax: false,
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
+                        closing_token:
+                            sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                             Expr::Identifier(Ident {
@@ -11848,6 +11860,7 @@ fn parse_time_functions() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![],
                 clauses: vec![],
@@ -13623,6 +13636,7 @@ fn parse_call() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     (Value::SingleQuotedString("a".to_string())).with_empty_span()
@@ -14143,6 +14157,8 @@ fn parse_map_access_expr() {
                     )]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
+                        closing_token:
+                            sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                             (number("2")).with_empty_span(),
@@ -14483,6 +14499,7 @@ fn test_selective_aggregation() {
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                         Expr::Identifier(Ident::new("name"))
@@ -14502,6 +14519,8 @@ fn test_selective_aggregation() {
                     uses_odbc_syntax: false,
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
+                        closing_token:
+                            sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                             Expr::Identifier(Ident::new("name"))
@@ -17418,6 +17437,7 @@ fn parse_composite_access_expr() {
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                         Expr::Identifier(Ident::new("a"))
@@ -17442,6 +17462,7 @@ fn parse_composite_access_expr() {
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                         Expr::Identifier(Ident::new("a"))
@@ -17468,6 +17489,7 @@ fn parse_composite_access_expr() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                     Expr::Identifier(Ident::new("a")),
@@ -22450,6 +22472,31 @@ fn parse_qualified_literal_prefix_requires_adjacent_period() {
 }
 
 #[test]
+fn function_spans_include_closing_parentheses() {
+    for call in ["foo()", "foo(1)", "foo(bar())", "foo( /* comment */ )"] {
+        let sql = format!("SELECT {call}");
+        let statements = all_dialects()
+            .run_parser_method(&sql, |parser| parser.parse_statements())
+            .unwrap();
+        let Statement::Query(query) = &statements[0] else {
+            panic!("expected a query");
+        };
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            panic!("expected a select");
+        };
+        let UnnamedExpr(Expr::Function(function)) = &select.projection[0] else {
+            panic!("expected a function");
+        };
+        assert_eq!(function.span().start, Location::new(1, 8), "{call}");
+        assert_eq!(
+            function.span().end,
+            Location::new(1, sql.len() as u64 + 1),
+            "{call}"
+        );
+    }
+}
+
+#[test]
 fn parse_cache_table_options_without_flag() {
     let dialects = all_dialects();
     for (suffix, has_as) in [("", false), (" SELECT 1", false), (" AS SELECT 1", true)] {
@@ -22671,6 +22718,7 @@ fn parse_delimited_identifiers() {
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
+                closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                 duplicate_treatment: None,
                 args: vec![],
                 clauses: vec![],

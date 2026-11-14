@@ -12525,13 +12525,32 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::REFRESH, Keyword::COLLATION, Keyword::VERSION]) {
             AlterDatabaseOperation::RefreshCollationVersion
         } else {
-            return self.expected_ref(
-                "RENAME TO, OWNER TO, SET, RESET or REFRESH COLLATION VERSION after ALTER DATABASE",
-                self.peek_token_ref(),
-            );
+            let with = self.parse_keyword(Keyword::WITH);
+            let mut options = vec![];
+            while let Some(option) = self.parse_alter_database_option()? {
+                options.push(option);
+            }
+            AlterDatabaseOperation::Options { with, options }
         };
 
         Ok(AlterDatabase { name, operation })
+    }
+
+    fn parse_alter_database_option(&mut self) -> Result<Option<AlterDatabaseOption>, ParserError> {
+        let name = if self.parse_keyword(Keyword::CONNECTION) {
+            self.expect_keyword_is(Keyword::LIMIT)?;
+            AlterDatabaseOptionName::ConnectionLimit
+        } else {
+            let token = self.next_token();
+            let Token::Word(word) = token.token else {
+                self.prev_token();
+                return Ok(None);
+            };
+            AlterDatabaseOptionName::Name(word.into_ident(token.span))
+        };
+        let _ = self.consume_token(&Token::Eq);
+        let value = self.parse_expr()?;
+        Ok(Some(AlterDatabaseOption { name, value }))
     }
 
     /// Parse the clause after `SET` that stores a configuration parameter

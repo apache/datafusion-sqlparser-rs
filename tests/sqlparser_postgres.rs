@@ -13547,20 +13547,10 @@ fn parse_alter_database_rename() {
             .span(),
         Span::new(Location::new(1, 16), Location::new(1, 21))
     );
-    for (sql, error) in [
-        ("ALTER DATABASE", "Expected: identifier, found: EOF"),
-        (
-            "ALTER DATABASE d RENAME TO",
-            "Expected: identifier, found: EOF",
-        ),
-        (
-            "ALTER DATABASE d",
-            "Expected: RENAME TO, OWNER TO, SET, RESET or REFRESH COLLATION VERSION after ALTER DATABASE, found: EOF",
-        ),
-    ] {
+    for sql in ["ALTER DATABASE", "ALTER DATABASE d RENAME TO"] {
         assert_eq!(
             dialects.parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(error.to_string()),
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
             "{sql}"
         );
     }
@@ -13781,4 +13771,71 @@ fn parse_alter_database_refresh_collation_version() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: x".to_string())
     );
+}
+
+#[test]
+fn parse_alter_database_options() {
+    let dialects = pg_and_generic();
+
+    assert_eq!(
+        dialects.verified_stmt(
+            "ALTER DATABASE d WITH allow_connections true CONNECTION LIMIT -1 \"is_template\" false"
+        ),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("d")]),
+            operation: AlterDatabaseOperation::Options {
+                with: true,
+                options: vec![
+                    AlterDatabaseOption {
+                        name: AlterDatabaseOptionName::Name(Ident::new("allow_connections")),
+                        value: Expr::Value(Value::Boolean(true).with_empty_span()),
+                    },
+                    AlterDatabaseOption {
+                        name: AlterDatabaseOptionName::ConnectionLimit,
+                        value: Expr::UnaryOp {
+                            op: UnaryOperator::Minus,
+                            expr: Box::new(Expr::value(number("1"))),
+                        },
+                    },
+                    AlterDatabaseOption {
+                        name: AlterDatabaseOptionName::Name(Ident::with_quote('"', "is_template")),
+                        value: Expr::Value(Value::Boolean(false).with_empty_span()),
+                    },
+                ],
+            },
+        })
+    );
+
+    for sql in [
+        "ALTER DATABASE d",
+        "ALTER DATABASE d WITH",
+        "ALTER DATABASE d ALLOW_CONNECTIONS DEFAULT",
+        "ALTER DATABASE d TABLESPACE pg_default",
+        "ALTER DATABASE d OWNER r",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    dialects.one_statement_parses_to(
+        "ALTER DATABASE d CONNECTION LIMIT = 5 tablespace = pg_default",
+        "ALTER DATABASE d CONNECTION LIMIT 5 tablespace pg_default",
+    );
+
+    for (sql, error) in [
+        ("ALTER DATABASE d CONNECTION 5", "Expected: LIMIT, found: 5"),
+        (
+            "ALTER DATABASE d IS_TEMPLATE",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d 'x' 1",
+            "Expected: end of statement, found: 'x'",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
 }

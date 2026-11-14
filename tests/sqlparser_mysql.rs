@@ -1989,8 +1989,8 @@ fn parse_simple_insert() {
             );
             assert_eq!(
                 vec![
-                    ObjectName::from(Ident::new("title")),
-                    ObjectName::from(Ident::new("priority"))
+                    TargetColumn::from(Ident::new("title")),
+                    TargetColumn::from(Ident::new("priority"))
                 ],
                 columns
             );
@@ -2060,8 +2060,8 @@ fn parse_ignore_insert() {
             );
             assert_eq!(
                 vec![
-                    ObjectName::from(Ident::new("title")),
-                    ObjectName::from(Ident::new("priority"))
+                    TargetColumn::from(Ident::new("title")),
+                    TargetColumn::from(Ident::new("priority"))
                 ],
                 columns
             );
@@ -2116,8 +2116,8 @@ fn parse_priority_insert() {
             );
             assert_eq!(
                 vec![
-                    ObjectName::from(Ident::new("title")),
-                    ObjectName::from(Ident::new("priority"))
+                    TargetColumn::from(Ident::new("title")),
+                    TargetColumn::from(Ident::new("priority"))
                 ],
                 columns
             );
@@ -2169,8 +2169,8 @@ fn parse_priority_insert() {
             );
             assert_eq!(
                 vec![
-                    ObjectName::from(Ident::new("title")),
-                    ObjectName::from(Ident::new("priority"))
+                    TargetColumn::from(Ident::new("title")),
+                    TargetColumn::from(Ident::new("priority"))
                 ],
                 columns
             );
@@ -2222,7 +2222,7 @@ fn parse_insert_as() {
                 table_name
             );
             assert_eq!(
-                vec![ObjectName::from(Ident::with_quote('`', "date"))],
+                vec![TargetColumn::from(Ident::with_quote('`', "date"))],
                 columns
             );
             let insert_alias = insert_alias.unwrap();
@@ -2278,8 +2278,8 @@ fn parse_insert_as() {
             );
             assert_eq!(
                 vec![
-                    ObjectName::from(Ident::with_quote('`', "id")),
-                    ObjectName::from(Ident::with_quote('`', "date"))
+                    TargetColumn::from(Ident::with_quote('`', "id")),
+                    TargetColumn::from(Ident::with_quote('`', "date"))
                 ],
                 columns
             );
@@ -2344,8 +2344,8 @@ fn parse_replace_insert() {
             );
             assert_eq!(
                 vec![
-                    ObjectName::from(Ident::new("title")),
-                    ObjectName::from(Ident::new("priority"))
+                    TargetColumn::from(Ident::new("title")),
+                    TargetColumn::from(Ident::new("priority"))
                 ],
                 columns
             );
@@ -2445,12 +2445,12 @@ fn parse_insert_with_on_duplicate_update() {
             );
             assert_eq!(
                 vec![
-                    ObjectName::from(Ident::new("name")),
-                    ObjectName::from(Ident::new("description")),
-                    ObjectName::from(Ident::new("perm_create")),
-                    ObjectName::from(Ident::new("perm_read")),
-                    ObjectName::from(Ident::new("perm_update")),
-                    ObjectName::from(Ident::new("perm_delete"))
+                    TargetColumn::from(Ident::new("name")),
+                    TargetColumn::from(Ident::new("description")),
+                    TargetColumn::from(Ident::new("perm_create")),
+                    TargetColumn::from(Ident::new("perm_read")),
+                    TargetColumn::from(Ident::new("perm_update")),
+                    TargetColumn::from(Ident::new("perm_delete"))
                 ],
                 columns
             );
@@ -2491,33 +2491,33 @@ fn parse_insert_with_on_duplicate_update() {
             assert_eq!(
                 Some(OnInsert::DuplicateKeyUpdate(vec![
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
-                            "description".to_string()
-                        )])),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec![Ident::new("description".to_string())]).into()
+                        ),
                         value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
-                            "perm_create".to_string()
-                        )])),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec![Ident::new("perm_create".to_string())]).into()
+                        ),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
-                            "perm_read".to_string()
-                        )])),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec![Ident::new("perm_read".to_string())]).into()
+                        ),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
-                            "perm_update".to_string()
-                        )])),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec![Ident::new("perm_update".to_string())]).into()
+                        ),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
-                            "perm_delete".to_string()
-                        )])),
+                        target: AssignmentTarget::ColumnName(
+                            ObjectName::from(vec![Ident::new("perm_delete".to_string())]).into()
+                        ),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_delete"))]),
                     },
                 ])),
@@ -2765,7 +2765,7 @@ fn parse_insert_with_numeric_prefix_column_name() {
                 table_name
             );
             assert_eq!(
-                vec![ObjectName::from(Ident::new("123col_$@length123"))],
+                vec![TargetColumn::from(Ident::new("123col_$@length123"))],
                 columns
             );
         }
@@ -2839,10 +2839,9 @@ fn parse_update_with_joins() {
             );
             assert_eq!(
                 vec![Assignment {
-                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
-                        Ident::new("o"),
-                        Ident::new("completed")
-                    ])),
+                    target: AssignmentTarget::ColumnName(
+                        ObjectName::from(vec![Ident::new("o"), Ident::new("completed")]).into()
+                    ),
                     value: Expr::Value((Value::Boolean(true)).with_empty_span())
                 }],
                 assignments
@@ -4550,13 +4549,14 @@ fn test_variable_assignment_using_colon_equal() {
             assert_eq!(
                 assignments,
                 vec![Assignment {
-                    target: AssignmentTarget::ColumnName(ObjectName(vec![
-                        ObjectNamePart::Identifier(Ident {
+                    target: AssignmentTarget::ColumnName(
+                        ObjectName(vec![ObjectNamePart::Identifier(Ident {
                             value: "price".to_string(),
                             quote_style: None,
                             span: Span::empty(),
-                        })
-                    ])),
+                        })])
+                        .into()
+                    ),
                     value: Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "@new_price".to_string(),

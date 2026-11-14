@@ -8112,9 +8112,9 @@ impl fmt::Display for Assignment {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AssignmentTarget {
     /// A single column
-    ColumnName(ObjectName),
+    ColumnName(TargetColumn),
     /// A tuple of columns
-    Tuple(Vec<ObjectName>),
+    Tuple(Vec<TargetColumn>),
 }
 
 impl fmt::Display for AssignmentTarget {
@@ -8123,6 +8123,46 @@ impl fmt::Display for AssignmentTarget {
             AssignmentTarget::ColumnName(column) => write!(f, "{column}"),
             AssignmentTarget::Tuple(columns) => write!(f, "({})", display_comma_separated(columns)),
         }
+    }
+}
+
+/// A column written by an assignment or listed in an `INSERT` column list,
+/// e.g. `col`, `arr[1]` or `arr[1:2]`.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-update.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TargetColumn {
+    /// The column, e.g. `arr` in `arr[1].x`.
+    pub name: ObjectName,
+    /// Subscripts and the subfields after them, e.g. `[1]` and `.x` in `arr[1].x`.
+    pub access_chain: Vec<AccessExpr>,
+}
+
+impl From<ObjectName> for TargetColumn {
+    fn from(name: ObjectName) -> Self {
+        Self {
+            name,
+            access_chain: vec![],
+        }
+    }
+}
+
+impl From<Ident> for TargetColumn {
+    fn from(ident: Ident) -> Self {
+        ObjectName::from(ident).into()
+    }
+}
+
+impl fmt::Display for TargetColumn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            self.name,
+            display_separated(&self.access_chain, "")
+        )
     }
 }
 

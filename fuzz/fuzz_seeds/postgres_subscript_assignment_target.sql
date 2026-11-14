@@ -1,0 +1,1 @@
+UPDATE u SET arr[1] = 5

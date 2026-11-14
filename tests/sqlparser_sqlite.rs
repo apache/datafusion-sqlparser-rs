@@ -516,8 +516,8 @@ fn parse_update_tuple_row_values() {
             or: None,
             assignments: vec![Assignment {
                 target: AssignmentTarget::Tuple(vec![
-                    ObjectName::from(vec![Ident::new("a"),]),
-                    ObjectName::from(vec![Ident::new("b"),]),
+                    Ident::new("a").into(),
+                    Ident::new("b").into(),
                 ]),
                 value: Expr::Tuple(vec![
                     Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span()),

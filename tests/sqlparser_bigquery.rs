@@ -1850,11 +1850,11 @@ fn parse_merge() {
         update_token: AttachedToken::empty(),
         kind: MergeUpdateKind::Set(vec![
             Assignment {
-                target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("a")])),
+                target: AssignmentTarget::ColumnName(Ident::new("a").into()),
                 value: Expr::value(number("1")),
             },
             Assignment {
-                target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("b")])),
+                target: AssignmentTarget::ColumnName(Ident::new("b").into()),
                 value: Expr::value(number("2")),
             },
         ]),

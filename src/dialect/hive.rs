@@ -25,6 +25,10 @@ use crate::parser::Parser;
 pub struct HiveDialect {}
 
 impl Dialect for HiveDialect {
+    fn supports_create_table_skewed_by(&self) -> bool {
+        true
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         (ch == '"') || (ch == '`')
     }

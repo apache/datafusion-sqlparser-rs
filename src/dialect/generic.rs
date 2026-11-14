@@ -309,6 +309,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_create_table_clustered_by(&self) -> bool {
+        true
+    }
+
     fn supports_detach(&self) -> bool {
         true
     }

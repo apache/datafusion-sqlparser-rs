@@ -694,7 +694,9 @@ fn parse_create_table_like_with_defaults() {
                 stmt.like,
                 Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
                     name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    defaults: Some(CreateTableLikeDefaults::Including),
+                    options: vec![CreateTableLikeOption::Including(
+                        CreateTableLikeProperty::Defaults
+                    )],
                 }))
             )
         }
@@ -712,7 +714,9 @@ fn parse_create_table_like_with_defaults() {
                 stmt.like,
                 Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
                     name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    defaults: Some(CreateTableLikeDefaults::Excluding),
+                    options: vec![CreateTableLikeOption::Excluding(
+                        CreateTableLikeProperty::Defaults
+                    )],
                 }))
             )
         }
@@ -13517,4 +13521,81 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+#[test]
+fn parse_create_table_like_options() {
+    for property in [
+        "ALL",
+        "COMMENTS",
+        "COMPRESSION",
+        "CONSTRAINTS",
+        "DEFAULTS",
+        "GENERATED",
+        "IDENTITY",
+        "INDEXES",
+        "STATISTICS",
+        "STORAGE",
+    ] {
+        pg().verified_stmt(&format!("CREATE TABLE new (LIKE old INCLUDING {property})"));
+        pg().verified_stmt(&format!("CREATE TABLE new (LIKE old EXCLUDING {property})"));
+    }
+
+    match pg().verified_stmt(
+        "CREATE TABLE new (LIKE old INCLUDING ALL EXCLUDING INDEXES INCLUDING INDEXES)",
+    ) {
+        Statement::CreateTable(stmt) => assert_eq!(
+            stmt.like,
+            Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                name: ObjectName::from(vec![Ident::new("old")]),
+                options: vec![
+                    CreateTableLikeOption::Including(CreateTableLikeProperty::All),
+                    CreateTableLikeOption::Excluding(CreateTableLikeProperty::Indexes),
+                    CreateTableLikeOption::Including(CreateTableLikeProperty::Indexes),
+                ],
+            }))
+        ),
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE new (LIKE old INCLUDING)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of ALL or COMMENTS or COMPRESSION or CONSTRAINTS or DEFAULTS or GENERATED or IDENTITY or INDEXES or STATISTICS or STORAGE, found: )".to_string()
+        )
+    );
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE new (LIKE old COMMENTS)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: COMMENTS".to_string())
+    );
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TABLE new (LIKE)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
+}
+
+#[test]
+fn display_create_table_like_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = pg().verified_stmt("CREATE TABLE new (LIKE old INCLUDING ALL)");
+    for rejected in ["LIKE", "INCLUDING", "ALL"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
+    }
 }

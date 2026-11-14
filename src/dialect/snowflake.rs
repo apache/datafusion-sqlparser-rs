@@ -939,7 +939,7 @@ pub fn parse_create_table(
                     builder = builder.like(Some(CreateTableLikeKind::Plain(
                         crate::ast::CreateTableLike {
                             name,
-                            defaults: None,
+                            options: vec![],
                         },
                     )));
                 }

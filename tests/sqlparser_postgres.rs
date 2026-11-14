@@ -1252,6 +1252,7 @@ fn parse_alter_table_alter_column() {
                 op,
                 AlterColumnOperation::SetDataType {
                     data_type: DataType::Text,
+                    collation: None,
                     using: Some(using_expr),
                     had_set: true,
                 }
@@ -1259,6 +1260,35 @@ fn parse_alter_table_alter_column() {
         }
         _ => unreachable!(),
     }
+
+    match alter_table_op(pg().verified_stmt(
+        r#"ALTER TABLE tab ALTER COLUMN a SET DATA TYPE TEXT COLLATE pg_catalog."C" USING a::TEXT"#,
+    )) {
+        AlterTableOperation::AlterColumn {
+            op:
+                AlterColumnOperation::SetDataType {
+                    collation, using, ..
+                },
+            ..
+        } => {
+            assert_eq!(
+                collation,
+                Some(ObjectName::from(vec![
+                    Ident::new("pg_catalog"),
+                    Ident::with_quote('"', "C"),
+                ]))
+            );
+            assert_eq!(using.unwrap().to_string(), "a::TEXT");
+        }
+        _ => unreachable!(),
+    }
+    pg().verified_stmt(r#"ALTER TABLE tab ALTER COLUMN a TYPE TEXT COLLATE "C""#);
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TABLE tab ALTER COLUMN a TYPE TEXT COLLATE")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }
 
 #[test]

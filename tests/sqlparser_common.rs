@@ -4083,6 +4083,12 @@ fn parse_listagg() {
     all_dialects_where(|d| d.supports_national_string_literal())
         .verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE X'deadbeef' WITH COUNT)");
+    all_dialects_where(|d| !d.supports_non_decimal_integer_literals())
+        .verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE 0xdeadbeef WITH COUNT)");
+    assert_eq!(
+        parse_sql_statements("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE '...' +)").unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
 }
 
 #[test]

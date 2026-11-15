@@ -9126,22 +9126,33 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_publication_objects(&mut self) -> Result<Vec<PublicationObject>, ParserError> {
-        let mut objects = vec![];
+        self.parse_publication_object_groups(
+            Parser::parse_publication_table,
+            PublicationObject::Tables,
+            PublicationObject::Schemas,
+        )
+    }
+
+    /// Parses `TABLE ...` and `TABLES IN SCHEMA ...` groups, building table
+    /// members with `parse_table`.
+    fn parse_publication_object_groups<Table, Group>(
+        &mut self,
+        parse_table: fn(&mut Self) -> Result<Table, ParserError>,
+        tables: fn(Vec<Table>) -> Group,
+        schemas: fn(Vec<PublicationSchema>) -> Group,
+    ) -> Result<Vec<Group>, ParserError> {
+        let mut groups = vec![];
         loop {
-            let object = if self.parse_keyword(Keyword::TABLE) {
-                PublicationObject::Tables(
-                    self.parse_publication_group_members(Parser::parse_publication_table)?,
-                )
+            let group = if self.parse_keyword(Keyword::TABLE) {
+                tables(self.parse_publication_group_members(parse_table)?)
             } else if self.parse_keywords(&[Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
-                PublicationObject::Schemas(
-                    self.parse_publication_group_members(Parser::parse_publication_schema)?,
-                )
+                schemas(self.parse_publication_group_members(Parser::parse_publication_schema)?)
             } else {
                 return self.expected_ref("TABLE or TABLES IN SCHEMA", self.peek_token_ref());
             };
-            objects.push(object);
+            groups.push(group);
             if !self.consume_token(&Token::Comma) {
-                return Ok(objects);
+                return Ok(groups);
             }
         }
     }
@@ -9209,6 +9220,11 @@ impl<'a> Parser<'a> {
                 .then_some(TableInheritance::IncludeDescendants);
             Ok((name, inheritance))
         }
+    }
+
+    fn parse_publication_drop_table(&mut self) -> Result<PublicationDropTable, ParserError> {
+        let (name, inheritance) = self.parse_publication_relation()?;
+        Ok(PublicationDropTable { name, inheritance })
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
@@ -12621,18 +12637,29 @@ impl<'a> Parser<'a> {
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterpublication.html)
     pub fn parse_alter_publication(&mut self) -> Result<AlterPublication, ParserError> {
         let name = self.parse_identifier()?;
-        let operation = if self.parse_keyword(Keyword::SET) {
-            self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
-            self.expect_token(&Token::RParen)?;
-            AlterPublicationOperation::SetOptions(options)
+        let operation = if self.parse_keyword(Keyword::ADD) {
+            AlterPublicationOperation::Add(self.parse_publication_objects()?)
+        } else if self.parse_keyword(Keyword::SET) {
+            if self.consume_token(&Token::LParen) {
+                let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+                self.expect_token(&Token::RParen)?;
+                AlterPublicationOperation::SetOptions(options)
+            } else {
+                AlterPublicationOperation::Set(self.parse_publication_objects()?)
+            }
+        } else if self.parse_keyword(Keyword::DROP) {
+            AlterPublicationOperation::Drop(self.parse_publication_object_groups(
+                Parser::parse_publication_drop_table,
+                PublicationDropObject::Tables,
+                PublicationDropObject::Schemas,
+            )?)
         } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
             AlterPublicationOperation::OwnerTo(self.parse_owner()?)
         } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             AlterPublicationOperation::RenameTo(self.parse_identifier()?)
         } else {
             return self.expected_ref(
-                "SET, OWNER TO, or RENAME TO after ALTER PUBLICATION",
+                "ADD, SET, DROP, OWNER TO, or RENAME TO after ALTER PUBLICATION",
                 self.peek_token_ref(),
             );
         };

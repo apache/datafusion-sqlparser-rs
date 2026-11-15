@@ -9156,22 +9156,40 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_publication_table(&mut self) -> Result<PublicationTable, ParserError> {
+        let (name, inheritance) = self.parse_publication_relation()?;
+        let columns = self.parse_parenthesized_column_list(IsOptional::Optional, false)?;
+        let filter = if self.parse_keyword(Keyword::WHERE) {
+            self.expect_token(&Token::LParen)?;
+            let filter = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(filter)
+        } else {
+            None
+        };
+        Ok(PublicationTable {
+            name,
+            inheritance,
+            columns,
+            filter,
+        })
+    }
+
+    fn parse_publication_relation(
+        &mut self,
+    ) -> Result<(ObjectName, Option<TableInheritance>), ParserError> {
         if self.parse_keyword(Keyword::ONLY) {
             let parenthesized = self.consume_token(&Token::LParen);
             let name = self.parse_object_name(false)?;
             if parenthesized {
                 self.expect_token(&Token::RParen)?;
             }
-            Ok(PublicationTable {
-                name,
-                inheritance: Some(TableInheritance::Only { parenthesized }),
-            })
+            Ok((name, Some(TableInheritance::Only { parenthesized })))
         } else {
             let name = self.parse_object_name(false)?;
             let inheritance = self
                 .consume_token(&Token::Mul)
                 .then_some(TableInheritance::IncludeDescendants);
-            Ok(PublicationTable { name, inheritance })
+            Ok((name, inheritance))
         }
     }
 

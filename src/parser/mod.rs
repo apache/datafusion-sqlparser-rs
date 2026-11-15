@@ -5188,8 +5188,21 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated_with_trailing_commas(
             |p| p.parse_select_item(),
             trailing_commas,
-            Self::is_reserved_for_column_alias,
+            |kw, parser| {
+                Self::is_reserved_for_column_alias(kw, parser)
+                    && !Self::is_keyword_projection_item(parser)
+            },
         )
+    }
+
+    /// Called after a reserved keyword that follows a comma in a projection, e.g.
+    /// `SELECT a, offset FROM t`. Returns true if the next token means the keyword
+    /// is a select item rather than a clause after a trailing comma.
+    fn is_keyword_projection_item(parser: &mut Parser) -> bool {
+        parser.peek_token_ref().token == Token::Comma
+            || parser
+                .peek_one_of_keywords(&[Keyword::FROM, Keyword::AS])
+                .is_some()
     }
 
     /// Parse a list of actions for `GRANT` statements.

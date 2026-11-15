@@ -23516,3 +23516,22 @@ fn parse_national_character_string_types() {
         ParserError::ParserError("Expected: ), found: EOF".to_string())
     );
 }
+
+#[test]
+fn parse_projection_trailing_comma_keyword_column() {
+    let dialects = all_dialects_where(|d| d.supports_projection_trailing_commas());
+
+    for sql in [
+        "SELECT 'a' AS a, offset FROM t",
+        "SELECT a, offset FROM t",
+        "SELECT a, limit FROM t",
+        "SELECT a, offset, b FROM t",
+        "SELECT a, offset AS o FROM t",
+        "SELECT * FROM (SELECT a, offset FROM t)",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    dialects.one_statement_parses_to("SELECT a, FROM t", "SELECT a FROM t");
+    dialects.one_statement_parses_to("SELECT a, LIMIT 1", "SELECT a LIMIT 1");
+}

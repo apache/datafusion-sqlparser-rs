@@ -8264,6 +8264,8 @@ impl<'a> Parser<'a> {
             ObjectType::Stream
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
             ObjectType::Warehouse
+        } else if self.parse_keyword(Keyword::PUBLICATION) {
+            ObjectType::Publication
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function().map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
@@ -8293,7 +8295,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, PUBLICATION, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
                 self.peek_token_ref(),
             );
         };

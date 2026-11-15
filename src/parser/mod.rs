@@ -5622,6 +5622,8 @@ impl<'a> Parser<'a> {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::COLLATION) {
             self.parse_create_collation().map(Into::into)
+        } else if self.parse_keyword(Keyword::PUBLICATION) {
+            self.parse_create_publication().map(Into::into)
         } else if self.parse_keyword(Keyword::TYPE) {
             self.parse_create_type()
         } else if self.parse_keyword(Keyword::PROCEDURE)
@@ -9098,6 +9100,25 @@ impl<'a> Parser<'a> {
             if_not_exists,
             name,
             definition,
+        })
+    }
+
+    /// Parse a [Statement::CreatePublication].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createpublication.html)
+    pub fn parse_create_publication(&mut self) -> Result<CreatePublication, ParserError> {
+        let name = self.parse_identifier()?;
+        let target = if self.parse_keyword(Keyword::FOR) {
+            self.expect_keywords(&[Keyword::ALL, Keyword::TABLES])?;
+            Some(PublicationTarget::AllTables)
+        } else {
+            None
+        };
+        let options = self.parse_options_with_keywords(&[Keyword::WITH])?;
+        Ok(CreatePublication {
+            name,
+            target,
+            options,
         })
     }
 

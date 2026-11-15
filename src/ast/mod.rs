@@ -78,21 +78,22 @@ pub use self::ddl::{
     CreateAggregateArgs, CreateAggregateOption, CreateCollation, CreateCollationDefinition,
     CreateConnector, CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable,
     CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily,
-    CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateRule, CreateRuleAction,
-    CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch, CreateTrigger,
-    CreateUserMapping, CreateView, Deduplicate, DeferrableInitial, DetachPartitionMode, DistStyle,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
-    ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
-    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
-    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, SqliteTableOption,
-    SqliteTableOptions, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, WithData,
+    CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreatePublication, CreateRule,
+    CreateRuleAction, CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch,
+    CreateTrigger, CreateUserMapping, CreateView, Deduplicate, DeferrableInitial,
+    DetachPartitionMode, DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator,
+    DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy, DropRule,
+    DropTrigger, ForValues, ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
+    OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition,
+    PartitionBoundValue, ProcedureParam, PublicationTarget, ReferentialAction, RenameTableNameKind,
+    ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, UserMappingUser, ViewColumnDef,
+    WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -4161,6 +4162,11 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
     CreateCollation(CreateCollation),
     /// ```sql
+    /// CREATE PUBLICATION
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpublication.html)
+    CreatePublication(CreatePublication),
+    /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
@@ -5715,6 +5721,7 @@ impl fmt::Display for Statement {
             Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
             Statement::CreateCollation(create_collation) => write!(f, "{create_collation}"),
+            Statement::CreatePublication(create_publication) => write!(f, "{create_publication}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {
@@ -12635,6 +12642,12 @@ impl From<CreateExtension> for Statement {
 impl From<CreateCollation> for Statement {
     fn from(c: CreateCollation) -> Self {
         Self::CreateCollation(c)
+    }
+}
+
+impl From<CreatePublication> for Statement {
+    fn from(c: CreatePublication) -> Self {
+        Self::CreatePublication(c)
     }
 }
 

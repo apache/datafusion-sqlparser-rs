@@ -5190,19 +5190,20 @@ impl<'a> Parser<'a> {
             trailing_commas,
             |kw, parser| {
                 Self::is_reserved_for_column_alias(kw, parser)
-                    && !Self::is_keyword_projection_item(parser)
+                    && !(matches!(kw, Keyword::LIMIT | Keyword::OFFSET)
+                        && parser.peek_select_item_end(0))
             },
         )
     }
 
-    /// Called after a reserved keyword that follows a comma in a projection, e.g.
-    /// `SELECT a, offset FROM t`. Returns true if the next token means the keyword
-    /// is a select item rather than a clause after a trailing comma.
-    fn is_keyword_projection_item(parser: &mut Parser) -> bool {
-        parser.peek_token_ref().token == Token::Comma
-            || parser
-                .peek_one_of_keywords(&[Keyword::FROM, Keyword::AS])
-                .is_some()
+    /// Returns true if the `n`th next token ends a select item, so that a `LIMIT`
+    /// or `OFFSET` before it names a column, as in `SELECT offset, limit FROM t`.
+    fn peek_select_item_end(&self, n: usize) -> bool {
+        match &self.peek_nth_token_ref(n).token {
+            Token::Comma => true,
+            Token::Word(w) => matches!(w.keyword, Keyword::FROM | Keyword::AS),
+            _ => false,
+        }
     }
 
     /// Parse a list of actions for `GRANT` statements.
@@ -16499,6 +16500,9 @@ impl<'a> Parser<'a> {
     fn peek_empty_projection(&self) -> bool {
         match &self.peek_token_ref().token {
             Token::EOF | Token::SemiColon | Token::RParen => true,
+            Token::Word(w) if matches!(w.keyword, Keyword::LIMIT | Keyword::OFFSET) => {
+                !self.peek_select_item_end(1)
+            }
             Token::Word(w) => matches!(
                 w.keyword,
                 Keyword::INTO

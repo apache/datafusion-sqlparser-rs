@@ -23522,6 +23522,8 @@ fn parse_projection_trailing_comma_keyword_column() {
     let dialects = all_dialects_where(|d| d.supports_projection_trailing_commas());
 
     for sql in [
+        "SELECT offset FROM t",
+        "SELECT offset, 'a' AS a FROM t",
         "SELECT 'a' AS a, offset FROM t",
         "SELECT a, offset FROM t",
         "SELECT a, limit FROM t",
@@ -23534,4 +23536,23 @@ fn parse_projection_trailing_comma_keyword_column() {
 
     dialects.one_statement_parses_to("SELECT a, FROM t", "SELECT a FROM t");
     dialects.one_statement_parses_to("SELECT a, LIMIT 1", "SELECT a LIMIT 1");
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a, union, b FROM t")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: ,".to_string()
+        )
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_empty_projections());
+    for sql in [
+        "SELECT offset FROM t",
+        "SELECT limit, offset FROM t",
+        "SELECT offset AS o FROM t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    dialects.verified_stmt("SELECT LIMIT 1");
+    dialects.verified_stmt("SELECT OFFSET 1");
 }

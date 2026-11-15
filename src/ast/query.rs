@@ -813,6 +813,8 @@ pub struct Cte {
     pub closing_paren_token: AttachedToken,
     /// Optional PostgreSQL `SEARCH { BREADTH | DEPTH } FIRST BY ... SET ...` clause.
     pub search: Option<CteSearchClause>,
+    /// Optional PostgreSQL `CYCLE ... SET ... USING ...` clause.
+    pub cycle: Option<CteCycleClause>,
 }
 
 impl fmt::Display for Cte {
@@ -839,6 +841,9 @@ impl fmt::Display for Cte {
         };
         if let Some(search) = &self.search {
             write!(f, " {search}")?;
+        }
+        if let Some(cycle) = &self.cycle {
+            write!(f, " {cycle}")?;
         }
         if let Some(ref fr) = self.from {
             write!(f, " FROM {fr}")?;
@@ -895,6 +900,37 @@ impl fmt::Display for CteSearchOrder {
             CteSearchOrder::BreadthFirst => f.write_str("BREADTH FIRST"),
             CteSearchOrder::DepthFirst => f.write_str("DEPTH FIRST"),
         }
+    }
+}
+
+/// The `CYCLE` clause of a recursive CTE.
+///
+/// ```sql
+/// CYCLE id SET is_cycle USING path
+/// ```
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CYCLE)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CteCycleClause {
+    /// The columns checked for cycles.
+    pub columns: Vec<Ident>,
+    /// The cycle mark column after `SET`.
+    pub mark_column: Ident,
+    /// The path column after `USING`.
+    pub path_column: Ident,
+}
+
+impl fmt::Display for CteCycleClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CYCLE {} SET {}",
+            display_comma_separated(&self.columns),
+            self.mark_column
+        )?;
+        write!(f, " USING {}", self.path_column)
     }
 }
 

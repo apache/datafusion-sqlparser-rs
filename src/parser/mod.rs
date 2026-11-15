@@ -5200,8 +5200,21 @@ impl<'a> Parser<'a> {
     /// or `OFFSET` before it names a column, as in `SELECT offset, limit FROM t`.
     fn peek_select_item_end(&self, n: usize) -> bool {
         match &self.peek_nth_token_ref(n).token {
-            Token::Comma => true,
-            Token::Word(w) => matches!(w.keyword, Keyword::FROM | Keyword::AS),
+            Token::Comma | Token::EOF | Token::SemiColon | Token::RParen => true,
+            Token::Word(w) => matches!(
+                w.keyword,
+                Keyword::AS
+                    | Keyword::INTO
+                    | Keyword::FROM
+                    | Keyword::WHERE
+                    | Keyword::GROUP
+                    | Keyword::HAVING
+                    | Keyword::WINDOW
+                    | Keyword::ORDER
+                    | Keyword::UNION
+                    | Keyword::INTERSECT
+                    | Keyword::EXCEPT
+            ),
             _ => false,
         }
     }

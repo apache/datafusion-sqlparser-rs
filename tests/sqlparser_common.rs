@@ -23530,6 +23530,11 @@ fn parse_projection_trailing_comma_keyword_column() {
         "SELECT a, offset, b FROM t",
         "SELECT a, offset AS o FROM t",
         "SELECT * FROM (SELECT a, offset FROM t)",
+        "SELECT a, offset",
+        "SELECT * FROM (SELECT a, offset) AS s",
+        "SELECT a, offset WHERE b",
+        "SELECT a, offset INTO u FROM t",
+        "SELECT a, offset UNION SELECT 1, 2",
     ] {
         dialects.verified_stmt(sql);
     }
@@ -23550,6 +23555,8 @@ fn parse_projection_trailing_comma_keyword_column() {
         "SELECT offset FROM t",
         "SELECT limit, offset FROM t",
         "SELECT offset AS o FROM t",
+        "SELECT offset",
+        "SELECT offset WHERE b",
     ] {
         dialects.verified_stmt(sql);
     }

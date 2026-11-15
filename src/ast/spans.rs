@@ -277,6 +277,7 @@ impl Spanned for Values {
 /// - [Statement::CreateCollation]
 /// - [Statement::AlterCollation]
 /// - [Statement::CreatePublication]
+/// - [Statement::AlterPublication]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -418,6 +419,7 @@ impl Spanned for Statement {
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterCollation { .. } => Span::empty(),
+            Statement::AlterPublication(alter_publication) => alter_publication.span(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),

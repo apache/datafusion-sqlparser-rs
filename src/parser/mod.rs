@@ -12175,6 +12175,7 @@ impl<'a> Parser<'a> {
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::TRIGGER => self.parse_alter_trigger().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
+            Keyword::PUBLICATION => self.parse_alter_publication().map(Into::into),
             Keyword::USER if self.dialect.supports_alter_user_as_alter_role() => {
                 self.parse_alter_role()
             }
@@ -12182,7 +12183,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or PUBLICATION",
                     self.peek_token_ref(),
                 )
             }
@@ -12613,6 +12614,29 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterCollation { name, operation })
+    }
+
+    /// Parse a [Statement::AlterPublication].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterpublication.html)
+    pub fn parse_alter_publication(&mut self) -> Result<AlterPublication, ParserError> {
+        let name = self.parse_identifier()?;
+        let operation = if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            self.expect_token(&Token::RParen)?;
+            AlterPublicationOperation::SetOptions(options)
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterPublicationOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterPublicationOperation::RenameTo(self.parse_identifier()?)
+        } else {
+            return self.expected_ref(
+                "SET, OWNER TO, or RENAME TO after ALTER PUBLICATION",
+                self.peek_token_ref(),
+            );
+        };
+        Ok(AlterPublication { name, operation })
     }
 
     /// Parse a [Statement::AlterOperator]

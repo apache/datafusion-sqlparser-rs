@@ -49,9 +49,9 @@ use crate::ast::{
     HiveRowFormat, HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName,
     OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query,
     RefreshModeKind, ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, Statement,
-    StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    StorageLifecyclePolicy, StorageSerializationPolicy, TableInheritance, TableVersion, Tag,
+    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -5021,8 +5021,12 @@ pub struct CreatePublication {
 impl fmt::Display for CreatePublication {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "CREATE PUBLICATION {}", self.name)?;
-        if let Some(PublicationTarget::AllTables) = self.target {
-            write!(f, " FOR ALL TABLES")?;
+        match &self.target {
+            Some(PublicationTarget::AllTables) => write!(f, " FOR ALL TABLES")?,
+            Some(PublicationTarget::Objects(objects)) => {
+                write!(f, " FOR {}", display_comma_separated(objects))?
+            }
+            None => {}
         }
         if !self.options.is_empty() {
             write!(f, " WITH ({})", display_comma_separated(&self.options))?;
@@ -5044,6 +5048,66 @@ impl Spanned for CreatePublication {
 pub enum PublicationTarget {
     /// `FOR ALL TABLES`
     AllTables,
+    /// `FOR publication_object [, ...]`
+    Objects(Vec<PublicationObject>),
+}
+
+/// A group of publication members.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PublicationObject {
+    /// `TABLE table [, ...]`
+    Tables(Vec<PublicationTable>),
+}
+
+impl fmt::Display for PublicationObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PublicationObject::Tables(tables) => {
+                write!(f, "TABLE {}", display_comma_separated(tables))
+            }
+        }
+    }
+}
+
+/// A published table.
+///
+/// ```sql
+/// [ ONLY ] table_name [ * ]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct PublicationTable {
+    /// Name of the table.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// `ONLY` or `*` marker.
+    pub inheritance: Option<TableInheritance>,
+}
+
+impl fmt::Display for PublicationTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt_publication_relation(f, &self.name, self.inheritance)
+    }
+}
+
+fn fmt_publication_relation(
+    f: &mut fmt::Formatter,
+    name: &ObjectName,
+    inheritance: Option<TableInheritance>,
+) -> fmt::Result {
+    match inheritance {
+        Some(TableInheritance::Only {
+            parenthesized: true,
+        }) => write!(f, "ONLY ({name})"),
+        Some(TableInheritance::Only {
+            parenthesized: false,
+        }) => write!(f, "ONLY {name}"),
+        Some(TableInheritance::IncludeDescendants) => write!(f, "{name} *"),
+        None => write!(f, "{name}"),
+    }
 }
 
 /// `ALTER [ MATERIALIZED ] VIEW` statement.

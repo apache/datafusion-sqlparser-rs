@@ -88,12 +88,12 @@ pub use self::ddl::{
     IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
     KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
     OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition,
-    PartitionBoundValue, ProcedureParam, PublicationTarget, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
-    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, UserMappingUser, ViewColumnDef,
-    WithData,
+    PartitionBoundValue, ProcedureParam, PublicationObject, PublicationTable, PublicationTarget,
+    ReferentialAction, RenameTableNameKind, ReplicaIdentity, SqliteTableOption, SqliteTableOptions,
+    TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
+    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,

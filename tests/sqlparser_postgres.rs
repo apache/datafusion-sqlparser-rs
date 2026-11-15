@@ -13578,7 +13578,7 @@ fn parse_create_publication() {
     for (sql, expected) in [
         (
             "CREATE PUBLICATION p FOR ALL",
-            "Expected: TABLES, found: EOF",
+            "Expected: TABLE, found: ALL",
         ),
         (
             "CREATE PUBLICATION p WITH ()",
@@ -13587,6 +13587,68 @@ fn parse_create_publication() {
         (
             "CREATE PUBLICATION s.p",
             "Expected: end of statement, found: .",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_publication_for_table() {
+    for sql in [
+        "CREATE PUBLICATION p FOR TABLE public.items",
+        "CREATE PUBLICATION p FOR TABLE ONLY (public.items), public.other *",
+        "CREATE PUBLICATION p FOR TABLE a, TABLE b WITH (publish = 'insert')",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    let sql = r#"CREATE PUBLICATION p FOR TABLE ONLY "Public"."Items", other, TABLE last *"#;
+    let Statement::CreatePublication(create) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        create.target,
+        Some(PublicationTarget::Objects(vec![
+            PublicationObject::Tables(vec![
+                PublicationTable {
+                    name: ObjectName::from(vec![
+                        Ident::with_quote('"', "Public"),
+                        Ident::with_quote('"', "Items"),
+                    ]),
+                    inheritance: Some(TableInheritance::Only {
+                        parenthesized: false
+                    }),
+                },
+                PublicationTable {
+                    name: ObjectName::from(vec![Ident::new("other")]),
+                    inheritance: None,
+                },
+            ]),
+            PublicationObject::Tables(vec![PublicationTable {
+                name: ObjectName::from(vec![Ident::new("last")]),
+                inheritance: Some(TableInheritance::IncludeDescendants),
+            }]),
+        ]))
+    );
+
+    for (sql, expected) in [
+        ("CREATE PUBLICATION p FOR t", "Expected: TABLE, found: t"),
+        (
+            "CREATE PUBLICATION p FOR ALL TABLES, TABLE t",
+            "Expected: end of statement, found: ,",
+        ),
+        (
+            "CREATE PUBLICATION p FOR TABLE ONLY t *",
+            "Expected: end of statement, found: *",
+        ),
+        (
+            "CREATE PUBLICATION p FOR TABLE ONLY (t",
+            "Expected: ), found: EOF",
         ),
     ] {
         assert_eq!(

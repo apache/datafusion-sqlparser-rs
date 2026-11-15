@@ -976,3 +976,13 @@ fn display_create_macro_propagates_argument_list_errors() {
         }
     }
 }
+
+#[test]
+fn test_exponentiation() {
+    let expected_expr = Expr::BinaryOp {
+        left: Box::new(Expr::Identifier(Ident::new("a"))),
+        op: BinaryOperator::PGExp,
+        right: Box::new(Expr::Identifier(Ident::new("b"))),
+    };
+    assert_eq!(duckdb().verified_expr("a ^ b"), expected_expr);
+}

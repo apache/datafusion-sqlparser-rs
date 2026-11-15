@@ -2857,13 +2857,13 @@ fn parse_string_agg() {
     );
 }
 
-/// selects all dialects but PostgreSQL
-pub fn all_dialects_but_pg() -> TestedDialects {
+/// selects all dialects but PostgreSQL and DuckDB
+pub fn all_dialects_but_pg_and_duckdb() -> TestedDialects {
     TestedDialects::new(
         all_dialects()
             .dialects
             .into_iter()
-            .filter(|x| !x.is::<PostgreSqlDialect>())
+            .filter(|x| !x.is::<PostgreSqlDialect>() && !x.is::<DuckDbDialect>())
             .collect(),
     )
 }
@@ -2871,7 +2871,11 @@ pub fn all_dialects_but_pg() -> TestedDialects {
 #[test]
 fn parse_bitwise_ops() {
     let bitwise_ops = &[
-        ("^", BinaryOperator::BitwiseXor, all_dialects_but_pg()),
+        (
+            "^",
+            BinaryOperator::BitwiseXor,
+            all_dialects_but_pg_and_duckdb(),
+        ),
         ("|", BinaryOperator::BitwiseOr, all_dialects()),
         ("&", BinaryOperator::BitwiseAnd, all_dialects()),
     ];

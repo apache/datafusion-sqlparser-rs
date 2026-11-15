@@ -8908,6 +8908,7 @@ fn parse_recursive_cte() {
         from: None,
         materialized: None,
         closing_paren_token: AttachedToken::empty(),
+        search: None,
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
 }

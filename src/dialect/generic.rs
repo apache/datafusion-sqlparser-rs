@@ -361,6 +361,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_cte_search_clause(&self) -> bool {
+        true
+    }
+
     fn supports_select_item_multi_column_alias(&self) -> bool {
         true
     }

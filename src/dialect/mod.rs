@@ -452,6 +452,20 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `SEARCH` clause after a common
+    /// table expression.
+    ///
+    /// ```sql
+    /// WITH RECURSIVE t(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM t)
+    ///     SEARCH DEPTH FIRST BY id SET ordercol
+    /// SELECT * FROM t
+    /// ```
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-SEARCH)
+    fn supports_cte_search_clause(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `CREATE GROUP`.
     ///
     /// <https://www.postgresql.org/docs/current/sql-creategroup.html>

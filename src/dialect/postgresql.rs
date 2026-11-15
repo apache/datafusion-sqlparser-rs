@@ -228,6 +228,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_cte_search_clause(&self) -> bool {
+        true
+    }
+
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
     }

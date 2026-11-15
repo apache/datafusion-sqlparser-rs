@@ -811,6 +811,8 @@ pub struct Cte {
     pub materialized: Option<CteAsMaterialized>,
     /// Token for the closing parenthesis of the CTE definition.
     pub closing_paren_token: AttachedToken,
+    /// Optional PostgreSQL `SEARCH { BREADTH | DEPTH } FIRST BY ... SET ...` clause.
+    pub search: Option<CteSearchClause>,
 }
 
 impl fmt::Display for Cte {
@@ -835,10 +837,64 @@ impl fmt::Display for Cte {
                 f.write_str(")")?;
             }
         };
+        if let Some(search) = &self.search {
+            write!(f, " {search}")?;
+        }
         if let Some(ref fr) = self.from {
             write!(f, " FROM {fr}")?;
         }
         Ok(())
+    }
+}
+
+/// The `SEARCH` clause of a recursive CTE.
+///
+/// ```sql
+/// SEARCH DEPTH FIRST BY id SET ordercol
+/// ```
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-SEARCH)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CteSearchClause {
+    /// Breadth-first or depth-first ordering.
+    pub order: CteSearchOrder,
+    /// The columns after `BY`.
+    pub columns: Vec<Ident>,
+    /// The sequence column after `SET`.
+    pub sequence_column: Ident,
+}
+
+impl fmt::Display for CteSearchClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "SEARCH {} BY {} SET {}",
+            self.order,
+            display_comma_separated(&self.columns),
+            self.sequence_column
+        )
+    }
+}
+
+/// The traversal order of a [`CteSearchClause`].
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CteSearchOrder {
+    /// `BREADTH FIRST`
+    BreadthFirst,
+    /// `DEPTH FIRST`
+    DepthFirst,
+}
+
+impl fmt::Display for CteSearchOrder {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CteSearchOrder::BreadthFirst => f.write_str("BREADTH FIRST"),
+            CteSearchOrder::DepthFirst => f.write_str("DEPTH FIRST"),
+        }
     }
 }
 

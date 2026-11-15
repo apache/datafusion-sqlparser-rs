@@ -243,6 +243,7 @@ impl Spanned for CteCycleClause {
         let CteCycleClause {
             columns,
             mark_column,
+            mark_values,
             path_column,
         } = self;
 
@@ -251,6 +252,11 @@ impl Spanned for CteCycleClause {
                 .iter()
                 .map(|item| item.span)
                 .chain(core::iter::once(mark_column.span))
+                .chain(
+                    mark_values
+                        .iter()
+                        .flat_map(|values| [values.value.span(), values.default.span()]),
+                )
                 .chain(core::iter::once(path_column.span)),
         )
     }

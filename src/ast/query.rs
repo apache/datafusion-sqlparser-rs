@@ -813,7 +813,7 @@ pub struct Cte {
     pub closing_paren_token: AttachedToken,
     /// Optional PostgreSQL `SEARCH { BREADTH | DEPTH } FIRST BY ... SET ...` clause.
     pub search: Option<CteSearchClause>,
-    /// Optional PostgreSQL `CYCLE ... SET ... USING ...` clause.
+    /// Optional PostgreSQL `CYCLE ... SET ... [TO ... DEFAULT ...] USING ...` clause.
     pub cycle: Option<CteCycleClause>,
 }
 
@@ -906,7 +906,7 @@ impl fmt::Display for CteSearchOrder {
 /// The `CYCLE` clause of a recursive CTE.
 ///
 /// ```sql
-/// CYCLE id SET is_cycle USING path
+/// CYCLE id SET is_cycle TO 'Y' DEFAULT 'N' USING path
 /// ```
 ///
 /// [PostgreSQL](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CYCLE)
@@ -918,6 +918,8 @@ pub struct CteCycleClause {
     pub columns: Vec<Ident>,
     /// The cycle mark column after `SET`.
     pub mark_column: Ident,
+    /// The optional `TO value DEFAULT value` pair.
+    pub mark_values: Option<CteCycleMarkValues>,
     /// The path column after `USING`.
     pub path_column: Ident,
 }
@@ -930,7 +932,27 @@ impl fmt::Display for CteCycleClause {
             display_comma_separated(&self.columns),
             self.mark_column
         )?;
+        if let Some(mark_values) = &self.mark_values {
+            write!(f, " {mark_values}")?;
+        }
         write!(f, " USING {}", self.path_column)
+    }
+}
+
+/// The `TO value DEFAULT value` pair of a [`CteCycleClause`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CteCycleMarkValues {
+    /// The value set on a row that closes a cycle.
+    pub value: Expr,
+    /// The value set on every other row.
+    pub default: Expr,
+}
+
+impl fmt::Display for CteCycleMarkValues {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TO {} DEFAULT {}", self.value, self.default)
     }
 }
 

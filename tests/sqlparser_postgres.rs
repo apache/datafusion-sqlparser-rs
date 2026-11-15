@@ -14281,6 +14281,7 @@ fn parse_cte_cycle_clause() {
         Some(CteCycleClause {
             columns: vec![Ident::new("id")],
             mark_column: Ident::new("is_cycle"),
+            mark_values: None,
             path_column: Ident::new("path"),
         })
     );
@@ -14340,5 +14341,60 @@ fn parse_cte_cycle_clause() {
         .unwrap_err()
         .to_string(),
         "sql parser error: Expected: SET, found: USING at Line: 1, Column: 28"
+    );
+}
+
+#[test]
+fn parse_cte_cycle_mark_values() {
+    pg_and_generic().verified_stmt(&format!(
+        "{RECURSIVE_GROUPS_CTE} CYCLE id, parent_id SET is_cycle TO true DEFAULT false USING path SELECT id FROM r"
+    ));
+
+    let query = pg().verified_query(&format!(
+        "{RECURSIVE_GROUPS_CTE} CYCLE id SET is_cycle TO 'Y' DEFAULT 'N' USING path SELECT id FROM r"
+    ));
+    assert_eq!(
+        query.with.unwrap().cte_tables[0].cycle,
+        Some(CteCycleClause {
+            columns: vec![Ident::new("id")],
+            mark_column: Ident::new("is_cycle"),
+            mark_values: Some(CteCycleMarkValues {
+                value: Expr::Value(Value::SingleQuotedString("Y".to_string()).with_empty_span()),
+                default: Expr::Value(Value::SingleQuotedString("N".to_string()).with_empty_span()),
+            }),
+            path_column: Ident::new("path"),
+        })
+    );
+
+    let sql = format!(
+        "{RECURSIVE_GROUPS_CTE} CYCLE id SET is_cycle TO 'Y' DEFAULT 'N' USING path SELECT id FROM r"
+    );
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, &sql).unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        panic!("{sql}")
+    };
+    let cte = &query.with.as_ref().unwrap().cte_tables[0];
+    assert_eq!(
+        cte.cycle.as_ref().unwrap().span(),
+        Span::new(Location::new(1, 172), Location::new(1, 217))
+    );
+    assert_cte_display_propagates_write_error(cte, "TO ");
+
+    assert_recursive_cte_errors(
+        &pg(),
+        &[
+            (
+                "CYCLE id SET is_cycle TO 'Y' USING path",
+                "Expected: DEFAULT, found: USING",
+            ),
+            (
+                "CYCLE id SET is_cycle TO , DEFAULT 'N' USING path",
+                "Expected: an expression, found: ,",
+            ),
+            (
+                "CYCLE id SET is_cycle TO 'Y' DEFAULT , USING path",
+                "Expected: an expression, found: ,",
+            ),
+        ],
     );
 }

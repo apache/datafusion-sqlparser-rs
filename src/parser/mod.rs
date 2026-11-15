@@ -16343,11 +16343,20 @@ impl<'a> Parser<'a> {
         let columns = self.parse_comma_separated(|parser| parser.parse_identifier())?;
         self.expect_keyword_is(Keyword::SET)?;
         let mark_column = self.parse_identifier()?;
+        let mark_values = if self.parse_keyword(Keyword::TO) {
+            let value = self.parse_expr()?;
+            self.expect_keyword_is(Keyword::DEFAULT)?;
+            let default = self.parse_expr()?;
+            Some(CteCycleMarkValues { value, default })
+        } else {
+            None
+        };
         self.expect_keyword_is(Keyword::USING)?;
         let path_column = self.parse_identifier()?;
         Ok(Some(CteCycleClause {
             columns,
             mark_column,
+            mark_values,
             path_column,
         }))
     }

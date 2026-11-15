@@ -13578,7 +13578,7 @@ fn parse_create_publication() {
     for (sql, expected) in [
         (
             "CREATE PUBLICATION p FOR ALL",
-            "Expected: TABLE, found: ALL",
+            "Expected: TABLE or TABLES IN SCHEMA, found: ALL",
         ),
         (
             "CREATE PUBLICATION p WITH ()",
@@ -13643,7 +13643,10 @@ fn parse_create_publication_for_table() {
     );
 
     for (sql, expected) in [
-        ("CREATE PUBLICATION p FOR t", "Expected: TABLE, found: t"),
+        (
+            "CREATE PUBLICATION p FOR t",
+            "Expected: TABLE or TABLES IN SCHEMA, found: t",
+        ),
         (
             "CREATE PUBLICATION p FOR ALL TABLES, TABLE t",
             "Expected: end of statement, found: ,",
@@ -13711,6 +13714,55 @@ fn parse_publication_table_columns_and_filter() {
         (
             "CREATE PUBLICATION p FOR TABLE t WHERE (id > 0) (id)",
             "Expected: end of statement, found: (",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_publication_schemas() {
+    for sql in [
+        "CREATE PUBLICATION p FOR TABLES IN SCHEMA feed, CURRENT_SCHEMA",
+        "CREATE PUBLICATION p FOR TABLE public.items, TABLES IN SCHEMA feed",
+        "CREATE PUBLICATION p FOR TABLES IN SCHEMA feed, TABLE a (id), b",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    let sql =
+        r#"CREATE PUBLICATION p FOR TABLE a, TABLES IN SCHEMA "CURRENT_SCHEMA", CURRENT_SCHEMA"#;
+    let Statement::CreatePublication(create) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        create.target,
+        Some(PublicationTarget::Objects(vec![
+            PublicationObject::Tables(vec![PublicationTable {
+                name: ObjectName::from(vec![Ident::new("a")]),
+                inheritance: None,
+                columns: vec![],
+                filter: None,
+            }]),
+            PublicationObject::Schemas(vec![
+                PublicationSchema::Name(Ident::with_quote('"', "CURRENT_SCHEMA")),
+                PublicationSchema::CurrentSchema,
+            ]),
+        ]))
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE PUBLICATION p FOR TABLES IN SCHEMA s.t",
+            "Expected: end of statement, found: .",
+        ),
+        (
+            "CREATE PUBLICATION p FOR TABLES IN feed",
+            "Expected: TABLE or TABLES IN SCHEMA, found: TABLES",
         ),
     ] {
         assert_eq!(

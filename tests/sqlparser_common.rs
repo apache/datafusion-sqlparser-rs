@@ -23488,6 +23488,10 @@ fn parse_window_frame_untyped_string_offset() {
             .unwrap_err(),
         ParserError::ParserError("Expected: an expression, found: )".to_string())
     );
+    all_dialects().one_statement_parses_to(
+        "SELECT sum(x) OVER (ORDER BY f RANGE BETWEEN '5' SECOND PRECEDING AND '0' DAY FOLLOWING) FROM t",
+        "SELECT sum(x) OVER (ORDER BY f RANGE BETWEEN INTERVAL '5' SECOND PRECEDING AND INTERVAL '0' DAY FOLLOWING) FROM t",
+    );
 
     let select = dialects.verified_only_select(
         "SELECT sum(x) OVER (ORDER BY f RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND CURRENT ROW) FROM t",

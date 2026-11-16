@@ -23579,3 +23579,33 @@ $$"#,
         );
     }
 }
+
+#[test]
+fn parse_cache_table_followed_by_semicolon() {
+    for (sql, expected) in [
+        ("CACHE TABLE t;", vec!["CACHE TABLE t"]),
+        ("CACHE TABLE t; SELECT 1", vec!["CACHE TABLE t", "SELECT 1"]),
+        (
+            "CACHE LAZY TABLE t OPTIONS('storageLevel' = 'DISK_ONLY'); SELECT 1",
+            vec![
+                "CACHE LAZY TABLE t OPTIONS('storageLevel' = 'DISK_ONLY')",
+                "SELECT 1",
+            ],
+        ),
+        (
+            "CACHE TABLE t AS SELECT 1; SELECT 2",
+            vec!["CACHE TABLE t AS SELECT 1", "SELECT 2"],
+        ),
+    ] {
+        let statements = parse_sql_statements(sql).unwrap();
+        let displayed: Vec<String> = statements.iter().map(ToString::to_string).collect();
+        assert_eq!(displayed, expected, "{sql}");
+    }
+
+    assert_eq!(
+        parse_sql_statements("CACHE TABLE t AS; SELECT 1").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: ;".to_string()
+        ),
+    );
+}

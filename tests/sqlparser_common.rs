@@ -6718,9 +6718,9 @@ fn parse_window_functions() {
         expr_from_projection(&select.projection[0])
     );
 
-    for i in 0..EXPECTED_PROJ_QTY {
+    for projection in &select.projection {
         assert!(matches!(
-            expr_from_projection(&select.projection[i]),
+            expr_from_projection(projection),
             Expr::Function(Function {
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     window_name: None,
@@ -17628,6 +17628,14 @@ fn test_table_sample() {
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE RESERVOIR (50 ROWS)");
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT * FROM tbl TABLESAMPLE RESERVOIR ()")
+            .unwrap_err(),
+        ParserError::ParserError("Expecting number or byte length e.g. 100M".to_string())
+    );
 }
 
 #[test]
@@ -21930,45 +21938,36 @@ fn parse_compound_field_access_numeric_display() {
 }
 
 #[test]
-fn parse_placeholder_disallows_quoted_ident() {
+fn parse_quoted_placeholders_roundtrip() {
     let dialects = TestedDialects::new(vec![
         Box::new(AnsiDialect {}),
         Box::new(GenericDialect {}),
         Box::new(SnowflakeDialect {}),
         Box::new(SQLiteDialect {}),
     ]);
-    // Valid placeholders roundtrip
-    dialects.verified_stmt("SELECT :x");
-
-    // Quoted identifiers are not valid placeholders
-    let err = dialects.parse_sql_statements("SELECT :`a`").unwrap_err();
+    for sql in [
+        "SELECT :x",
+        "SELECT :`a`",
+        r#"SELECT :"a""#,
+        "SELECT :` a` AS a",
+        r#"SELECT :"a b c", :"a""b""#,
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    let select = dialects.verified_only_select(r#"SELECT :"a b c""#);
     assert_eq!(
-        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
-        err
+        expr_from_projection(only(&select.projection)),
+        &Expr::value(Value::Placeholder(r#":"a b c""#.to_string()))
     );
-    let err = dialects.parse_sql_statements("SELECT :\"a\"").unwrap_err();
-    assert_eq!(
-        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
-        err
-    );
-    let err = dialects.parse_sql_statements("SELECT:` a` a").unwrap_err();
-    assert_eq!(
-        ParserError::ParserError("Expected: placeholder, found: ` a`".to_string()),
-        err
-    );
-
     let ansi = TestedDialects::new(vec![Box::new(AnsiDialect {})]);
-    ansi.verified_stmt("SELECT @x");
-    let err = ansi.parse_sql_statements("SELECT @`a`").unwrap_err();
-    assert_eq!(
-        ParserError::ParserError("Expected: placeholder, found: `a`".to_string()),
-        err
-    );
-    let err = ansi.parse_sql_statements("SELECT @\"a\"").unwrap_err();
-    assert_eq!(
-        ParserError::ParserError("Expected: placeholder, found: \"a\"".to_string()),
-        err
-    );
+    for sql in [
+        "SELECT @x",
+        "SELECT @`a`",
+        r#"SELECT @"a""#,
+        r#"SELECT @"a b c""#,
+    ] {
+        ansi.verified_stmt(sql);
+    }
 }
 
 #[test]
@@ -23520,5 +23519,115 @@ fn parse_window_frame_untyped_string_offset() {
             _ => panic!("expected a window specification"),
         },
         _ => panic!("expected a window function"),
+    }
+}
+
+#[test]
+fn parse_trailing_end_keyword_is_not_silently_dropped() {
+    let dialects = all_dialects();
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a FROM t1 WHERE a = b END")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: END".to_string())
+    );
+}
+
+#[test]
+fn parse_national_character_string_types() {
+    let dialects = all_dialects();
+    for data_type in [
+        "NATIONAL CHARACTER",
+        "NATIONAL CHARACTER(4)",
+        "NATIONAL CHARACTER VARYING",
+        "NATIONAL CHARACTER VARYING(4)",
+        "NATIONAL CHAR",
+        "NATIONAL CHAR(4)",
+        "NATIONAL CHAR VARYING(4)",
+        "NCHAR",
+        "NCHAR(4)",
+        "NCHAR VARYING(4)",
+    ] {
+        dialects.verified_stmt(&format!("CREATE TABLE t (c {data_type})"));
+        dialects.verified_expr(&format!("CAST('ab' AS {data_type})"));
+    }
+
+    dialects.verified_stmt("SELECT national FROM t");
+    match dialects.verified_stmt("CREATE TABLE t (c national)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => assert_eq!(
+            columns[0].data_type,
+            DataType::Custom(ObjectName::from(vec![Ident::new("national")]), vec![])
+        ),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (c NATIONAL CHARACTER(4 OCTETS")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ), found: EOF".to_string())
+    );
+}
+
+#[test]
+fn parse_create_procedure_string_body() {
+    match verified_stmt("CREATE PROCEDURE p (a INT) LANGUAGE sql AS 'INSERT INTO t VALUES (a)'") {
+        Statement::CreateProcedure {
+            language,
+            body: CreateProcedureBody::AsString { body, link_symbol },
+            ..
+        } => {
+            assert_eq!(language, Some(Ident::new("sql")));
+            assert_eq!(
+                body,
+                Expr::Value(
+                    Value::SingleQuotedString("INSERT INTO t VALUES (a)".to_string())
+                        .with_empty_span()
+                )
+            );
+            assert_eq!(link_symbol, None);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    verified_stmt("CREATE PROCEDURE p () LANGUAGE C AS 'MODULE_PATHNAME', 'p_wrapper'");
+    one_statement_parses_to(
+        "CREATE PROCEDURE p () AS 'SELECT 1' LANGUAGE sql",
+        "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1'",
+    );
+
+    pg_and_generic().verified_stmt(
+        "CREATE PROCEDURE p (a INT) LANGUAGE plpgsql AS $$ BEGIN INSERT INTO t VALUES (a); END; $$",
+    );
+    pg_and_generic().verified_stmt("CREATE PROCEDURE p () LANGUAGE sql AS $body$ SELECT 1 $body$");
+    pg_and_generic().one_statement_parses_to(
+        "CREATE PROCEDURE p () LANGUAGE sql AS E'SELECT 1'",
+        "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE PROCEDURE insert_data(a integer, b integer)
+LANGUAGE SQL
+AS $$
+INSERT INTO tbl VALUES (a);
+INSERT INTO tbl VALUES (b);
+$$"#,
+        "CREATE PROCEDURE insert_data (a INTEGER, b INTEGER) LANGUAGE SQL AS $$\nINSERT INTO tbl VALUES (a);\nINSERT INTO tbl VALUES (b);\n$$",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1' LANGUAGE sql",
+            "Expected: end of statement, found: LANGUAGE",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE C AS 'MODULE_PATHNAME',",
+            "Expected: literal string, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
     }
 }

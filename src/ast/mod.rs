@@ -151,7 +151,7 @@ pub mod table_constraints;
 pub use table_constraints::{
     CheckConstraint, ConstraintUsingIndex, ExcludeConstraint, ExcludeConstraintElement,
     ExcludeConstraintOperator, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
-    PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
+    NotNullConstraint, PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
 };
 mod operator;
 mod query;
@@ -5633,6 +5633,13 @@ impl fmt::Display for Statement {
 
                 match body {
                     CreateProcedureBody::As(body) => write!(f, " AS {body}"),
+                    CreateProcedureBody::AsString { body, link_symbol } => {
+                        write!(f, " AS {body}")?;
+                        if let Some(link_symbol) = link_symbol {
+                            write!(f, ", {link_symbol}")?;
+                        }
+                        Ok(())
+                    }
                     CreateProcedureBody::BeginAtomic(BeginEndStatements { statements, .. }) => {
                         format_begin_atomic(f, statements)
                     }
@@ -7305,6 +7312,8 @@ pub enum Action {
         /// Optional list of target columns for insert.
         columns: Option<Vec<Ident>>,
     },
+    /// Maintain permission.
+    Maintain,
     /// Manage operation with a specific manage type.
     Manage {
         /// The specific manage sub-type.
@@ -7408,6 +7417,7 @@ impl fmt::Display for Action {
             Action::ImportedPrivileges => f.write_str("IMPORTED PRIVILEGES")?,
             Action::ImportShare => f.write_str("IMPORT SHARE")?,
             Action::Insert { .. } => f.write_str("INSERT")?,
+            Action::Maintain => f.write_str("MAINTAIN")?,
             Action::Manage { manage_type } => write!(f, "MANAGE {manage_type}")?,
             Action::ManageReleases => f.write_str("MANAGE RELEASES")?,
             Action::ManageVersions => f.write_str("MANAGE VERSIONS")?,
@@ -10608,6 +10618,15 @@ pub enum CreateFunctionBody {
 pub enum CreateProcedureBody {
     /// Statements after `AS`.
     As(ConditionalStatements),
+    /// A definition string after `AS`, e.g. `AS $$ body $$` or `AS 'obj_file', 'link_symbol'`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
+    AsString {
+        /// The definition.
+        body: Expr,
+        /// The symbol to link when the definition names a shared library file.
+        link_symbol: Option<Expr>,
+    },
     /// SQL-standard body enclosed by `BEGIN ATOMIC` and `END`.
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html

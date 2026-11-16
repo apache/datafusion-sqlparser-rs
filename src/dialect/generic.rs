@@ -153,6 +153,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_table_not_null_constraint(&self) -> bool {
+        true
+    }
+
     fn supports_limit_comma(&self) -> bool {
         true
     }

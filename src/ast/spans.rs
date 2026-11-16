@@ -712,6 +712,7 @@ impl Spanned for TableConstraint {
             TableConstraint::PrimaryKeyUsingIndex(constraint)
             | TableConstraint::UniqueUsingIndex(constraint) => constraint.span(),
             TableConstraint::Exclude(constraint) => constraint.span(),
+            TableConstraint::NotNull(constraint) => constraint.span(),
         }
     }
 }
@@ -1181,9 +1182,7 @@ impl Spanned for CreateTableOptions {
         match self {
             CreateTableOptions::None => Span::empty(),
             CreateTableOptions::With(vec) => union_spans(vec.iter().map(|i| i.span())),
-            CreateTableOptions::Options(vec) => {
-                union_spans(vec.as_slice().iter().map(|i| i.span()))
-            }
+            CreateTableOptions::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
         }
@@ -3588,6 +3587,19 @@ SETTINGS update_parallel_mode = 'auto'"#;
     }
 
     #[test]
+    fn test_create_table_options_span() {
+        let dialect = &crate::dialect::BigQueryDialect {};
+        let sql =
+            "CREATE TABLE t (a INT64) OPTIONS (description = 'd', expiration_timestamp = NULL)";
+        let mut test = SpanTest::new(dialect, sql);
+        let stmt = test.0.parse_statement().unwrap();
+        assert_eq!(
+            test.get_source(stmt.span()),
+            "t (a INT64) OPTIONS (description = 'd', expiration_timestamp = NULL"
+        );
+    }
+
+    #[test]
     fn test_alter_view_spans() {
         let dialect = &crate::dialect::PostgreSqlDialect {};
         for (sql, expected) in [
@@ -3631,5 +3643,18 @@ SETTINGS update_parallel_mode = 'auto'"#;
         };
         assert_eq!(test.get_source(options[0].span()), "N");
         assert_eq!(test.get_source(options[1].span()), "'BEGIN NULL; END'");
+    }
+
+    #[test]
+    fn test_table_not_null_constraint_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            ("CONSTRAINT nn NOT NULL a NO INHERIT", "nn NOT NULL a"),
+            ("NOT NULL a", "a"),
+        ] {
+            let mut test = SpanTest::new(dialect, sql);
+            let constraint = test.0.parse_optional_table_constraint().unwrap().unwrap();
+            assert_eq!(test.get_source(constraint.span()), expected, "{sql}");
+        }
     }
 }

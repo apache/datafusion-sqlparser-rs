@@ -427,6 +427,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// see <https://www.postgresql.org/docs/current/sql-createtable.html>
+    fn supports_table_not_null_constraint(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/13/functions-math.html>
     fn supports_factorial_operator(&self) -> bool {
         true

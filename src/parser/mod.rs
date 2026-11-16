@@ -554,15 +554,8 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            match &self.peek_token_ref().token {
-                Token::EOF => break,
-                // end of statement
-                Token::Word(word)
-                    if expecting_statement_delimiter && word.keyword == Keyword::END =>
-                {
-                    break;
-                }
-                _ => {}
+            if self.peek_token_ref().token == Token::EOF {
+                break;
             }
 
             if expecting_statement_delimiter {
@@ -6144,6 +6137,11 @@ impl<'a> Parser<'a> {
             called_on_null: Option<FunctionCalledOnNull>,
             parallel: Option<FunctionParallel>,
             security: Option<FunctionSecurity>,
+            leakproof: Option<bool>,
+            window: Option<()>,
+            cost: Option<Expr>,
+            rows: Option<Expr>,
+            support: Option<ObjectName>,
         }
         let mut body = Body::default();
         let mut set_params: Vec<FunctionDefinitionSetParam> = Vec::new();
@@ -6212,6 +6210,24 @@ impl<'a> Parser<'a> {
                 } else {
                     return self.expected_ref("DEFINER or INVOKER", self.peek_token_ref());
                 }
+            } else if self.parse_keyword(Keyword::LEAKPROOF) {
+                ensure_not_set(&body.leakproof, "[NOT] LEAKPROOF")?;
+                body.leakproof = Some(true);
+            } else if self.parse_keywords(&[Keyword::NOT, Keyword::LEAKPROOF]) {
+                ensure_not_set(&body.leakproof, "[NOT] LEAKPROOF")?;
+                body.leakproof = Some(false);
+            } else if self.parse_keyword(Keyword::WINDOW) {
+                ensure_not_set(&body.window, "WINDOW")?;
+                body.window = Some(());
+            } else if self.parse_keyword(Keyword::COST) {
+                ensure_not_set(&body.cost, "COST")?;
+                body.cost = Some(self.parse_number()?);
+            } else if self.parse_keyword(Keyword::ROWS) {
+                ensure_not_set(&body.rows, "ROWS")?;
+                body.rows = Some(self.parse_number()?);
+            } else if self.parse_keyword(Keyword::SUPPORT) {
+                ensure_not_set(&body.support, "SUPPORT")?;
+                body.support = Some(self.parse_object_name(false)?);
             } else if self.parse_keyword(Keyword::SET) {
                 let name = self.parse_object_name(false)?;
                 let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
@@ -6250,6 +6266,11 @@ impl<'a> Parser<'a> {
             called_on_null: body.called_on_null,
             parallel: body.parallel,
             security: body.security,
+            leakproof: body.leakproof,
+            window: body.window.is_some(),
+            cost: body.cost,
+            rows: body.rows,
+            support: body.support,
             set_params,
             language: body.language,
             function_body: body.function_body,
@@ -6289,6 +6310,11 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             language: None,
             determinism_specifier: None,
@@ -6373,6 +6399,11 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
         })
     }
@@ -6464,6 +6495,11 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
         })
     }
@@ -10975,6 +11011,23 @@ impl<'a> Parser<'a> {
                     Ok(None)
                 }
             }
+            Token::Word(w)
+                if w.keyword == Keyword::NOT
+                    && self.dialect.supports_table_not_null_constraint()
+                    && self.peek_keyword(Keyword::NULL) =>
+            {
+                self.advance_token(); // NULL
+                let column = self.parse_identifier()?;
+                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
+                Ok(Some(
+                    NotNullConstraint {
+                        name,
+                        column,
+                        no_inherit,
+                    }
+                    .into(),
+                ))
+            }
             _ => {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE", next_token)
@@ -13343,11 +13396,11 @@ impl<'a> Parser<'a> {
                 //    without any whitespace in between
                 let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
                 let ident = match next_token.token {
-                    Token::Word(w) if w.quote_style.is_none() => Ok(w.into_ident(next_token.span)),
+                    Token::Word(w) => Ok(w.into_ident(next_token.span)),
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
-                Ok(Value::Placeholder(format!("{tok}{}", ident.value))
+                Ok(Value::Placeholder(format!("{tok}{ident}"))
                     .with_span(Span::new(span.start, ident.span.end)))
             }
             unexpected => self.expected(
@@ -13467,6 +13520,13 @@ impl<'a> Parser<'a> {
     /// Parse the body of a `CREATE FUNCTION` specified as a string.
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
     fn parse_create_function_body_string(&mut self) -> Result<CreateFunctionBody, ParserError> {
+        let (body, link_symbol) = self.parse_definition_string()?;
+        Ok(CreateFunctionBody::AsBeforeOptions { body, link_symbol })
+    }
+
+    /// Parse a definition string and the link symbol that may follow it,
+    /// e.g. `$$ body $$` or `'obj_file', 'link_symbol'`.
+    fn parse_definition_string(&mut self) -> Result<(Expr, Option<Expr>), ParserError> {
         let parse_string_expr = |parser: &mut Parser| -> Result<Expr, ParserError> {
             let peek_token = parser.peek_token();
             let span = peek_token.span;
@@ -13482,14 +13542,13 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(CreateFunctionBody::AsBeforeOptions {
-            body: parse_string_expr(self)?,
-            link_symbol: if self.consume_token(&Token::Comma) {
-                Some(parse_string_expr(self)?)
-            } else {
-                None
-            },
-        })
+        let body = parse_string_expr(self)?;
+        let link_symbol = if self.consume_token(&Token::Comma) {
+            Some(parse_string_expr(self)?)
+        } else {
+            None
+        };
+        Ok((body, link_symbol))
     }
 
     /// Parse a literal string
@@ -13803,6 +13862,39 @@ impl<'a> Parser<'a> {
                         Ok(DataType::CharLargeObject(self.parse_optional_precision()?))
                     } else {
                         Ok(DataType::Char(self.parse_optional_character_length()?))
+                    }
+                }
+                Keyword::NATIONAL if self.peek_keyword(Keyword::CHARACTER) => {
+                    let _ = self.parse_keyword(Keyword::CHARACTER);
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NationalCharacterVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::NationalCharacter(
+                            self.parse_optional_character_length()?,
+                        ))
+                    }
+                }
+                Keyword::NATIONAL if self.peek_keyword(Keyword::CHAR) => {
+                    let _ = self.parse_keyword(Keyword::CHAR);
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NationalCharVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::NationalChar(
+                            self.parse_optional_character_length()?,
+                        ))
+                    }
+                }
+                Keyword::NCHAR => {
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::NcharVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else {
+                        Ok(DataType::Nchar(self.parse_optional_character_length()?))
                     }
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
@@ -17893,11 +17985,13 @@ impl<'a> Parser<'a> {
             Keyword::ROW,
             Keyword::SYSTEM,
             Keyword::BLOCK,
+            Keyword::RESERVOIR,
         ]) {
             Some(Keyword::BERNOULLI) => Some(TableSampleMethod::Bernoulli),
             Some(Keyword::ROW) => Some(TableSampleMethod::Row),
             Some(Keyword::SYSTEM) => Some(TableSampleMethod::System),
             Some(Keyword::BLOCK) => Some(TableSampleMethod::Block),
+            Some(Keyword::RESERVOIR) => Some(TableSampleMethod::Reservoir),
             _ => None,
         };
 
@@ -19230,6 +19324,8 @@ impl<'a> Parser<'a> {
             Ok(Action::Insert {
                 columns: parse_columns(self)?,
             })
+        } else if self.parse_keyword(Keyword::MAINTAIN) {
+            Ok(Action::Maintain)
         } else if self.parse_keyword(Keyword::MANAGE) {
             let manage_type = self.parse_action_manage_type()?;
             Ok(Action::Manage { manage_type })
@@ -21925,7 +22021,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
 
-        let language = if self.parse_keyword(Keyword::LANGUAGE) {
+        let mut language = if self.parse_keyword(Keyword::LANGUAGE) {
             Some(self.parse_identifier()?)
         } else {
             None
@@ -21935,7 +22031,21 @@ impl<'a> Parser<'a> {
             Some(statements) => CreateProcedureBody::BeginAtomic(statements),
             None => {
                 self.expect_keyword_is(Keyword::AS)?;
-                CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                if matches!(
+                    self.peek_token_ref().token,
+                    Token::SingleQuotedString(_)
+                        | Token::DollarQuotedString(_)
+                        | Token::EscapedStringLiteral(_)
+                        | Token::UnicodeStringLiteral(_)
+                ) {
+                    let (body, link_symbol) = self.parse_definition_string()?;
+                    if language.is_none() && self.parse_keyword(Keyword::LANGUAGE) {
+                        language = Some(self.parse_identifier()?);
+                    }
+                    CreateProcedureBody::AsString { body, link_symbol }
+                } else {
+                    CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                }
             }
         };
 
@@ -22987,6 +23097,43 @@ mod tests {
                     unit: None
                 }))
             );
+        }
+
+        #[test]
+        fn test_ansii_national_character_string_types() {
+            // National character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#national-character-string-type>
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let length = Some(CharacterLength::IntegerLength {
+                length: 20,
+                unit: None,
+            });
+
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER",
+                DataType::NationalCharacter(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER(20)",
+                DataType::NationalCharacter(length)
+            );
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHARACTER VARYING(20)",
+                DataType::NationalCharacterVarying(length)
+            );
+            test_parse_data_type!(dialect, "NATIONAL CHAR", DataType::NationalChar(None));
+            test_parse_data_type!(dialect, "NATIONAL CHAR(20)", DataType::NationalChar(length));
+            test_parse_data_type!(
+                dialect,
+                "NATIONAL CHAR VARYING(20)",
+                DataType::NationalCharVarying(length)
+            );
+            test_parse_data_type!(dialect, "NCHAR", DataType::Nchar(None));
+            test_parse_data_type!(dialect, "NCHAR(20)", DataType::Nchar(length));
+            test_parse_data_type!(dialect, "NCHAR VARYING(20)", DataType::NcharVarying(length));
         }
 
         #[test]

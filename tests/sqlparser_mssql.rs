@@ -2983,3 +2983,36 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().verified_stmt("SELECT * FROM t [PRINT]");
     ms().verified_stmt("SELECT * FROM t AS [PRINT]");
 }
+
+#[test]
+fn parse_mssql_while_single_statement_body() {
+    let stmts = ms()
+        .parse_sql_statements("WHILE @n < 10 SET @n = @n + 1; SELECT @n")
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+    match &stmts[0] {
+        Statement::While(w) => assert_eq!(w.while_block.statements().len(), 1),
+        other => panic!("Expected While, got: {other:?}"),
+    }
+    assert!(matches!(&stmts[1], Statement::Query(_)));
+
+    let stmts = tsql()
+        .parse_sql_statements("WHILE @n < 10\n  SET @n = @n + 1\nSELECT @n")
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert!(matches!(&stmts[1], Statement::Query(_)));
+
+    let stmts = ms()
+        .parse_sql_statements("WHILE @i < 3 WHILE @j < 3 SET @j = @j + 1; SELECT 1")
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+    match &stmts[0] {
+        Statement::While(w) => {
+            assert!(matches!(
+                w.while_block.statements().as_slice(),
+                [Statement::While(_)]
+            ))
+        }
+        other => panic!("Expected While, got: {other:?}"),
+    }
+}

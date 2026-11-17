@@ -2805,8 +2805,20 @@ pub struct WhileStatement {
 impl fmt::Display for WhileStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let WhileStatement { while_block } = self;
-        write!(f, "{while_block}")?;
-        Ok(())
+        match &while_block.conditional_statements {
+            // A body without `BEGIN` is one statement, ended by the enclosing list's `;`
+            ConditionalStatements::Sequence { statements } => {
+                write!(f, "{}", while_block.start_token.0)?;
+                if let Some(condition) = &while_block.condition {
+                    write!(f, " {condition}")?;
+                }
+                if !statements.is_empty() {
+                    write!(f, " {}", display_separated(statements, "; "))?;
+                }
+                Ok(())
+            }
+            ConditionalStatements::BeginEnd(_) => write!(f, "{while_block}"),
+        }
     }
 }
 

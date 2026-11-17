@@ -1,3 +1,1 @@
-WHILE @n < 10
-  SET @n = @n + 1
-SELECT @n
+WHILE @n < 10 SET @n = @n + 1; SELECT @n

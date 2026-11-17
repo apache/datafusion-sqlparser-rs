@@ -95,6 +95,16 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
+    /// See <https://spark.apache.org/docs/latest/sql-ref-literals.html#string-literal>
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
+
+    /// Spark keeps the backslash in `\%` and `\_` so they still escape `LIKE` wildcards.
+    fn ignores_wildcard_escapes(&self) -> bool {
+        true
+    }
+
     /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-ddl-create-table-datasource.html>
     fn supports_create_table_using(&self) -> bool {
         true

@@ -5399,7 +5399,8 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated(f)
     }
 
-    /// Parses 0 or more statements, each followed by a semicolon.
+    /// Parses 0 or more statements, each followed by a semicolon, which is
+    /// optional when [ParserOptions::require_semicolon_stmt_delimiter] is false.
     /// If the next token is any of `terminal_keywords` then no more
     /// statements will be parsed.
     pub(crate) fn parse_statement_list(
@@ -5419,7 +5420,11 @@ impl<'a> Parser<'a> {
             }
 
             values.push(self.parse_statement()?);
-            self.expect_token(&Token::SemiColon)?;
+            if self.options.require_semicolon_stmt_delimiter {
+                self.expect_token(&Token::SemiColon)?;
+            } else {
+                while self.consume_token(&Token::SemiColon) {}
+            }
         }
         Ok(values)
     }

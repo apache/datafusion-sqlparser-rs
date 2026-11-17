@@ -2836,10 +2836,13 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
         );
     }
 
-    let stmts = tsql()
-        .parse_sql_statements("select 1\nrevoke select on t from u")
-        .unwrap();
-    assert!(matches!(stmts[..], [_, Statement::Revoke(_)]));
+    for sql in [
+        "select 1\nrevoke select on t from u",
+        "select * from t\nrevoke select on t from u",
+    ] {
+        let stmts = tsql().parse_sql_statements(sql).unwrap();
+        assert!(matches!(stmts[..], [_, Statement::Revoke(_)]), "{sql:?}");
+    }
 }
 
 #[test]

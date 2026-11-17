@@ -2795,6 +2795,8 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
         ("select 1\ndeny select on t to u", 2),
         ("select 1\nwaitfor delay '00:00:01'", 2),
         ("select 1\nkill 52", 2),
+        ("select 1\ncommit", 2),
+        ("select 1\nrollback tran", 2),
     ];
     for (sql, expected) in col_alias_cases {
         let stmts = tsql()
@@ -2820,6 +2822,8 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
         ("select * from t\ndeny select on t to u", 2),
         ("select * from t\nwaitfor delay '00:00:01'", 2),
         ("select * from t\nkill 52", 2),
+        ("select * from t\ncommit", 2),
+        ("select * from t\nrollback tran", 2),
     ];
     for (sql, expected) in tbl_alias_cases {
         let stmts = tsql()
@@ -2831,6 +2835,11 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
             "expected {expected} stmts for: {sql:?}"
         );
     }
+
+    let stmts = tsql()
+        .parse_sql_statements("select 1\nrevoke select on t from u")
+        .unwrap();
+    assert!(matches!(stmts[..], [_, Statement::Revoke(_)]));
 }
 
 #[test]
@@ -3002,4 +3011,6 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().one_statement_parses_to("SELECT 1 [PRINT]", "SELECT 1 AS [PRINT]");
     ms().verified_stmt("SELECT * FROM t [PRINT]");
     ms().verified_stmt("SELECT * FROM t AS [PRINT]");
+    ms().one_statement_parses_to("SELECT 1 [SET]", "SELECT 1 AS [SET]");
+    ms().verified_stmt("SELECT * FROM t AS [BEGIN]");
 }

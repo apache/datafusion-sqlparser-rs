@@ -236,6 +236,9 @@ impl MsSqlDialect {
                 | Keyword::DENY
                 | Keyword::WAITFOR
                 | Keyword::KILL
+                | Keyword::COMMIT
+                | Keyword::ROLLBACK
+                | Keyword::REVOKE
         )
     }
 

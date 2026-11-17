@@ -5409,6 +5409,10 @@ impl<'a> Parser<'a> {
     ) -> Result<Vec<Statement>, ParserError> {
         let mut values = vec![];
         loop {
+            if !self.options.require_semicolon_stmt_delimiter {
+                while self.consume_token(&Token::SemiColon) {}
+            }
+
             match &self.peek_nth_token_ref(0).token {
                 Token::EOF => break,
                 Token::Word(w)
@@ -5422,8 +5426,6 @@ impl<'a> Parser<'a> {
             values.push(self.parse_statement()?);
             if self.options.require_semicolon_stmt_delimiter {
                 self.expect_token(&Token::SemiColon)?;
-            } else {
-                while self.consume_token(&Token::SemiColon) {}
             }
         }
         Ok(values)

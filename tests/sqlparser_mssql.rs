@@ -3017,3 +3017,63 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().one_statement_parses_to("SELECT 1 [SET]", "SELECT 1 AS [SET]");
     ms().verified_stmt("SELECT * FROM t AS [BEGIN]");
 }
+
+#[test]
+fn parse_mssql_return_before_statement() {
+    for (sql, canonical) in [
+        (
+            r#"IF @f = 1 RETURN
+SELECT id FROM t"#,
+            "IF @f = 1 RETURN; SELECT id FROM t",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+SELECT * FROM t"#,
+            "IF @f = 1 RETURN; SELECT * FROM t",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+SET @x = 1"#,
+            "IF @f = 1 RETURN; SET @x = 1",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+PRINT ('x')"#,
+            "IF @f = 1 RETURN; PRINT ('x')",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+IF (@g = 1) RETURN"#,
+            "IF @f = 1 RETURN; IF (@g = 1) RETURN",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+WITH c AS (SELECT 1 AS a) SELECT a FROM c"#,
+            "IF @f = 1 RETURN; WITH c AS (SELECT 1 AS a) SELECT a FROM c",
+        ),
+    ] {
+        tsql().statements_parse_to(sql, canonical);
+    }
+
+    ms().one_statement_parses_to("IF @f = 1 BEGIN RETURN END", "IF @f = 1 BEGIN RETURN; END");
+    ms().one_statement_parses_to(
+        "IF @f = 1 RETURN ELSE SELECT 1",
+        "IF @f = 1 RETURN; ELSE SELECT 1;",
+    );
+
+    ms().verified_stmt("RETURN @x");
+    ms().verified_stmt("RETURN @@ERROR");
+    ms().verified_stmt("RETURN -1");
+    ms().verified_stmt("RETURN (SELECT 1)");
+    ms().verified_stmt("RETURN ABS(@x)");
+    ms().verified_stmt("RETURN CASE WHEN @x = 1 THEN 1 ELSE 0 END");
+    ms().verified_stmt("RETURN SYSTEM_USER");
+    ms().verified_stmt("RETURN CURRENT_USER");
+
+    assert_eq!(
+        ms().parse_sql_statements("RETURN SELECT 1"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: SELECT".to_owned()
+        ))
+    );
+}

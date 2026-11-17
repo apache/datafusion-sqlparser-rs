@@ -18,7 +18,7 @@
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{
     BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, CreateTrigger,
-    GranteesType, IfStatement, Statement,
+    GranteesType, IfStatement, ReturnStatement, ReturnStatementValue, Statement,
 };
 use crate::dialect::Dialect;
 use crate::keywords::{Keyword, RESERVED_FOR_TABLE_FACTOR};
@@ -180,6 +180,8 @@ impl Dialect for MsSqlDialect {
             }
         } else if parser.peek_keyword(Keyword::IF) {
             Some(self.parse_if_stmt(parser))
+        } else if parser.parse_keyword(Keyword::RETURN) {
+            Some(self.parse_return(parser))
         } else if parser.parse_keywords(&[Keyword::CREATE, Keyword::TRIGGER]) {
             Some(self.parse_create_trigger(parser, false))
         } else if parser.parse_keywords(&[
@@ -324,6 +326,28 @@ impl MsSqlDialect {
             end_token: None,
         }
         .into())
+    }
+
+    /// ```sql
+    /// RETURN [ integer_expression ]
+    /// ```
+    ///
+    /// A keyword that cannot be an implicit alias, such as `SELECT` or `END`,
+    /// starts the next statement rather than the value.
+    ///
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/return-transact-sql>
+    fn parse_return(&self, parser: &mut Parser) -> Result<Statement, ParserError> {
+        let next_keyword = match &parser.peek_token_ref().token {
+            Token::Word(w) if w.quote_style.is_none() => Some(w.keyword),
+            _ => None,
+        };
+        let value = match next_keyword {
+            Some(kw) if !self.is_select_item_alias(false, &kw, parser) => None,
+            _ => parser.maybe_parse(|p| p.parse_expr())?,
+        };
+        Ok(Statement::Return(ReturnStatement {
+            value: value.map(ReturnStatementValue::Expr),
+        }))
     }
 
     /// Parse `CREATE TRIGGER` for [MsSql]

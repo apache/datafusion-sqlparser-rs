@@ -381,3 +381,21 @@ fn test_substring() {
 fn test_pipe_operator() {
     spark().verified_stmt("SELECT * FROM t |> WHERE x > 1 |> SELECT x AS y |> ORDER BY y");
 }
+
+#[test]
+fn parse_string_literal_backslash_escape() {
+    let Statement::Query(query) =
+        spark().one_statement_parses_to(r"SELECT 'a\tb\nc\'d\\e\%f\_g'", "")
+    else {
+        unreachable!()
+    };
+    let SetExpr::Select(select) = *query.body else {
+        unreachable!()
+    };
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::Value(
+            Value::SingleQuotedString("a\tb\nc'd\\e\\%f\\_g".to_string()).with_empty_span()
+        )
+    );
+}

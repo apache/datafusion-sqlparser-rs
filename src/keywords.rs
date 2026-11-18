@@ -1057,6 +1057,7 @@ define_keywords!(
     STYPE,
     SUBMULTISET,
     SUBSCRIPT,
+    SUBSCRIPTION,
     SUBSTR,
     SUBSTRING,
     SUBSTRING_REGEX,

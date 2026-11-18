@@ -13557,3 +13557,36 @@ fn parse_operator_name_spans_whole_operator_character_run() {
     pg().verified_stmt("DROP OPERATOR === (INT4, INT4)");
     pg().verified_stmt("SELECT 1 OPERATOR(app.===) 2");
 }
+
+#[test]
+fn parse_operator_name_longer_than_63_characters() {
+    let longest = "=".repeat(63);
+    test_operator(&longest, &pg(), BinaryOperator::Custom(longest.clone()));
+
+    // The limit applies after trailing `+` and `-` leave the name
+    pg().one_statement_parses_to(
+        &format!("SELECT 1 {longest}+-+-+2"),
+        &format!("SELECT 1 {longest} + - + - +2"),
+    );
+    let tokens = Tokenizer::new(
+        &PostgreSqlDialect {},
+        &format!("{longest}{}", "+".repeat(100)),
+    )
+    .tokenize()
+    .unwrap();
+    assert_eq!(tokens.len(), 101);
+    assert!(tokens[1..].iter().all(|token| *token == Token::Plus));
+
+    for sql in [
+        format!("SELECT 1 {longest}= 2"),
+        format!("SELECT a {}-b", "@".repeat(63)),
+        format!("SELECT a {longest}~b"),
+        format!("SELECT 1 ={}~2", "+".repeat(100)),
+        format!("SELECT 1 {}=2", "+".repeat(70)),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(&sql).unwrap_err(),
+            ParserError::TokenizerError("operator too long at Line: 1, Column: 10".to_string())
+        );
+    }
+}

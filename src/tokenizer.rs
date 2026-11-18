@@ -51,7 +51,7 @@ use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 /// Chars that may join a preceding prefix operator into one token.
 pub(crate) const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|`?";
 
-/// PostgreSQL rejects longer operator names, so no operator name scan looks further.
+/// The longest operator name PostgreSQL accepts, one less than its `NAMEDATALEN`.
 const MAX_OPERATOR_NAME_CHARS: usize = 63;
 
 /// SQL Token enumeration
@@ -813,6 +813,8 @@ struct State<'a> {
     peekable: Peekable<Chars<'a>>,
     line: u64,
     col: u64,
+    /// Signs ahead that each form a one-character operator, left after the operator name of their run
+    pending_sign_operators: usize,
 }
 
 impl State<'_> {
@@ -1047,6 +1049,7 @@ impl<'a> Tokenizer<'a> {
             peekable: self.query.chars().peekable(),
             line: 1,
             col: 1,
+            pending_sign_operators: 0,
         };
 
         let mut prev_non_ws = buf
@@ -1149,6 +1152,7 @@ impl<'a> Tokenizer<'a> {
             peekable: hint_content.chars().peekable(),
             line: span.start.line,
             col: span.start.column,
+            pending_sign_operators: 0,
         };
 
         // Tokenize the hint content and add tokens to the buffer
@@ -1269,6 +1273,7 @@ impl<'a> Tokenizer<'a> {
                 peekable: word.chars().peekable(),
                 line: 0,
                 col: 0,
+                pending_sign_operators: 0,
             };
             let mut s = peeking_take_while(&mut inner_state, |ch| matches!(ch, '0'..='9' | '.'));
             let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
@@ -1290,7 +1295,7 @@ impl<'a> Tokenizer<'a> {
         let name = match chars.peek() {
             Some(&ch) if self.dialect.is_custom_operator_part(ch) => {
                 buf = [0u8; 4 * MAX_OPERATOR_NAME_CHARS];
-                self.operator_name(chars, &mut buf)
+                self.operator_name(chars, &mut buf)?
             }
             _ => None,
         };
@@ -1302,6 +1307,7 @@ impl<'a> Tokenizer<'a> {
             peekable: name.chars().peekable(),
             line: chars.line,
             col: chars.col,
+            pending_sign_operators: 0,
         };
         let token = match self.next_token_unbounded(&mut bounded, prev_token, prev_non_ws_token) {
             Ok(Some(token)) if bounded.peek().is_none() && !matches!(token, Token::Char(_)) => {
@@ -1319,24 +1325,31 @@ impl<'a> Tokenizer<'a> {
     /// <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-OPERATORS>
     fn operator_name<'b>(
         &self,
-        chars: &State,
+        chars: &mut State,
         buf: &'b mut [u8; 4 * MAX_OPERATOR_NAME_CHARS],
-    ) -> Option<&'b str> {
+    ) -> Result<Option<&'b str>, TokenizerError> {
+        if chars.pending_sign_operators > 0 {
+            chars.pending_sign_operators -= 1;
+            return Ok(chars.peek().map(|&ch| &*ch.encode_utf8(buf)));
+        }
         let mut lookahead = chars.peekable.clone();
         let mut count = 0;
         let mut len = 0;
+        let mut count_without_trailing_signs = 0;
         let mut len_without_trailing_signs = 0;
         let mut has_non_sign_special = false;
         while let Some(ch) = lookahead.next() {
-            if count == MAX_OPERATOR_NAME_CHARS
-                || !self.dialect.is_custom_operator_part(ch)
+            if !self.dialect.is_custom_operator_part(ch)
                 || matches!((ch, lookahead.peek()), ('-', Some('-')) | ('/', Some('*')))
             {
                 break;
             }
             count += 1;
-            len += ch.encode_utf8(&mut buf[len..]).len();
+            if count <= MAX_OPERATOR_NAME_CHARS {
+                len += ch.encode_utf8(&mut buf[len..]).len();
+            }
             if !matches!(ch, '+' | '-') {
+                count_without_trailing_signs = count;
                 len_without_trailing_signs = len;
             }
             has_non_sign_special |= matches!(
@@ -1345,14 +1358,24 @@ impl<'a> Tokenizer<'a> {
             );
         }
         // A name ending in `+` or `-` keeps them only alongside a non-sign special character
-        if count > 1 && !has_non_sign_special {
+        let (name_count, name_len) = if count > 1 && !has_non_sign_special {
             // A name made only of signs keeps its first one
-            len = len_without_trailing_signs.max(1);
+            (
+                count_without_trailing_signs.max(1),
+                len_without_trailing_signs.max(1),
+            )
+        } else {
+            (count, len)
+        };
+        if name_count > MAX_OPERATOR_NAME_CHARS {
+            return self.tokenizer_error(chars.location(), "operator too long");
         }
-        if len == 0 {
-            return None;
+        if name_count == 0 {
+            return Ok(None);
         }
-        core::str::from_utf8(&buf[..len]).ok()
+        // The signs left after the name each read as a one-character operator
+        chars.pending_sign_operators = count - name_count;
+        Ok(core::str::from_utf8(&buf[..name_len]).ok())
     }
 
     /// Get the next token or return None, without bounding an operator to its custom operator name
@@ -2315,6 +2338,7 @@ impl<'a> Tokenizer<'a> {
                     peekable: chars.peekable.clone(),
                     line: chars.line,
                     col: chars.col,
+                    pending_sign_operators: chars.pending_sign_operators,
                 };
 
                 loop {
@@ -4197,6 +4221,7 @@ mod tests {
             peekable: s.chars().peekable(),
             line: 0,
             col: 0,
+            pending_sign_operators: 0,
         };
 
         assert_eq!(

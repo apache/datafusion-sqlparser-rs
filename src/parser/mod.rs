@@ -9108,11 +9108,14 @@ impl<'a> Parser<'a> {
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createpublication.html)
     pub fn parse_create_publication(&mut self) -> Result<CreatePublication, ParserError> {
         let name = self.parse_identifier()?;
-        let target = if self.parse_keyword(Keyword::FOR) {
-            self.expect_keywords(&[Keyword::ALL, Keyword::TABLES])?;
+        let target = if !self.parse_keyword(Keyword::FOR) {
+            None
+        } else if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES]) {
             Some(PublicationTarget::AllTables)
         } else {
-            None
+            Some(PublicationTarget::Objects(
+                self.parse_publication_objects()?,
+            ))
         };
         let options = self.parse_options_with_keywords(&[Keyword::WITH])?;
         Ok(CreatePublication {
@@ -9120,6 +9123,56 @@ impl<'a> Parser<'a> {
             target,
             options,
         })
+    }
+
+    fn parse_publication_objects(&mut self) -> Result<Vec<PublicationObject>, ParserError> {
+        let mut objects = vec![];
+        loop {
+            self.expect_keyword_is(Keyword::TABLE)?;
+            objects.push(PublicationObject::Tables(
+                self.parse_publication_group_members(Parser::parse_publication_table)?,
+            ));
+            if !self.consume_token(&Token::Comma) {
+                return Ok(objects);
+            }
+        }
+    }
+
+    /// Parses the members of one publication object group, where each comma
+    /// not followed by a group keyword continues the group.
+    fn parse_publication_group_members<Member>(
+        &mut self,
+        parse_member: fn(&mut Self) -> Result<Member, ParserError>,
+    ) -> Result<Vec<Member>, ParserError> {
+        let mut members = vec![parse_member(self)?];
+        while self.consume_token(&Token::Comma) {
+            if self.peek_keyword(Keyword::TABLE) {
+                self.prev_token();
+                break;
+            }
+            members.push(parse_member(self)?);
+        }
+        Ok(members)
+    }
+
+    fn parse_publication_table(&mut self) -> Result<PublicationTable, ParserError> {
+        if self.parse_keyword(Keyword::ONLY) {
+            let parenthesized = self.consume_token(&Token::LParen);
+            let name = self.parse_object_name(false)?;
+            if parenthesized {
+                self.expect_token(&Token::RParen)?;
+            }
+            Ok(PublicationTable {
+                name,
+                inheritance: Some(TableInheritance::Only { parenthesized }),
+            })
+        } else {
+            let name = self.parse_object_name(false)?;
+            let inheritance = self
+                .consume_token(&Token::Mul)
+                .then_some(TableInheritance::IncludeDescendants);
+            Ok(PublicationTable { name, inheritance })
+        }
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.

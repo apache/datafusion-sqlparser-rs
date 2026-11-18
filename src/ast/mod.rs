@@ -6648,17 +6648,19 @@ impl fmt::Display for Statement {
     }
 }
 
-/// Can use to describe options in create sequence or table column type identity
+/// Can use to describe options in create sequence, alter sequence, or table
+/// column type identity
 /// ```sql
 /// [ AS data_type ] [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
-///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+///     [ START [ WITH ] start ] [ RESTART [ [ WITH ] restart ] ]
+///     [ CACHE cache ] [ [ NO ] CYCLE ]
 ///     [ OWNED BY { table_name.column_name | NONE } ]
 /// ```
 ///
 /// The options form an unordered list, so they are stored in the order written.
-/// `AS` and `OWNED BY` are only accepted by `CREATE SEQUENCE`, not by an
-/// identity column.
+/// `AS` and `OWNED BY` are only accepted by `CREATE SEQUENCE` and `ALTER
+/// SEQUENCE`, not by an identity column.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -6673,6 +6675,9 @@ pub enum SequenceOptions {
     MaxValue(Option<Expr>),
     /// `START [WITH] <expr>`; second value indicates presence of `WITH`.
     StartWith(Expr, bool),
+    /// `RESTART [ [ WITH ] restart ]`, `None` restarting from the start value.
+    /// The second value indicates presence of `WITH`.
+    Restart(Option<Expr>, bool),
     /// `CACHE <expr>` option.
     Cache(Expr),
     /// `CYCLE` or `NO CYCLE` option.
@@ -6713,6 +6718,17 @@ impl fmt::Display for SequenceOptions {
                     " START{with} {start}",
                     with = if *with { " WITH" } else { "" },
                     start = start
+                )
+            }
+            SequenceOptions::Restart(None, _) => {
+                write!(f, " RESTART")
+            }
+            SequenceOptions::Restart(Some(restart), with) => {
+                write!(
+                    f,
+                    " RESTART{with} {restart}",
+                    with = if *with { " WITH" } else { "" },
+                    restart = restart
                 )
             }
             SequenceOptions::Cache(cache) => {

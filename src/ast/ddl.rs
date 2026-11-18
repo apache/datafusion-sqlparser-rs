@@ -1431,6 +1431,13 @@ pub enum AlterColumnOperation {
         /// Optional sequence options for identity generation.
         sequence_options: Option<Vec<SequenceOptions>>,
     },
+    /// `{ SET GENERATED { ALWAYS | BY DEFAULT } | RESTART [ [ WITH ] restart ] } [...]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    AlterIdentity {
+        /// The identity changes, in source order.
+        options: Vec<AlterIdentityOption>,
+    },
     /// `DROP IDENTITY [ IF EXISTS ]`
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
@@ -1495,6 +1502,9 @@ impl fmt::Display for AlterColumnOperation {
                 }
                 Ok(())
             }
+            AlterColumnOperation::AlterIdentity { options } => {
+                write!(f, "{}", display_separated(options, " "))
+            }
             AlterColumnOperation::DropIdentity { if_exists } => {
                 write!(f, "DROP IDENTITY")?;
                 if *if_exists {
@@ -1504,6 +1514,41 @@ impl fmt::Display for AlterColumnOperation {
             }
             AlterColumnOperation::GenericOptions { options } => {
                 write!(f, "OPTIONS ({})", display_comma_separated(options))
+            }
+        }
+    }
+}
+
+/// One change to an identity column in [`AlterColumnOperation::AlterIdentity`].
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterIdentityOption {
+    /// `SET GENERATED { ALWAYS | BY DEFAULT }`
+    SetGenerated(GeneratedAs),
+    /// `RESTART`, restarting at the sequence's start value.
+    Restart,
+    /// `RESTART [WITH] <expr>`, with `true` when `WITH` is present.
+    RestartWith(Expr, bool),
+}
+
+impl fmt::Display for AlterIdentityOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterIdentityOption::SetGenerated(generated_as) => {
+                let generated_as = match generated_as {
+                    GeneratedAs::Always => "ALWAYS",
+                    GeneratedAs::ByDefault => "BY DEFAULT",
+                    GeneratedAs::ExpStored => "",
+                };
+                write!(f, "SET GENERATED {generated_as}")
+            }
+            AlterIdentityOption::Restart => write!(f, "RESTART"),
+            AlterIdentityOption::RestartWith(restart, with) => {
+                let with = if *with { " WITH" } else { "" };
+                write!(f, "RESTART{with} {restart}")
             }
         }
     }

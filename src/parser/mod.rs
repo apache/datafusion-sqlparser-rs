@@ -11770,6 +11770,12 @@ impl<'a> Parser<'a> {
                     generated_as,
                     sequence_options,
                 }
+            } else if let Some(option) = self.parse_alter_identity_option()? {
+                let mut options = vec![option];
+                while let Some(option) = self.parse_alter_identity_option()? {
+                    options.push(option);
+                }
+                AlterColumnOperation::AlterIdentity { options }
             } else if self.parse_keywords(&[Keyword::DROP, Keyword::IDENTITY]) {
                 AlterColumnOperation::DropIdentity {
                     if_exists: self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]),
@@ -21969,6 +21975,34 @@ impl<'a> Parser<'a> {
         }
 
         Ok(sequence_options)
+    }
+
+    /// Parse one item of the identity column changes of `ALTER COLUMN`, or
+    /// return `None` without consuming anything when the next tokens start none.
+    fn parse_alter_identity_option(&mut self) -> Result<Option<AlterIdentityOption>, ParserError> {
+        if self.parse_keyword(Keyword::RESTART) {
+            let with = self.parse_keyword(Keyword::WITH);
+            let value = if with {
+                Some(self.parse_number()?)
+            } else {
+                self.maybe_parse(|parser| parser.parse_number())?
+            };
+            return Ok(Some(match value {
+                Some(value) => AlterIdentityOption::RestartWith(value, with),
+                None => AlterIdentityOption::Restart,
+            }));
+        }
+        if self.parse_keywords(&[Keyword::SET, Keyword::GENERATED]) {
+            let generated_as = if self.parse_keyword(Keyword::ALWAYS) {
+                GeneratedAs::Always
+            } else if self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT]) {
+                GeneratedAs::ByDefault
+            } else {
+                return self.expected_ref("ALWAYS or BY DEFAULT", self.peek_token_ref());
+            };
+            return Ok(Some(AlterIdentityOption::SetGenerated(generated_as)));
+        }
+        Ok(None)
     }
 
     ///   Parse a `CREATE SERVER` statement.

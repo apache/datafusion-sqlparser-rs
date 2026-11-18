@@ -13559,12 +13559,21 @@ fn parse_alter_procedure_and_routine() {
             }
         }
 
-        assert_eq!(
-            pg().parse_sql_statements(&format!("ALTER {keyword} p() STALBE"))
-                .unwrap_err(),
-            ParserError::ParserError(format!(
-                "Expected: at least one ALTER {keyword} action, found: STALBE"
-            ))
-        );
+        for (sql, expected) in [
+            (
+                "p() STALBE",
+                format!("Expected: at least one ALTER {keyword} action, found: STALBE"),
+            ),
+            (
+                "p() NO LEAKPROOF",
+                "Expected: DEPENDS after NO, found: LEAKPROOF".to_string(),
+            ),
+        ] {
+            assert_eq!(
+                pg().parse_sql_statements(&format!("ALTER {keyword} {sql}"))
+                    .unwrap_err(),
+                ParserError::ParserError(expected)
+            );
+        }
     }
 }

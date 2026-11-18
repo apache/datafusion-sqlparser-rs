@@ -4955,6 +4955,8 @@ pub enum AlterExtensionMember {
     Server(Ident),
     /// `TABLE object_name`
     Table(ObjectName),
+    /// `TEXT SEARCH CONFIGURATION object_name`
+    TextSearchConfiguration(ObjectName),
     /// `VIEW object_name`
     View(ObjectName),
 }
@@ -5001,6 +5003,9 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::Sequence(name) => write!(f, "SEQUENCE {name}"),
             AlterExtensionMember::Server(name) => write!(f, "SERVER {name}"),
             AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
+            AlterExtensionMember::TextSearchConfiguration(name) => {
+                write!(f, "TEXT SEARCH CONFIGURATION {name}")
+            }
             AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }
     }

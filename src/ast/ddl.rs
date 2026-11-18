@@ -4957,6 +4957,8 @@ pub enum AlterExtensionMember {
     Table(ObjectName),
     /// `TEXT SEARCH CONFIGURATION object_name`
     TextSearchConfiguration(ObjectName),
+    /// `TEXT SEARCH DICTIONARY object_name`
+    TextSearchDictionary(ObjectName),
     /// `VIEW object_name`
     View(ObjectName),
 }
@@ -5005,6 +5007,9 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
             AlterExtensionMember::TextSearchConfiguration(name) => {
                 write!(f, "TEXT SEARCH CONFIGURATION {name}")
+            }
+            AlterExtensionMember::TextSearchDictionary(name) => {
+                write!(f, "TEXT SEARCH DICTIONARY {name}")
             }
             AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }

@@ -1173,6 +1173,7 @@ fn parse_drop_and_comment_collation_ast() {
         pg_and_generic().verified_stmt("DROP COLLATION test0"),
         Statement::Drop {
             object_type: ObjectType::Collation,
+            concurrently: false,
             if_exists: false,
             names: vec![ObjectName::from(vec![Ident::new("test0")])],
             cascade: false,
@@ -1187,6 +1188,7 @@ fn parse_drop_and_comment_collation_ast() {
         pg_and_generic().verified_stmt("DROP COLLATION IF EXISTS test0"),
         Statement::Drop {
             object_type: ObjectType::Collation,
+            concurrently: false,
             if_exists: true,
             names: vec![ObjectName::from(vec![Ident::new("test0")])],
             cascade: false,
@@ -13517,4 +13519,43 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+#[test]
+fn parse_drop_index_concurrently() {
+    for (sql, if_exists) in [
+        ("DROP INDEX CONCURRENTLY i", false),
+        ("DROP INDEX CONCURRENTLY IF EXISTS i", true),
+    ] {
+        assert_eq!(
+            pg_and_generic().verified_stmt(sql),
+            Statement::Drop {
+                object_type: ObjectType::Index,
+                concurrently: true,
+                if_exists,
+                names: vec![ObjectName::from(vec![Ident::new("i")])],
+                cascade: false,
+                restrict: false,
+                purge: false,
+                temporary: false,
+                table: None,
+            }
+        );
+    }
+    pg_and_generic().verified_stmt("DROP INDEX CONCURRENTLY IF EXISTS i, j CASCADE");
+
+    assert!(matches!(
+        pg_and_generic().verified_stmt("DROP INDEX i"),
+        Statement::Drop {
+            concurrently: false,
+            ..
+        }
+    ));
+
+    for sql in [
+        "DROP INDEX IF EXISTS CONCURRENTLY i",
+        "DROP TABLE CONCURRENTLY t",
+    ] {
+        assert!(pg_and_generic().parse_sql_statements(sql).is_err(), "{sql}");
+    }
 }

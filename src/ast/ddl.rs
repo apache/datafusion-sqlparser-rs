@@ -4947,6 +4947,8 @@ pub enum AlterExtensionMember {
     Conversion(ObjectName),
     /// `DATABASE object_name`
     Database(Ident),
+    /// `DOMAIN object_name`
+    Domain(DataType),
     /// `EVENT TRIGGER object_name`
     EventTrigger(Ident),
     /// `EXTENSION object_name`
@@ -5058,6 +5060,7 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::Collation(name) => write!(f, "COLLATION {name}"),
             AlterExtensionMember::Conversion(name) => write!(f, "CONVERSION {name}"),
             AlterExtensionMember::Database(name) => write!(f, "DATABASE {name}"),
+            AlterExtensionMember::Domain(data_type) => write!(f, "DOMAIN {data_type}"),
             AlterExtensionMember::EventTrigger(name) => write!(f, "EVENT TRIGGER {name}"),
             AlterExtensionMember::Extension(name) => write!(f, "EXTENSION {name}"),
             AlterExtensionMember::ForeignDataWrapper(name) => {

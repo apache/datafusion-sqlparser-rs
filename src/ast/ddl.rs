@@ -4970,6 +4970,13 @@ pub enum AlterExtensionMember {
         /// Index method.
         using: Ident,
     },
+    /// `OPERATOR FAMILY object_name USING index_method`
+    OperatorFamily {
+        /// Operator family name.
+        name: ObjectName,
+        /// Index method.
+        using: Ident,
+    },
     /// `PROCEDURE procedure_name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]`
     Procedure(FunctionDesc),
     /// `PUBLICATION object_name`
@@ -5050,6 +5057,9 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::Operator(signature) => write!(f, "OPERATOR {signature}"),
             AlterExtensionMember::OperatorClass { name, using } => {
                 write!(f, "OPERATOR CLASS {name} USING {using}")
+            }
+            AlterExtensionMember::OperatorFamily { name, using } => {
+                write!(f, "OPERATOR FAMILY {name} USING {using}")
             }
             AlterExtensionMember::Procedure(function) => write!(f, "PROCEDURE {function}"),
             AlterExtensionMember::Publication(name) => write!(f, "PUBLICATION {name}"),

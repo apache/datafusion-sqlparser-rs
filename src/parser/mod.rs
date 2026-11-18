@@ -11770,6 +11770,10 @@ impl<'a> Parser<'a> {
                     generated_as,
                     sequence_options,
                 }
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::IDENTITY]) {
+                AlterColumnOperation::DropIdentity {
+                    if_exists: self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]),
+                }
             } else if self.parse_keyword(Keyword::OPTIONS) {
                 AlterColumnOperation::GenericOptions {
                     options: self.parse_alter_generic_options()?,

@@ -4928,6 +4928,8 @@ pub enum AlterExtensionOperation {
 pub enum AlterExtensionMember {
     /// `TABLE object_name`
     Table(ObjectName),
+    /// `VIEW object_name`
+    View(ObjectName),
 }
 
 impl fmt::Display for AlterExtensionOperation {
@@ -4953,6 +4955,7 @@ impl fmt::Display for AlterExtensionMember {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
+            AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }
     }
 }

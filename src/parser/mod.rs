@@ -12541,6 +12541,8 @@ impl<'a> Parser<'a> {
     fn parse_alter_extension_member(&mut self) -> Result<AlterExtensionMember, ParserError> {
         if self.parse_keyword(Keyword::TABLE) {
             Ok(AlterExtensionMember::Table(self.parse_object_name(false)?))
+        } else if self.parse_keyword(Keyword::VIEW) {
+            Ok(AlterExtensionMember::View(self.parse_object_name(false)?))
         } else {
             self.expected_ref(
                 "member object type after ADD or DROP",

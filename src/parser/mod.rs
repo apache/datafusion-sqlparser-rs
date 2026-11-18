@@ -21047,10 +21047,10 @@ impl<'a> Parser<'a> {
     fn parse_order_by_expr_inner(
         &mut self,
         with_operator_class: bool,
-    ) -> Result<(OrderByExpr, Option<ObjectName>), ParserError> {
+    ) -> Result<(OrderByExpr, Option<IndexOperatorClass>), ParserError> {
         let expr = self.parse_expr()?;
 
-        let operator_class: Option<ObjectName> = if with_operator_class {
+        let operator_class: Option<IndexOperatorClass> = if with_operator_class {
             // We check that if non of the following keywords are present, then we parse an
             // identifier as operator class.
             if self
@@ -21059,7 +21059,13 @@ impl<'a> Parser<'a> {
             {
                 None
             } else {
-                self.maybe_parse(|parser| parser.parse_object_name(false))?
+                match self.maybe_parse(|parser| parser.parse_object_name(false))? {
+                    Some(name) => Some(IndexOperatorClass {
+                        name,
+                        parameters: self.parse_index_operator_class_parameters()?,
+                    }),
+                    None => None,
+                }
             }
         } else {
             None
@@ -21094,6 +21100,16 @@ impl<'a> Parser<'a> {
             },
             operator_class,
         ))
+    }
+
+    /// Parse the optional `( opclass_parameter = value [, ...] )` after an index operator class.
+    fn parse_index_operator_class_parameters(&mut self) -> Result<Vec<Expr>, ParserError> {
+        if !self.consume_token(&Token::LParen) {
+            return Ok(Vec::new());
+        }
+        let parameters = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(parameters)
     }
 
     fn parse_order_by_using_operator(&mut self) -> Result<ObjectName, ParserError> {

@@ -12050,6 +12050,8 @@ impl<'a> Parser<'a> {
             }
             Keyword::FUNCTION => self.parse_alter_function(AlterFunctionKind::Function),
             Keyword::AGGREGATE => self.parse_alter_function(AlterFunctionKind::Aggregate),
+            Keyword::PROCEDURE => self.parse_alter_function(AlterFunctionKind::Procedure),
+            Keyword::ROUTINE => self.parse_alter_function(AlterFunctionKind::Routine),
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
                     self.parse_alter_operator_family().map(Into::into)
@@ -12070,7 +12072,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or PROCEDURE or ROUTINE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
                     self.peek_token_ref(),
                 )
             }
@@ -12223,27 +12225,34 @@ impl<'a> Parser<'a> {
 
     fn parse_alter_function_actions(
         &mut self,
+        kind: &AlterFunctionKind,
     ) -> Result<(Vec<AlterFunctionAction>, bool), ParserError> {
         let mut actions = vec![];
         while let Some(action) = self.parse_alter_function_action()? {
             actions.push(action);
         }
         if actions.is_empty() {
-            return self.expected_ref("at least one ALTER FUNCTION action", self.peek_token_ref());
+            return self.expected_ref(
+                &format!("at least one ALTER {kind} action"),
+                self.peek_token_ref(),
+            );
         }
         let restrict = self.parse_keyword(Keyword::RESTRICT);
         Ok((actions, restrict))
     }
 
-    /// Parse an `ALTER FUNCTION` or `ALTER AGGREGATE` statement.
+    /// Parse an `ALTER FUNCTION`, `ALTER AGGREGATE`, `ALTER PROCEDURE` or `ALTER ROUTINE` statement.
     pub fn parse_alter_function(
         &mut self,
         kind: AlterFunctionKind,
     ) -> Result<Statement, ParserError> {
         let (function, aggregate_star, aggregate_order_by) = match kind {
-            AlterFunctionKind::Function => (self.parse_function_desc()?, false, None),
+            AlterFunctionKind::Function
+            | AlterFunctionKind::Procedure
+            | AlterFunctionKind::Routine => (self.parse_function_desc()?, false, None),
             AlterFunctionKind::Aggregate => self.parse_alter_aggregate_signature()?,
         };
+        let is_aggregate = matches!(kind, AlterFunctionKind::Aggregate);
 
         let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             let new_name = self.parse_identifier()?;
@@ -12254,7 +12263,7 @@ impl<'a> Parser<'a> {
             AlterFunctionOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) && self.parse_keyword(Keyword::NO) {
+        } else if !is_aggregate && self.parse_keyword(Keyword::NO) {
             if !self.parse_keyword(Keyword::DEPENDS) {
                 return self.expected_ref("DEPENDS after NO", self.peek_token_ref());
             }
@@ -12263,16 +12272,14 @@ impl<'a> Parser<'a> {
                 no: true,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function)
-            && self.parse_keyword(Keyword::DEPENDS)
-        {
+        } else if !is_aggregate && self.parse_keyword(Keyword::DEPENDS) {
             self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
             AlterFunctionOperation::DependsOnExtension {
                 no: false,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) {
-            let (actions, restrict) = self.parse_alter_function_actions()?;
+        } else if !is_aggregate {
+            let (actions, restrict) = self.parse_alter_function_actions(&kind)?;
             AlterFunctionOperation::Actions { actions, restrict }
         } else {
             return self.expected_ref(

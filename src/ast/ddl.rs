@@ -4867,6 +4867,61 @@ impl Spanned for DropExtension {
     }
 }
 
+/// ALTER EXTENSION statement.
+/// Note: this is a PostgreSQL-specific statement.
+///
+/// # References
+///
+/// PostgreSQL Documentation:
+/// <https://www.postgresql.org/docs/current/sql-alterextension.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterExtension {
+    /// Name of the extension being altered.
+    pub name: Ident,
+    /// The operation to perform on the extension.
+    pub operation: AlterExtensionOperation,
+}
+
+/// Operations supported by `ALTER EXTENSION`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterExtensionOperation {
+    /// Move the extension to another schema.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name SET SCHEMA new_schema
+    /// ```
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
+}
+
+impl fmt::Display for AlterExtensionOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterExtensionOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+        }
+    }
+}
+
+impl fmt::Display for AlterExtension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER EXTENSION {} {}", self.name, self.operation)
+    }
+}
+
+impl Spanned for AlterExtension {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
 /// CREATE COLLATION statement.
 /// Note: this is a PostgreSQL-specific statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

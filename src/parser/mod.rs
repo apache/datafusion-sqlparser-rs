@@ -12021,6 +12021,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
+            Keyword::EXTENSION => self.parse_alter_extension().map(Into::into),
             Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
@@ -12070,7 +12071,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or EXTENSION",
                     self.peek_token_ref(),
                 )
             }
@@ -12501,6 +12502,25 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterCollation { name, operation })
+    }
+
+    /// Parse a [Statement::AlterExtension]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterextension.html)
+    pub fn parse_alter_extension(&mut self) -> Result<AlterExtension, ParserError> {
+        let name = self.parse_identifier()?;
+        let operation = if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterExtensionOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else {
+            return self.expected_ref(
+                "SET SCHEMA after ALTER EXTENSION name",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(AlterExtension { name, operation })
     }
 
     /// Parse a [Statement::AlterOperator]

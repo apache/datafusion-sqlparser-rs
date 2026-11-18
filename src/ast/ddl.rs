@@ -4930,6 +4930,8 @@ pub enum AlterExtensionMember {
     ForeignTable(ObjectName),
     /// `MATERIALIZED VIEW object_name`
     MaterializedView(ObjectName),
+    /// `SEQUENCE object_name`
+    Sequence(ObjectName),
     /// `TABLE object_name`
     Table(ObjectName),
     /// `VIEW object_name`
@@ -4960,6 +4962,7 @@ impl fmt::Display for AlterExtensionMember {
         match self {
             AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
             AlterExtensionMember::MaterializedView(name) => write!(f, "MATERIALIZED VIEW {name}"),
+            AlterExtensionMember::Sequence(name) => write!(f, "SEQUENCE {name}"),
             AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
             AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }

@@ -13586,6 +13586,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH DICTIONARY dict"),
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH PARSER pgrm"),
         format!("ALTER EXTENSION ext_name {action} TEXT SEARCH TEMPLATE tpl"),
+        format!("ALTER EXTENSION ext_name {action} TRANSFORM FOR my_type LANGUAGE plpgsql"),
         format!("ALTER EXTENSION ext_name {action} VIEW v"),
     ];
     for sql in sqls {
@@ -13804,6 +13805,26 @@ fn parse_alter_extension_add_member() {
         other => panic!("unexpected statement: {other:?}"),
     }
 
+    match pg_and_generic()
+        .verified_stmt("ALTER EXTENSION ext_name ADD TRANSFORM FOR my_type LANGUAGE plpgsql")
+    {
+        Statement::AlterExtension(AlterExtension {
+            operation:
+                AlterExtensionOperation::Add(AlterExtensionMember::Transform {
+                    type_name,
+                    language,
+                }),
+            ..
+        }) => {
+            assert_eq!(
+                type_name,
+                DataType::Custom(ObjectName::from(Ident::new("my_type")), vec![])
+            );
+            assert_eq!(language, Ident::new("plpgsql"));
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
     for (sql, error) in [
         (
             "ALTER EXTENSION ext_name ADD",
@@ -13836,6 +13857,10 @@ fn parse_alter_extension_add_member() {
         (
             "ALTER EXTENSION ext_name ADD CAST (INT)",
             "Expected: AS, found: )",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TRANSFORM FOR my_type",
+            "Expected: LANGUAGE, found: EOF",
         ),
         (
             "ALTER EXTENSION ext_name ADD OPERATOR +",
@@ -13879,6 +13904,14 @@ fn parse_alter_extension_add_member() {
         ),
         (
             "ALTER EXTENSION ext_name ADD OPERATOR FAMILY of USING",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TRANSFORM FOR",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TRANSFORM FOR my_type LANGUAGE",
             "Expected: identifier, found: EOF",
         ),
     ] {

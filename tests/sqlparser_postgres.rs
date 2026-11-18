@@ -13568,6 +13568,7 @@ fn parse_alter_procedure_and_routine() {
                 "p() NO LEAKPROOF",
                 "Expected: DEPENDS after NO, found: LEAKPROOF".to_string(),
             ),
+            ("p(", "Expected: a data type name, found: EOF".to_string()),
         ] {
             assert_eq!(
                 pg().parse_sql_statements(&format!("ALTER {keyword} {sql}"))

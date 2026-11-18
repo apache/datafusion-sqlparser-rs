@@ -4907,6 +4907,27 @@ pub enum AlterExtensionOperation {
         /// Target schema name.
         schema_name: ObjectName,
     },
+    /// Add a member object to the extension.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name ADD member_object
+    /// ```
+    Add(AlterExtensionMember),
+    /// Remove a member object from the extension.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name DROP member_object
+    /// ```
+    Drop(AlterExtensionMember),
+}
+
+/// Member objects that can be added to or removed from an extension.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterExtensionMember {
+    /// `TABLE object_name`
+    Table(ObjectName),
 }
 
 impl fmt::Display for AlterExtensionOperation {
@@ -4922,6 +4943,16 @@ impl fmt::Display for AlterExtensionOperation {
             AlterExtensionOperation::SetSchema { schema_name } => {
                 write!(f, "SET SCHEMA {schema_name}")
             }
+            AlterExtensionOperation::Add(member) => write!(f, "ADD {member}"),
+            AlterExtensionOperation::Drop(member) => write!(f, "DROP {member}"),
+        }
+    }
+}
+
+impl fmt::Display for AlterExtensionMember {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
         }
     }
 }

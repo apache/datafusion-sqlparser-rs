@@ -12521,13 +12521,32 @@ impl<'a> Parser<'a> {
                 schema_name: self.parse_object_name(false)?,
             }
         } else {
-            return self.expected_ref(
-                "UPDATE or SET SCHEMA after ALTER EXTENSION name",
-                self.peek_token_ref(),
-            );
+            let action = if self.parse_keyword(Keyword::ADD) {
+                AlterExtensionOperation::Add
+            } else if self.parse_keyword(Keyword::DROP) {
+                AlterExtensionOperation::Drop
+            } else {
+                return self.expected_ref(
+                    "UPDATE, SET SCHEMA, ADD, or DROP after ALTER EXTENSION name",
+                    self.peek_token_ref(),
+                );
+            };
+            action(self.parse_alter_extension_member()?)
         };
 
         Ok(AlterExtension { name, operation })
+    }
+
+    /// Parse a member object of `ALTER EXTENSION ADD` or `ALTER EXTENSION DROP`
+    fn parse_alter_extension_member(&mut self) -> Result<AlterExtensionMember, ParserError> {
+        if self.parse_keyword(Keyword::TABLE) {
+            Ok(AlterExtensionMember::Table(self.parse_object_name(false)?))
+        } else {
+            self.expected_ref(
+                "member object type after ADD or DROP",
+                self.peek_token_ref(),
+            )
+        }
     }
 
     /// Parse a [Statement::AlterOperator]

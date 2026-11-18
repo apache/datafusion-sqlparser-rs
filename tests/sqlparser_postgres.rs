@@ -13772,3 +13772,60 @@ fn parse_publication_schemas() {
         );
     }
 }
+
+#[test]
+fn parse_alter_publication() {
+    for sql in [
+        "ALTER PUBLICATION p SET (publish = 'insert', publish_via_partition_root = true)",
+        "ALTER PUBLICATION p OWNER TO postgres",
+        "ALTER PUBLICATION p OWNER TO CURRENT_ROLE",
+        "ALTER PUBLICATION p OWNER TO CURRENT_USER",
+        "ALTER PUBLICATION p OWNER TO SESSION_USER",
+        "ALTER PUBLICATION p RENAME TO renamed",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    let operation = |sql| match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterPublication(AlterPublication { name, operation }) => {
+            assert_eq!(name, Ident::new("p"));
+            operation
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        operation("ALTER PUBLICATION p SET (publish_via_partition_root)"),
+        AlterPublicationOperation::SetOptions(vec![SqlOption::Ident(ObjectName::from(vec![
+            Ident::new("publish_via_partition_root")
+        ]))])
+    );
+    assert_eq!(
+        operation("ALTER PUBLICATION p OWNER TO CURRENT_ROLE"),
+        AlterPublicationOperation::OwnerTo(Owner::CurrentRole)
+    );
+    assert_eq!(
+        operation(r#"ALTER PUBLICATION p RENAME TO "Renamed""#),
+        AlterPublicationOperation::RenameTo(Ident::with_quote('"', "Renamed"))
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER PUBLICATION p SET ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "ALTER PUBLICATION p RENAME TO s.q",
+            "Expected: end of statement, found: .",
+        ),
+        (
+            "ALTER PUBLICATION p REFRESH",
+            "Expected: SET, OWNER TO, or RENAME TO after ALTER PUBLICATION, found: REFRESH",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

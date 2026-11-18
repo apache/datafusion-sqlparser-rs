@@ -5146,6 +5146,56 @@ fn fmt_publication_relation(
     }
 }
 
+/// `ALTER PUBLICATION` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterpublication.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterPublication {
+    /// Name of the publication.
+    pub name: Ident,
+    /// The operation to perform on the publication.
+    pub operation: AlterPublicationOperation,
+}
+
+impl fmt::Display for AlterPublication {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER PUBLICATION {} {}", self.name, self.operation)
+    }
+}
+
+impl Spanned for AlterPublication {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// Operations supported by `ALTER PUBLICATION`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterPublicationOperation {
+    /// `SET ( publication_parameter [= value] [, ...] )`
+    SetOptions(Vec<SqlOption>),
+    /// `OWNER TO new_owner`
+    OwnerTo(Owner),
+    /// `RENAME TO new_name`
+    RenameTo(Ident),
+}
+
+impl fmt::Display for AlterPublicationOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterPublicationOperation::SetOptions(options) => {
+                write!(f, "SET ({})", display_comma_separated(options))
+            }
+            AlterPublicationOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterPublicationOperation::RenameTo(new_name) => write!(f, "RENAME TO {new_name}"),
+        }
+    }
+}
+
 /// `ALTER [ MATERIALIZED ] VIEW` statement.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altermaterializedview.html)

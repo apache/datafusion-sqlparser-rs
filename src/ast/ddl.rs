@@ -1339,14 +1339,14 @@ pub enum OperatorOption {
     Restrict(Option<ObjectName>),
     /// `JOIN = { join_proc | NONE }`
     Join(Option<ObjectName>),
-    /// `COMMUTATOR = com_op`
+    /// `COMMUTATOR = com_op`, a schema-qualified name written as `OPERATOR(schema.com_op)`
     Commutator(ObjectName),
-    /// `NEGATOR = neg_op`
+    /// `NEGATOR = neg_op`, a schema-qualified name written as `OPERATOR(schema.neg_op)`
     Negator(ObjectName),
-    /// `HASHES`
-    Hashes,
-    /// `MERGES`
-    Merges,
+    /// `HASHES [ = boolean ]`
+    Hashes(Option<bool>),
+    /// `MERGES [ = boolean ]`
+    Merges(Option<bool>),
 }
 
 impl fmt::Display for AlterOperator {
@@ -1387,10 +1387,25 @@ impl fmt::Display for OperatorOption {
             Self::Restrict(None) => write!(f, "RESTRICT = NONE"),
             Self::Join(Some(proc_name)) => write!(f, "JOIN = {}", proc_name),
             Self::Join(None) => write!(f, "JOIN = NONE"),
-            Self::Commutator(op_name) => write!(f, "COMMUTATOR = {}", op_name),
-            Self::Negator(op_name) => write!(f, "NEGATOR = {}", op_name),
-            Self::Hashes => write!(f, "HASHES"),
-            Self::Merges => write!(f, "MERGES"),
+            Self::Commutator(op_name) => write!(f, "COMMUTATOR = {}", OperatorRef(op_name)),
+            Self::Negator(op_name) => write!(f, "NEGATOR = {}", OperatorRef(op_name)),
+            Self::Hashes(None) => write!(f, "HASHES"),
+            Self::Hashes(Some(value)) => write!(f, "HASHES = {value}"),
+            Self::Merges(None) => write!(f, "MERGES"),
+            Self::Merges(Some(value)) => write!(f, "MERGES = {value}"),
+        }
+    }
+}
+
+/// Displays an operator named in an option, where PostgreSQL takes a schema only inside `OPERATOR(...)`
+struct OperatorRef<'a>(&'a ObjectName);
+
+impl fmt::Display for OperatorRef<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0 .0.len() > 1 {
+            write!(f, "OPERATOR({})", self.0)
+        } else {
+            write!(f, "{}", self.0)
         }
     }
 }

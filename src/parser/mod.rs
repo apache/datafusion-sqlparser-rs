@@ -12021,6 +12021,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
+            Keyword::SEQUENCE => self.parse_alter_sequence(),
             Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
@@ -12070,7 +12071,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or SEQUENCE",
                     self.peek_token_ref(),
                 )
             }
@@ -12501,6 +12502,28 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterCollation { name, operation })
+    }
+
+    /// Parse a [Statement::AlterSequence].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-altersequence.html)
+    pub fn parse_alter_sequence(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+
+        let operation = if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterSequenceOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else {
+            self.expected_ref("SET SCHEMA after the sequence name", self.peek_token_ref())?
+        };
+
+        Ok(Statement::AlterSequence(AlterSequence {
+            if_exists,
+            name,
+            operation,
+        }))
     }
 
     /// Parse a [Statement::AlterOperator]

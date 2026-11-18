@@ -13518,3 +13518,82 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_alter_sequence() {
+    let dialects = pg_and_generic();
+    dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA other");
+    dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s SET SCHEMA other");
+    dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA a.b");
+}
+
+#[test]
+fn parse_alter_sequence_ast() {
+    assert_eq!(
+        pg().parse_sql_statements("ALTER SEQUENCE IF EXISTS s SET SCHEMA other")
+            .unwrap(),
+        vec![Statement::from(AlterSequence {
+            if_exists: true,
+            name: ObjectName::from(vec!["s".into()]),
+            operation: AlterSequenceOperation::SetSchema {
+                schema_name: ObjectName::from(vec!["other".into()]),
+            },
+        })]
+    );
+    // span support for the statement is not implemented
+    let statements = pg()
+        .parse_sql_statements("ALTER SEQUENCE s SET SCHEMA other")
+        .unwrap();
+    assert_eq!(statements[0].span(), Span::empty());
+}
+
+#[test]
+fn parse_alter_sequence_errors() {
+    for (sql, expected) in [
+        ("ALTER SEQUENCE", "Expected: identifier, found: EOF"),
+        (
+            "ALTER SEQUENCE s",
+            "Expected: SET SCHEMA after the sequence name, found: EOF",
+        ),
+        (
+            "ALTER SEQUENCE s SET",
+            "Expected: SET SCHEMA after the sequence name, found: SET",
+        ),
+        (
+            "ALTER SEQUENCE s SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_sequence_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter<'a>(&'a str);
+
+    impl Write for RejectingWriter<'_> {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    for sql in [
+        "ALTER SEQUENCE s SET SCHEMA other",
+        "ALTER SEQUENCE IF EXISTS s SET SCHEMA other",
+    ] {
+        let statement = pg().verified_stmt(sql);
+        let mut writer = RejectingWriter("SEQUENCE");
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
+    }
+}

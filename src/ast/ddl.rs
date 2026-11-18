@@ -1216,6 +1216,8 @@ pub enum AlterTypeOperation {
     AddValue(AlterTypeAddValue),
     /// Rename an existing value of the type.
     RenameValue(AlterTypeRenameValue),
+    /// Change the owner of the type.
+    OwnerTo(Owner),
     /// Move the type to another schema.
     SetSchema {
         /// Target schema name.
@@ -1297,6 +1299,7 @@ impl fmt::Display for AlterTypeOperation {
             Self::RenameValue(AlterTypeRenameValue { from, to }) => {
                 write!(f, "RENAME VALUE {from} TO {to}")
             }
+            Self::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
             Self::SetSchema { schema_name } => write!(f, "SET SCHEMA {schema_name}"),
         }
     }

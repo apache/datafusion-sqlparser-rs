@@ -12433,7 +12433,9 @@ impl<'a> Parser<'a> {
     pub fn parse_alter_type(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+        let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterTypeOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             let new_name = self.parse_identifier()?;
             AlterTypeOperation::Rename(AlterTypeRename { new_name })
         } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
@@ -12467,7 +12469,7 @@ impl<'a> Parser<'a> {
             })
         } else {
             return self.expected_ref(
-                "RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE after ALTER TYPE",
+                "OWNER TO, RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE after ALTER TYPE",
                 self.peek_token_ref(),
             );
         };

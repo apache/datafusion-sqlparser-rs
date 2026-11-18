@@ -12442,6 +12442,15 @@ impl<'a> Parser<'a> {
             AlterTypeOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::ATTRIBUTE]) {
+            let from = self.parse_identifier()?;
+            self.expect_keyword(Keyword::TO)?;
+            let to = self.parse_identifier()?;
+            AlterTypeOperation::RenameAttribute(AlterTypeRenameAttribute {
+                from,
+                to,
+                drop_behavior: self.parse_optional_drop_behavior(),
+            })
         } else if self.parse_keywords(&[Keyword::ADD, Keyword::VALUE]) {
             let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
             let new_enum_value = self.parse_identifier()?;
@@ -12469,7 +12478,8 @@ impl<'a> Parser<'a> {
             })
         } else {
             return self.expected_ref(
-                "OWNER TO, RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE after ALTER TYPE",
+                "OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD VALUE, or RENAME VALUE \
+                 after ALTER TYPE",
                 self.peek_token_ref(),
             );
         };

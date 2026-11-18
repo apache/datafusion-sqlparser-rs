@@ -1223,6 +1223,8 @@ pub enum AlterTypeOperation {
         /// Target schema name.
         schema_name: ObjectName,
     },
+    /// Rename an attribute of a composite type.
+    RenameAttribute(AlterTypeRenameAttribute),
 }
 
 /// See [AlterTypeOperation::Rename]
@@ -1269,6 +1271,19 @@ pub struct AlterTypeRenameValue {
     pub to: Ident,
 }
 
+/// See [AlterTypeOperation::RenameAttribute]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTypeRenameAttribute {
+    /// Existing attribute identifier to rename.
+    pub from: Ident,
+    /// New identifier for the attribute.
+    pub to: Ident,
+    /// Optional `CASCADE` / `RESTRICT` behavior.
+    pub drop_behavior: Option<DropBehavior>,
+}
+
 impl fmt::Display for AlterTypeOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -1301,6 +1316,17 @@ impl fmt::Display for AlterTypeOperation {
             }
             Self::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
             Self::SetSchema { schema_name } => write!(f, "SET SCHEMA {schema_name}"),
+            Self::RenameAttribute(AlterTypeRenameAttribute {
+                from,
+                to,
+                drop_behavior,
+            }) => {
+                write!(f, "RENAME ATTRIBUTE {from} TO {to}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

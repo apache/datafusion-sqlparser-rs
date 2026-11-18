@@ -140,6 +140,7 @@ define_keywords!(
     AT,
     ATOMIC,
     ATTACH,
+    ATTRIBUTE,
     AUDIT,
     AUTHENTICATION,
     AUTHORIZATION,

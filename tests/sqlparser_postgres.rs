@@ -13527,6 +13527,8 @@ fn parse_alter_sequence() {
     dialects.verified_stmt("ALTER SEQUENCE s OWNER TO CURRENT_USER");
     dialects.verified_stmt("ALTER SEQUENCE s OWNER TO SESSION_USER");
     dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s OWNER TO r1");
+    dialects.verified_stmt("ALTER SEQUENCE s RENAME TO s2");
+    dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s RENAME TO s2");
     dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA other");
     dialects.verified_stmt("ALTER SEQUENCE IF EXISTS s SET SCHEMA other");
     dialects.verified_stmt("ALTER SEQUENCE s SET SCHEMA a.b");
@@ -13561,14 +13563,18 @@ fn parse_alter_sequence_errors() {
         ),
         (
             "ALTER SEQUENCE s",
-            "Expected: OWNER TO or SET SCHEMA after the sequence name, found: EOF",
+            "Expected: OWNER TO, RENAME TO, or SET SCHEMA after the sequence name, found: EOF",
         ),
         (
             "ALTER SEQUENCE s SET",
-            "Expected: OWNER TO or SET SCHEMA after the sequence name, found: SET",
+            "Expected: OWNER TO, RENAME TO, or SET SCHEMA after the sequence name, found: SET",
         ),
         (
             "ALTER SEQUENCE s SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER SEQUENCE s RENAME TO",
             "Expected: identifier, found: EOF",
         ),
         (

@@ -12068,6 +12068,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Keyword::ROLE => self.parse_alter_role(),
+            Keyword::SYSTEM => self.parse_alter_system().map(Into::into),
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::TRIGGER => self.parse_alter_trigger().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
@@ -12078,7 +12079,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or EXTENSION",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or SYSTEM or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or EXTENSION",
                     self.peek_token_ref(),
                 )
             }
@@ -12192,31 +12193,57 @@ impl<'a> Parser<'a> {
             let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
                 FunctionSetValue::FromCurrent
             } else {
-                if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
-                    return self.expected_ref("= or TO", self.peek_token_ref());
-                }
-                if self.parse_keyword(Keyword::DEFAULT) {
-                    FunctionSetValue::Default
-                } else {
-                    FunctionSetValue::Values(self.parse_comma_separated(Parser::parse_expr)?)
-                }
+                self.parse_config_assignment_value()?
             };
             Some(AlterFunctionAction::Set(FunctionDefinitionSetParam {
                 name,
                 value,
             }))
         } else if self.parse_keyword(Keyword::RESET) {
-            let reset_config = if self.parse_keyword(Keyword::ALL) {
-                ResetConfig::ALL
-            } else {
-                ResetConfig::ConfigName(self.parse_object_name(false)?)
-            };
-            Some(AlterFunctionAction::Reset(reset_config))
+            Some(AlterFunctionAction::Reset(self.parse_reset_config()?))
         } else {
             None
         };
 
         Ok(action)
+    }
+
+    /// Parse `{ = | TO } { DEFAULT | value [, ...] }` after a configuration parameter name.
+    fn parse_config_assignment_value(&mut self) -> Result<FunctionSetValue, ParserError> {
+        if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
+            return self.expected_ref("= or TO", self.peek_token_ref());
+        }
+        if self.parse_keyword(Keyword::DEFAULT) {
+            Ok(FunctionSetValue::Default)
+        } else {
+            Ok(FunctionSetValue::Values(
+                self.parse_comma_separated(Parser::parse_expr)?,
+            ))
+        }
+    }
+
+    /// Parse `{ ALL | configuration_parameter }` after `RESET`.
+    fn parse_reset_config(&mut self) -> Result<ResetConfig, ParserError> {
+        if self.parse_keyword(Keyword::ALL) {
+            Ok(ResetConfig::ALL)
+        } else {
+            Ok(ResetConfig::ConfigName(self.parse_object_name(false)?))
+        }
+    }
+
+    /// Parse an `ALTER SYSTEM` statement after the `ALTER SYSTEM` keywords.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altersystem.html)
+    pub fn parse_alter_system(&mut self) -> Result<AlterSystem, ParserError> {
+        if self.parse_keyword(Keyword::SET) {
+            let name = self.parse_object_name(false)?;
+            let value = self.parse_config_assignment_value()?;
+            Ok(AlterSystem::Set(FunctionDefinitionSetParam { name, value }))
+        } else if self.parse_keyword(Keyword::RESET) {
+            Ok(AlterSystem::Reset(self.parse_reset_config()?))
+        } else {
+            self.expected_ref("SET or RESET", self.peek_token_ref())
+        }
     }
 
     fn parse_alter_function_actions(

@@ -14140,3 +14140,69 @@ fn parse_select_for_key_lock_strengths() {
         );
     }
 }
+
+#[test]
+fn parse_alter_system() {
+    for sql in [
+        "ALTER SYSTEM SET log_min_duration_statement = '1000'",
+        "ALTER SYSTEM SET log_min_duration_statement = 1000",
+        "ALTER SYSTEM SET wal_level = logical",
+        "ALTER SYSTEM SET my_extension.setting = 'value'",
+        "ALTER SYSTEM RESET log_min_duration_statement",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+    pg_and_generic().one_statement_parses_to(
+        "ALTER SYSTEM SET work_mem TO '64MB'",
+        "ALTER SYSTEM SET work_mem = '64MB'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "ALTER SYSTEM SET work_mem TO DEFAULT",
+        "ALTER SYSTEM SET work_mem = DEFAULT",
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER SYSTEM SET search_path = pg_catalog, public"),
+        Statement::AlterSystem(AlterSystem::Set(FunctionDefinitionSetParam {
+            name: ObjectName::from(vec![Ident::new("search_path")]),
+            value: FunctionSetValue::Values(vec![
+                Expr::Identifier(Ident::new("pg_catalog")),
+                Expr::Identifier(Ident::new("public")),
+            ]),
+        }))
+    );
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER SYSTEM SET work_mem = DEFAULT"),
+        Statement::AlterSystem(AlterSystem::Set(FunctionDefinitionSetParam {
+            name: ObjectName::from(vec![Ident::new("work_mem")]),
+            value: FunctionSetValue::Default,
+        }))
+    );
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER SYSTEM RESET ALL"),
+        Statement::AlterSystem(AlterSystem::Reset(ResetConfig::ALL))
+    );
+}
+
+#[test]
+fn parse_alter_system_rejects_malformed_statements() {
+    for (sql, expected) in [
+        ("ALTER SYSTEM", "Expected: SET or RESET, found: EOF"),
+        ("ALTER SYSTEM SET work_mem", "Expected: = or TO, found: EOF"),
+        (
+            "ALTER SYSTEM SET work_mem FROM CURRENT",
+            "Expected: = or TO, found: FROM",
+        ),
+        (
+            "ALTER SYSTEM SET work_mem =",
+            "Expected: an expression, found: EOF",
+        ),
+        ("ALTER SYSTEM RESET", "Expected: identifier, found: EOF"),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

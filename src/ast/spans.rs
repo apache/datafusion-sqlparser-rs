@@ -265,6 +265,7 @@ impl Spanned for Values {
 /// - [Statement::AlterType]
 /// - [Statement::AlterOperator]
 /// - [Statement::AlterRole]
+/// - [Statement::AlterSystem]
 /// - [Statement::AttachDatabase]
 /// - [Statement::AttachDuckDBDatabase]
 /// - [Statement::DetachDuckDBDatabase]
@@ -423,6 +424,7 @@ impl Spanned for Statement {
             Statement::AlterOperatorClass { .. } => Span::empty(),
             Statement::AlterTextSearch { .. } => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
+            Statement::AlterSystem(_) => Span::empty(),
             Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
             Statement::AttachDuckDBDatabase { .. } => Span::empty(),

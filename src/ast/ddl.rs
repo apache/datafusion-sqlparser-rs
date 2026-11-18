@@ -6357,6 +6357,31 @@ impl Spanned for AlterFunction {
     }
 }
 
+/// `ALTER SYSTEM` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altersystem.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterSystem {
+    /// `ALTER SYSTEM SET configuration_parameter { TO | = } { value [, ...] | DEFAULT }`
+    Set(FunctionDefinitionSetParam),
+    /// `ALTER SYSTEM RESET { configuration_parameter | ALL }`
+    Reset(ResetConfig),
+}
+
+impl fmt::Display for AlterSystem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterSystem::Set(set_param) => write!(f, "ALTER SYSTEM {set_param}"),
+            AlterSystem::Reset(ResetConfig::ALL) => write!(f, "ALTER SYSTEM RESET ALL"),
+            AlterSystem::Reset(ResetConfig::ConfigName(name)) => {
+                write!(f, "ALTER SYSTEM RESET {name}")
+            }
+        }
+    }
+}
+
 /// Text search object kind.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html).

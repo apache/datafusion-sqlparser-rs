@@ -856,6 +856,7 @@ define_keywords!(
     PROGRAM,
     PROJECTION,
     PUBLIC,
+    PUBLICATION,
     PURCHASE,
     PURGE,
     PUT,

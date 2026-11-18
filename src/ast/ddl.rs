@@ -4957,6 +4957,8 @@ pub enum AlterExtensionMember {
     },
     /// `MATERIALIZED VIEW object_name`
     MaterializedView(ObjectName),
+    /// `PUBLICATION object_name`
+    Publication(Ident),
     /// `SCHEMA object_name`
     Schema(Ident),
     /// `SEQUENCE object_name`
@@ -5018,6 +5020,7 @@ impl fmt::Display for AlterExtensionMember {
                 }
             }
             AlterExtensionMember::MaterializedView(name) => write!(f, "MATERIALIZED VIEW {name}"),
+            AlterExtensionMember::Publication(name) => write!(f, "PUBLICATION {name}"),
             AlterExtensionMember::Schema(name) => write!(f, "SCHEMA {name}"),
             AlterExtensionMember::Sequence(name) => write!(f, "SEQUENCE {name}"),
             AlterExtensionMember::Server(name) => write!(f, "SERVER {name}"),

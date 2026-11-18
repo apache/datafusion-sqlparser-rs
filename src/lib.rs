@@ -175,6 +175,8 @@ mod display_utils;
 pub mod keywords;
 pub mod parser;
 pub mod tokenizer;
+#[cfg(feature = "v2")]
+pub mod v2;
 
 #[doc(hidden)]
 // This is required to make utilities accessible by both the crate-internal

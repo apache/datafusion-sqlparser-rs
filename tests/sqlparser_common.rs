@@ -23579,3 +23579,51 @@ $$"#,
         );
     }
 }
+
+#[test]
+fn parse_create_or_replace_procedure() {
+    match verified_stmt("CREATE OR REPLACE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1; END")
+    {
+        Statement::CreateProcedure {
+            or_replace,
+            or_alter,
+            ..
+        } => {
+            assert!(or_replace);
+            assert!(!or_alter);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    match verified_stmt("CREATE PROCEDURE p () LANGUAGE sql BEGIN ATOMIC SELECT 1; END") {
+        Statement::CreateProcedure { or_replace, .. } => assert!(!or_replace),
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    verified_stmt("CREATE OR REPLACE PROCEDURE p (a INT) AS BEGIN SELECT 1; END");
+
+    for (sql, err) in [
+        (
+            "CREATE OR REPLACE PROCEDURE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE OR REPLACE OR ALTER PROCEDURE p AS BEGIN SELECT 1; END",
+            "CREATE OR REPLACE PROCEDURE does not accept this modifier",
+        ),
+        (
+            "CREATE OR REPLACE TEMPORARY PROCEDURE p AS BEGIN SELECT 1; END",
+            "CREATE OR REPLACE PROCEDURE does not accept this modifier",
+        ),
+        (
+            "CREATE OR REPLACE EXTENSION e",
+            "Expected: [EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or PROCEDURE or AGGREGATE or SCHEMA or WAREHOUSE after CREATE OR REPLACE, found: EXTENSION",
+        ),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}

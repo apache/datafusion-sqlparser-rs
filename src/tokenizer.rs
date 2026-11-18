@@ -48,8 +48,11 @@ use crate::dialect::{
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
-/// Chars that may join a preceding `-` or `!` into one token.
-pub(crate) const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|";
+/// Chars that may join a preceding prefix operator into one token.
+pub(crate) const OPERATOR_CHARS: &str = "+-*/<>=~!@%#^&|`?";
+
+/// PostgreSQL rejects longer operator names, so no operator name scan looks further.
+const MAX_OPERATOR_NAME_CHARS: usize = 63;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1283,6 +1286,82 @@ impl<'a> Tokenizer<'a> {
         prev_token: Option<&Token>,
         prev_non_ws_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
+        let mut buf;
+        let name = match chars.peek() {
+            Some(&ch) if self.dialect.is_custom_operator_part(ch) => {
+                buf = [0u8; 4 * MAX_OPERATOR_NAME_CHARS];
+                self.operator_name(chars, &mut buf)
+            }
+            _ => None,
+        };
+        let Some(name) = name else {
+            return self.next_token_unbounded(chars, prev_token, prev_non_ws_token);
+        };
+        // Reading from the name alone keeps the operator branches from reading past its end
+        let mut bounded = State {
+            peekable: name.chars().peekable(),
+            line: chars.line,
+            col: chars.col,
+        };
+        let token = match self.next_token_unbounded(&mut bounded, prev_token, prev_non_ws_token) {
+            Ok(Some(token)) if bounded.peek().is_none() && !matches!(token, Token::Char(_)) => {
+                token
+            }
+            _ => Token::CustomBinaryOperator(name.to_string()),
+        };
+        for _ in name.chars() {
+            chars.next();
+        }
+        Ok(Some(token))
+    }
+
+    /// The custom operator name starting at `chars`, written into `buf`, following
+    /// <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-OPERATORS>
+    fn operator_name<'b>(
+        &self,
+        chars: &State,
+        buf: &'b mut [u8; 4 * MAX_OPERATOR_NAME_CHARS],
+    ) -> Option<&'b str> {
+        let mut lookahead = chars.peekable.clone();
+        let mut count = 0;
+        let mut len = 0;
+        let mut len_without_trailing_signs = 0;
+        let mut has_non_sign_special = false;
+        while let Some(ch) = lookahead.next() {
+            if count == MAX_OPERATOR_NAME_CHARS
+                || !self.dialect.is_custom_operator_part(ch)
+                || matches!((ch, lookahead.peek()), ('-', Some('-')) | ('/', Some('*')))
+            {
+                break;
+            }
+            count += 1;
+            len += ch.encode_utf8(&mut buf[len..]).len();
+            if !matches!(ch, '+' | '-') {
+                len_without_trailing_signs = len;
+            }
+            has_non_sign_special |= matches!(
+                ch,
+                '~' | '!' | '@' | '#' | '%' | '^' | '&' | '|' | '`' | '?'
+            );
+        }
+        // A name ending in `+` or `-` keeps them only alongside a non-sign special character
+        if count > 1 && !has_non_sign_special {
+            // A name made only of signs keeps its first one
+            len = len_without_trailing_signs.max(1);
+        }
+        if len == 0 {
+            return None;
+        }
+        core::str::from_utf8(&buf[..len]).ok()
+    }
+
+    /// Get the next token or return None, without bounding an operator to its custom operator name
+    fn next_token_unbounded(
+        &self,
+        chars: &mut State,
+        prev_token: Option<&Token>,
+        prev_non_ws_token: Option<&Token>,
+    ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
                 ch if prev_token == Some(&Token::Period)
@@ -1875,9 +1954,6 @@ impl<'a> Tokenizer<'a> {
                             chars.next();
                             match chars.peek() {
                                 Some('>') => self.consume_for_binop(chars, "<=>", Token::Spaceship),
-                                // `<=+` and `<=-` are not valid combined operators; treat `<=` as
-                                // the operator and leave `+`/`-` to be tokenized separately.
-                                Some('+') | Some('-') => Ok(Some(Token::LtEq)),
                                 _ => self.start_binop(chars, "<=", Token::LtEq),
                             }
                         }
@@ -1897,9 +1973,6 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some('<') => self.consume_for_binop(chars, "<<", Token::ShiftLeft),
-                        // `<+` is not a valid combined operator; treat `<` as the operator
-                        // and leave `+` to be tokenized separately.
-                        Some('+') => Ok(Some(Token::Lt)),
                         Some('-') if self.dialect.supports_geometric_types() => {
                             if chars.peekable.clone().nth(1) == Some('>') {
                                 chars.next(); // consume `-`
@@ -1942,8 +2015,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the '&'
                     match chars.peek() {
                         Some('>') if self.dialect.supports_geometric_types() => {
-                            chars.next();
-                            self.consume_and_return(chars, Token::AmpersandRightAngleBracket)
+                            self.consume_for_binop(chars, "&>", Token::AmpersandRightAngleBracket)
                         }
                         Some('<') if self.dialect.supports_geometric_types() => {
                             chars.next(); // consume
@@ -3768,9 +3840,9 @@ mod tests {
 
     #[test]
     fn tokenize_nested_multiline_comment() {
-        all_dialects_where(|d| d.supports_nested_comments()).tokenizes_to(
-            "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1",
-            vec![
+        let sql = "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1";
+        let expected = |star_slash: Vec<Token>| {
+            let mut tokens = vec![
                 Token::Number("0".to_string(), false),
                 Token::Whitespace(Whitespace::MultiLineComment(
                     "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
@@ -3782,11 +3854,19 @@ mod tests {
                     quote_style: None,
                     keyword: Keyword::COMMENT,
                 }),
-                Token::Mul,
-                Token::Div,
-                Token::Number("1".to_string(), false),
-            ],
-        );
+            ];
+            tokens.extend(star_slash);
+            tokens.push(Token::Number("1".to_string(), false));
+            tokens
+        };
+        all_dialects_where(|d| d.supports_nested_comments() && !d.is_custom_operator_part('*'))
+            .tokenizes_to(sql, expected(vec![Token::Mul, Token::Div]));
+        // Outside a comment, `*/` is a single operator name
+        all_dialects_where(|d| d.supports_nested_comments() && d.is_custom_operator_part('*'))
+            .tokenizes_to(
+                sql,
+                expected(vec![Token::CustomBinaryOperator("*/".to_string())]),
+            );
 
         all_dialects_where(|d| d.supports_nested_comments()).tokenizes_to(
             "0/*multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/*/1",

@@ -111,11 +111,11 @@ fn parenthesize_only_adds_parentheses() {
 
 #[test]
 fn spell_custom_operators_names_only_custom_operators() {
-    let mut statement = statement(&PostgreSqlDialect {}, "SELECT a<>-1, a + 1, a <-> b FROM t");
+    let mut statement = statement(&PostgreSqlDialect {}, "SELECT a<>~1, a + 1, a <-> b FROM t");
     spell_custom_operators(&mut statement);
     assert_eq!(
         statement.to_string(),
-        "SELECT a OPERATOR(<>-) 1, a + 1, a <-> b FROM t"
+        "SELECT a OPERATOR(<>~) 1, a + 1, a <-> b FROM t"
     );
 }
 

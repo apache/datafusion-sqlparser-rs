@@ -2014,7 +2014,10 @@ impl fmt::Display for Expr {
                 | UnaryOperator::QuestionPipe
                 | UnaryOperator::PGSquareRoot
                 | UnaryOperator::PGCubeRoot => write!(f, "{op} {expr}"),
-                UnaryOperator::Minus | UnaryOperator::BangNot => {
+                UnaryOperator::Minus
+                | UnaryOperator::Plus
+                | UnaryOperator::BangNot
+                | UnaryOperator::PGPrefixFactorial => {
                     // Written before the check, so an enclosing
                     // `starts_with_operator_char` stops at this operator.
                     write!(f, "{op}")?;
@@ -2023,7 +2026,6 @@ impl fmt::Display for Expr {
                     }
                     write!(f, "{expr}")
                 }
-                UnaryOperator::Plus | UnaryOperator::PGPrefixFactorial => write!(f, "{op}{expr}"),
             },
             Expr::Convert {
                 is_try,

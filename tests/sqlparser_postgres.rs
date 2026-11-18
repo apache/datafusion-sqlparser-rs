@@ -8009,7 +8009,7 @@ fn parse_alter_type() {
             .unwrap_err(),
         ParserError::ParserError(
             "Expected: OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
-             ADD VALUE, or RENAME VALUE after ALTER TYPE, found: FOO"
+             DROP ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE, found: FOO"
                 .to_string()
         )
     );
@@ -13692,6 +13692,9 @@ fn parse_alter_type_attribute_actions() {
     for sql in [
         "ALTER TYPE t ADD ATTRIBUTE a INT COLLATE \"C\"",
         "ALTER TYPE t ADD ATTRIBUTE a INT4 COLLATE pg_catalog.default CASCADE",
+        "ALTER TYPE t DROP ATTRIBUTE a",
+        "ALTER TYPE t DROP ATTRIBUTE IF EXISTS a RESTRICT",
+        "ALTER TYPE t ADD ATTRIBUTE a INT, DROP ATTRIBUTE b CASCADE",
     ] {
         pg_and_generic().verified_stmt(sql);
     }
@@ -13710,8 +13713,12 @@ fn parse_alter_type_attribute_actions() {
             "Expected: identifier, found: EOF",
         ),
         (
+            "ALTER TYPE t DROP ATTRIBUTE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
             "ALTER TYPE t ADD FOO",
-            "Expected: ADD ATTRIBUTE after ALTER TYPE, found: ADD",
+            "Expected: ADD ATTRIBUTE, or DROP ATTRIBUTE after ALTER TYPE, found: ADD",
         ),
     ] {
         assert_eq!(
@@ -13719,6 +13726,28 @@ fn parse_alter_type_attribute_actions() {
             ParserError::ParserError(expected.to_string())
         );
     }
+
+    let stmt = pg_and_generic()
+        .verified_stmt("ALTER TYPE t ADD ATTRIBUTE a INT, DROP ATTRIBUTE b CASCADE");
+    assert_eq!(
+        stmt,
+        Statement::AlterType(AlterType {
+            name: ObjectName::from(Ident::new("t")),
+            operation: AlterTypeOperation::AttributeActions(vec![
+                AlterTypeAttributeAction::Add {
+                    name: Ident::new("a"),
+                    data_type: DataType::Int(None),
+                    collate: None,
+                    drop_behavior: None,
+                },
+                AlterTypeAttributeAction::Drop {
+                    if_exists: false,
+                    name: Ident::new("b"),
+                    drop_behavior: Some(DropBehavior::Cascade),
+                },
+            ]),
+        })
+    );
 }
 
 #[test]
@@ -13754,6 +13783,53 @@ fn display_alter_type_attribute_action_propagates_formatter_errors() {
     );
     assert_eq!(
         write!(RejectingWriter("CASCADE"), "{action}"),
+        Err(fmt::Error)
+    );
+}
+
+#[test]
+fn display_alter_type_attribute_action_drop_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let drop = AlterTypeAttributeAction::Drop {
+        if_exists: false,
+        name: Ident::new("b"),
+        drop_behavior: None,
+    };
+    assert_eq!(
+        write!(RejectingWriter("DROP ATTRIBUTE"), "{drop}"),
+        Err(fmt::Error)
+    );
+
+    let drop_if_exists = AlterTypeAttributeAction::Drop {
+        if_exists: true,
+        name: Ident::new("b"),
+        drop_behavior: None,
+    };
+    assert_eq!(
+        write!(RejectingWriter("IF EXISTS"), "{drop_if_exists}"),
+        Err(fmt::Error)
+    );
+
+    let drop_cascade = AlterTypeAttributeAction::Drop {
+        if_exists: false,
+        name: Ident::new("b"),
+        drop_behavior: Some(DropBehavior::Cascade),
+    };
+    assert_eq!(
+        write!(RejectingWriter("CASCADE"), "{drop_cascade}"),
         Err(fmt::Error)
     );
 }

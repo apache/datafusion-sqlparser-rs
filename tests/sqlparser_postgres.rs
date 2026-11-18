@@ -13736,3 +13736,31 @@ fn parse_alter_database_owner() {
         )
     );
 }
+
+#[test]
+fn parse_alter_database_set_tablespace() {
+    let dialects = pg_and_generic();
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE d SET TABLESPACE pg_default"),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("d")]),
+            operation: AlterDatabaseOperation::SetTablespace {
+                tablespace_name: Ident::new("pg_default"),
+            },
+        })
+    );
+    // An assignment makes `tablespace` an ordinary configuration parameter.
+    assert!(matches!(
+        dialects.verified_stmt("ALTER DATABASE d SET tablespace = x"),
+        Statement::AlterDatabase(AlterDatabase {
+            operation: AlterDatabaseOperation::Set(ConfigurationSet::Parameter(_)),
+            ..
+        })
+    ));
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER DATABASE d SET TABLESPACE")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+}

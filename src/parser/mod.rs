@@ -12507,7 +12507,13 @@ impl<'a> Parser<'a> {
                 new_name: self.parse_identifier()?,
             }
         } else if self.parse_keyword(Keyword::SET) {
-            AlterDatabaseOperation::Set(self.parse_configuration_set()?)
+            if self.parse_special_set_keyword(Keyword::TABLESPACE) {
+                AlterDatabaseOperation::SetTablespace {
+                    tablespace_name: self.parse_identifier()?,
+                }
+            } else {
+                AlterDatabaseOperation::Set(self.parse_configuration_set()?)
+            }
         } else if self.parse_keyword(Keyword::RESET) {
             AlterDatabaseOperation::Reset(if self.parse_keyword(Keyword::ALL) {
                 ResetConfig::ALL

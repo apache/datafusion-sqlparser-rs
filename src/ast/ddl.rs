@@ -5014,6 +5014,13 @@ pub enum AlterExtensionMember {
     TextSearchParser(ObjectName),
     /// `TEXT SEARCH TEMPLATE object_name`
     TextSearchTemplate(ObjectName),
+    /// `TRANSFORM FOR type_name LANGUAGE lang_name`
+    Transform {
+        /// Transformed type.
+        type_name: DataType,
+        /// Language name.
+        language: Ident,
+    },
     /// `VIEW object_name`
     View(ObjectName),
 }
@@ -5093,6 +5100,10 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::TextSearchTemplate(name) => {
                 write!(f, "TEXT SEARCH TEMPLATE {name}")
             }
+            AlterExtensionMember::Transform {
+                type_name,
+                language,
+            } => write!(f, "TRANSFORM FOR {type_name} LANGUAGE {language}"),
             AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }
     }

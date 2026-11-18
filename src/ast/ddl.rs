@@ -5037,6 +5037,8 @@ pub enum AlterDatabaseOperation {
         /// Target tablespace name.
         tablespace_name: Ident,
     },
+    /// `REFRESH COLLATION VERSION`
+    RefreshCollationVersion,
 }
 
 impl fmt::Display for AlterDatabaseOperation {
@@ -5051,6 +5053,9 @@ impl fmt::Display for AlterDatabaseOperation {
             AlterDatabaseOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
             AlterDatabaseOperation::SetTablespace { tablespace_name } => {
                 write!(f, "SET TABLESPACE {tablespace_name}")
+            }
+            AlterDatabaseOperation::RefreshCollationVersion => {
+                f.write_str("REFRESH COLLATION VERSION")
             }
         }
     }

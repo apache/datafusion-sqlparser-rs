@@ -1311,6 +1311,19 @@ pub enum AlterTypeAttributeAction {
         /// Optional `CASCADE` / `RESTRICT` behavior.
         drop_behavior: Option<DropBehavior>,
     },
+    /// `ALTER ATTRIBUTE name [ SET DATA ] TYPE data_type [ COLLATE collation ] [ CASCADE | RESTRICT ]`
+    Alter {
+        /// Name of the attribute to alter.
+        name: Ident,
+        /// Whether `SET DATA` was written before `TYPE`.
+        set_data: bool,
+        /// New data type of the attribute.
+        data_type: DataType,
+        /// Optional collation of the attribute.
+        collate: Option<ObjectName>,
+        /// Optional `CASCADE` / `RESTRICT` behavior.
+        drop_behavior: Option<DropBehavior>,
+    },
 }
 
 impl fmt::Display for AlterTypeOperation {
@@ -1390,6 +1403,26 @@ impl fmt::Display for AlterTypeAttributeAction {
                     write!(f, "DROP ATTRIBUTE IF EXISTS {name}")?;
                 } else {
                     write!(f, "DROP ATTRIBUTE {name}")?;
+                }
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            Self::Alter {
+                name,
+                set_data,
+                data_type,
+                collate,
+                drop_behavior,
+            } => {
+                write!(f, "ALTER ATTRIBUTE {name}")?;
+                if *set_data {
+                    write!(f, " SET DATA")?;
+                }
+                write!(f, " TYPE {data_type}")?;
+                if let Some(collate) = collate {
+                    write!(f, " COLLATE {collate}")?;
                 }
                 if let Some(drop_behavior) = drop_behavior {
                     write!(f, " {drop_behavior}")?;

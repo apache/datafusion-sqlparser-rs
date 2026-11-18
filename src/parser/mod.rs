@@ -12476,14 +12476,17 @@ impl<'a> Parser<'a> {
                 from: existing_enum_value,
                 to: new_enum_value,
             })
-        } else if self.peek_keyword(Keyword::ADD) || self.peek_keyword(Keyword::DROP) {
+        } else if self.peek_keyword(Keyword::ADD)
+            || self.peek_keyword(Keyword::DROP)
+            || self.peek_keyword(Keyword::ALTER)
+        {
             AlterTypeOperation::AttributeActions(
                 self.parse_comma_separated(Parser::parse_alter_type_attribute_action)?,
             )
         } else {
             return self.expected_ref(
                 "OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
-                 DROP ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE",
+                 DROP ATTRIBUTE, ALTER ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE",
                 self.peek_token_ref(),
             );
         };
@@ -12519,9 +12522,27 @@ impl<'a> Parser<'a> {
                 name,
                 drop_behavior,
             })
+        } else if self.parse_keywords(&[Keyword::ALTER, Keyword::ATTRIBUTE]) {
+            let name = self.parse_identifier()?;
+            let set_data = self.parse_keywords(&[Keyword::SET, Keyword::DATA]);
+            self.expect_keyword(Keyword::TYPE)?;
+            let data_type = self.parse_data_type()?;
+            let collate = if self.parse_keyword(Keyword::COLLATE) {
+                Some(self.parse_object_name(false)?)
+            } else {
+                None
+            };
+            let drop_behavior = self.parse_optional_drop_behavior();
+            Ok(AlterTypeAttributeAction::Alter {
+                name,
+                set_data,
+                data_type,
+                collate,
+                drop_behavior,
+            })
         } else {
             self.expected_ref(
-                "ADD ATTRIBUTE, or DROP ATTRIBUTE after ALTER TYPE",
+                "ADD ATTRIBUTE, DROP ATTRIBUTE, or ALTER ATTRIBUTE after ALTER TYPE",
                 self.peek_token_ref(),
             )
         }

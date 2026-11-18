@@ -13534,6 +13534,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} ACCESS METHOD btree"),
         format!("ALTER EXTENSION ext_name {action} COLLATION en_US"),
         format!("ALTER EXTENSION ext_name {action} COLLATION schema.en_US"),
+        format!("ALTER EXTENSION ext_name {action} CONVERSION conv"),
         format!("ALTER EXTENSION ext_name {action} EVENT TRIGGER trg"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN DATA WRAPPER fdw"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE ft"),
@@ -13724,6 +13725,7 @@ fn parse_alter_extension_add_member() {
     for member in [
         "ACCESS METHOD",
         "COLLATION",
+        "CONVERSION",
         "EVENT TRIGGER",
         "FOREIGN DATA WRAPPER",
         "FOREIGN TABLE",

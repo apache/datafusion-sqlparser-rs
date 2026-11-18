@@ -976,3 +976,55 @@ fn display_create_macro_propagates_argument_list_errors() {
         }
     }
 }
+
+#[test]
+fn parse_custom_array_typed_literal() {
+    for (sql, size) in [
+        ("mood[] '[happy,sad]'", None),
+        ("mood[2] '[happy,sad]'", Some(2)),
+    ] {
+        assert_eq!(
+            duckdb_and_generic().verified_expr(sql),
+            Expr::TypedString(TypedString {
+                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                    Box::new(DataType::Custom(
+                        ObjectName::from(vec!["mood".into()]),
+                        vec![]
+                    )),
+                    size,
+                )),
+                value: Value::SingleQuotedString("[happy,sad]".into()).with_empty_span(),
+                uses_odbc_syntax: false,
+            }),
+            "{sql}"
+        );
+    }
+    duckdb_and_generic().verified_expr("mood[][] '[[happy,sad]]'");
+    duckdb_and_generic().verified_expr("tags[mood[2] '[happy,sad]':4]");
+}
+
+#[test]
+fn parse_custom_array_typed_placeholders() {
+    assert_eq!(
+        duckdb_and_generic().verified_expr("mood[] :items"),
+        Expr::TypedString(TypedString {
+            data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(DataType::Custom(
+                    ObjectName::from(vec!["mood".into()]),
+                    vec![]
+                )),
+                None,
+            )),
+            value: Value::Placeholder(":items".into()).with_empty_span(),
+            uses_odbc_syntax: false,
+        })
+    );
+    for sql in [
+        "mood[][2] :items",
+        "mood[2][] :items",
+        "mood[2] $1",
+        "tags[mood[] :items]",
+    ] {
+        duckdb_and_generic().verified_expr(sql);
+    }
+}

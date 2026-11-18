@@ -1918,6 +1918,19 @@ impl<'a> Parser<'a> {
                     }))
                 }
                 DataType::Custom(..) => parser_err!("dummy", loc),
+                data_type
+                    if parser.peek_token_ref().token == Token::Colon && {
+                        let mut element_type = &data_type;
+                        while let DataType::Array(ArrayElemTypeDef::SquareBracket(inner, Some(_))) =
+                            element_type
+                        {
+                            element_type = inner;
+                        }
+                        matches!(element_type, DataType::Custom(..))
+                    } =>
+                {
+                    parser_err!("dummy", loc)
+                }
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
                     Ok(Expr::Cast {

@@ -6187,6 +6187,42 @@ impl fmt::Display for AggregateSignature {
     }
 }
 
+/// `DROP AGGREGATE` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-dropaggregate.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropAggregate {
+    /// Whether `IF EXISTS` was present.
+    pub if_exists: bool,
+    /// One or more aggregates to drop.
+    pub signatures: Vec<AggregateSignature>,
+    /// `CASCADE` or `RESTRICT`
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+impl fmt::Display for DropAggregate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DROP AGGREGATE{} {}",
+            if self.if_exists { " IF EXISTS" } else { "" },
+            display_comma_separated(&self.signatures),
+        )?;
+        if let Some(drop_behavior) = &self.drop_behavior {
+            write!(f, " {drop_behavior}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for DropAggregate {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
 /// `ALTER FUNCTION` / `ALTER AGGREGATE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

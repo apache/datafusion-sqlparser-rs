@@ -8266,6 +8266,8 @@ impl<'a> Parser<'a> {
             ObjectType::Warehouse
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function().map(Into::into);
+        } else if self.parse_keyword(Keyword::AGGREGATE) {
+            return self.parse_drop_aggregate().map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
             return self.parse_drop_policy().map(Into::into);
         } else if self.parse_keyword(Keyword::RULE) {
@@ -8293,7 +8295,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
+                "AGGREGATE, COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
                 self.peek_token_ref(),
             );
         };
@@ -8359,6 +8361,22 @@ impl<'a> Parser<'a> {
         Ok(DropFunction {
             if_exists,
             func_desc,
+            drop_behavior,
+        })
+    }
+
+    /// ```sql
+    /// DROP AGGREGATE [ IF EXISTS ] name ( aggregate_signature ) [, ...] [ CASCADE | RESTRICT ]
+    /// ```
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-dropaggregate.html)
+    fn parse_drop_aggregate(&mut self) -> Result<DropAggregate, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let signatures = self.parse_comma_separated(Parser::parse_alter_aggregate_signature)?;
+        let drop_behavior = self.parse_optional_drop_behavior();
+        Ok(DropAggregate {
+            if_exists,
+            signatures,
             drop_behavior,
         })
     }

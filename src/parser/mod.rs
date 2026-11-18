@@ -9128,10 +9128,18 @@ impl<'a> Parser<'a> {
     fn parse_publication_objects(&mut self) -> Result<Vec<PublicationObject>, ParserError> {
         let mut objects = vec![];
         loop {
-            self.expect_keyword_is(Keyword::TABLE)?;
-            objects.push(PublicationObject::Tables(
-                self.parse_publication_group_members(Parser::parse_publication_table)?,
-            ));
+            let object = if self.parse_keyword(Keyword::TABLE) {
+                PublicationObject::Tables(
+                    self.parse_publication_group_members(Parser::parse_publication_table)?,
+                )
+            } else if self.parse_keywords(&[Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
+                PublicationObject::Schemas(
+                    self.parse_publication_group_members(Parser::parse_publication_schema)?,
+                )
+            } else {
+                return self.expected_ref("TABLE or TABLES IN SCHEMA", self.peek_token_ref());
+            };
+            objects.push(object);
             if !self.consume_token(&Token::Comma) {
                 return Ok(objects);
             }
@@ -9146,13 +9154,23 @@ impl<'a> Parser<'a> {
     ) -> Result<Vec<Member>, ParserError> {
         let mut members = vec![parse_member(self)?];
         while self.consume_token(&Token::Comma) {
-            if self.peek_keyword(Keyword::TABLE) {
+            if self.peek_keyword(Keyword::TABLE)
+                || self.peek_keywords(&[Keyword::TABLES, Keyword::IN, Keyword::SCHEMA])
+            {
                 self.prev_token();
                 break;
             }
             members.push(parse_member(self)?);
         }
         Ok(members)
+    }
+
+    fn parse_publication_schema(&mut self) -> Result<PublicationSchema, ParserError> {
+        if self.parse_keyword(Keyword::CURRENT_SCHEMA) {
+            Ok(PublicationSchema::CurrentSchema)
+        } else {
+            Ok(PublicationSchema::Name(self.parse_identifier()?))
+        }
     }
 
     fn parse_publication_table(&mut self) -> Result<PublicationTable, ParserError> {

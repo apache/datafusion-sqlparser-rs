@@ -5059,6 +5059,8 @@ pub enum PublicationTarget {
 pub enum PublicationObject {
     /// `TABLE table [, ...]`
     Tables(Vec<PublicationTable>),
+    /// `TABLES IN SCHEMA { schema_name | CURRENT_SCHEMA } [, ...]`
+    Schemas(Vec<PublicationSchema>),
 }
 
 impl fmt::Display for PublicationObject {
@@ -5067,6 +5069,29 @@ impl fmt::Display for PublicationObject {
             PublicationObject::Tables(tables) => {
                 write!(f, "TABLE {}", display_comma_separated(tables))
             }
+            PublicationObject::Schemas(schemas) => {
+                write!(f, "TABLES IN SCHEMA {}", display_comma_separated(schemas))
+            }
+        }
+    }
+}
+
+/// A schema whose tables are published.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PublicationSchema {
+    /// A named schema.
+    Name(Ident),
+    /// `CURRENT_SCHEMA`
+    CurrentSchema,
+}
+
+impl fmt::Display for PublicationSchema {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PublicationSchema::Name(name) => write!(f, "{name}"),
+            PublicationSchema::CurrentSchema => write!(f, "CURRENT_SCHEMA"),
         }
     }
 }

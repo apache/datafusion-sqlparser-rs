@@ -12541,6 +12541,8 @@ impl<'a> Parser<'a> {
     fn parse_alter_extension_member(&mut self) -> Result<AlterExtensionMember, ParserError> {
         if self.parse_keywords(&[Keyword::ACCESS, Keyword::METHOD]) {
             Ok(AlterExtensionMember::AccessMethod(self.parse_identifier()?))
+        } else if self.parse_keywords(&[Keyword::EVENT, Keyword::TRIGGER]) {
+            Ok(AlterExtensionMember::EventTrigger(self.parse_identifier()?))
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
             Ok(AlterExtensionMember::ForeignTable(
                 self.parse_object_name(false)?,

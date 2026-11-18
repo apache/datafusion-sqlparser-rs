@@ -4922,6 +4922,10 @@ pub enum AlterExtensionOperation {
 }
 
 /// Member objects that can be added to or removed from an extension.
+///
+/// `ADD` and `DROP` also accept `DATABASE`, `ROLE`, `SUBSCRIPTION`, `TABLESPACE`,
+/// `PUBLICATION`, `EXTENSION`, `INDEX`, and `STATISTICS` member objects, which
+/// PostgreSQL rejects with a semantic error.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -4932,6 +4936,8 @@ pub enum AlterExtensionMember {
     Collation(ObjectName),
     /// `CONVERSION object_name`
     Conversion(ObjectName),
+    /// `DATABASE object_name`
+    Database(Ident),
     /// `EVENT TRIGGER object_name`
     EventTrigger(Ident),
     /// `FOREIGN DATA WRAPPER object_name`
@@ -4992,6 +4998,7 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::AccessMethod(name) => write!(f, "ACCESS METHOD {name}"),
             AlterExtensionMember::Collation(name) => write!(f, "COLLATION {name}"),
             AlterExtensionMember::Conversion(name) => write!(f, "CONVERSION {name}"),
+            AlterExtensionMember::Database(name) => write!(f, "DATABASE {name}"),
             AlterExtensionMember::EventTrigger(name) => write!(f, "EVENT TRIGGER {name}"),
             AlterExtensionMember::ForeignDataWrapper(name) => {
                 write!(f, "FOREIGN DATA WRAPPER {name}")

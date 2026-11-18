@@ -12514,9 +12514,11 @@ impl<'a> Parser<'a> {
             } else {
                 ResetConfig::ConfigName(self.parse_object_name(false)?)
             })
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterDatabaseOperation::OwnerTo(self.parse_owner()?)
         } else {
             return self.expected_ref(
-                "RENAME TO, SET or RESET after ALTER DATABASE",
+                "RENAME TO, OWNER TO, SET or RESET after ALTER DATABASE",
                 self.peek_token_ref(),
             );
         };

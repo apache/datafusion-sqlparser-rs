@@ -13555,7 +13555,7 @@ fn parse_alter_database_rename() {
         ),
         (
             "ALTER DATABASE d",
-            "Expected: RENAME TO, SET or RESET after ALTER DATABASE, found: EOF",
+            "Expected: RENAME TO, OWNER TO, SET or RESET after ALTER DATABASE, found: EOF",
         ),
     ] {
         assert_eq!(
@@ -13707,5 +13707,32 @@ fn parse_alter_database_reset() {
             .parse_sql_statements("ALTER DATABASE d RESET")
             .unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
+}
+
+#[test]
+fn parse_alter_database_owner() {
+    let dialects = pg_and_generic();
+    for (sql, owner) in [
+        ("ALTER DATABASE d OWNER TO r", Owner::Ident(Ident::new("r"))),
+        ("ALTER DATABASE d OWNER TO CURRENT_USER", Owner::CurrentUser),
+        ("ALTER DATABASE d OWNER TO CURRENT_ROLE", Owner::CurrentRole),
+        ("ALTER DATABASE d OWNER TO SESSION_USER", Owner::SessionUser),
+    ] {
+        assert_eq!(
+            dialects.verified_stmt(sql),
+            Statement::AlterDatabase(AlterDatabase {
+                name: ObjectName::from(vec![Ident::new("d")]),
+                operation: AlterDatabaseOperation::OwnerTo(owner),
+            })
+        );
+    }
+    assert_eq!(
+        dialects
+            .parse_sql_statements("ALTER DATABASE d OWNER TO")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF".to_string()
+        )
     );
 }

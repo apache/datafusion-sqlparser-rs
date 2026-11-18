@@ -5071,10 +5071,10 @@ impl fmt::Display for PublicationObject {
     }
 }
 
-/// A published table.
+/// A published table with an optional column list and row filter.
 ///
 /// ```sql
-/// [ ONLY ] table_name [ * ]
+/// [ ONLY ] table_name [ * ] [ ( column_name [, ...] ) ] [ WHERE ( expression ) ]
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -5085,11 +5085,22 @@ pub struct PublicationTable {
     pub name: ObjectName,
     /// `ONLY` or `*` marker.
     pub inheritance: Option<TableInheritance>,
+    /// Published columns, empty when all columns are published.
+    pub columns: Vec<Ident>,
+    /// Row filter of the `WHERE ( expression )` clause.
+    pub filter: Option<Expr>,
 }
 
 impl fmt::Display for PublicationTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt_publication_relation(f, &self.name, self.inheritance)
+        fmt_publication_relation(f, &self.name, self.inheritance)?;
+        if !self.columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if let Some(filter) = &self.filter {
+            write!(f, " WHERE ({filter})")?;
+        }
+        Ok(())
     }
 }
 

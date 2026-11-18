@@ -13623,15 +13623,21 @@ fn parse_create_publication_for_table() {
                     inheritance: Some(TableInheritance::Only {
                         parenthesized: false
                     }),
+                    columns: vec![],
+                    filter: None,
                 },
                 PublicationTable {
                     name: ObjectName::from(vec![Ident::new("other")]),
                     inheritance: None,
+                    columns: vec![],
+                    filter: None,
                 },
             ]),
             PublicationObject::Tables(vec![PublicationTable {
                 name: ObjectName::from(vec![Ident::new("last")]),
                 inheritance: Some(TableInheritance::IncludeDescendants),
+                columns: vec![],
+                filter: None,
             }]),
         ]))
     );
@@ -13649,6 +13655,62 @@ fn parse_create_publication_for_table() {
         (
             "CREATE PUBLICATION p FOR TABLE ONLY (t",
             "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_publication_table_columns_and_filter() {
+    for sql in [
+        "CREATE PUBLICATION p FOR TABLE ONLY public.items (id) WHERE (id > 0)",
+        "CREATE PUBLICATION p FOR TABLE ONLY public.items (id) WHERE ((id > 0)), other (a, b)",
+        "CREATE PUBLICATION p FOR TABLE items WHERE (id IS NOT NULL)",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    let sql = r#"CREATE PUBLICATION p FOR TABLE items ("Id", name) WHERE ((id > 0))"#;
+    let Statement::CreatePublication(create) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        create.target,
+        Some(PublicationTarget::Objects(vec![PublicationObject::Tables(
+            vec![PublicationTable {
+                name: ObjectName::from(vec![Ident::new("items")]),
+                inheritance: None,
+                columns: vec![Ident::with_quote('"', "Id"), Ident::new("name")],
+                filter: Some(Expr::Nested(Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("id"))),
+                    op: BinaryOperator::Gt,
+                    right: Box::new(Expr::value(number("0"))),
+                }))),
+            }]
+        )]))
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE PUBLICATION p FOR TABLE t WHERE id > 0",
+            "Expected: (, found: id",
+        ),
+        (
+            "CREATE PUBLICATION p FOR TABLE t (id) WHERE (id > 0) AND id < 9",
+            "Expected: end of statement, found: AND",
+        ),
+        (
+            "CREATE PUBLICATION p FOR TABLE t ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE PUBLICATION p FOR TABLE t WHERE (id > 0) (id)",
+            "Expected: end of statement, found: (",
         ),
     ] {
         assert_eq!(

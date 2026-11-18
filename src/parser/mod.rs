@@ -12547,6 +12547,8 @@ impl<'a> Parser<'a> {
             Ok(AlterExtensionMember::MaterializedView(
                 self.parse_object_name(false)?,
             ))
+        } else if self.parse_keyword(Keyword::SCHEMA) {
+            Ok(AlterExtensionMember::Schema(self.parse_identifier()?))
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             Ok(AlterExtensionMember::Sequence(
                 self.parse_object_name(false)?,

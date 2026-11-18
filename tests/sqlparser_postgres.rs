@@ -13534,6 +13534,7 @@ fn alter_extension_member_round_trip_forms(action: &str) {
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE ft"),
         format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE schema.ft"),
         format!("ALTER EXTENSION ext_name {action} MATERIALIZED VIEW mv"),
+        format!("ALTER EXTENSION ext_name {action} SCHEMA schema_name"),
         format!("ALTER EXTENSION ext_name {action} SEQUENCE seq"),
         format!("ALTER EXTENSION ext_name {action} TABLE t"),
         format!("ALTER EXTENSION ext_name {action} TABLE schema.t"),
@@ -13674,6 +13675,10 @@ fn parse_alter_extension_add_member() {
             "ALTER EXTENSION ext_name ADD FOO bar",
             "Expected: member object type after ADD or DROP, found: FOO",
         ),
+        (
+            "ALTER EXTENSION ext_name ADD SCHEMA a.b",
+            "Expected: end of statement, found: .",
+        ),
     ] {
         assert_eq!(
             pg_and_generic().parse_sql_statements(sql).unwrap_err(),
@@ -13685,6 +13690,7 @@ fn parse_alter_extension_add_member() {
     for member in [
         "FOREIGN TABLE",
         "MATERIALIZED VIEW",
+        "SCHEMA",
         "SEQUENCE",
         "TABLE",
         "VIEW",

@@ -4963,6 +4963,8 @@ pub enum AlterExtensionMember {
     Procedure(FunctionDesc),
     /// `PUBLICATION object_name`
     Publication(Ident),
+    /// `ROUTINE routine_name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]`
+    Routine(FunctionDesc),
     /// `ROLE object_name`
     Role(Ident),
     /// `SCHEMA object_name`
@@ -5035,6 +5037,7 @@ impl fmt::Display for AlterExtensionMember {
             AlterExtensionMember::MaterializedView(name) => write!(f, "MATERIALIZED VIEW {name}"),
             AlterExtensionMember::Procedure(function) => write!(f, "PROCEDURE {function}"),
             AlterExtensionMember::Publication(name) => write!(f, "PUBLICATION {name}"),
+            AlterExtensionMember::Routine(function) => write!(f, "ROUTINE {function}"),
             AlterExtensionMember::Role(name) => write!(f, "ROLE {name}"),
             AlterExtensionMember::Schema(name) => write!(f, "SCHEMA {name}"),
             AlterExtensionMember::Sequence(name) => write!(f, "SEQUENCE {name}"),

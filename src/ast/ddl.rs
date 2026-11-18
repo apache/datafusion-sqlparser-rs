@@ -5881,14 +5881,14 @@ impl Spanned for AlterOperatorClass {
     }
 }
 
-/// `ALTER FUNCTION` / `ALTER AGGREGATE` statement.
+/// `ALTER FUNCTION` / `ALTER AGGREGATE` / `ALTER PROCEDURE` / `ALTER ROUTINE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterFunction {
     /// Object type being altered.
     pub kind: AlterFunctionKind,
-    /// Function or aggregate signature.
+    /// Function, aggregate, procedure or routine signature.
     pub function: FunctionDesc,
     /// `ORDER BY` argument list for aggregate signatures.
     ///
@@ -5911,6 +5911,10 @@ pub enum AlterFunctionKind {
     Function,
     /// `AGGREGATE`
     Aggregate,
+    /// `PROCEDURE`
+    Procedure,
+    /// `ROUTINE`
+    Routine,
 }
 
 impl fmt::Display for AlterFunctionKind {
@@ -5918,11 +5922,13 @@ impl fmt::Display for AlterFunctionKind {
         match self {
             Self::Function => write!(f, "FUNCTION"),
             Self::Aggregate => write!(f, "AGGREGATE"),
+            Self::Procedure => write!(f, "PROCEDURE"),
+            Self::Routine => write!(f, "ROUTINE"),
         }
     }
 }
 
-/// Operation for `ALTER FUNCTION` / `ALTER AGGREGATE`.
+/// Operation for [`AlterFunction`].
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5946,7 +5952,7 @@ pub enum AlterFunctionOperation {
         /// Extension name.
         extension_name: ObjectName,
     },
-    /// `action [ ... ] [ RESTRICT ]` (function only).
+    /// `action [ ... ] [ RESTRICT ]` (not `AGGREGATE`).
     Actions {
         /// One or more function actions.
         actions: Vec<AlterFunctionAction>,
@@ -5955,7 +5961,7 @@ pub enum AlterFunctionOperation {
     },
 }
 
-/// Function action in `ALTER FUNCTION ... action [ ... ] [ RESTRICT ]`.
+/// Action in `ALTER { FUNCTION | PROCEDURE | ROUTINE } ... action [ ... ] [ RESTRICT ]`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5992,7 +5998,9 @@ impl fmt::Display for AlterFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ALTER {} ", self.kind)?;
         match self.kind {
-            AlterFunctionKind::Function => {
+            AlterFunctionKind::Function
+            | AlterFunctionKind::Procedure
+            | AlterFunctionKind::Routine => {
                 write!(f, "{} ", self.function)?;
             }
             AlterFunctionKind::Aggregate => {

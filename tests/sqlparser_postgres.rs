@@ -13518,3 +13518,63 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_alter_procedure_and_routine() {
+    for (kind, keyword) in [
+        (AlterFunctionKind::Procedure, "PROCEDURE"),
+        (AlterFunctionKind::Routine, "ROUTINE"),
+    ] {
+        for (sql, expected) in [
+            ("p RENAME TO p2", "p RENAME TO p2"),
+            (
+                "p(IN a int, text) OWNER TO CURRENT_USER",
+                "p(IN a INT, TEXT) OWNER TO CURRENT_USER",
+            ),
+            ("p() SET SCHEMA s", "p() SET SCHEMA s"),
+            ("p() DEPENDS ON EXTENSION e", "p() DEPENDS ON EXTENSION e"),
+            (
+                "p() NO DEPENDS ON EXTENSION e",
+                "p() NO DEPENDS ON EXTENSION e",
+            ),
+            ("p() SECURITY DEFINER", "p() SECURITY DEFINER"),
+            (
+                "p() EXTERNAL SECURITY INVOKER SET search_path TO pg_catalog RESTRICT",
+                "p() EXTERNAL SECURITY INVOKER SET search_path = pg_catalog RESTRICT",
+            ),
+            (
+                "p() SET work_mem FROM CURRENT",
+                "p() SET work_mem FROM CURRENT",
+            ),
+            ("p() RESET ALL", "p() RESET ALL"),
+            ("p() STABLE LEAKPROOF", "p() STABLE LEAKPROOF"),
+        ] {
+            let statement = pg_and_generic().one_statement_parses_to(
+                &format!("ALTER {keyword} {sql}"),
+                &format!("ALTER {keyword} {expected}"),
+            );
+            match statement {
+                Statement::AlterFunction(alter) => assert_eq!(alter.kind, kind),
+                other => panic!("expected AlterFunction, got {other:?}"),
+            }
+        }
+
+        for (sql, expected) in [
+            (
+                "p() STALBE",
+                format!("Expected: at least one ALTER {keyword} action, found: STALBE"),
+            ),
+            (
+                "p() NO LEAKPROOF",
+                "Expected: DEPENDS after NO, found: LEAKPROOF".to_string(),
+            ),
+            ("p(", "Expected: a data type name, found: EOF".to_string()),
+        ] {
+            assert_eq!(
+                pg().parse_sql_statements(&format!("ALTER {keyword} {sql}"))
+                    .unwrap_err(),
+                ParserError::ParserError(expected)
+            );
+        }
+    }
+}

@@ -12508,9 +12508,15 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SET) {
             AlterDatabaseOperation::Set(self.parse_configuration_set()?)
+        } else if self.parse_keyword(Keyword::RESET) {
+            AlterDatabaseOperation::Reset(if self.parse_keyword(Keyword::ALL) {
+                ResetConfig::ALL
+            } else {
+                ResetConfig::ConfigName(self.parse_object_name(false)?)
+            })
         } else {
             return self.expected_ref(
-                "RENAME TO or SET after ALTER DATABASE",
+                "RENAME TO, SET or RESET after ALTER DATABASE",
                 self.peek_token_ref(),
             );
         };

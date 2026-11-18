@@ -4932,6 +4932,8 @@ pub enum AlterExtensionOperation {
 pub enum AlterExtensionMember {
     /// `ACCESS METHOD object_name`
     AccessMethod(Ident),
+    /// `AGGREGATE aggregate_name ( aggregate_signature )`
+    Aggregate(AggregateSignature),
     /// `COLLATION object_name`
     Collation(ObjectName),
     /// `CONVERSION object_name`
@@ -5016,6 +5018,7 @@ impl fmt::Display for AlterExtensionMember {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterExtensionMember::AccessMethod(name) => write!(f, "ACCESS METHOD {name}"),
+            AlterExtensionMember::Aggregate(signature) => write!(f, "AGGREGATE {signature}"),
             AlterExtensionMember::Collation(name) => write!(f, "COLLATION {name}"),
             AlterExtensionMember::Conversion(name) => write!(f, "CONVERSION {name}"),
             AlterExtensionMember::Database(name) => write!(f, "DATABASE {name}"),

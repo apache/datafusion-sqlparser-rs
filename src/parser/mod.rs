@@ -784,6 +784,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::RESET => self.parse_reset().map(Into::into),
                 Keyword::REFRESH => self.parse_refresh_materialized_view().map(Into::into),
+                Keyword::REINDEX => self.parse_reindex().map(Into::into),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -23006,6 +23007,46 @@ impl<'a> Parser<'a> {
             concurrently,
             name,
             with_data,
+        })
+    }
+
+    /// Parse a `REINDEX` statement, after the `REINDEX` keyword.
+    fn parse_reindex(&mut self) -> Result<Reindex, ParserError> {
+        let options = if self.peek_token_ref().token == Token::LParen {
+            Some(self.parse_utility_options()?)
+        } else {
+            None
+        };
+        let object_type = match self.expect_one_of_keywords(&[
+            Keyword::INDEX,
+            Keyword::TABLE,
+            Keyword::SCHEMA,
+            Keyword::DATABASE,
+            Keyword::SYSTEM,
+        ])? {
+            Keyword::INDEX => ReindexObjectType::Index,
+            Keyword::TABLE => ReindexObjectType::Table,
+            Keyword::SCHEMA => ReindexObjectType::Schema,
+            Keyword::DATABASE => ReindexObjectType::Database,
+            Keyword::SYSTEM => ReindexObjectType::System,
+            unexpected_keyword => {
+                return Err(ParserError::ParserError(format!(
+                    "Internal parser error: expected any of {{INDEX, TABLE, SCHEMA, DATABASE, SYSTEM}}, got {unexpected_keyword:?}"
+                )))
+            }
+        };
+        let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
+        let name = match object_type {
+            ReindexObjectType::Database | ReindexObjectType::System => {
+                self.maybe_parse(|parser| parser.parse_object_name(false))?
+            }
+            _ => Some(self.parse_object_name(false)?),
+        };
+        Ok(Reindex {
+            options,
+            object_type,
+            concurrently,
+            name,
         })
     }
 }

@@ -1227,6 +1227,11 @@ pub enum AlterTypeOperation {
     RenameAttribute(AlterTypeRenameAttribute),
     /// A comma-separated list of attribute modifications of a composite type.
     AttributeActions(Vec<AlterTypeAttributeAction>),
+    /// Set the properties of a base type.
+    SetOptions {
+        /// The properties to set, [`SqlOption::KeyValue`].
+        options: Vec<SqlOption>,
+    },
 }
 
 /// See [AlterTypeOperation::Rename]
@@ -1371,6 +1376,9 @@ impl fmt::Display for AlterTypeOperation {
             }
             Self::AttributeActions(actions) => {
                 write!(f, "{}", display_comma_separated(actions))
+            }
+            Self::SetOptions { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
             }
         }
     }

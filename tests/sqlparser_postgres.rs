@@ -8009,8 +8009,8 @@ fn parse_alter_type() {
             .unwrap_err(),
         ParserError::ParserError(
             "Expected: OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
-             DROP ATTRIBUTE, ALTER ATTRIBUTE, ADD VALUE, or RENAME VALUE after ALTER TYPE, \
-             found: FOO"
+             DROP ATTRIBUTE, ALTER ATTRIBUTE, ADD VALUE, RENAME VALUE, or SET (...) \
+             after ALTER TYPE, found: FOO"
                 .to_string()
         )
     );
@@ -13903,4 +13903,70 @@ fn display_alter_type_attribute_action_drop_alter_propagates_formatter_errors() 
         write!(RejectingWriter("CASCADE"), "{alter_cascade}"),
         Err(fmt::Error)
     );
+}
+
+#[test]
+fn parse_alter_type_set_options() {
+    let stmt = pg_and_generic().verified_stmt("ALTER TYPE t SET (typmod_in = f1)");
+    assert_eq!(
+        stmt,
+        Statement::AlterType(AlterType {
+            name: ObjectName::from(Ident::new("t")),
+            operation: AlterTypeOperation::SetOptions {
+                options: vec![SqlOption::KeyValue {
+                    key: ObjectName::from(Ident::new("typmod_in")),
+                    value: Expr::Identifier(Ident::new("f1")),
+                }],
+            },
+        })
+    );
+
+    for sql in [
+        "ALTER TYPE t SET (search_function = NONE)",
+        "ALTER TYPE t SET (receive = pg_catalog.recv, send = pg_catalog.send, typmod_in = 1, typmod_out = 'x')",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_alter_type_invalid() {
+    for (sql, expected) in [
+        (
+            "ALTER TYPE t",
+            "Expected: OWNER TO, RENAME TO, SET SCHEMA, RENAME ATTRIBUTE, ADD ATTRIBUTE, \
+             DROP ATTRIBUTE, ALTER ATTRIBUTE, ADD VALUE, RENAME VALUE, or SET (...) \
+             after ALTER TYPE, found: EOF",
+        ),
+        (
+            "ALTER TYPE t SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ADD ATTRIBUTE a",
+            "Expected: a data type name, found: EOF",
+        ),
+        ("ALTER TYPE t SET ()", "Expected: identifier, found: )"),
+        ("ALTER TYPE t SET (typmod_in)", "Expected: =, found: )"),
+        ("ALTER TYPE t SET", "Expected: (, found: EOF"),
+        (
+            "ALTER TYPE t SET (typmod_in =",
+            "Expected: an expression, found: EOF",
+        ),
+        ("ALTER TYPE t SET (typmod_in = 1", "Expected: ), found: EOF"),
+        (
+            "ALTER TYPE t RENAME ATTRIBUTE a",
+            "Expected: TO, found: EOF",
+        ),
+        (
+            "ALTER TYPE t ALTER ATTRIBUTE a",
+            "Expected: TYPE, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
 }

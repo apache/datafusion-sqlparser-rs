@@ -412,6 +412,7 @@ impl Spanned for Statement {
             Statement::AlterTable(alter_table) => alter_table.span(),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
             Statement::AlterView(alter_view) => alter_view.span(),
+            Statement::AlterDatabase(alter_database) => alter_database.span(),
             // These statements need to be implemented
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),

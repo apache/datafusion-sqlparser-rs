@@ -5003,6 +5003,51 @@ impl Spanned for AlterCollation {
     }
 }
 
+/// `ALTER DATABASE` statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdatabase.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterDatabase {
+    /// Name of the database being altered.
+    pub name: ObjectName,
+    /// The operation to perform on the database.
+    pub operation: AlterDatabaseOperation,
+}
+
+/// Operations supported by `ALTER DATABASE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterDatabaseOperation {
+    /// `RENAME TO new_name`
+    RenameTo {
+        /// New database name.
+        new_name: Ident,
+    },
+}
+
+impl fmt::Display for AlterDatabaseOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterDatabaseOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+        }
+    }
+}
+
+impl fmt::Display for AlterDatabase {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER DATABASE {} {}", self.name, self.operation)
+    }
+}
+
+impl Spanned for AlterDatabase {
+    fn span(&self) -> Span {
+        self.name.span()
+    }
+}
+
 /// `ALTER [ MATERIALIZED ] VIEW` statement.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altermaterializedview.html)

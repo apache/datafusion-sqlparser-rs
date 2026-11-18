@@ -12509,13 +12509,20 @@ impl<'a> Parser<'a> {
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterextension.html)
     pub fn parse_alter_extension(&mut self) -> Result<AlterExtension, ParserError> {
         let name = self.parse_identifier()?;
-        let operation = if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+        let operation = if self.parse_keyword(Keyword::UPDATE) {
+            let new_version = if self.parse_keyword(Keyword::TO) {
+                Some(self.parse_identifier()?)
+            } else {
+                None
+            };
+            AlterExtensionOperation::Update { new_version }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
             AlterExtensionOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
         } else {
             return self.expected_ref(
-                "SET SCHEMA after ALTER EXTENSION name",
+                "UPDATE or SET SCHEMA after ALTER EXTENSION name",
                 self.peek_token_ref(),
             );
         };

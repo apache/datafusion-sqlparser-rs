@@ -8862,6 +8862,8 @@ pub enum ObjectType {
     Stream,
     /// A warehouse.
     Warehouse,
+    /// A publication.
+    Publication,
 }
 
 impl fmt::Display for ObjectType {
@@ -8883,6 +8885,7 @@ impl fmt::Display for ObjectType {
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
             ObjectType::Warehouse => "WAREHOUSE",
+            ObjectType::Publication => "PUBLICATION",
         })
     }
 }

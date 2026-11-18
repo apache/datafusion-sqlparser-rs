@@ -11612,7 +11612,7 @@ fn parse_drop_foreign_table() {
             .parse_sql_statements("DROP FOREIGN ft")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
+        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, PUBLICATION, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
     );
     for (sql, expected) in [
         ("DROP FOREIGN TABLE", "Expected: identifier, found: EOF"),
@@ -11983,7 +11983,7 @@ fn parse_drop_group_is_dialect_gated() {
         all_dialects_where(|d| !d.supports_drop_group())
             .parse_sql_statements("DROP GROUP staff"),
         Err(ParserError::ParserError(
-            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
+            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, PUBLICATION, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
         ))
     );
 }
@@ -13517,4 +13517,33 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+#[test]
+fn parse_drop_publication() {
+    pg_and_generic().verified_stmt("DROP PUBLICATION p");
+    pg_and_generic().verified_stmt("DROP PUBLICATION IF EXISTS p RESTRICT");
+    match pg_and_generic().verified_stmt("DROP PUBLICATION IF EXISTS p, renamed CASCADE") {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+            restrict,
+            ..
+        } => {
+            assert_eq!(object_type, ObjectType::Publication);
+            assert!(if_exists);
+            assert_eq!(
+                names,
+                vec![
+                    ObjectName::from(vec![Ident::new("p")]),
+                    ObjectName::from(vec![Ident::new("renamed")]),
+                ]
+            );
+            assert!(cascade);
+            assert!(!restrict);
+        }
+        _ => unreachable!(),
+    }
 }

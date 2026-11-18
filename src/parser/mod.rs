@@ -11743,6 +11743,10 @@ impl<'a> Parser<'a> {
                 }
             } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
                 AlterColumnOperation::DropDefault {}
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::EXPRESSION]) {
+                AlterColumnOperation::DropExpression {
+                    if_exists: self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]),
+                }
             } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE]) {
                 self.parse_set_data_type(true)?
             } else if self.parse_keyword(Keyword::TYPE) {

@@ -1431,6 +1431,14 @@ pub enum AlterColumnOperation {
         /// Optional sequence options for identity generation.
         sequence_options: Option<Vec<SequenceOptions>>,
     },
+    /// `DROP EXPRESSION [ IF EXISTS ]`, turning a generated column into an
+    /// ordinary one.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    DropExpression {
+        /// Whether `IF EXISTS` was specified.
+        if_exists: bool,
+    },
     /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
     /// options of a foreign table column.
     ///
@@ -1485,6 +1493,13 @@ impl fmt::Display for AlterColumnOperation {
                     }
 
                     write!(f, " )")?;
+                }
+                Ok(())
+            }
+            AlterColumnOperation::DropExpression { if_exists } => {
+                write!(f, "DROP EXPRESSION")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
                 }
                 Ok(())
             }

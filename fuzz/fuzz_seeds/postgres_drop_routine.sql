@@ -1,0 +1,1 @@
+DROP ROUTINE IF EXISTS s.f(IN a int, text), p CASCADE

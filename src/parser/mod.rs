@@ -12428,15 +12428,18 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a [Statement::AlterType]
+    ///
+    /// [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertype.html)
     pub fn parse_alter_type(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             let new_name = self.parse_identifier()?;
-            Ok(Statement::AlterType(AlterType {
-                name,
-                operation: AlterTypeOperation::Rename(AlterTypeRename { new_name }),
-            }))
+            AlterTypeOperation::Rename(AlterTypeRename { new_name })
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterTypeOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
         } else if self.parse_keywords(&[Keyword::ADD, Keyword::VALUE]) {
             let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
             let new_enum_value = self.parse_identifier()?;
@@ -12448,32 +12451,28 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::AlterType(AlterType {
-                name,
-                operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
-                    if_not_exists,
-                    value: new_enum_value,
-                    position,
-                }),
-            }))
+            AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists,
+                value: new_enum_value,
+                position,
+            })
         } else if self.parse_keywords(&[Keyword::RENAME, Keyword::VALUE]) {
             let existing_enum_value = self.parse_identifier()?;
             self.expect_keyword(Keyword::TO)?;
             let new_enum_value = self.parse_identifier()?;
 
-            Ok(Statement::AlterType(AlterType {
-                name,
-                operation: AlterTypeOperation::RenameValue(AlterTypeRenameValue {
-                    from: existing_enum_value,
-                    to: new_enum_value,
-                }),
-            }))
+            AlterTypeOperation::RenameValue(AlterTypeRenameValue {
+                from: existing_enum_value,
+                to: new_enum_value,
+            })
         } else {
-            self.expected_ref(
-                "{RENAME TO | { RENAME | ADD } VALUE}",
+            return self.expected_ref(
+                "RENAME TO, SET SCHEMA, ADD VALUE, or RENAME VALUE after ALTER TYPE",
                 self.peek_token_ref(),
-            )
-        }
+            );
+        };
+
+        Ok(Statement::AlterType(AlterType { name, operation }))
     }
 
     /// Parse a [Statement::AlterCollation].

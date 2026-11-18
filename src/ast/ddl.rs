@@ -4926,6 +4926,8 @@ pub enum AlterExtensionOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterExtensionMember {
+    /// `MATERIALIZED VIEW object_name`
+    MaterializedView(ObjectName),
     /// `TABLE object_name`
     Table(ObjectName),
     /// `VIEW object_name`
@@ -4954,6 +4956,7 @@ impl fmt::Display for AlterExtensionOperation {
 impl fmt::Display for AlterExtensionMember {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterExtensionMember::MaterializedView(name) => write!(f, "MATERIALIZED VIEW {name}"),
             AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
             AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
         }

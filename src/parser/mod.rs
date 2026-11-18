@@ -9131,8 +9131,8 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    /// Parse an operator signature for a [Statement::DropOperator]
-    /// Format: `name ( { left_type | NONE } , right_type )`
+    /// Parse an operator signature in the form
+    /// `name ( { left_type | NONE } , right_type )`
     fn parse_drop_operator_signature(&mut self) -> Result<DropOperatorSignature, ParserError> {
         let name = self.parse_operator_name()?;
         self.expect_token(&Token::LParen)?;
@@ -12575,6 +12575,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
             Ok(AlterExtensionMember::MaterializedView(
                 self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keyword(Keyword::OPERATOR) {
+            Ok(AlterExtensionMember::Operator(
+                self.parse_drop_operator_signature()?,
             ))
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             Ok(AlterExtensionMember::Procedure(self.parse_function_desc()?))

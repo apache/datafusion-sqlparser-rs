@@ -12539,7 +12539,11 @@ impl<'a> Parser<'a> {
 
     /// Parse a member object of `ALTER EXTENSION ADD` or `ALTER EXTENSION DROP`
     fn parse_alter_extension_member(&mut self) -> Result<AlterExtensionMember, ParserError> {
-        if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
+        if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
+            Ok(AlterExtensionMember::ForeignTable(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
             Ok(AlterExtensionMember::MaterializedView(
                 self.parse_object_name(false)?,
             ))

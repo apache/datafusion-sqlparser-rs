@@ -5176,6 +5176,12 @@ impl Spanned for AlterPublication {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterPublicationOperation {
+    /// `ADD publication_object [, ...]`
+    Add(Vec<PublicationObject>),
+    /// `SET publication_object [, ...]`, replacing all members.
+    Set(Vec<PublicationObject>),
+    /// `DROP publication_drop_object [, ...]`
+    Drop(Vec<PublicationDropObject>),
     /// `SET ( publication_parameter [= value] [, ...] )`
     SetOptions(Vec<SqlOption>),
     /// `OWNER TO new_owner`
@@ -5187,12 +5193,63 @@ pub enum AlterPublicationOperation {
 impl fmt::Display for AlterPublicationOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterPublicationOperation::Add(objects) => {
+                write!(f, "ADD {}", display_comma_separated(objects))
+            }
+            AlterPublicationOperation::Set(objects) => {
+                write!(f, "SET {}", display_comma_separated(objects))
+            }
+            AlterPublicationOperation::Drop(objects) => {
+                write!(f, "DROP {}", display_comma_separated(objects))
+            }
             AlterPublicationOperation::SetOptions(options) => {
                 write!(f, "SET ({})", display_comma_separated(options))
             }
             AlterPublicationOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
             AlterPublicationOperation::RenameTo(new_name) => write!(f, "RENAME TO {new_name}"),
         }
+    }
+}
+
+/// A group of members removed by `ALTER PUBLICATION ... DROP`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PublicationDropObject {
+    /// `TABLE [ ONLY ] table_name [ * ] [, ...]`
+    Tables(Vec<PublicationDropTable>),
+    /// `TABLES IN SCHEMA { schema_name | CURRENT_SCHEMA } [, ...]`
+    Schemas(Vec<PublicationSchema>),
+}
+
+impl fmt::Display for PublicationDropObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PublicationDropObject::Tables(tables) => {
+                write!(f, "TABLE {}", display_comma_separated(tables))
+            }
+            PublicationDropObject::Schemas(schemas) => {
+                write!(f, "TABLES IN SCHEMA {}", display_comma_separated(schemas))
+            }
+        }
+    }
+}
+
+/// A table removed from a publication.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct PublicationDropTable {
+    /// Name of the table.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// `ONLY` or `*` marker.
+    pub inheritance: Option<TableInheritance>,
+}
+
+impl fmt::Display for PublicationDropTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt_publication_relation(f, &self.name, self.inheritance)
     }
 }
 

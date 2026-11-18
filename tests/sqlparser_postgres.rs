@@ -13819,7 +13819,74 @@ fn parse_alter_publication() {
         ),
         (
             "ALTER PUBLICATION p REFRESH",
-            "Expected: SET, OWNER TO, or RENAME TO after ALTER PUBLICATION, found: REFRESH",
+            "Expected: ADD, SET, DROP, OWNER TO, or RENAME TO after ALTER PUBLICATION, found: REFRESH",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_publication_members() {
+    for sql in [
+        "ALTER PUBLICATION p ADD TABLE ONLY public.items (id) WHERE ((id > 0))",
+        "ALTER PUBLICATION p ADD TABLES IN SCHEMA feed",
+        "ALTER PUBLICATION p SET TABLE public.items (id) WHERE (id > 0)",
+        "ALTER PUBLICATION p SET TABLES IN SCHEMA feed, TABLE t",
+        "ALTER PUBLICATION p DROP TABLE ONLY public.items",
+        "ALTER PUBLICATION p DROP TABLE ONLY (a), b *, TABLES IN SCHEMA feed",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    let operation = |sql| match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterPublication(AlterPublication { operation, .. }) => operation,
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        operation("ALTER PUBLICATION p DROP TABLE ONLY (a), TABLES IN SCHEMA CURRENT_SCHEMA"),
+        AlterPublicationOperation::Drop(vec![
+            PublicationDropObject::Tables(vec![PublicationDropTable {
+                name: ObjectName::from(vec![Ident::new("a")]),
+                inheritance: Some(TableInheritance::Only {
+                    parenthesized: true
+                }),
+            }]),
+            PublicationDropObject::Schemas(vec![PublicationSchema::CurrentSchema]),
+        ])
+    );
+    assert_eq!(
+        operation("ALTER PUBLICATION p SET TABLES IN SCHEMA feed"),
+        AlterPublicationOperation::Set(vec![PublicationObject::Schemas(vec![
+            PublicationSchema::Name(Ident::new("feed"))
+        ])])
+    );
+    assert_eq!(
+        operation("ALTER PUBLICATION p ADD TABLE t"),
+        AlterPublicationOperation::Add(vec![PublicationObject::Tables(vec![PublicationTable {
+            name: ObjectName::from(vec![Ident::new("t")]),
+            inheritance: None,
+            columns: vec![],
+            filter: None,
+        }])])
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER PUBLICATION p DROP TABLE t (id)",
+            "Expected: end of statement, found: (",
+        ),
+        (
+            "ALTER PUBLICATION p DROP TABLE t WHERE (id > 0)",
+            "Expected: end of statement, found: WHERE",
+        ),
+        (
+            "ALTER PUBLICATION p ADD t",
+            "Expected: TABLE or TABLES IN SCHEMA, found: t",
         ),
     ] {
         assert_eq!(

@@ -5856,12 +5856,13 @@ impl<'a> Parser<'a> {
 
         let table_name = self.parse_object_name(false)?;
         let options = self.parse_options(Keyword::OPTIONS)?;
-        let (has_as, query) = if self.peek_token_ref().token == Token::EOF {
-            (false, None)
-        } else {
-            let (has_as, query) = self.parse_as_query()?;
-            (has_as, Some(query))
-        };
+        let (has_as, query) =
+            if matches!(self.peek_token_ref().token, Token::EOF | Token::SemiColon) {
+                (false, None)
+            } else {
+                let (has_as, query) = self.parse_as_query()?;
+                (has_as, Some(query))
+            };
 
         Ok(Statement::Cache {
             table_flag,

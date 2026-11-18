@@ -13547,3 +13547,52 @@ fn parse_drop_publication() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_create_publication() {
+    for sql in [
+        "CREATE PUBLICATION p",
+        "CREATE PUBLICATION p FOR ALL TABLES",
+        "CREATE PUBLICATION p WITH (publish = 'insert', publish_via_partition_root, publish_generated_columns = stored)",
+        "CREATE PUBLICATION all_members FOR ALL TABLES WITH (publish = 'insert, update, delete, truncate')",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    let Statement::CreatePublication(create) = pg_and_generic().verified_stmt(
+        r#"CREATE PUBLICATION "Pub" FOR ALL TABLES WITH (publish_via_partition_root)"#,
+    ) else {
+        unreachable!()
+    };
+    assert_eq!(
+        create,
+        CreatePublication {
+            name: Ident::with_quote('"', "Pub"),
+            target: Some(PublicationTarget::AllTables),
+            options: vec![SqlOption::Ident(ObjectName::from(vec![Ident::new(
+                "publish_via_partition_root"
+            )]))],
+        }
+    );
+
+    for (sql, expected) in [
+        (
+            "CREATE PUBLICATION p FOR ALL",
+            "Expected: TABLES, found: EOF",
+        ),
+        (
+            "CREATE PUBLICATION p WITH ()",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE PUBLICATION s.p",
+            "Expected: end of statement, found: .",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

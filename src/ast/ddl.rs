@@ -5003,6 +5003,49 @@ impl Spanned for AlterCollation {
     }
 }
 
+/// `CREATE PUBLICATION` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpublication.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreatePublication {
+    /// Name of the publication.
+    pub name: Ident,
+    /// Tables published, `None` when the publication starts empty.
+    pub target: Option<PublicationTarget>,
+    /// Options of the `WITH ( ... )` clause.
+    pub options: Vec<SqlOption>,
+}
+
+impl fmt::Display for CreatePublication {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE PUBLICATION {}", self.name)?;
+        if let Some(PublicationTarget::AllTables) = self.target {
+            write!(f, " FOR ALL TABLES")?;
+        }
+        if !self.options.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.options))?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for CreatePublication {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// Tables published by a [`CreatePublication`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PublicationTarget {
+    /// `FOR ALL TABLES`
+    AllTables,
+}
+
 /// `ALTER [ MATERIALIZED ] VIEW` statement.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altermaterializedview.html)

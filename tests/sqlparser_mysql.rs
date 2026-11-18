@@ -4795,6 +4795,7 @@ fn parse_drop_index() {
     match mysql().verified_stmt(sql) {
         Statement::Drop {
             object_type,
+            concurrently,
             if_exists,
             names,
             cascade,
@@ -4803,6 +4804,7 @@ fn parse_drop_index() {
             temporary,
             table,
         } => {
+            assert!(!concurrently);
             assert!(!if_exists);
             assert_eq!(ObjectType::Index, object_type);
             assert_eq!(

@@ -4057,6 +4057,9 @@ pub enum Statement {
     Drop {
         /// The type of the object to drop: TABLE, VIEW, etc.
         object_type: ObjectType,
+        /// PostgreSQL `DROP INDEX CONCURRENTLY`.
+        /// See <https://www.postgresql.org/docs/current/sql-dropindex.html>
+        concurrently: bool,
         /// An optional `IF EXISTS` clause. (Non-standard.)
         if_exists: bool,
         /// One or more objects to drop. (ANSI SQL requires exactly one.)
@@ -5852,6 +5855,7 @@ impl fmt::Display for Statement {
             }
             Statement::Drop {
                 object_type,
+                concurrently,
                 if_exists,
                 names,
                 cascade,
@@ -5862,9 +5866,10 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "DROP {}{}{} {}{}{}{}",
+                    "DROP {}{}{}{} {}{}{}{}",
                     if *temporary { "TEMPORARY " } else { "" },
                     object_type,
+                    if *concurrently { " CONCURRENTLY" } else { "" },
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(names),
                     if *cascade { " CASCADE" } else { "" },

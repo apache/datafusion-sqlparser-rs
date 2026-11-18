@@ -667,6 +667,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlparser_v2"
+version = "2.0.0"
+
+[[package]]
 name = "stacker"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -50,7 +50,7 @@ should_panic_without_expect = "deny"
 todo = "deny"
 
 [workspace]
-members = ["sqlparser_bench"]
+members = ["sqlparser_bench", "sqlparser_v2"]
 
 [features]
 default = ["std", "recursive-protection"]

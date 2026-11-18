@@ -5039,6 +5039,19 @@ pub enum AlterDatabaseOperation {
     },
     /// `REFRESH COLLATION VERSION`
     RefreshCollationVersion,
+    /// `[ WITH ] option [ ... ]`, where the list may be empty.
+    Options {
+        /// Whether the `WITH` keyword was present.
+        with: bool,
+        /// The options to change.
+        options: Vec<AlterDatabaseOption>,
+    },
+}
+
+impl AlterDatabaseOperation {
+    fn is_empty(&self) -> bool {
+        matches!(self, Self::Options { with: false, options } if options.is_empty())
+    }
 }
 
 impl fmt::Display for AlterDatabaseOperation {
@@ -5057,19 +5070,69 @@ impl fmt::Display for AlterDatabaseOperation {
             AlterDatabaseOperation::RefreshCollationVersion => {
                 f.write_str("REFRESH COLLATION VERSION")
             }
+            AlterDatabaseOperation::Options { with, options } => match (with, options.is_empty()) {
+                (false, _) => write!(f, "{}", display_separated(options, " ")),
+                (true, true) => f.write_str("WITH"),
+                (true, false) => write!(f, "WITH {}", display_separated(options, " ")),
+            },
         }
     }
 }
 
 impl fmt::Display for AlterDatabase {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ALTER DATABASE {} {}", self.name, self.operation)
+        if self.operation.is_empty() {
+            write!(f, "ALTER DATABASE {}", self.name)
+        } else {
+            write!(f, "ALTER DATABASE {} {}", self.name, self.operation)
+        }
     }
 }
 
 impl Spanned for AlterDatabase {
     fn span(&self) -> Span {
         self.name.span()
+    }
+}
+
+/// An option of `ALTER DATABASE ... [ WITH ] option`, such as
+/// `ALLOW_CONNECTIONS true`, `CONNECTION LIMIT 5` or `IS_TEMPLATE false`.
+///
+/// The name is kept as written, since PostgreSQL's grammar accepts any
+/// identifier here and only the server checks it.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterDatabaseOption {
+    /// Option name.
+    pub name: AlterDatabaseOptionName,
+    /// Option value.
+    pub value: Expr,
+}
+
+impl fmt::Display for AlterDatabaseOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.name, self.value)
+    }
+}
+
+/// Name of an [`AlterDatabaseOption`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterDatabaseOptionName {
+    /// `CONNECTION LIMIT`
+    ConnectionLimit,
+    /// Any other option name, such as `ALLOW_CONNECTIONS`.
+    Name(Ident),
+}
+
+impl fmt::Display for AlterDatabaseOptionName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterDatabaseOptionName::ConnectionLimit => f.write_str("CONNECTION LIMIT"),
+            AlterDatabaseOptionName::Name(name) => write!(f, "{name}"),
+        }
     }
 }
 

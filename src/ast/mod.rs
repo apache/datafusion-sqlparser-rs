@@ -65,9 +65,10 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,
-    AlterConnectorOwner, AlterDatabase, AlterDatabaseOperation, AlterFunction, AlterFunctionAction,
-    AlterFunctionKind, AlterFunctionOperation, AlterGenericOption, AlterIndexOperation,
-    AlterOperator, AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
+    AlterConnectorOwner, AlterDatabase, AlterDatabaseOperation, AlterDatabaseOption,
+    AlterDatabaseOptionName, AlterFunction, AlterFunctionAction, AlterFunctionKind,
+    AlterFunctionOperation, AlterGenericOption, AlterIndexOperation, AlterOperator,
+    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
     AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
     AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
     AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,

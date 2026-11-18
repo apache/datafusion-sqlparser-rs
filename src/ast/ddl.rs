@@ -1225,6 +1225,8 @@ pub enum AlterTypeOperation {
     },
     /// Rename an attribute of a composite type.
     RenameAttribute(AlterTypeRenameAttribute),
+    /// A comma-separated list of attribute modifications of a composite type.
+    AttributeActions(Vec<AlterTypeAttributeAction>),
 }
 
 /// See [AlterTypeOperation::Rename]
@@ -1284,6 +1286,24 @@ pub struct AlterTypeRenameAttribute {
     pub drop_behavior: Option<DropBehavior>,
 }
 
+/// A single attribute modification in [AlterTypeOperation::AttributeActions]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTypeAttributeAction {
+    /// `ADD ATTRIBUTE name data_type [ COLLATE collation ] [ CASCADE | RESTRICT ]`
+    Add {
+        /// Name of the attribute to add.
+        name: Ident,
+        /// Data type of the attribute.
+        data_type: DataType,
+        /// Optional collation of the attribute.
+        collate: Option<ObjectName>,
+        /// Optional `CASCADE` / `RESTRICT` behavior.
+        drop_behavior: Option<DropBehavior>,
+    },
+}
+
 impl fmt::Display for AlterTypeOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -1322,6 +1342,31 @@ impl fmt::Display for AlterTypeOperation {
                 drop_behavior,
             }) => {
                 write!(f, "RENAME ATTRIBUTE {from} TO {to}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            Self::AttributeActions(actions) => {
+                write!(f, "{}", display_comma_separated(actions))
+            }
+        }
+    }
+}
+
+impl fmt::Display for AlterTypeAttributeAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Add {
+                name,
+                data_type,
+                collate,
+                drop_behavior,
+            } => {
+                write!(f, "ADD ATTRIBUTE {name} {data_type}")?;
+                if let Some(collate) = collate {
+                    write!(f, " COLLATE {collate}")?;
+                }
                 if let Some(drop_behavior) = drop_behavior {
                     write!(f, " {drop_behavior}")?;
                 }

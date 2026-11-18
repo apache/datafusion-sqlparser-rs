@@ -4930,6 +4930,8 @@ pub enum AlterExtensionMember {
     AccessMethod(Ident),
     /// `COLLATION object_name`
     Collation(ObjectName),
+    /// `CONVERSION object_name`
+    Conversion(ObjectName),
     /// `EVENT TRIGGER object_name`
     EventTrigger(Ident),
     /// `FOREIGN DATA WRAPPER object_name`
@@ -4981,6 +4983,7 @@ impl fmt::Display for AlterExtensionMember {
         match self {
             AlterExtensionMember::AccessMethod(name) => write!(f, "ACCESS METHOD {name}"),
             AlterExtensionMember::Collation(name) => write!(f, "COLLATION {name}"),
+            AlterExtensionMember::Conversion(name) => write!(f, "CONVERSION {name}"),
             AlterExtensionMember::EventTrigger(name) => write!(f, "EVENT TRIGGER {name}"),
             AlterExtensionMember::ForeignDataWrapper(name) => {
                 write!(f, "FOREIGN DATA WRAPPER {name}")

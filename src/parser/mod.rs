@@ -12049,8 +12049,15 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
-            Keyword::FUNCTION => self.parse_alter_function(AlterFunctionKind::Function),
-            Keyword::AGGREGATE => self.parse_alter_function(AlterFunctionKind::Aggregate),
+            Keyword::FUNCTION => {
+                let signature = AlterFunctionSignature::Function(self.parse_function_desc()?);
+                self.parse_alter_function(signature)
+            }
+            Keyword::AGGREGATE => {
+                let signature =
+                    AlterFunctionSignature::Aggregate(self.parse_alter_aggregate_signature()?);
+                self.parse_alter_function(signature)
+            }
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
                     self.parse_alter_operator_family().map(Into::into)
@@ -12078,22 +12085,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_alter_aggregate_signature(
-        &mut self,
-    ) -> Result<(FunctionDesc, bool, Option<Vec<OperateFunctionArg>>), ParserError> {
+    fn parse_alter_aggregate_signature(&mut self) -> Result<AggregateSignature, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_token(&Token::LParen)?;
 
         if self.consume_token(&Token::Mul) {
             self.expect_token(&Token::RParen)?;
-            return Ok((
-                FunctionDesc {
-                    name,
-                    args: Some(vec![]),
-                },
-                true,
-                None,
-            ));
+            return Ok(AggregateSignature {
+                name,
+                args: AggregateArgs::Star,
+            });
         }
 
         let args =
@@ -12103,21 +12104,17 @@ impl<'a> Parser<'a> {
                 self.parse_comma_separated(Parser::parse_aggregate_function_arg)?
             };
 
-        let aggregate_order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             Some(self.parse_comma_separated(Parser::parse_aggregate_function_arg)?)
         } else {
             None
         };
 
         self.expect_token(&Token::RParen)?;
-        Ok((
-            FunctionDesc {
-                name,
-                args: Some(args),
-            },
-            false,
-            aggregate_order_by,
-        ))
+        Ok(AggregateSignature {
+            name,
+            args: AggregateArgs::List { args, order_by },
+        })
     }
 
     fn parse_alter_function_action(&mut self) -> Result<Option<AlterFunctionAction>, ParserError> {
@@ -12236,16 +12233,11 @@ impl<'a> Parser<'a> {
         Ok((actions, restrict))
     }
 
-    /// Parse an `ALTER FUNCTION` or `ALTER AGGREGATE` statement.
+    /// Parse an `ALTER FUNCTION` or `ALTER AGGREGATE` operation after its signature.
     pub fn parse_alter_function(
         &mut self,
-        kind: AlterFunctionKind,
+        signature: AlterFunctionSignature,
     ) -> Result<Statement, ParserError> {
-        let (function, aggregate_star, aggregate_order_by) = match kind {
-            AlterFunctionKind::Function => (self.parse_function_desc()?, false, None),
-            AlterFunctionKind::Aggregate => self.parse_alter_aggregate_signature()?,
-        };
-
         let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             let new_name = self.parse_identifier()?;
             AlterFunctionOperation::RenameTo { new_name }
@@ -12255,7 +12247,9 @@ impl<'a> Parser<'a> {
             AlterFunctionOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) && self.parse_keyword(Keyword::NO) {
+        } else if matches!(signature, AlterFunctionSignature::Function(_))
+            && self.parse_keyword(Keyword::NO)
+        {
             if !self.parse_keyword(Keyword::DEPENDS) {
                 return self.expected_ref("DEPENDS after NO", self.peek_token_ref());
             }
@@ -12264,7 +12258,7 @@ impl<'a> Parser<'a> {
                 no: true,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function)
+        } else if matches!(signature, AlterFunctionSignature::Function(_))
             && self.parse_keyword(Keyword::DEPENDS)
         {
             self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
@@ -12272,7 +12266,7 @@ impl<'a> Parser<'a> {
                 no: false,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) {
+        } else if matches!(signature, AlterFunctionSignature::Function(_)) {
             let (actions, restrict) = self.parse_alter_function_actions()?;
             AlterFunctionOperation::Actions { actions, restrict }
         } else {
@@ -12283,10 +12277,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::AlterFunction(AlterFunction {
-            kind,
-            function,
-            aggregate_order_by,
-            aggregate_star,
+            signature,
             operation,
         }))
     }

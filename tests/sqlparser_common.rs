@@ -23579,3 +23579,50 @@ $$"#,
         );
     }
 }
+
+#[test]
+fn parse_only_table_name() {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    for (sql, expected_name, expected_alias) in [
+        ("SELECT * FROM only", "only", None),
+        ("SELECT * FROM only;", "only", None),
+        ("SELECT * FROM only t", "only", Some("t")),
+        ("SELECT * FROM only AS t", "only", Some("t")),
+        ("SELECT * FROM ONLY t", "ONLY", Some("t")),
+        ("SELECT * FROM only.t", "only.t", None),
+    ] {
+        let select = dialects.verified_only_select_with_canonical(sql, sql.trim_end_matches(';'));
+        let TableFactor::Table {
+            name,
+            alias,
+            inheritance,
+            ..
+        } = &select.from[0].relation
+        else {
+            panic!("expected a table: {select:?}");
+        };
+        assert_eq!(name.to_string(), expected_name);
+        assert_eq!(
+            alias.as_ref().map(|a| a.name.value.as_str()),
+            expected_alias
+        );
+        assert_eq!(*inheritance, None);
+    }
+
+    for sql in [
+        "SELECT * FROM only WHERE id = 1",
+        "SELECT * FROM only ORDER BY id",
+        "SELECT * FROM only LIMIT 1",
+        "SELECT * FROM only JOIN other ON only.id = other.id",
+        "SELECT * FROM only, other",
+        "SELECT * FROM only UNION SELECT * FROM other",
+        "SELECT * FROM other JOIN only ON other.id = only.id",
+        "SELECT * FROM (SELECT * FROM only) AS t",
+        "UPDATE only SET id = 1",
+        "UPDATE only AS t SET id = 1",
+        "DELETE FROM only",
+        "DELETE FROM only WHERE id = 1",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+}

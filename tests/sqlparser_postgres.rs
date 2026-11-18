@@ -12178,12 +12178,11 @@ fn parse_table_inheritance_markers() {
         ),
         ("SELECT * FROM \"only\"", "\"only\"", None, None),
     ] {
-        let select = pg_and_generic().verified_only_select(sql);
+        let select = pg().verified_only_select(sql);
         assert_relation(&select.from[0].relation, name, alias, inheritance);
     }
 
-    let select =
-        pg_and_generic().verified_only_select("SELECT * FROM ONLY a JOIN b * ON a.id = b.id");
+    let select = pg().verified_only_select("SELECT * FROM ONLY a JOIN b * ON a.id = b.id");
     assert_relation(&select.from[0].relation, "a", None, only);
     assert_relation(&select.from[0].joins[0].relation, "b", None, descendants);
 
@@ -12192,7 +12191,7 @@ fn parse_table_inheritance_markers() {
         ("UPDATE ONLY (t) SET id = 1", only_parenthesized),
         ("UPDATE t * SET id = 1", descendants),
     ] {
-        match pg_and_generic().verified_stmt(sql) {
+        match pg().verified_stmt(sql) {
             Statement::Update(Update { table, .. }) => {
                 assert_relation(&table.relation, "t", None, inheritance)
             }
@@ -12205,7 +12204,7 @@ fn parse_table_inheritance_markers() {
         ("DELETE FROM ONLY (t)", only_parenthesized),
         ("DELETE FROM t *", descendants),
     ] {
-        match pg_and_generic().verified_stmt(sql) {
+        match pg().verified_stmt(sql) {
             Statement::Delete(Delete {
                 from: FromTable::WithFromKeyword(from),
                 ..
@@ -12214,19 +12213,23 @@ fn parse_table_inheritance_markers() {
         }
     }
 
-    pg_and_generic().one_statement_parses_to("SELECT * FROM t*", "SELECT * FROM t *");
-    pg_and_generic().one_statement_parses_to("SELECT * FROM ONLY(t)", "SELECT * FROM ONLY (t)");
-    pg_and_generic().one_statement_parses_to("UPDATE t* SET id = 1", "UPDATE t * SET id = 1");
-    pg_and_generic().one_statement_parses_to("DELETE FROM t*", "DELETE FROM t *");
+    pg().one_statement_parses_to("SELECT * FROM t*", "SELECT * FROM t *");
+    pg().one_statement_parses_to("SELECT * FROM ONLY(t)", "SELECT * FROM ONLY (t)");
+    pg().one_statement_parses_to("UPDATE t* SET id = 1", "UPDATE t * SET id = 1");
+    pg().one_statement_parses_to("DELETE FROM t*", "DELETE FROM t *");
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT * FROM ONLY").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 
     for sql in [
-        "SELECT * FROM ONLY",
         "SELECT * FROM ONLY t *",
         "SELECT * FROM ONLY (t *)",
         "SELECT * FROM ONLY (t",
         "SELECT * FROM ONLY ()",
     ] {
-        assert!(pg_and_generic().parse_sql_statements(sql).is_err(), "{sql}");
+        assert!(pg().parse_sql_statements(sql).is_err(), "{sql}");
     }
 
     let other_dialects = all_dialects_where(|d| !d.supports_table_inheritance_markers());
@@ -12266,7 +12269,7 @@ fn display_table_inheritance_propagates_write_errors() {
         ("SELECT * FROM t *", " *"),
         ("SELECT * FROM t", "t"),
     ] {
-        let stmt = pg_and_generic().verified_stmt(sql);
+        let stmt = pg().verified_stmt(sql);
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{sql}");
     }

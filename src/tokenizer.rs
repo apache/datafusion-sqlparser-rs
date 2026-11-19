@@ -2365,9 +2365,13 @@ impl<'a> Tokenizer<'a> {
     /// Tokenize an identifier or keyword, after the first char is already consumed.
     fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
         let mut s = first_chars.into();
-        s.push_str(&peeking_take_while(chars, |ch| {
-            self.dialect.is_identifier_part(ch)
-        }));
+        while let Some(&ch) = chars.peek() {
+            if !self.dialect.is_identifier_part(ch) {
+                break;
+            }
+            chars.next();
+            s.push(ch);
+        }
         s
     }
 

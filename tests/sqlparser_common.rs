@@ -14675,6 +14675,7 @@ fn test_match_recognize() {
                     OneOrMore,
                 ),
             ]),
+            subsets: vec![],
             symbols: vec![
                 SymbolDefinition {
                     symbol: Ident::new("row_with_price_decrease"),
@@ -14746,6 +14747,28 @@ fn test_match_recognize() {
 
     for sql in examples {
         all_dialects_where(|d| d.supports_match_recognize()).verified_query(sql);
+    }
+
+    let select = all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(
+        "SELECT * FROM my_table MATCH_RECOGNIZE(MEASURES LAST(u.price) AS last_u PATTERN (a b+ c+) SUBSET u = (b, c), v = (a, b) DEFINE a AS price > 0, b AS price > 10, c AS price > 20)",
+    );
+    match &select.from[0].relation {
+        TableFactor::MatchRecognize { subsets, .. } => {
+            assert_eq!(
+                subsets,
+                &vec![
+                    SubsetDefinition {
+                        name: Ident::new("u"),
+                        symbols: vec![Ident::new("b"), Ident::new("c")],
+                    },
+                    SubsetDefinition {
+                        name: Ident::new("v"),
+                        symbols: vec![Ident::new("a"), Ident::new("b")],
+                    },
+                ]
+            );
+        }
+        other => panic!("expected MatchRecognize, got {other:?}"),
     }
 }
 

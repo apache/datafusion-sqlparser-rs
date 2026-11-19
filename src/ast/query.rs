@@ -1726,6 +1726,8 @@ pub enum TableFactor {
         after_match_skip: Option<AfterMatchSkip>,
         /// `PATTERN ( <pattern> )`
         pattern: MatchRecognizePattern,
+        /// `SUBSET <name> = (<symbol> [, ...]) [, ...]`
+        subsets: Vec<SubsetDefinition>,
         /// `DEFINE <symbol> AS <expr> [, ... ]`
         symbols: Vec<SymbolDefinition>,
         /// The alias for the table.
@@ -2140,6 +2142,30 @@ impl fmt::Display for EmptyMatchesMode {
     }
 }
 
+/// A union variable defined in a `MATCH_RECOGNIZE` `SUBSET` clause.
+///
+/// Example: `SUBSET U = (A, B)`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SubsetDefinition {
+    /// The union variable identifier.
+    pub name: Ident,
+    /// The primary pattern variables belonging to this subset.
+    pub symbols: Vec<Ident>,
+}
+
+impl fmt::Display for SubsetDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} = ({})",
+            self.name,
+            display_comma_separated(&self.symbols)
+        )
+    }
+}
+
 /// A symbol defined in a `MATCH_RECOGNIZE` operation.
 ///
 /// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize#define-defining-symbols>.
@@ -2516,6 +2542,7 @@ impl fmt::Display for TableFactor {
                 rows_per_match,
                 after_match_skip,
                 pattern,
+                subsets,
                 symbols,
                 alias,
             } => {
@@ -2536,6 +2563,9 @@ impl fmt::Display for TableFactor {
                     write!(f, "{after_match_skip} ")?;
                 }
                 write!(f, "PATTERN ({pattern}) ")?;
+                if !subsets.is_empty() {
+                    write!(f, "SUBSET {} ", display_comma_separated(subsets))?;
+                }
                 write!(f, "DEFINE {})", display_comma_separated(symbols))?;
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;

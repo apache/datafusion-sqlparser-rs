@@ -47,8 +47,8 @@ use super::{
     OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
     ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
     RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
-    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SubsetDefinition,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
     TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
     Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
@@ -2242,6 +2242,7 @@ impl Spanned for TableFactor {
                 rows_per_match: _,
                 after_match_skip: _,
                 pattern,
+                subsets,
                 symbols,
                 alias,
             } => union_spans(
@@ -2250,6 +2251,7 @@ impl Spanned for TableFactor {
                     .chain(order_by.iter().map(|i| i.span()))
                     .chain(measures.iter().map(|i| i.span()))
                     .chain(core::iter::once(pattern.span()))
+                    .chain(subsets.iter().map(|i| i.span()))
                     .chain(symbols.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|i| i.span())),
             ),
@@ -2297,6 +2299,13 @@ impl Spanned for ExprWithAlias {
 impl Spanned for MatchRecognizePattern {
     fn span(&self) -> Span {
         Span::empty()
+    }
+}
+
+impl Spanned for SubsetDefinition {
+    fn span(&self) -> Span {
+        let SubsetDefinition { name, symbols } = self;
+        union_spans(core::iter::once(name.span).chain(symbols.iter().map(|s| s.span)))
     }
 }
 

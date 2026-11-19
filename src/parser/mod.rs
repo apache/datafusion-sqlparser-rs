@@ -18509,6 +18509,17 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::PATTERN)?;
         let pattern = self.parse_parenthesized(Self::parse_pattern)?;
 
+        let subsets = if self.parse_keyword(Keyword::SUBSET) {
+            self.parse_comma_separated(|p| {
+                let name = p.parse_identifier()?;
+                p.expect_token(&Token::Eq)?;
+                let symbols = p.parse_parenthesized_identifiers()?;
+                Ok(SubsetDefinition { name, symbols })
+            })?
+        } else {
+            vec![]
+        };
+
         self.expect_keyword_is(Keyword::DEFINE)?;
 
         let symbols = self.parse_comma_separated(|p| {
@@ -18530,6 +18541,7 @@ impl<'a> Parser<'a> {
             rows_per_match,
             after_match_skip,
             pattern,
+            subsets,
             symbols,
             alias,
         })

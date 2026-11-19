@@ -1,0 +1,1 @@
+SELECT a.CEIL(a.CEIL(a.CEIL(x)))

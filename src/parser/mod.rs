@@ -10369,6 +10369,7 @@ impl<'a> Parser<'a> {
                     index_options: vec![],
                     characteristics,
                     nulls_distinct,
+                    on_conflict: None,
                 }
                 .into(),
             ))
@@ -10385,6 +10386,7 @@ impl<'a> Parser<'a> {
                     include: vec![],
                     index_options: vec![],
                     characteristics,
+                    on_conflict: None,
                 }
                 .into(),
             ))
@@ -10435,6 +10437,7 @@ impl<'a> Parser<'a> {
                     expr: Box::new(expr),
                     no_inherit,
                     enforced,
+                    on_conflict: None,
                 }
                 .into(),
             ))
@@ -10515,19 +10518,8 @@ impl<'a> Parser<'a> {
                     order: None,
                 }),
             )))
-        } else if dialect_of!(self is SQLiteDialect | GenericDialect)
-            && self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
-        {
-            // Support ON CONFLICT for SQLite
-            Ok(Some(ColumnOption::OnConflict(
-                self.expect_one_of_keywords(&[
-                    Keyword::ROLLBACK,
-                    Keyword::ABORT,
-                    Keyword::FAIL,
-                    Keyword::IGNORE,
-                    Keyword::REPLACE,
-                ])?,
-            )))
+        } else if let Some(keyword) = self.parse_optional_constraint_conflict_clause()? {
+            Ok(Some(ColumnOption::OnConflict(keyword)))
         } else if self.parse_keyword(Keyword::INVISIBLE) {
             Ok(Some(ColumnOption::Invisible))
         } else {
@@ -10831,6 +10823,7 @@ impl<'a> Parser<'a> {
                 let include = self.parse_optional_include_columns()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
+                let on_conflict = self.parse_optional_constraint_conflict_clause()?;
                 Ok(Some(
                     UniqueConstraint {
                         name,
@@ -10842,6 +10835,7 @@ impl<'a> Parser<'a> {
                         index_options,
                         characteristics,
                         nulls_distinct,
+                        on_conflict,
                     }
                     .into(),
                 ))
@@ -10866,6 +10860,7 @@ impl<'a> Parser<'a> {
                 let include = self.parse_optional_include_columns()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
+                let on_conflict = self.parse_optional_constraint_conflict_clause()?;
                 Ok(Some(
                     PrimaryKeyConstraint {
                         name,
@@ -10875,6 +10870,7 @@ impl<'a> Parser<'a> {
                         include,
                         index_options,
                         characteristics,
+                        on_conflict,
                     }
                     .into(),
                 ))
@@ -10923,12 +10919,14 @@ impl<'a> Parser<'a> {
                     None
                 };
 
+                let on_conflict = self.parse_optional_constraint_conflict_clause()?;
                 Ok(Some(
                     CheckConstraint {
                         name,
                         expr,
                         no_inherit,
                         enforced,
+                        on_conflict,
                     }
                     .into(),
                 ))
@@ -11138,6 +11136,25 @@ impl<'a> Parser<'a> {
         } else {
             NullsDistinctOption::None
         })
+    }
+
+    /// Parses an optional `ON CONFLICT { ROLLBACK | ABORT | FAIL | IGNORE | REPLACE }`.
+    fn parse_optional_constraint_conflict_clause(
+        &mut self,
+    ) -> Result<Option<Keyword>, ParserError> {
+        if !self.dialect.supports_constraint_conflict_clause()
+            || !self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
+        {
+            return Ok(None);
+        }
+        self.expect_one_of_keywords(&[
+            Keyword::ROLLBACK,
+            Keyword::ABORT,
+            Keyword::FAIL,
+            Keyword::IGNORE,
+            Keyword::REPLACE,
+        ])
+        .map(Some)
     }
 
     /// Optionally parse a parenthesized list of `SqlOption`s introduced by `keyword`.

@@ -4477,6 +4477,7 @@ fn parse_create_table() {
                                     include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
+                                    on_conflict: None,
                                 }),
                             },
                             ColumnOptionDef {
@@ -4495,6 +4496,7 @@ fn parse_create_table() {
                                     index_options: vec![],
                                     characteristics: None,
                                     nulls_distinct: NullsDistinctOption::None,
+                                    on_conflict: None,
                                 }),
                             },
                             ColumnOptionDef {
@@ -4504,6 +4506,7 @@ fn parse_create_table() {
                                     expr: Box::new(verified_expr("constrained > 0")),
                                     no_inherit: false,
                                     enforced: None,
+                                    on_conflict: None,
                                 }),
                             },
                         ],
@@ -4835,6 +4838,7 @@ fn parse_create_table_column_constraint_characteristics() {
                                 index_options: vec![],
                                 characteristics: expected_value,
                                 nulls_distinct: NullsDistinctOption::None,
+                                on_conflict: None,
                             })
                         }]
                     }],

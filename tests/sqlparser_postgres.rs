@@ -7201,6 +7201,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7222,6 +7223,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7243,6 +7245,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7264,6 +7267,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7285,6 +7289,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -10811,6 +10816,7 @@ fn parse_alter_table_constraint_check_no_inherit() {
                         }),
                         no_inherit: true,
                         enforced: None,
+                        on_conflict: None,
                     }
                     .into(),
                     not_valid: true,

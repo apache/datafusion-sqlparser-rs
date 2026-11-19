@@ -230,6 +230,7 @@ fn parse_create_table_auto_increment() {
                                 include: vec![],
                                 index_options: vec![],
                                 characteristics: None,
+                                on_conflict: None,
                             }),
                         },
                         ColumnOptionDef {
@@ -263,6 +264,7 @@ fn parse_create_table_primary_key_asc_desc() {
                     include: vec![],
                     index_options: vec![],
                     characteristics: None,
+                    on_conflict: None,
                 }),
             },
             ColumnOptionDef {
@@ -2009,4 +2011,58 @@ fn parse_create_table_string_literal_column_with_dangling_constraint_name() {
             .to_string(),
         "sql parser error: Expected: constraint details after CONSTRAINT <name>, found: )"
     );
+}
+
+#[test]
+fn parse_create_table_on_conflict_table_constraint() {
+    for keyword in [
+        Keyword::ROLLBACK,
+        Keyword::ABORT,
+        Keyword::FAIL,
+        Keyword::IGNORE,
+        Keyword::REPLACE,
+    ] {
+        let sql = format!(
+            "CREATE TABLE t (a INT, b INT, PRIMARY KEY (a) ON CONFLICT {keyword:?}, CONSTRAINT u UNIQUE (b) ON CONFLICT {keyword:?}, CHECK (a > b) ON CONFLICT {keyword:?})"
+        );
+        let Statement::CreateTable(CreateTable { constraints, .. }) =
+            sqlite_and_generic().verified_stmt(&sql)
+        else {
+            unreachable!()
+        };
+        let [TableConstraint::PrimaryKey(primary_key), TableConstraint::Unique(unique), TableConstraint::Check(check)] =
+            constraints.as_slice()
+        else {
+            panic!("unexpected constraints: {constraints:?}")
+        };
+        assert_eq!(primary_key.on_conflict, Some(keyword));
+        assert_eq!(unique.on_conflict, Some(keyword));
+        assert_eq!(check.on_conflict, Some(keyword));
+    }
+
+    sqlite().verified_stmt(
+        "CREATE TABLE c (x, y, z GENERATED ALWAYS AS (x + y) VIRTUAL, PRIMARY KEY (x, y) ON CONFLICT ABORT) WITHOUT ROWID",
+    );
+}
+
+#[test]
+fn parse_create_table_on_conflict_table_constraint_err() {
+    assert_eq!(
+        sqlite_and_generic()
+            .parse_sql_statements("CREATE TABLE t (a INT, UNIQUE (a) ON CONFLICT BOH)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of ROLLBACK or ABORT or FAIL or IGNORE or REPLACE, found: BOH"
+                .to_string()
+        )
+    );
+
+    let unsupported = all_dialects_where(|d| !d.supports_constraint_conflict_clause());
+    for sql in [
+        "CREATE TABLE t (a INT, PRIMARY KEY (a) ON CONFLICT IGNORE)",
+        "CREATE TABLE t (a INT, UNIQUE (a) ON CONFLICT IGNORE)",
+        "CREATE TABLE t (a INT, CHECK (a > 0) ON CONFLICT IGNORE)",
+    ] {
+        assert!(unsupported.parse_sql_statements(sql).is_err(), "{sql}");
+    }
 }

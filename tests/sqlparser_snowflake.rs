@@ -541,6 +541,8 @@ fn test_snowflake_create_table_cluster_by() {
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
+                            closing_token:
+                                sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("c"))
                             ))],
@@ -1605,6 +1607,8 @@ fn test_alter_table_clustering() {
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
+                            closing_token:
+                                sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("c3"))
                             ))],
@@ -4664,6 +4668,7 @@ fn test_snowflake_identifier_function() {
             assert_eq!(
                 *args,
                 FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                         Value::SingleQuotedString("email".to_string()).into()
                     )))],
@@ -4685,6 +4690,7 @@ fn test_snowflake_identifier_function() {
             assert_eq!(
                 *args,
                 FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                         Value::SingleQuotedString("\"Email\"".to_string()).into()
                     )))],
@@ -4709,6 +4715,7 @@ fn test_snowflake_identifier_function() {
             assert_eq!(
                 *args,
                 FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                         Value::SingleQuotedString("alias1".to_string()).into()
                     )))],

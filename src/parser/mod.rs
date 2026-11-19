@@ -23017,30 +23017,35 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let object_type = match self.expect_one_of_keywords(&[
+        let object_type = match self.parse_one_of_keywords(&[
             Keyword::INDEX,
             Keyword::TABLE,
             Keyword::SCHEMA,
             Keyword::DATABASE,
             Keyword::SYSTEM,
-        ])? {
-            Keyword::INDEX => ReindexObjectType::Index,
-            Keyword::TABLE => ReindexObjectType::Table,
-            Keyword::SCHEMA => ReindexObjectType::Schema,
-            Keyword::DATABASE => ReindexObjectType::Database,
-            Keyword::SYSTEM => ReindexObjectType::System,
-            unexpected_keyword => {
-                return Err(ParserError::ParserError(format!(
-                    "Internal parser error: expected any of {{INDEX, TABLE, SCHEMA, DATABASE, SYSTEM}}, got {unexpected_keyword:?}"
-                )))
+        ]) {
+            Some(Keyword::INDEX) => ReindexObjectType::Index,
+            Some(Keyword::TABLE) => ReindexObjectType::Table,
+            Some(Keyword::SCHEMA) => ReindexObjectType::Schema,
+            Some(Keyword::DATABASE) => ReindexObjectType::Database,
+            Some(Keyword::SYSTEM) => ReindexObjectType::System,
+            _ => {
+                return self.expected_ref(
+                    "one of INDEX or TABLE or SCHEMA or DATABASE or SYSTEM",
+                    self.peek_token_ref(),
+                )
             }
         };
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
-        let name = match object_type {
-            ReindexObjectType::Database | ReindexObjectType::System => {
-                self.maybe_parse(|parser| parser.parse_object_name(false))?
-            }
-            _ => Some(self.parse_object_name(false)?),
+        let name_omitted =
+            matches!(
+                object_type,
+                ReindexObjectType::Database | ReindexObjectType::System
+            ) && matches!(self.peek_token_ref().token, Token::EOF | Token::SemiColon);
+        let name = if name_omitted {
+            None
+        } else {
+            Some(self.parse_object_name(false)?)
         };
         Ok(Reindex {
             options,

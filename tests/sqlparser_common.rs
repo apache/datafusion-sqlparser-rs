@@ -23719,6 +23719,19 @@ fn parse_reindex() {
             "{sql}"
         );
     }
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REINDEX SYSTEM; REINDEX DATABASE")
+            .unwrap(),
+        [ReindexObjectType::System, ReindexObjectType::Database].map(|object_type| {
+            Statement::Reindex(Reindex {
+                options: None,
+                object_type,
+                concurrently: false,
+                name: None,
+            })
+        })
+    );
 
     for (sql, error) in [
         (
@@ -23739,6 +23752,7 @@ fn parse_reindex() {
             "REINDEX TABLE t CONCURRENTLY",
             "Expected: end of statement, found: CONCURRENTLY",
         ),
+        ("REINDEX DATABASE 1", "Expected: identifier, found: 1"),
     ] {
         assert_eq!(
             all_dialects().parse_sql_statements(sql).unwrap_err(),

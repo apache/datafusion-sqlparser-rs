@@ -133,6 +133,8 @@ pub struct CreateTableBuilder {
     pub partition_of: Option<ObjectName>,
     /// Range of values associated with the partition (`FOR VALUES`)
     pub for_values: Option<ForValues>,
+    /// Optional composite type of a typed table (`OF type_name`)
+    pub of_type: Option<ObjectName>,
     /// Whether to copy grants from the source.
     pub copy_grants: bool,
     /// Optional flag for schema evolution support.
@@ -232,6 +234,7 @@ impl CreateTableBuilder {
             inherits: None,
             partition_of: None,
             for_values: None,
+            of_type: None,
             copy_grants: false,
             enable_schema_evolution: None,
             change_tracking: None,
@@ -431,6 +434,13 @@ impl CreateTableBuilder {
         self.for_values = for_values;
         self
     }
+
+    /// Sets the composite type of a typed table.
+    pub fn of_type(mut self, of_type: Option<ObjectName>) -> Self {
+        self.of_type = of_type;
+        self
+    }
+
     /// Enable copying grants from source object.
     pub fn copy_grants(mut self, copy_grants: bool) -> Self {
         self.copy_grants = copy_grants;
@@ -626,6 +636,7 @@ impl CreateTableBuilder {
             inherits: self.inherits,
             partition_of: self.partition_of,
             for_values: self.for_values,
+            of_type: self.of_type,
             copy_grants: self.copy_grants,
             enable_schema_evolution: self.enable_schema_evolution,
             change_tracking: self.change_tracking,
@@ -711,6 +722,7 @@ impl From<CreateTable> for CreateTableBuilder {
             inherits: table.inherits,
             partition_of: table.partition_of,
             for_values: table.for_values,
+            of_type: table.of_type,
             copy_grants: table.copy_grants,
             enable_schema_evolution: table.enable_schema_evolution,
             change_tracking: table.change_tracking,

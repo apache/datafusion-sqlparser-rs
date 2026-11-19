@@ -196,6 +196,8 @@ pub enum Value {
     NationalQuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// X'hex value'
     HexStringLiteral(String),
+    /// Hexadecimal numeric literal written as `0x...`.
+    HexNumber(String),
 
     /// Double quoted string literal, e.g. `"abc"`.
     DoubleQuotedString(String),
@@ -277,6 +279,7 @@ impl fmt::Display for Value {
             Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
             Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", escape_single_quote_string(v)),
+            Value::HexNumber(v) => write!(f, "0x{v}"),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => {
                 write!(f, "B'{}'", escape_single_quote_string(v))

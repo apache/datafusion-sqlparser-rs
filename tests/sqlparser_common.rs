@@ -17057,6 +17057,7 @@ fn parse_comments() {
         Statement::Comment {
             object_type,
             object_name,
+            parent_name: None,
             comment: Some(comment),
             if_exists,
         } => {
@@ -17094,6 +17095,7 @@ fn parse_comments() {
             Statement::Comment {
                 object_type,
                 object_name,
+                parent_name: None,
                 comment: Some(comment),
                 if_exists,
             } => {
@@ -17112,6 +17114,7 @@ fn parse_comments() {
         Statement::Comment {
             object_type,
             object_name,
+            parent_name: None,
             comment: None,
             if_exists,
         } => {

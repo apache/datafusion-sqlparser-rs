@@ -14922,6 +14922,43 @@ fn test_match_recognize_patterns() {
             ]),
         ]),
     );
+
+    // Unparenthesized exclusion following a symbol (not confused with `{n,m}` quantifier)
+    check(
+        "S1 {- S2 -}* S3",
+        Concat(vec![
+            Symbol(Named(Ident::new("S1"))),
+            Repetition(Box::new(Exclude(Named(Ident::new("S2")))), ZeroOrMore),
+            Symbol(Named(Ident::new("S3"))),
+        ]),
+    );
+
+    // Case-insensitive PERMUTE
+    all_dialects_where(|d| d.supports_match_recognize()).one_statement_parses_to(
+        "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN (permute(S1, S2)) DEFINE DUMMY AS 1 = 1)",
+        "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN (PERMUTE(S1, S2)) DEFINE DUMMY AS 1 = 1)",
+    );
+}
+
+#[test]
+fn parse_match_recognize_on_derived_table() {
+    let dialects = all_dialects_where(|d| d.supports_match_recognize());
+
+    let select = dialects.verified_only_select(
+        "SELECT * FROM (SELECT 1 AS id, 'A' AS tag) AS t MATCH_RECOGNIZE(ORDER BY id MEASURES MATCH_NUMBER() AS mn ONE ROW PER MATCH PATTERN (a) DEFINE a AS tag = 'A')",
+    );
+    assert!(matches!(
+        select.from[0].relation,
+        TableFactor::MatchRecognize { ref table, .. } if matches!(**table, TableFactor::Derived { .. })
+    ));
+
+    let select_values = dialects.verified_only_select(
+        "SELECT * FROM (VALUES (1, 'A'), (2, 'B')) AS t (id, tag) MATCH_RECOGNIZE(ORDER BY id PATTERN (a b) DEFINE a AS tag = 'A', b AS tag = 'B')",
+    );
+    assert!(matches!(
+        select_values.from[0].relation,
+        TableFactor::MatchRecognize { ref table, .. } if matches!(**table, TableFactor::Derived { .. })
+    ));
 }
 
 #[test]

@@ -17771,6 +17771,11 @@ impl<'a> Parser<'a> {
                         )),
                     }
                 }
+                if self.dialect.supports_match_recognize()
+                    && self.parse_keyword(Keyword::MATCH_RECOGNIZE)
+                {
+                    table = self.parse_match_recognize(table)?;
+                }
                 return Ok(table);
             }
 
@@ -18552,7 +18557,7 @@ impl<'a> Parser<'a> {
                 value,
                 quote_style: None,
                 ..
-            }) if value == "PERMUTE" => {
+            }) if value.eq_ignore_ascii_case("PERMUTE") => {
                 self.expect_token(&Token::LParen)?;
                 let symbols = self.parse_comma_separated(|p| {
                     p.parse_identifier().map(MatchRecognizeSymbol::Named)
@@ -18581,7 +18586,7 @@ impl<'a> Parser<'a> {
             Token::Mul => RepetitionQuantifier::ZeroOrMore,
             Token::Plus => RepetitionQuantifier::OneOrMore,
             Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
-            Token::LBrace => {
+            Token::LBrace if self.peek_token_ref().token != Token::Minus => {
                 // quantifier is a range like {n} or {n,} or {,m} or {n,m}
                 let token = self.next_token();
                 match token.token {

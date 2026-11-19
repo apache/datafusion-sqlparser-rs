@@ -5247,3 +5247,28 @@ fn parse_key_constraint_index_type_before_columns() {
         );
     }
 }
+
+#[test]
+fn parse_create_trigger_single_statement_body() {
+    let sql = "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.id = 1; DROP TRIGGER tr";
+    let statements = mysql_and_generic().parse_sql_statements(sql).unwrap();
+    let [Statement::CreateTrigger(CreateTrigger {
+        statements: Some(body),
+        ..
+    }), Statement::DropTrigger(_)] = &statements[..]
+    else {
+        panic!("{statements:?}")
+    };
+    assert!(
+        matches!(body.statements()[..], [Statement::Set(_)]),
+        "{body:?}"
+    );
+
+    assert_eq!(
+        mysql_and_generic()
+            .parse_sql_statements("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW"),
+        Err(ParserError::ParserError(
+            "Expected: an SQL statement, found: EOF".to_string()
+        ))
+    );
+}

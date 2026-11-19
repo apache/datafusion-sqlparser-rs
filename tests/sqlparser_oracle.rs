@@ -22,8 +22,9 @@ use pretty_assertions::assert_eq;
 
 use sqlparser::{
     ast::{
-        BinaryOperator, Expr, Ident, Insert, ObjectName, Query, QuoteDelimitedString, SetExpr,
-        Statement, TableAliasWithoutColumns, TableObject, Value, ValueWithSpan,
+        BinaryOperator, Expr, FlashbackQueryKind, Ident, Insert, ObjectName, Query,
+        QuoteDelimitedString, SetExpr, Statement, TableAliasWithoutColumns, TableFactor,
+        TableObject, TableVersion, Value, ValueWithSpan,
     },
     dialect::OracleDialect,
     parser::ParserError,
@@ -544,4 +545,70 @@ fn test_insert_without_alias() {
 fn parse_non_reserved_keyword_table_names() {
     oracle().verified_stmt("SELECT * FROM limit");
     oracle().verified_stmt("SELECT * FROM t JOIN limit ON TRUE");
+}
+
+#[test]
+fn parse_flashback_query() {
+    oracle().verified_stmt("SELECT * FROM t AS OF SCN 17421273106698");
+    oracle().verified_stmt("SELECT * FROM t AS OF SCN :scn");
+    oracle().verified_stmt("SELECT * FROM t AS OF TIMESTAMP SYSTIMESTAMP - INTERVAL '5' MINUTE");
+    oracle().verified_stmt("SELECT * FROM t AS OF PERIOD FOR valid_time SYSDATE");
+    oracle().verified_stmt("SELECT * FROM t VERSIONS BETWEEN SCN 100 AND MAXVALUE");
+    oracle().verified_stmt(
+        "SELECT * FROM t VERSIONS BETWEEN TIMESTAMP MINVALUE AND SYSTIMESTAMP - INTERVAL '1' HOUR",
+    );
+    oracle().verified_stmt(
+        "SELECT * FROM t VERSIONS PERIOD FOR valid_time BETWEEN MINVALUE AND MAXVALUE",
+    );
+    oracle().verified_stmt(
+        "SELECT a.id FROM a AS OF SCN 5 JOIN b AS OF SCN 5 ON a.id = b.id WHERE a.id IN (SELECT id FROM c AS OF SCN 5)",
+    );
+
+    // The clause comes before the alias.
+    let select =
+        oracle().verified_only_select("SELECT e.id FROM emp VERSIONS BETWEEN SCN 1 AND 2 e");
+    match &select.from[0].relation {
+        TableFactor::Table { version, alias, .. } => {
+            assert_eq!(
+                version,
+                &Some(TableVersion::VersionsBetween {
+                    kind: FlashbackQueryKind::Scn,
+                    low: Expr::value(number("1")),
+                    high: Expr::value(number("2")),
+                })
+            );
+            assert_eq!(
+                alias.as_ref().map(|alias| alias.name.value.as_str()),
+                Some("e")
+            );
+        }
+        relation => panic!("unexpected relation: {relation:?}"),
+    }
+
+    // Outside the clause, `versions` and `scn` remain identifiers.
+    oracle().verified_stmt("SELECT * FROM t versions");
+    oracle().verified_stmt("SELECT scn, versions FROM t");
+
+    assert_eq!(
+        oracle()
+            .parse_sql_statements("SELECT * FROM t AS OF SCN")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
+    assert_eq!(
+        oracle()
+            .parse_sql_statements("SELECT * FROM t VERSIONS BETWEEN 1 AND 2")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: one of SCN or TIMESTAMP, found: 1".to_string())
+    );
+    assert_eq!(
+        oracle()
+            .parse_sql_statements("SELECT * FROM t VERSIONS BETWEEN SCN 1")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: AND, found: EOF".to_string())
+    );
+
+    all_dialects_where(|d| !d.supports_flashback_query())
+        .parse_sql_statements("SELECT * FROM t AS OF SCN 1")
+        .unwrap_err();
 }

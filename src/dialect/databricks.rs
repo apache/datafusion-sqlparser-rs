@@ -90,6 +90,11 @@ impl Dialect for DatabricksDialect {
         true
     }
 
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/functions/exists>
+    fn supports_exists_function(&self) -> bool {
+        true
+    }
+
     // https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select.html#syntax
     fn supports_select_wildcard_except(&self) -> bool {
         true

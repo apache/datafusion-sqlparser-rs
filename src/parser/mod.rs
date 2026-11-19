@@ -5599,6 +5599,10 @@ impl<'a> Parser<'a> {
             self.parse_create_schema(or_replace)
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
             self.parse_create_warehouse(or_replace).map(Into::into)
+        } else if self.parse_keyword(Keyword::VECTOR) {
+            self.expect_keyword_is(Keyword::INDEX)?;
+            self.parse_create_index_inner(false, true, or_replace)
+                .map(Into::into)
         } else if or_replace {
             self.expected_ref(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE or SCHEMA or WAREHOUSE after CREATE OR REPLACE",
@@ -8946,6 +8950,17 @@ impl<'a> Parser<'a> {
 
     /// Parse a `CREATE INDEX` statement.
     pub fn parse_create_index(&mut self, unique: bool) -> Result<CreateIndex, ParserError> {
+        self.parse_create_index_inner(unique, false, false)
+    }
+
+    /// Parse the body of a `CREATE [UNIQUE | VECTOR] INDEX` statement, with the
+    /// leading `[UNIQUE | VECTOR] INDEX` keyword(s) already consumed.
+    fn parse_create_index_inner(
+        &mut self,
+        unique: bool,
+        vector: bool,
+        or_replace: bool,
+    ) -> Result<CreateIndex, ParserError> {
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
         let r#async = self.parse_keyword(Keyword::ASYNC);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -8979,6 +8994,16 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
+        // `STORING(...)` covering columns (e.g. `CREATE VECTOR INDEX`).
+        let storing = if self.parse_keyword(Keyword::STORING) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+            columns
+        } else {
+            vec![]
+        };
+
         let nulls_distinct = if self.parse_keyword(Keyword::NULLS) {
             let not = self.parse_keyword(Keyword::NOT);
             self.expect_keyword_is(Keyword::DISTINCT)?;
@@ -8987,7 +9012,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let with = if self.dialect.supports_create_index_with_clause()
+        // A vector index accepts a `WITH (...)` options clause in every dialect
+        // (e.g. SQL Server `WITH (METRIC = ..., TYPE = ...)`).
+        let with = if (self.dialect.supports_create_index_with_clause() || vector)
             && self.parse_keyword(Keyword::WITH)
         {
             self.expect_token(&Token::LParen)?;
@@ -8997,6 +9024,16 @@ impl<'a> Parser<'a> {
         } else {
             Vec::new()
         };
+
+        // SQL Server places a vector index on a filegroup: `ON [PRIMARY]`.
+        let filegroup = if vector && self.parse_keyword(Keyword::ON) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        // `OPTIONS(...)` clause (e.g. `CREATE VECTOR INDEX`); no-op when absent.
+        let options = self.parse_options(Keyword::OPTIONS)?;
 
         let predicate = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
@@ -9025,13 +9062,18 @@ impl<'a> Parser<'a> {
             table_name,
             using,
             columns,
+            vector,
+            or_replace,
             unique,
             concurrently,
             r#async,
             if_not_exists,
             include,
+            storing,
             nulls_distinct,
             with,
+            filegroup,
+            options,
             predicate,
             index_options,
             alter_options,

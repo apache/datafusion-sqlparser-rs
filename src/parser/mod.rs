@@ -16271,6 +16271,7 @@ impl<'a> Parser<'a> {
                     from: None,
                     materialized: None,
                     closing_paren_token: closing_paren_token.into(),
+                    search: self.parse_cte_search_clause()?,
                 };
                 if self.parse_keyword(Keyword::FROM) {
                     cte.from = Some(self.parse_identifier()?);
@@ -16316,11 +16317,37 @@ impl<'a> Parser<'a> {
             from: None,
             materialized: is_materialized,
             closing_paren_token: closing_paren_token.into(),
+            search: self.parse_cte_search_clause()?,
         };
         if self.dialect.supports_from_first_insert() && self.parse_keyword(Keyword::FROM) {
             cte.from = Some(self.parse_identifier()?);
         }
         Ok(cte)
+    }
+
+    /// Parse the optional `SEARCH` clause after a CTE's closing parenthesis.
+    fn parse_cte_search_clause(&mut self) -> Result<Option<CteSearchClause>, ParserError> {
+        if !self.dialect.supports_cte_search_clause() || !self.parse_keyword(Keyword::SEARCH) {
+            return Ok(None);
+        }
+        let order = match self.expect_one_of_keywords(&[Keyword::BREADTH, Keyword::DEPTH])? {
+            Keyword::BREADTH => CteSearchOrder::BreadthFirst,
+            Keyword::DEPTH => CteSearchOrder::DepthFirst,
+            unexpected_keyword => {
+                return Err(ParserError::ParserError(format!(
+                "Internal parser error: unexpected keyword `{unexpected_keyword}` in BREADTH/DEPTH"
+            )))
+            }
+        };
+        self.expect_keywords(&[Keyword::FIRST, Keyword::BY])?;
+        let columns = self.parse_comma_separated(|parser| parser.parse_identifier())?;
+        self.expect_keyword_is(Keyword::SET)?;
+        let sequence_column = self.parse_identifier()?;
+        Ok(Some(CteSearchClause {
+            order,
+            columns,
+            sequence_column,
+        }))
     }
 
     /// Parse a "query body", which is an expression with roughly the

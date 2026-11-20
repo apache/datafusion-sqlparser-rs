@@ -14146,3 +14146,122 @@ fn parse_select_for_key_lock_strengths() {
         );
     }
 }
+
+const RECURSIVE_GROUPS_CTE: &str = "WITH RECURSIVE r (id, parent_id) AS (SELECT id, parent_id FROM groups WHERE id = 1 UNION ALL SELECT g.id, g.parent_id FROM groups AS g JOIN r ON g.parent_id = r.id)";
+
+/// Asserts that `RECURSIVE_GROUPS_CTE`, each set of clauses and `SELECT id FROM r` fail to parse with the paired error.
+fn assert_recursive_cte_errors(dialects: &TestedDialects, cases: &[(&str, &str)]) {
+    for (clauses, error) in cases {
+        let sql = format!("{RECURSIVE_GROUPS_CTE} {clauses} SELECT id FROM r");
+        let actual = dialects.parse_sql_statements(&sql).unwrap_err().to_string();
+        assert!(
+            actual.starts_with(&format!("sql parser error: {error}")),
+            "{sql}: {actual}"
+        );
+    }
+}
+
+/// Asserts that displaying `cte` fails when the writer rejects the `rejected` fragment.
+fn assert_cte_display_propagates_write_error(cte: &Cte, rejected: &'static str) {
+    struct RejectingWriter(&'static str);
+
+    impl core::fmt::Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> core::fmt::Result {
+            if value == self.0 {
+                Err(core::fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    assert_eq!(
+        core::fmt::Write::write_fmt(&mut RejectingWriter(rejected), format_args!("{cte}")),
+        Err(core::fmt::Error),
+        "{rejected:?}"
+    );
+}
+
+#[test]
+fn parse_cte_search_clause() {
+    for clauses in [
+        "SEARCH BREADTH FIRST BY id SET ordercol",
+        "SEARCH DEPTH FIRST BY id, parent_id SET ordercol",
+        "SEARCH DEPTH FIRST BY id SET ordercol, s AS (SELECT 1)",
+    ] {
+        pg_and_generic().verified_stmt(&format!(
+            "{RECURSIVE_GROUPS_CTE} {clauses} SELECT id FROM r"
+        ));
+    }
+
+    let query = pg().verified_query(&format!(
+        "{RECURSIVE_GROUPS_CTE} SEARCH DEPTH FIRST BY id SET ordercol SELECT id FROM r"
+    ));
+    assert_eq!(
+        query.with.unwrap().cte_tables[0].search,
+        Some(CteSearchClause {
+            order: CteSearchOrder::DepthFirst,
+            columns: vec![Ident::new("id")],
+            sequence_column: Ident::new("ordercol"),
+        })
+    );
+
+    let sql =
+        format!("{RECURSIVE_GROUPS_CTE} SEARCH DEPTH FIRST BY id SET ordercol SELECT id FROM r");
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, &sql).unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        panic!("{sql}")
+    };
+    let cte = &query.with.as_ref().unwrap().cte_tables[0];
+    assert_eq!(
+        cte.search.as_ref().unwrap().span(),
+        Span::new(Location::new(1, 188), Location::new(1, 203))
+    );
+    assert_eq!(
+        cte.span(),
+        Span::new(Location::new(1, 16), Location::new(1, 203))
+    );
+    assert_cte_display_propagates_write_error(cte, "SEARCH ");
+
+    assert_recursive_cte_errors(
+        &pg(),
+        &[
+            (
+                "SEARCH FIRST BY id SET ordercol",
+                "Expected: one of BREADTH or DEPTH, found: FIRST",
+            ),
+            (
+                "SEARCH DEPTH FIRST BY id USING ordercol",
+                "Expected: SET, found: USING",
+            ),
+            (
+                "SEARCH DEPTH BY id SET ordercol",
+                "Expected: FIRST, found: BY",
+            ),
+            (
+                "SEARCH DEPTH FIRST BY 1 SET ordercol",
+                "Expected: identifier, found: 1",
+            ),
+            (
+                "SEARCH DEPTH FIRST BY id SET 1",
+                "Expected: identifier, found: 1",
+            ),
+        ],
+    );
+    assert_recursive_cte_errors(
+        &all_dialects_where(|d| !d.supports_cte_search_clause()),
+        &[(
+            "SEARCH DEPTH FIRST BY id SET ordercol",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: SEARCH",
+        )],
+    );
+    assert_eq!(
+        Parser::parse_sql(
+            &GenericDialect {},
+            "WITH r (SELECT 1) SEARCH FIRST BY id SET ordercol SELECT 1"
+        )
+        .unwrap_err()
+        .to_string(),
+        "sql parser error: Expected: one of BREADTH or DEPTH, found: FIRST at Line: 1, Column: 26"
+    );
+}

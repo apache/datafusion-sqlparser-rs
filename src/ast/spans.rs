@@ -35,7 +35,7 @@ use super::{
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
     CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
-    Cte, Delete, DoOption, DoStatement, DoUpdate, DropRule, ExceptSelectItem,
+    Cte, CteSearchClause, Delete, DoOption, DoStatement, DoUpdate, DropRule, ExceptSelectItem,
     ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
     FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
@@ -205,13 +205,32 @@ impl Spanned for Cte {
             from,
             materialized: _, // enum
             closing_paren_token,
+            search,
         } = self;
 
         union_spans(
             core::iter::once(alias.span())
                 .chain(core::iter::once(query.span()))
                 .chain(from.iter().map(|item| item.span))
-                .chain(core::iter::once(closing_paren_token.0.span)),
+                .chain(core::iter::once(closing_paren_token.0.span))
+                .chain(search.iter().map(|item| item.span())),
+        )
+    }
+}
+
+impl Spanned for CteSearchClause {
+    fn span(&self) -> Span {
+        let CteSearchClause {
+            order: _, // enum
+            columns,
+            sequence_column,
+        } = self;
+
+        union_spans(
+            columns
+                .iter()
+                .map(|item| item.span)
+                .chain(core::iter::once(sequence_column.span)),
         )
     }
 }

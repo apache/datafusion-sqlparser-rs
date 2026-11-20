@@ -3145,6 +3145,50 @@ pub struct SqliteTableOptions {
     pub options: Vec<SqliteTableOption>,
 }
 
+/// An argument of `CREATE VIRTUAL TABLE ... USING module(...)`, kept as
+/// written because its meaning belongs to the module.
+///
+/// See [SQLite documentation](https://www.sqlite.org/lang_createvtab.html).
+#[derive(Debug, Clone, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct VirtualTableModuleArgument {
+    /// The argument text.
+    pub value: String,
+    /// The source `Span` of the argument.
+    pub span: Span,
+}
+
+impl PartialEq for VirtualTableModuleArgument {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Ord for VirtualTableModuleArgument {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl PartialOrd for VirtualTableModuleArgument {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(Ord::cmp(self, other))
+    }
+}
+
+impl core::hash::Hash for VirtualTableModuleArgument {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+impl fmt::Display for VirtualTableModuleArgument {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.value)
+    }
+}
+
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

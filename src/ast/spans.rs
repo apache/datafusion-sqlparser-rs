@@ -388,7 +388,7 @@ impl Spanned for Statement {
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(core::iter::once(module_name.span))
-                    .chain(module_args.iter().map(|i| i.span)),
+                    .chain(module_args.iter().map(|arg| arg.span)),
             ),
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),

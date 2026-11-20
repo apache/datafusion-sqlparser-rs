@@ -10428,6 +10428,16 @@ fn parse_double_colon_cast_at_timezone() {
 }
 
 #[test]
+fn parse_double_colon_cast_missing_type() {
+    assert_eq!(
+        all_dialects().parse_sql_statements("SELECT 1::"),
+        Err(ParserError::ParserError(
+            "Expected: a data type name, found: EOF".to_string()
+        )),
+    );
+}
+
+#[test]
 fn parse_set_time_zone() {
     match verified_stmt("SET TIMEZONE = 'UTC'") {
         Statement::Set(Set::SingleAssignment {

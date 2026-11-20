@@ -64,10 +64,11 @@ pub use self::dcl::{
     SetConfigValue, Use,
 };
 pub use self::ddl::{
-    AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,
-    AlterConnectorOwner, AlterFunction, AlterFunctionAction, AlterFunctionKind,
-    AlterFunctionOperation, AlterGenericOption, AlterIndexOperation, AlterOperator,
-    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
+    AggregateArgs, AggregateModifyKind, AggregateSignature, Alignment, AlterCollation,
+    AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner, AlterExtension,
+    AlterExtensionMember, AlterExtensionOperation, AlterFunction, AlterFunctionAction,
+    AlterFunctionOperation, AlterFunctionSignature, AlterGenericOption, AlterIndexOperation,
+    AlterOperator, AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
     AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
     AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
     AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
@@ -3943,6 +3944,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
     AlterCollation(AlterCollation),
     /// ```sql
+    /// ALTER EXTENSION
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterextension.html)
+    AlterExtension(AlterExtension),
+    /// ```sql
     /// ALTER OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteroperator.html)
@@ -5633,6 +5639,13 @@ impl fmt::Display for Statement {
 
                 match body {
                     CreateProcedureBody::As(body) => write!(f, " AS {body}"),
+                    CreateProcedureBody::AsString { body, link_symbol } => {
+                        write!(f, " AS {body}")?;
+                        if let Some(link_symbol) = link_symbol {
+                            write!(f, ", {link_symbol}")?;
+                        }
+                        Ok(())
+                    }
                     CreateProcedureBody::BeginAtomic(BeginEndStatements { statements, .. }) => {
                         format_begin_atomic(f, statements)
                     }
@@ -5785,6 +5798,7 @@ impl fmt::Display for Statement {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
             Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
+            Statement::AlterExtension(alter_extension) => write!(f, "{alter_extension}"),
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
             Statement::AlterOperatorFamily(alter_operator_family) => {
                 write!(f, "{alter_operator_family}")
@@ -10611,6 +10625,15 @@ pub enum CreateFunctionBody {
 pub enum CreateProcedureBody {
     /// Statements after `AS`.
     As(ConditionalStatements),
+    /// A definition string after `AS`, e.g. `AS $$ body $$` or `AS 'obj_file', 'link_symbol'`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
+    AsString {
+        /// The definition.
+        body: Expr,
+        /// The symbol to link when the definition names a shared library file.
+        link_symbol: Option<Expr>,
+    },
     /// SQL-standard body enclosed by `BEGIN ATOMIC` and `END`.
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
@@ -12764,6 +12787,12 @@ impl From<AlterType> for Statement {
 impl From<AlterCollation> for Statement {
     fn from(a: AlterCollation) -> Self {
         Self::AlterCollation(a)
+    }
+}
+
+impl From<AlterExtension> for Statement {
+    fn from(a: AlterExtension) -> Self {
+        Self::AlterExtension(a)
     }
 }
 

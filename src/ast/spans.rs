@@ -276,6 +276,7 @@ impl Spanned for Values {
 /// - [Statement::CreateExtension]
 /// - [Statement::CreateCollation]
 /// - [Statement::AlterCollation]
+/// - [Statement::AlterExtension]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -416,6 +417,7 @@ impl Spanned for Statement {
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterCollation { .. } => Span::empty(),
+            Statement::AlterExtension { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),

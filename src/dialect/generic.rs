@@ -337,10 +337,6 @@ impl Dialect for GenericDialect {
         true
     }
 
-    fn supports_table_inheritance_markers(&self) -> bool {
-        true
-    }
-
     fn supports_select_format(&self) -> bool {
         true
     }

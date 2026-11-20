@@ -9131,8 +9131,8 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    /// Parse an operator signature for a [Statement::DropOperator]
-    /// Format: `name ( { left_type | NONE } , right_type )`
+    /// Parse an operator signature in the form
+    /// `name ( { left_type | NONE } , right_type )`
     fn parse_drop_operator_signature(&mut self) -> Result<DropOperatorSignature, ParserError> {
         let name = self.parse_operator_name()?;
         self.expect_token(&Token::LParen)?;
@@ -12021,6 +12021,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
+            Keyword::EXTENSION => self.parse_alter_extension().map(Into::into),
             Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
@@ -12048,8 +12049,15 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
-            Keyword::FUNCTION => self.parse_alter_function(AlterFunctionKind::Function),
-            Keyword::AGGREGATE => self.parse_alter_function(AlterFunctionKind::Aggregate),
+            Keyword::FUNCTION => {
+                let signature = AlterFunctionSignature::Function(self.parse_function_desc()?);
+                self.parse_alter_function(signature)
+            }
+            Keyword::AGGREGATE => {
+                let signature =
+                    AlterFunctionSignature::Aggregate(self.parse_alter_aggregate_signature()?);
+                self.parse_alter_function(signature)
+            }
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
                     self.parse_alter_operator_family().map(Into::into)
@@ -12070,29 +12078,23 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or EXTENSION",
                     self.peek_token_ref(),
                 )
             }
         }
     }
 
-    fn parse_alter_aggregate_signature(
-        &mut self,
-    ) -> Result<(FunctionDesc, bool, Option<Vec<OperateFunctionArg>>), ParserError> {
+    fn parse_alter_aggregate_signature(&mut self) -> Result<AggregateSignature, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_token(&Token::LParen)?;
 
         if self.consume_token(&Token::Mul) {
             self.expect_token(&Token::RParen)?;
-            return Ok((
-                FunctionDesc {
-                    name,
-                    args: Some(vec![]),
-                },
-                true,
-                None,
-            ));
+            return Ok(AggregateSignature {
+                name,
+                args: AggregateArgs::Star,
+            });
         }
 
         let args =
@@ -12102,21 +12104,17 @@ impl<'a> Parser<'a> {
                 self.parse_comma_separated(Parser::parse_aggregate_function_arg)?
             };
 
-        let aggregate_order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             Some(self.parse_comma_separated(Parser::parse_aggregate_function_arg)?)
         } else {
             None
         };
 
         self.expect_token(&Token::RParen)?;
-        Ok((
-            FunctionDesc {
-                name,
-                args: Some(args),
-            },
-            false,
-            aggregate_order_by,
-        ))
+        Ok(AggregateSignature {
+            name,
+            args: AggregateArgs::List { args, order_by },
+        })
     }
 
     fn parse_alter_function_action(&mut self) -> Result<Option<AlterFunctionAction>, ParserError> {
@@ -12235,16 +12233,11 @@ impl<'a> Parser<'a> {
         Ok((actions, restrict))
     }
 
-    /// Parse an `ALTER FUNCTION` or `ALTER AGGREGATE` statement.
+    /// Parse an `ALTER FUNCTION` or `ALTER AGGREGATE` operation after its signature.
     pub fn parse_alter_function(
         &mut self,
-        kind: AlterFunctionKind,
+        signature: AlterFunctionSignature,
     ) -> Result<Statement, ParserError> {
-        let (function, aggregate_star, aggregate_order_by) = match kind {
-            AlterFunctionKind::Function => (self.parse_function_desc()?, false, None),
-            AlterFunctionKind::Aggregate => self.parse_alter_aggregate_signature()?,
-        };
-
         let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             let new_name = self.parse_identifier()?;
             AlterFunctionOperation::RenameTo { new_name }
@@ -12254,7 +12247,9 @@ impl<'a> Parser<'a> {
             AlterFunctionOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) && self.parse_keyword(Keyword::NO) {
+        } else if matches!(signature, AlterFunctionSignature::Function(_))
+            && self.parse_keyword(Keyword::NO)
+        {
             if !self.parse_keyword(Keyword::DEPENDS) {
                 return self.expected_ref("DEPENDS after NO", self.peek_token_ref());
             }
@@ -12263,7 +12258,7 @@ impl<'a> Parser<'a> {
                 no: true,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function)
+        } else if matches!(signature, AlterFunctionSignature::Function(_))
             && self.parse_keyword(Keyword::DEPENDS)
         {
             self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
@@ -12271,7 +12266,7 @@ impl<'a> Parser<'a> {
                 no: false,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) {
+        } else if matches!(signature, AlterFunctionSignature::Function(_)) {
             let (actions, restrict) = self.parse_alter_function_actions()?;
             AlterFunctionOperation::Actions { actions, restrict }
         } else {
@@ -12282,10 +12277,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::AlterFunction(AlterFunction {
-            kind,
-            function,
-            aggregate_order_by,
-            aggregate_star,
+            signature,
             operation,
         }))
     }
@@ -12501,6 +12493,177 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterCollation { name, operation })
+    }
+
+    /// Parse a [Statement::AlterExtension]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterextension.html)
+    pub fn parse_alter_extension(&mut self) -> Result<AlterExtension, ParserError> {
+        let name = self.parse_identifier()?;
+        let operation = if self.parse_keyword(Keyword::UPDATE) {
+            let new_version = if self.parse_keyword(Keyword::TO) {
+                Some(self.parse_identifier()?)
+            } else {
+                None
+            };
+            AlterExtensionOperation::Update { new_version }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterExtensionOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else {
+            let action = if self.parse_keyword(Keyword::ADD) {
+                AlterExtensionOperation::Add
+            } else if self.parse_keyword(Keyword::DROP) {
+                AlterExtensionOperation::Drop
+            } else {
+                return self.expected_ref(
+                    "UPDATE, SET SCHEMA, ADD, or DROP after ALTER EXTENSION name",
+                    self.peek_token_ref(),
+                );
+            };
+            action(self.parse_alter_extension_member()?)
+        };
+
+        Ok(AlterExtension { name, operation })
+    }
+
+    /// Parse a member object of `ALTER EXTENSION ADD` or `ALTER EXTENSION DROP`
+    fn parse_alter_extension_member(&mut self) -> Result<AlterExtensionMember, ParserError> {
+        if self.parse_keywords(&[Keyword::ACCESS, Keyword::METHOD]) {
+            Ok(AlterExtensionMember::AccessMethod(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::AGGREGATE) {
+            Ok(AlterExtensionMember::Aggregate(
+                self.parse_alter_aggregate_signature()?,
+            ))
+        } else if self.parse_keyword(Keyword::CAST) {
+            self.expect_token(&Token::LParen)?;
+            let source_type = self.parse_data_type()?;
+            self.expect_keyword_is(Keyword::AS)?;
+            let target_type = self.parse_data_type()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(AlterExtensionMember::Cast {
+                source_type,
+                target_type,
+            })
+        } else if self.parse_keyword(Keyword::COLLATION) {
+            Ok(AlterExtensionMember::Collation(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keyword(Keyword::CONVERSION) {
+            Ok(AlterExtensionMember::Conversion(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keyword(Keyword::DATABASE) {
+            Ok(AlterExtensionMember::Database(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::DOMAIN) {
+            Ok(AlterExtensionMember::Domain(self.parse_data_type()?))
+        } else if self.parse_keywords(&[Keyword::EVENT, Keyword::TRIGGER]) {
+            Ok(AlterExtensionMember::EventTrigger(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::EXTENSION) {
+            Ok(AlterExtensionMember::Extension(self.parse_identifier()?))
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
+            Ok(AlterExtensionMember::ForeignDataWrapper(
+                self.parse_identifier()?,
+            ))
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
+            Ok(AlterExtensionMember::ForeignTable(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            Ok(AlterExtensionMember::Function(self.parse_function_desc()?))
+        } else if self.parse_keyword(Keyword::INDEX) {
+            Ok(AlterExtensionMember::Index(self.parse_object_name(false)?))
+        } else if self.parse_keywords(&[Keyword::PROCEDURAL, Keyword::LANGUAGE]) {
+            Ok(AlterExtensionMember::Language {
+                procedural: true,
+                name: self.parse_identifier()?,
+            })
+        } else if self.parse_keyword(Keyword::LANGUAGE) {
+            Ok(AlterExtensionMember::Language {
+                procedural: false,
+                name: self.parse_identifier()?,
+            })
+        } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
+            Ok(AlterExtensionMember::MaterializedView(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keyword(Keyword::OPERATOR) {
+            if self.parse_keyword(Keyword::CLASS) {
+                let name = self.parse_object_name(false)?;
+                self.expect_keyword_is(Keyword::USING)?;
+                let using = self.parse_identifier()?;
+                Ok(AlterExtensionMember::OperatorClass { name, using })
+            } else if self.parse_keyword(Keyword::FAMILY) {
+                let name = self.parse_object_name(false)?;
+                self.expect_keyword_is(Keyword::USING)?;
+                let using = self.parse_identifier()?;
+                Ok(AlterExtensionMember::OperatorFamily { name, using })
+            } else {
+                Ok(AlterExtensionMember::Operator(
+                    self.parse_drop_operator_signature()?,
+                ))
+            }
+        } else if self.parse_keyword(Keyword::PROCEDURE) {
+            Ok(AlterExtensionMember::Procedure(self.parse_function_desc()?))
+        } else if self.parse_keyword(Keyword::PUBLICATION) {
+            Ok(AlterExtensionMember::Publication(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::ROUTINE) {
+            Ok(AlterExtensionMember::Routine(self.parse_function_desc()?))
+        } else if self.parse_keyword(Keyword::ROLE) {
+            Ok(AlterExtensionMember::Role(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::SCHEMA) {
+            Ok(AlterExtensionMember::Schema(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            Ok(AlterExtensionMember::Sequence(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keyword(Keyword::SERVER) {
+            Ok(AlterExtensionMember::Server(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::STATISTICS) {
+            Ok(AlterExtensionMember::Statistics(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keyword(Keyword::SUBSCRIPTION) {
+            Ok(AlterExtensionMember::Subscription(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::TABLE) {
+            Ok(AlterExtensionMember::Table(self.parse_object_name(false)?))
+        } else if self.parse_keyword(Keyword::TABLESPACE) {
+            Ok(AlterExtensionMember::TableSpace(self.parse_identifier()?))
+        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH, Keyword::CONFIGURATION]) {
+            Ok(AlterExtensionMember::TextSearchConfiguration(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH, Keyword::DICTIONARY]) {
+            Ok(AlterExtensionMember::TextSearchDictionary(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH, Keyword::PARSER]) {
+            Ok(AlterExtensionMember::TextSearchParser(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH, Keyword::TEMPLATE]) {
+            Ok(AlterExtensionMember::TextSearchTemplate(
+                self.parse_object_name(false)?,
+            ))
+        } else if self.parse_keywords(&[Keyword::TRANSFORM, Keyword::FOR]) {
+            let type_name = self.parse_data_type()?;
+            self.expect_keyword_is(Keyword::LANGUAGE)?;
+            let language = self.parse_identifier()?;
+            Ok(AlterExtensionMember::Transform {
+                type_name,
+                language,
+            })
+        } else if self.parse_keyword(Keyword::TYPE) {
+            Ok(AlterExtensionMember::Type(self.parse_data_type()?))
+        } else if self.parse_keyword(Keyword::VIEW) {
+            Ok(AlterExtensionMember::View(self.parse_object_name(false)?))
+        } else {
+            self.expected_ref(
+                "member object type after ADD or DROP",
+                self.peek_token_ref(),
+            )
+        }
     }
 
     /// Parse a [Statement::AlterOperator]
@@ -13515,6 +13678,13 @@ impl<'a> Parser<'a> {
     /// Parse the body of a `CREATE FUNCTION` specified as a string.
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
     fn parse_create_function_body_string(&mut self) -> Result<CreateFunctionBody, ParserError> {
+        let (body, link_symbol) = self.parse_definition_string()?;
+        Ok(CreateFunctionBody::AsBeforeOptions { body, link_symbol })
+    }
+
+    /// Parse a definition string and the link symbol that may follow it,
+    /// e.g. `$$ body $$` or `'obj_file', 'link_symbol'`.
+    fn parse_definition_string(&mut self) -> Result<(Expr, Option<Expr>), ParserError> {
         let parse_string_expr = |parser: &mut Parser| -> Result<Expr, ParserError> {
             let peek_token = parser.peek_token();
             let span = peek_token.span;
@@ -13530,14 +13700,13 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(CreateFunctionBody::AsBeforeOptions {
-            body: parse_string_expr(self)?,
-            link_symbol: if self.consume_token(&Token::Comma) {
-                Some(parse_string_expr(self)?)
-            } else {
-                None
-            },
-        })
+        let body = parse_string_expr(self)?;
+        let link_symbol = if self.consume_token(&Token::Comma) {
+            Some(parse_string_expr(self)?)
+        } else {
+            None
+        };
+        Ok((body, link_symbol))
     }
 
     /// Parse a literal string
@@ -21007,14 +21176,25 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a FOR UPDATE/FOR SHARE clause
+    /// Parse a `FOR` row-locking clause
     pub fn parse_lock(&mut self) -> Result<LockClause, ParserError> {
-        let lock_type = match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
-            Keyword::UPDATE => LockType::Update,
-            Keyword::SHARE => LockType::Share,
-            unexpected_keyword => return Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{UPDATE, SHARE}}, got {unexpected_keyword:?}"),
-            )),
+        let lock_type = match self.parse_one_of_keywords(&[
+            Keyword::UPDATE,
+            Keyword::SHARE,
+            Keyword::NO,
+            Keyword::KEY,
+        ]) {
+            Some(Keyword::UPDATE) => LockType::Update,
+            Some(Keyword::SHARE) => LockType::Share,
+            Some(Keyword::NO) => {
+                self.expect_keywords(&[Keyword::KEY, Keyword::UPDATE])?;
+                LockType::NoKeyUpdate
+            }
+            Some(Keyword::KEY) => {
+                self.expect_keyword(Keyword::SHARE)?;
+                LockType::KeyShare
+            }
+            _ => return self.expected_ref("one of UPDATE or SHARE", self.peek_token_ref()),
         };
         let of = if self.parse_keyword(Keyword::OF) {
             Some(self.parse_object_name(false)?)
@@ -22010,7 +22190,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
 
-        let language = if self.parse_keyword(Keyword::LANGUAGE) {
+        let mut language = if self.parse_keyword(Keyword::LANGUAGE) {
             Some(self.parse_identifier()?)
         } else {
             None
@@ -22020,7 +22200,21 @@ impl<'a> Parser<'a> {
             Some(statements) => CreateProcedureBody::BeginAtomic(statements),
             None => {
                 self.expect_keyword_is(Keyword::AS)?;
-                CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                if matches!(
+                    self.peek_token_ref().token,
+                    Token::SingleQuotedString(_)
+                        | Token::DollarQuotedString(_)
+                        | Token::EscapedStringLiteral(_)
+                        | Token::UnicodeStringLiteral(_)
+                ) {
+                    let (body, link_symbol) = self.parse_definition_string()?;
+                    if language.is_none() && self.parse_keyword(Keyword::LANGUAGE) {
+                        language = Some(self.parse_identifier()?);
+                    }
+                    CreateProcedureBody::AsString { body, link_symbol }
+                } else {
+                    CreateProcedureBody::As(self.parse_conditional_statements(&[Keyword::END])?)
+                }
             }
         };
 

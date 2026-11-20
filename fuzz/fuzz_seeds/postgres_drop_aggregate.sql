@@ -1,0 +1,1 @@
+DROP AGGREGATE IF EXISTS s.agg(IN x int ORDER BY text), cnt(*) CASCADE

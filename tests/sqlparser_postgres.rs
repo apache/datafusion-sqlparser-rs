@@ -11631,7 +11631,7 @@ fn parse_drop_foreign_table() {
             .parse_sql_statements("DROP FOREIGN ft")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
+        "sql parser error: Expected: AGGREGATE, COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
     );
     for (sql, expected) in [
         ("DROP FOREIGN TABLE", "Expected: identifier, found: EOF"),
@@ -12002,7 +12002,7 @@ fn parse_drop_group_is_dialect_gated() {
         all_dialects_where(|d| !d.supports_drop_group())
             .parse_sql_statements("DROP GROUP staff"),
         Err(ParserError::ParserError(
-            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
+            "Expected: AGGREGATE, COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
         ))
     );
 }
@@ -14142,6 +14142,51 @@ fn parse_select_for_key_lock_strengths() {
         assert_eq!(
             pg_and_generic().parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_drop_aggregate() {
+    for sql in [
+        "DROP AGGREGATE agg(*)",
+        "DROP AGGREGATE agg()",
+        "DROP AGGREGATE IF EXISTS s.agg(IN x BIGINT) CASCADE",
+        "DROP AGGREGATE agg(INT ORDER BY TEXT), pct(ORDER BY DOUBLE PRECISION) RESTRICT",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    assert_eq!(
+        pg().verified_stmt("DROP AGGREGATE IF EXISTS agg(BIGINT), cnt(*) CASCADE"),
+        Statement::DropAggregate(DropAggregate {
+            if_exists: true,
+            signatures: vec![
+                AggregateSignature {
+                    name: ObjectName::from(Ident::new("agg")),
+                    args: AggregateArgs::List {
+                        args: vec![OperateFunctionArg::unnamed(DataType::BigInt(None))],
+                        order_by: None,
+                    },
+                },
+                AggregateSignature {
+                    name: ObjectName::from(Ident::new("cnt")),
+                    args: AggregateArgs::Star,
+                },
+            ],
+            drop_behavior: Some(DropBehavior::Cascade),
+        })
+    );
+
+    for (sql, error) in [
+        ("DROP AGGREGATE", "Expected: identifier, found: EOF"),
+        ("DROP AGGREGATE agg", "Expected: (, found: EOF"),
+        ("DROP AGGREGATE agg(*), cnt", "Expected: (, found: EOF"),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.into())),
             "{sql}"
         );
     }

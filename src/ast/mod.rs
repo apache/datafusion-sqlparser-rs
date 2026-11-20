@@ -82,8 +82,8 @@ pub use self::ddl::{
     CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateRule, CreateRuleAction,
     CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch, CreateTrigger,
     CreateUserMapping, CreateView, Deduplicate, DeferrableInitial, DetachPartitionMode, DistStyle,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
+    DropAggregate, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
+    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
     ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs, GeneratedExpressionMode,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
@@ -4087,6 +4087,10 @@ pub enum Statement {
     /// ```
     DropFunction(DropFunction),
     /// ```sql
+    /// DROP AGGREGATE
+    /// ```
+    DropAggregate(DropAggregate),
+    /// ```sql
     /// DROP DOMAIN
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-dropdomain.html)
@@ -5884,6 +5888,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
+            Statement::DropAggregate(drop_aggregate) => write!(f, "{drop_aggregate}"),
             Statement::DropDomain(DropDomain {
                 if_exists,
                 name,
@@ -12643,6 +12648,12 @@ impl From<AlterTable> for Statement {
 impl From<DropFunction> for Statement {
     fn from(df: DropFunction) -> Self {
         Self::DropFunction(df)
+    }
+}
+
+impl From<DropAggregate> for Statement {
+    fn from(drop_aggregate: DropAggregate) -> Self {
+        Self::DropAggregate(drop_aggregate)
     }
 }
 

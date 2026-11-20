@@ -270,6 +270,7 @@ impl Spanned for Values {
 /// - [Statement::DetachDuckDBDatabase]
 /// - [Statement::Drop]
 /// - [Statement::DropFunction]
+/// - [Statement::DropAggregate]
 /// - [Statement::DropProcedure]
 /// - [Statement::DropSecret]
 /// - [Statement::Declare]
@@ -429,6 +430,7 @@ impl Spanned for Statement {
             Statement::DetachDuckDBDatabase { .. } => Span::empty(),
             Statement::Drop { .. } => Span::empty(),
             Statement::DropFunction(drop_function) => drop_function.span(),
+            Statement::DropAggregate(drop_aggregate) => drop_aggregate.span(),
             Statement::DropDomain { .. } => Span::empty(),
             Statement::DropProcedure { .. } => Span::empty(),
             Statement::DropSecret { .. } => Span::empty(),

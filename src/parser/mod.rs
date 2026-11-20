@@ -16272,6 +16272,7 @@ impl<'a> Parser<'a> {
                     materialized: None,
                     closing_paren_token: closing_paren_token.into(),
                     search: self.parse_cte_search_clause()?,
+                    cycle: self.parse_cte_cycle_clause()?,
                 };
                 if self.parse_keyword(Keyword::FROM) {
                     cte.from = Some(self.parse_identifier()?);
@@ -16318,6 +16319,7 @@ impl<'a> Parser<'a> {
             materialized: is_materialized,
             closing_paren_token: closing_paren_token.into(),
             search: self.parse_cte_search_clause()?,
+            cycle: self.parse_cte_cycle_clause()?,
         };
         if self.dialect.supports_from_first_insert() && self.parse_keyword(Keyword::FROM) {
             cte.from = Some(self.parse_identifier()?);
@@ -16347,6 +16349,23 @@ impl<'a> Parser<'a> {
             order,
             columns,
             sequence_column,
+        }))
+    }
+
+    /// Parse the optional `CYCLE` clause after a CTE's closing parenthesis.
+    fn parse_cte_cycle_clause(&mut self) -> Result<Option<CteCycleClause>, ParserError> {
+        if !self.dialect.supports_cte_cycle_clause() || !self.parse_keyword(Keyword::CYCLE) {
+            return Ok(None);
+        }
+        let columns = self.parse_comma_separated(|parser| parser.parse_identifier())?;
+        self.expect_keyword_is(Keyword::SET)?;
+        let mark_column = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::USING)?;
+        let path_column = self.parse_identifier()?;
+        Ok(Some(CteCycleClause {
+            columns,
+            mark_column,
+            path_column,
         }))
     }
 

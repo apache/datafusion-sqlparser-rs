@@ -35,22 +35,23 @@ use super::{
     ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
     ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource,
     CreateIndex, CreateRule, CreateRuleAction, CreateTable, CreateTableOptions, CreateUserMapping,
-    Cte, CteSearchClause, Delete, DoOption, DoStatement, DoUpdate, DropRule, ExceptSelectItem,
-    ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
-    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, InTarget,
-    IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
-    JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge,
-    MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, MergeUpdateKind,
-    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
-    OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr,
-    OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
-    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
-    Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    Cte, CteCycleClause, CteSearchClause, Delete, DoOption, DoStatement, DoUpdate, DropRule,
+    ExceptSelectItem, ExcludeConstraintElement, ExcludeSelectItem, Expr, ExprWithAlias, Fetch,
+    ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
+    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement,
+    IlikeSelectItem, InTarget, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
+    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr, OrderByKind, OutputClause,
+    Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RefreshMaterializedView,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -206,6 +207,7 @@ impl Spanned for Cte {
             materialized: _, // enum
             closing_paren_token,
             search,
+            cycle,
         } = self;
 
         union_spans(
@@ -213,7 +215,8 @@ impl Spanned for Cte {
                 .chain(core::iter::once(query.span()))
                 .chain(from.iter().map(|item| item.span))
                 .chain(core::iter::once(closing_paren_token.0.span))
-                .chain(search.iter().map(|item| item.span())),
+                .chain(search.iter().map(|item| item.span()))
+                .chain(cycle.iter().map(|item| item.span())),
         )
     }
 }
@@ -231,6 +234,24 @@ impl Spanned for CteSearchClause {
                 .iter()
                 .map(|item| item.span)
                 .chain(core::iter::once(sequence_column.span)),
+        )
+    }
+}
+
+impl Spanned for CteCycleClause {
+    fn span(&self) -> Span {
+        let CteCycleClause {
+            columns,
+            mark_column,
+            path_column,
+        } = self;
+
+        union_spans(
+            columns
+                .iter()
+                .map(|item| item.span)
+                .chain(core::iter::once(mark_column.span))
+                .chain(core::iter::once(path_column.span)),
         )
     }
 }

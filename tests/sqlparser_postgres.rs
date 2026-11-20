@@ -14265,3 +14265,86 @@ fn parse_cte_search_clause() {
         "sql parser error: Expected: one of BREADTH or DEPTH, found: FIRST at Line: 1, Column: 26"
     );
 }
+
+#[test]
+fn parse_cte_cycle_clause() {
+    for clauses in [
+        "CYCLE id SET is_cycle USING path",
+        "CYCLE id, parent_id SET is_cycle USING path",
+        "CYCLE id SET is_cycle USING path, s AS (SELECT 1)",
+        "SEARCH DEPTH FIRST BY id SET ordercol CYCLE id SET is_cycle USING path",
+    ] {
+        pg_and_generic().verified_stmt(&format!(
+            "{RECURSIVE_GROUPS_CTE} {clauses} SELECT id FROM r"
+        ));
+    }
+
+    let query = pg().verified_query(&format!(
+        "{RECURSIVE_GROUPS_CTE} CYCLE id SET is_cycle USING path SELECT id FROM r"
+    ));
+    assert_eq!(
+        query.with.unwrap().cte_tables[0].cycle,
+        Some(CteCycleClause {
+            columns: vec![Ident::new("id")],
+            mark_column: Ident::new("is_cycle"),
+            path_column: Ident::new("path"),
+        })
+    );
+
+    let sql = format!("{RECURSIVE_GROUPS_CTE} CYCLE id SET is_cycle USING path SELECT id FROM r");
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, &sql).unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        panic!("{sql}")
+    };
+    let cte = &query.with.as_ref().unwrap().cte_tables[0];
+    assert_eq!(
+        cte.cycle.as_ref().unwrap().span(),
+        Span::new(Location::new(1, 172), Location::new(1, 198))
+    );
+    assert_eq!(
+        cte.span(),
+        Span::new(Location::new(1, 16), Location::new(1, 198))
+    );
+
+    assert_cte_display_propagates_write_error(cte, " SET ");
+
+    assert_recursive_cte_errors(
+        &pg(),
+        &[
+            ("CYCLE id SET is_cycle", "Expected: USING, found: SELECT"),
+            (
+                "CYCLE 1 SET is_cycle USING path",
+                "Expected: identifier, found: 1",
+            ),
+            ("CYCLE id USING path", "Expected: SET, found: USING"),
+            (
+                "CYCLE id SET 1 USING path",
+                "Expected: identifier, found: 1",
+            ),
+            (
+                "CYCLE id SET is_cycle USING 1",
+                "Expected: identifier, found: 1",
+            ),
+            (
+                "CYCLE id SET is_cycle USING path SEARCH DEPTH FIRST BY id SET ordercol",
+                "Expected: SELECT, VALUES, or a subquery in the query body, found: SEARCH",
+            ),
+        ],
+    );
+    assert_recursive_cte_errors(
+        &all_dialects_where(|d| !d.supports_cte_cycle_clause()),
+        &[(
+            "CYCLE id SET is_cycle USING path",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: CYCLE",
+        )],
+    );
+    assert_eq!(
+        Parser::parse_sql(
+            &GenericDialect {},
+            "WITH r (SELECT 1) CYCLE id USING path SELECT 1"
+        )
+        .unwrap_err()
+        .to_string(),
+        "sql parser error: Expected: SET, found: USING at Line: 1, Column: 28"
+    );
+}

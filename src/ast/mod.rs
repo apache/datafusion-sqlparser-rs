@@ -93,7 +93,7 @@ pub use self::ddl::{
     SqliteTableOptions, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
     UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, WithData,
+    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, VirtualTableModuleArgument, WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -3817,7 +3817,7 @@ pub enum Statement {
         /// Module name used by the virtual table.
         module_name: Ident,
         /// Arguments passed to the module.
-        module_args: Vec<Ident>,
+        module_args: Vec<VirtualTableModuleArgument>,
     },
     /// ```sql
     /// `CREATE INDEX`

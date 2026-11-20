@@ -8265,7 +8265,13 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
             ObjectType::Warehouse
         } else if self.parse_keyword(Keyword::FUNCTION) {
-            return self.parse_drop_function().map(Into::into);
+            return self
+                .parse_drop_function(DropFunctionKind::Function)
+                .map(Into::into);
+        } else if self.parse_keyword(Keyword::ROUTINE) {
+            return self
+                .parse_drop_function(DropFunctionKind::Routine)
+                .map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
             return self.parse_drop_policy().map(Into::into);
         } else if self.parse_keyword(Keyword::RULE) {
@@ -8293,7 +8299,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, ROUTINE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
                 self.peek_token_ref(),
             );
         };
@@ -8349,14 +8355,15 @@ impl<'a> Parser<'a> {
     }
 
     /// ```sql
-    /// DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
+    /// DROP { FUNCTION | ROUTINE } [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
     /// [ CASCADE | RESTRICT ]
     /// ```
-    fn parse_drop_function(&mut self) -> Result<DropFunction, ParserError> {
+    fn parse_drop_function(&mut self, kind: DropFunctionKind) -> Result<DropFunction, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let drop_behavior = self.parse_optional_drop_behavior();
         Ok(DropFunction {
+            kind,
             if_exists,
             func_desc,
             drop_behavior,

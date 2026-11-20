@@ -5935,6 +5935,7 @@ fn parse_drop_function() {
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::DropFunction(DropFunction {
+            kind: DropFunctionKind::Function,
             if_exists: true,
             func_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -5952,6 +5953,7 @@ fn parse_drop_function() {
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::DropFunction(DropFunction {
+            kind: DropFunctionKind::Function,
             if_exists: true,
             func_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -5979,6 +5981,7 @@ fn parse_drop_function() {
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::DropFunction(DropFunction {
+            kind: DropFunctionKind::Function,
             if_exists: true,
             func_desc: vec![
                 FunctionDesc {
@@ -11631,7 +11634,7 @@ fn parse_drop_foreign_table() {
             .parse_sql_statements("DROP FOREIGN ft")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
+        "sql parser error: Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, ROUTINE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: FOREIGN"
     );
     for (sql, expected) in [
         ("DROP FOREIGN TABLE", "Expected: identifier, found: EOF"),
@@ -12002,7 +12005,7 @@ fn parse_drop_group_is_dialect_gated() {
         all_dialects_where(|d| !d.supports_drop_group())
             .parse_sql_statements("DROP GROUP staff"),
         Err(ParserError::ParserError(
-            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
+            "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, ROUTINE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: GROUP".to_string()
         ))
     );
 }
@@ -14145,4 +14148,40 @@ fn parse_select_for_key_lock_strengths() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_drop_routine() {
+    for sql in [
+        "DROP ROUTINE f",
+        "DROP ROUTINE f()",
+        "DROP ROUTINE IF EXISTS p() CASCADE",
+        "DROP ROUTINE s.f(IN a INTEGER, TEXT), p RESTRICT",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    assert_eq!(
+        pg().verified_stmt("DROP ROUTINE IF EXISTS f(INTEGER), p CASCADE"),
+        Statement::DropFunction(DropFunction {
+            kind: DropFunctionKind::Routine,
+            if_exists: true,
+            func_desc: vec![
+                FunctionDesc {
+                    name: ObjectName::from(vec![Ident::new("f")]),
+                    args: Some(vec![OperateFunctionArg::unnamed(DataType::Integer(None))]),
+                },
+                FunctionDesc {
+                    name: ObjectName::from(vec![Ident::new("p")]),
+                    args: None,
+                },
+            ],
+            drop_behavior: Some(DropBehavior::Cascade),
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("DROP ROUTINE").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }

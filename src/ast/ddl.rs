@@ -5482,11 +5482,13 @@ impl fmt::Display for AlterTable {
     }
 }
 
-/// DROP FUNCTION statement
+/// `DROP FUNCTION` or `DROP ROUTINE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DropFunction {
+    /// The object type keyword.
+    pub kind: DropFunctionKind,
     /// Whether to include the `IF EXISTS` clause.
     pub if_exists: bool,
     /// One or more functions to drop
@@ -5495,11 +5497,34 @@ pub struct DropFunction {
     pub drop_behavior: Option<DropBehavior>,
 }
 
+/// Object type keyword of a [`DropFunction`].
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DropFunctionKind {
+    /// `FUNCTION`
+    Function,
+    /// `ROUTINE`, matching a function or a procedure.
+    ///
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droproutine.html)
+    Routine,
+}
+
+impl fmt::Display for DropFunctionKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Function => write!(f, "FUNCTION"),
+            Self::Routine => write!(f, "ROUTINE"),
+        }
+    }
+}
+
 impl fmt::Display for DropFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "DROP FUNCTION{} {}",
+            "DROP {}{} {}",
+            self.kind,
             if self.if_exists { " IF EXISTS" } else { "" },
             display_comma_separated(&self.func_desc),
         )?;

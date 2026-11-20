@@ -82,8 +82,8 @@ pub use self::ddl::{
     CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateRule, CreateRuleAction,
     CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch, CreateTrigger,
     CreateUserMapping, CreateView, Deduplicate, DeferrableInitial, DetachPartitionMode, DistStyle,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
+    DropBehavior, DropExtension, DropFunction, DropFunctionKind, DropOperator, DropOperatorClass,
+    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
     ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs, GeneratedExpressionMode,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
@@ -4083,7 +4083,7 @@ pub enum Statement {
         table: Option<ObjectName>,
     },
     /// ```sql
-    /// DROP FUNCTION
+    /// DROP { FUNCTION | ROUTINE }
     /// ```
     DropFunction(DropFunction),
     /// ```sql

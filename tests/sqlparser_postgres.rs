@@ -14146,3 +14146,60 @@ fn parse_select_for_key_lock_strengths() {
         );
     }
 }
+
+#[test]
+fn parse_current_role_system_user_current_schema() {
+    let select =
+        pg_and_generic().verified_only_select("SELECT CURRENT_ROLE, SYSTEM_USER, CURRENT_SCHEMA");
+    for (item, name) in
+        select
+            .projection
+            .iter()
+            .zip(["CURRENT_ROLE", "SYSTEM_USER", "CURRENT_SCHEMA"])
+    {
+        assert_eq!(
+            &Expr::Function(Function {
+                name: ObjectName::from(vec![Ident::new(name)]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::None,
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+            }),
+            expr_from_projection(item)
+        );
+    }
+
+    let select = pg_and_generic().verified_only_select("SELECT current_schema()");
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName::from(vec![Ident::new("current_schema")]),
+            uses_odbc_syntax: false,
+            parameters: FunctionArguments::None,
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
+            null_treatment: None,
+            filter: None,
+            over: None,
+            within_group: vec![],
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+
+    let select = pg_and_generic().verified_only_select(r#"SELECT "current_role""#);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('"', "current_role")),
+        expr_from_projection(only(&select.projection))
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT CURRENT_ROLE()")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: (".to_string())
+    );
+}

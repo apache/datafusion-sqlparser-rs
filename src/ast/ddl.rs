@@ -36,7 +36,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, format_statement_list,
+    display_comma_separated, display_separated, format_begin_atomic,
     table_constraints::{
         CheckConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint,
         UniqueConstraint,
@@ -254,6 +254,15 @@ pub enum AlterTableOperation {
         // See `AttachPartition` for more details
         /// Partition expression to detach.
         partition: Partition,
+    },
+    /// `DETACH PARTITION partition_name [ CONCURRENTLY | FINALIZE ]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    DetachPartitionOf {
+        /// The partition to detach.
+        partition: ObjectName,
+        /// `CONCURRENTLY` or `FINALIZE`, if given.
+        mode: Option<DetachPartitionMode>,
     },
     /// `FREEZE PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
@@ -549,6 +558,20 @@ pub enum AlterTableOperation {
         /// Name of the constraint to validate.
         name: Ident,
     },
+    /// `INHERIT <parent_table>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    Inherit {
+        /// Parent table to add.
+        parent: ObjectName,
+    },
+    /// `NO INHERIT <parent_table>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    NoInherit {
+        /// Parent table to remove.
+        parent: ObjectName,
+    },
     /// Arbitrary parenthesized `SET` options.
     ///
     /// Example:
@@ -569,6 +592,14 @@ pub enum AlterTableOperation {
     ResetOptions {
         /// Parameters to reset, optionally namespaced as in `toast.autovacuum_enabled`.
         options: Vec<ObjectName>,
+    },
+    /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
+    /// options of a foreign table.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterforeigntable.html)
+    GenericOptions {
+        /// The option changes, in source order.
+        options: Vec<AlterGenericOption>,
     },
 }
 
@@ -958,6 +989,13 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::DetachPartition { partition } => {
                 write!(f, "DETACH {partition}")
             }
+            AlterTableOperation::DetachPartitionOf { partition, mode } => {
+                write!(
+                    f,
+                    "DETACH PARTITION {partition}{}",
+                    display_option_spaced(mode)
+                )
+            }
             AlterTableOperation::EnableAlwaysRule { name } => {
                 write!(f, "ENABLE ALWAYS RULE {name}")
             }
@@ -1129,11 +1167,16 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
             }
+            AlterTableOperation::Inherit { parent } => write!(f, "INHERIT {parent}"),
+            AlterTableOperation::NoInherit { parent } => write!(f, "NO INHERIT {parent}"),
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
             }
             AlterTableOperation::ResetOptions { options } => {
                 write!(f, "RESET ({})", display_comma_separated(options))
+            }
+            AlterTableOperation::GenericOptions { options } => {
+                write!(f, "OPTIONS ({})", display_comma_separated(options))
             }
         }
     }
@@ -1388,6 +1431,14 @@ pub enum AlterColumnOperation {
         /// Optional sequence options for identity generation.
         sequence_options: Option<Vec<SequenceOptions>>,
     },
+    /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
+    /// options of a foreign table column.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterforeigntable.html)
+    GenericOptions {
+        /// The option changes, in source order.
+        options: Vec<AlterGenericOption>,
+    },
 }
 
 impl fmt::Display for AlterColumnOperation {
@@ -1437,6 +1488,48 @@ impl fmt::Display for AlterColumnOperation {
                 }
                 Ok(())
             }
+            AlterColumnOperation::GenericOptions { options } => {
+                write!(f, "OPTIONS ({})", display_comma_separated(options))
+            }
+        }
+    }
+}
+
+/// An element of a PostgreSQL `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`
+/// list in an `ALTER` statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterforeigntable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterGenericOption {
+    /// `[ ADD ] option 'value'`, which fails if the option is already set.
+    Add {
+        /// The option to add.
+        option: CreateServerOption,
+        /// Whether the `ADD` keyword was written.
+        add_keyword: bool,
+    },
+    /// `SET option 'value'`, which fails if the option is not set.
+    Set(CreateServerOption),
+    /// `DROP option`
+    Drop(Ident),
+}
+
+impl fmt::Display for AlterGenericOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterGenericOption::Add {
+                option,
+                add_keyword,
+            } => {
+                if *add_keyword {
+                    f.write_str("ADD ")?;
+                }
+                write!(f, "{option}")
+            }
+            AlterGenericOption::Set(option) => write!(f, "SET {option}"),
+            AlterGenericOption::Drop(key) => write!(f, "DROP {key}"),
         }
     }
 }
@@ -2052,6 +2145,11 @@ pub enum ColumnOption {
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
     Options(Vec<SqlOption>),
+    /// PostgreSQL `OPTIONS ( option 'value' [, ...] )` of a column, passed to the
+    /// foreign-data wrapper of a foreign table.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+    GenericOptions(Vec<CreateServerOption>),
     /// Creates an identity or an autoincrement column in a table.
     /// Syntax
     /// ```sql
@@ -2224,6 +2322,9 @@ impl fmt::Display for ColumnOption {
             }
             Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            GenericOptions(options) => {
+                write!(f, "OPTIONS ({})", display_comma_separated(options))
             }
             Identity(parameters) => {
                 write!(f, "{parameters}")
@@ -2447,6 +2548,26 @@ impl fmt::Display for DropBehavior {
         f.write_str(match self {
             DropBehavior::Restrict => "RESTRICT",
             DropBehavior::Cascade => "CASCADE",
+        })
+    }
+}
+
+/// The mode of PostgreSQL `ALTER TABLE ... DETACH PARTITION`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DetachPartitionMode {
+    /// `CONCURRENTLY`
+    Concurrently,
+    /// `FINALIZE`, completing an interrupted `CONCURRENTLY` detach.
+    Finalize,
+}
+
+impl fmt::Display for DetachPartitionMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DetachPartitionMode::Concurrently => "CONCURRENTLY",
+            DetachPartitionMode::Finalize => "FINALIZE",
         })
     }
 }
@@ -3806,6 +3927,26 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub security: Option<FunctionSecurity>,
+    /// `[ NOT ] LEAKPROOF`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub leakproof: Option<bool>,
+    /// `WINDOW`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub window: bool,
+    /// `COST execution_cost`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub cost: Option<Expr>,
+    /// `ROWS result_rows`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub rows: Option<Expr>,
+    /// `SUPPORT support_function`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub support: Option<ObjectName>,
     /// SET configuration_parameter clauses
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
@@ -3867,6 +4008,9 @@ impl fmt::Display for CreateFunction {
         if let Some(language) = &self.language {
             write!(f, " LANGUAGE {language}")?;
         }
+        if self.window {
+            write!(f, " WINDOW")?;
+        }
         if let Some(behavior) = &self.behavior {
             write!(f, " {behavior}")?;
         }
@@ -3878,6 +4022,21 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(security) = &self.security {
             write!(f, " {security}")?;
+        }
+        if let Some(leakproof) = self.leakproof {
+            if !leakproof {
+                write!(f, " NOT")?;
+            }
+            write!(f, " LEAKPROOF")?;
+        }
+        if let Some(cost) = &self.cost {
+            write!(f, " COST {cost}")?;
+        }
+        if let Some(rows) = &self.rows {
+            write!(f, " ROWS {rows}")?;
+        }
+        if let Some(support) = &self.support {
+            write!(f, " SUPPORT {support}")?;
         }
         for set_param in &self.set_params {
             write!(f, " {set_param}")?;
@@ -3898,12 +4057,7 @@ impl fmt::Display for CreateFunction {
         if let Some(CreateFunctionBody::BeginAtomic(BeginEndStatements { statements, .. })) =
             &self.function_body
         {
-            write!(f, " BEGIN ATOMIC")?;
-            if !statements.is_empty() {
-                write!(f, " ")?;
-                format_statement_list(f, statements)?;
-            }
-            write!(f, " END")?;
+            format_begin_atomic(f, statements)?;
         }
         if let Some(CreateFunctionBody::AsReturnExpr(function_body)) = &self.function_body {
             write!(f, " AS RETURN {function_body}")?;
@@ -4713,6 +4867,266 @@ impl Spanned for DropExtension {
     }
 }
 
+/// ALTER EXTENSION statement.
+/// Note: this is a PostgreSQL-specific statement.
+///
+/// # References
+///
+/// PostgreSQL Documentation:
+/// <https://www.postgresql.org/docs/current/sql-alterextension.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterExtension {
+    /// Name of the extension being altered.
+    pub name: Ident,
+    /// The operation to perform on the extension.
+    pub operation: AlterExtensionOperation,
+}
+
+/// Operations supported by `ALTER EXTENSION`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterExtensionOperation {
+    /// Update the extension to a new version.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name UPDATE [ TO new_version ]
+    /// ```
+    Update {
+        /// New version to update to.
+        new_version: Option<Ident>,
+    },
+    /// Move the extension to another schema.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name SET SCHEMA new_schema
+    /// ```
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
+    /// Add a member object to the extension.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name ADD member_object
+    /// ```
+    Add(AlterExtensionMember),
+    /// Remove a member object from the extension.
+    ///
+    /// ```sql
+    /// ALTER EXTENSION name DROP member_object
+    /// ```
+    Drop(AlterExtensionMember),
+}
+
+/// Member objects that can be added to or removed from an extension.
+///
+/// `ADD` and `DROP` also accept `DATABASE`, `ROLE`, `SUBSCRIPTION`, `TABLESPACE`,
+/// `PUBLICATION`, `EXTENSION`, `INDEX`, and `STATISTICS` member objects, which
+/// PostgreSQL rejects with a semantic error.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterExtensionMember {
+    /// `ACCESS METHOD object_name`
+    AccessMethod(Ident),
+    /// `AGGREGATE aggregate_name ( aggregate_signature )`
+    Aggregate(AggregateSignature),
+    /// `CAST (source_type AS target_type)`
+    Cast {
+        /// Source type.
+        source_type: DataType,
+        /// Target type.
+        target_type: DataType,
+    },
+    /// `COLLATION object_name`
+    Collation(ObjectName),
+    /// `CONVERSION object_name`
+    Conversion(ObjectName),
+    /// `DATABASE object_name`
+    Database(Ident),
+    /// `DOMAIN object_name`
+    Domain(DataType),
+    /// `EVENT TRIGGER object_name`
+    EventTrigger(Ident),
+    /// `EXTENSION object_name`
+    Extension(Ident),
+    /// `FOREIGN DATA WRAPPER object_name`
+    ForeignDataWrapper(Ident),
+    /// `FOREIGN TABLE object_name`
+    ForeignTable(ObjectName),
+    /// `FUNCTION function_name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]`
+    Function(FunctionDesc),
+    /// `INDEX object_name`
+    Index(ObjectName),
+    /// `[ PROCEDURAL ] LANGUAGE object_name`
+    Language {
+        /// Whether the `PROCEDURAL` keyword was present.
+        procedural: bool,
+        /// Language name.
+        name: Ident,
+    },
+    /// `MATERIALIZED VIEW object_name`
+    MaterializedView(ObjectName),
+    /// `OPERATOR operator_name (left_type, right_type)`
+    Operator(DropOperatorSignature),
+    /// `OPERATOR CLASS object_name USING index_method`
+    OperatorClass {
+        /// Operator class name.
+        name: ObjectName,
+        /// Index method.
+        using: Ident,
+    },
+    /// `OPERATOR FAMILY object_name USING index_method`
+    OperatorFamily {
+        /// Operator family name.
+        name: ObjectName,
+        /// Index method.
+        using: Ident,
+    },
+    /// `PROCEDURE procedure_name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]`
+    Procedure(FunctionDesc),
+    /// `PUBLICATION object_name`
+    Publication(Ident),
+    /// `ROUTINE routine_name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]`
+    Routine(FunctionDesc),
+    /// `ROLE object_name`
+    Role(Ident),
+    /// `SCHEMA object_name`
+    Schema(Ident),
+    /// `SEQUENCE object_name`
+    Sequence(ObjectName),
+    /// `SERVER object_name`
+    Server(Ident),
+    /// `STATISTICS object_name`
+    Statistics(ObjectName),
+    /// `SUBSCRIPTION object_name`
+    Subscription(Ident),
+    /// `TABLE object_name`
+    Table(ObjectName),
+    /// `TABLESPACE object_name`
+    TableSpace(Ident),
+    /// `TEXT SEARCH CONFIGURATION object_name`
+    TextSearchConfiguration(ObjectName),
+    /// `TEXT SEARCH DICTIONARY object_name`
+    TextSearchDictionary(ObjectName),
+    /// `TEXT SEARCH PARSER object_name`
+    TextSearchParser(ObjectName),
+    /// `TEXT SEARCH TEMPLATE object_name`
+    TextSearchTemplate(ObjectName),
+    /// `TRANSFORM FOR type_name LANGUAGE lang_name`
+    Transform {
+        /// Transformed type.
+        type_name: DataType,
+        /// Language name.
+        language: Ident,
+    },
+    /// `TYPE object_name`
+    Type(DataType),
+    /// `VIEW object_name`
+    View(ObjectName),
+}
+
+impl fmt::Display for AlterExtensionOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterExtensionOperation::Update { new_version } => {
+                write!(f, "UPDATE")?;
+                if let Some(new_version) = new_version {
+                    write!(f, " TO {new_version}")?;
+                }
+                Ok(())
+            }
+            AlterExtensionOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterExtensionOperation::Add(member) => write!(f, "ADD {member}"),
+            AlterExtensionOperation::Drop(member) => write!(f, "DROP {member}"),
+        }
+    }
+}
+
+impl fmt::Display for AlterExtensionMember {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterExtensionMember::AccessMethod(name) => write!(f, "ACCESS METHOD {name}"),
+            AlterExtensionMember::Aggregate(signature) => write!(f, "AGGREGATE {signature}"),
+            AlterExtensionMember::Cast {
+                source_type,
+                target_type,
+            } => write!(f, "CAST ({source_type} AS {target_type})"),
+            AlterExtensionMember::Collation(name) => write!(f, "COLLATION {name}"),
+            AlterExtensionMember::Conversion(name) => write!(f, "CONVERSION {name}"),
+            AlterExtensionMember::Database(name) => write!(f, "DATABASE {name}"),
+            AlterExtensionMember::Domain(data_type) => write!(f, "DOMAIN {data_type}"),
+            AlterExtensionMember::EventTrigger(name) => write!(f, "EVENT TRIGGER {name}"),
+            AlterExtensionMember::Extension(name) => write!(f, "EXTENSION {name}"),
+            AlterExtensionMember::ForeignDataWrapper(name) => {
+                write!(f, "FOREIGN DATA WRAPPER {name}")
+            }
+            AlterExtensionMember::ForeignTable(name) => write!(f, "FOREIGN TABLE {name}"),
+            AlterExtensionMember::Function(function) => write!(f, "FUNCTION {function}"),
+            AlterExtensionMember::Index(name) => write!(f, "INDEX {name}"),
+            AlterExtensionMember::Language { procedural, name } => {
+                if *procedural {
+                    write!(f, "PROCEDURAL LANGUAGE {name}")
+                } else {
+                    write!(f, "LANGUAGE {name}")
+                }
+            }
+            AlterExtensionMember::MaterializedView(name) => write!(f, "MATERIALIZED VIEW {name}"),
+            AlterExtensionMember::Operator(signature) => write!(f, "OPERATOR {signature}"),
+            AlterExtensionMember::OperatorClass { name, using } => {
+                write!(f, "OPERATOR CLASS {name} USING {using}")
+            }
+            AlterExtensionMember::OperatorFamily { name, using } => {
+                write!(f, "OPERATOR FAMILY {name} USING {using}")
+            }
+            AlterExtensionMember::Procedure(function) => write!(f, "PROCEDURE {function}"),
+            AlterExtensionMember::Publication(name) => write!(f, "PUBLICATION {name}"),
+            AlterExtensionMember::Routine(function) => write!(f, "ROUTINE {function}"),
+            AlterExtensionMember::Role(name) => write!(f, "ROLE {name}"),
+            AlterExtensionMember::Schema(name) => write!(f, "SCHEMA {name}"),
+            AlterExtensionMember::Sequence(name) => write!(f, "SEQUENCE {name}"),
+            AlterExtensionMember::Server(name) => write!(f, "SERVER {name}"),
+            AlterExtensionMember::Statistics(name) => write!(f, "STATISTICS {name}"),
+            AlterExtensionMember::Subscription(name) => write!(f, "SUBSCRIPTION {name}"),
+            AlterExtensionMember::Table(name) => write!(f, "TABLE {name}"),
+            AlterExtensionMember::TableSpace(name) => write!(f, "TABLESPACE {name}"),
+            AlterExtensionMember::TextSearchConfiguration(name) => {
+                write!(f, "TEXT SEARCH CONFIGURATION {name}")
+            }
+            AlterExtensionMember::TextSearchDictionary(name) => {
+                write!(f, "TEXT SEARCH DICTIONARY {name}")
+            }
+            AlterExtensionMember::TextSearchParser(name) => write!(f, "TEXT SEARCH PARSER {name}"),
+            AlterExtensionMember::TextSearchTemplate(name) => {
+                write!(f, "TEXT SEARCH TEMPLATE {name}")
+            }
+            AlterExtensionMember::Transform {
+                type_name,
+                language,
+            } => write!(f, "TRANSFORM FOR {type_name} LANGUAGE {language}"),
+            AlterExtensionMember::Type(data_type) => write!(f, "TYPE {data_type}"),
+            AlterExtensionMember::View(name) => write!(f, "VIEW {name}"),
+        }
+    }
+}
+
+impl fmt::Display for AlterExtension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER EXTENSION {} {}", self.name, self.operation)
+    }
+}
+
+impl Spanned for AlterExtension {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
 /// CREATE COLLATION statement.
 /// Note: this is a PostgreSQL-specific statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4849,11 +5263,16 @@ impl Spanned for AlterCollation {
     }
 }
 
-/// `ALTER VIEW` statement.
+/// `ALTER [ MATERIALIZED ] VIEW` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altermaterializedview.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterView {
+    /// Whether `MATERIALIZED` was specified. A materialized view's operation is never
+    /// [`AlterViewOperation::As`] or [`AlterViewOperation::AlterColumn`].
+    pub materialized: bool,
     /// View name being altered.
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -4977,7 +5396,11 @@ impl fmt::Display for AlterViewOperation {
 
 impl fmt::Display for AlterView {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ALTER VIEW ")?;
+        write!(f, "ALTER ")?;
+        if self.materialized {
+            write!(f, "MATERIALIZED ")?;
+        }
+        write!(f, "VIEW ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
@@ -5000,6 +5423,9 @@ pub enum AlterTableType {
     /// External table type
     /// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
     External,
+    /// Foreign table type
+    /// <https://www.postgresql.org/docs/current/sql-alterforeigntable.html>
+    Foreign,
 }
 
 /// ALTER TABLE statement
@@ -5034,6 +5460,7 @@ impl fmt::Display for AlterTable {
             Some(AlterTableType::Iceberg) => write!(f, "ALTER ICEBERG TABLE ")?,
             Some(AlterTableType::Dynamic) => write!(f, "ALTER DYNAMIC TABLE ")?,
             Some(AlterTableType::External) => write!(f, "ALTER EXTERNAL TABLE ")?,
+            Some(AlterTableType::Foreign) => write!(f, "ALTER FOREIGN TABLE ")?,
             None => write!(f, "ALTER TABLE ")?,
         }
 
@@ -5714,43 +6141,79 @@ impl Spanned for AlterOperatorClass {
     }
 }
 
+/// An aggregate's name and argument signature.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AggregateSignature {
+    /// Aggregate name.
+    pub name: ObjectName,
+    /// Aggregate arguments.
+    pub args: AggregateArgs,
+}
+
+/// Arguments identifying an aggregate.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AggregateArgs {
+    /// The `*` signature.
+    Star,
+    /// Direct arguments with an optional ordered-set argument list.
+    List {
+        /// Direct arguments.
+        args: Vec<OperateFunctionArg>,
+        /// Arguments following `ORDER BY`.
+        order_by: Option<Vec<OperateFunctionArg>>,
+    },
+}
+
+impl fmt::Display for AggregateSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(", self.name)?;
+        match &self.args {
+            AggregateArgs::Star => write!(f, "*")?,
+            AggregateArgs::List { args, order_by } => {
+                write!(f, "{}", display_comma_separated(args))?;
+                if let Some(order_by) = order_by {
+                    if !args.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "ORDER BY {}", display_comma_separated(order_by))?;
+                }
+            }
+        }
+        write!(f, ")")
+    }
+}
+
 /// `ALTER FUNCTION` / `ALTER AGGREGATE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterFunction {
-    /// Object type being altered.
-    pub kind: AlterFunctionKind,
     /// Function or aggregate signature.
-    pub function: FunctionDesc,
-    /// `ORDER BY` argument list for aggregate signatures.
-    ///
-    /// This is only used for `ALTER AGGREGATE`.
-    pub aggregate_order_by: Option<Vec<OperateFunctionArg>>,
-    /// Whether the aggregate signature uses `*`.
-    ///
-    /// This is only used for `ALTER AGGREGATE`.
-    pub aggregate_star: bool,
+    pub signature: AlterFunctionSignature,
     /// Operation applied to the object.
     pub operation: AlterFunctionOperation,
 }
 
-/// Function-like object type used by [`AlterFunction`].
+/// The function or aggregate identified by [`AlterFunction`].
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum AlterFunctionKind {
-    /// `FUNCTION`
-    Function,
-    /// `AGGREGATE`
-    Aggregate,
+pub enum AlterFunctionSignature {
+    /// A function signature.
+    Function(FunctionDesc),
+    /// An aggregate signature.
+    Aggregate(AggregateSignature),
 }
 
-impl fmt::Display for AlterFunctionKind {
+impl fmt::Display for AlterFunctionSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Function => write!(f, "FUNCTION"),
-            Self::Aggregate => write!(f, "AGGREGATE"),
+            Self::Function(function) => write!(f, "FUNCTION {function}"),
+            Self::Aggregate(signature) => write!(f, "AGGREGATE {signature}"),
         }
     }
 }
@@ -5823,35 +6286,7 @@ pub enum AlterFunctionAction {
 
 impl fmt::Display for AlterFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ALTER {} ", self.kind)?;
-        match self.kind {
-            AlterFunctionKind::Function => {
-                write!(f, "{} ", self.function)?;
-            }
-            AlterFunctionKind::Aggregate => {
-                write!(f, "{}(", self.function.name)?;
-                if self.aggregate_star {
-                    write!(f, "*")?;
-                } else {
-                    if let Some(args) = &self.function.args {
-                        write!(f, "{}", display_comma_separated(args))?;
-                    }
-                    if let Some(order_by_args) = &self.aggregate_order_by {
-                        if self
-                            .function
-                            .args
-                            .as_ref()
-                            .is_some_and(|args| !args.is_empty())
-                        {
-                            write!(f, " ")?;
-                        }
-                        write!(f, "ORDER BY {}", display_comma_separated(order_by_args))?;
-                    }
-                }
-                write!(f, ") ")?;
-            }
-        }
-        write!(f, "{}", self.operation)
+        write!(f, "ALTER {} {}", self.signature, self.operation)
     }
 }
 
@@ -6507,6 +6942,11 @@ pub struct CreateForeignTable {
     pub constraints: Vec<TableConstraint>,
     /// `INHERITS ( parent_table [, ...] )`
     pub inherits: Option<Vec<ObjectName>>,
+    /// The parent table of `PARTITION OF parent_table`.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub partition_of: Option<ObjectName>,
+    /// The partition bound following `PARTITION OF`.
+    pub for_values: Option<ForValues>,
     /// The `SERVER server_name` clause.
     pub server_name: Ident,
     /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
@@ -6517,22 +6957,30 @@ impl fmt::Display for CreateForeignTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}",
+            "CREATE FOREIGN TABLE {if_not_exists}{name}",
             if_not_exists = if self.if_not_exists {
                 "IF NOT EXISTS "
             } else {
                 ""
             },
             name = self.name,
-            columns = display_comma_separated(&self.columns),
         )?;
-        if !self.columns.is_empty() && !self.constraints.is_empty() {
-            write!(f, ", ")?;
+        if let Some(partition_of) = &self.partition_of {
+            write!(f, " PARTITION OF {partition_of}")?;
         }
-        write!(f, "{}", display_comma_separated(&self.constraints))?;
-        f.write_str(")")?;
+        // The column list is optional only in the `PARTITION OF` form.
+        if self.partition_of.is_none() || !self.columns.is_empty() || !self.constraints.is_empty() {
+            write!(f, " ({}", display_comma_separated(&self.columns))?;
+            if !self.columns.is_empty() && !self.constraints.is_empty() {
+                write!(f, ", ")?;
+            }
+            write!(f, "{})", display_comma_separated(&self.constraints))?;
+        }
         if let Some(inherits) = &self.inherits {
             write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
+        }
+        if let Some(for_values) = &self.for_values {
+            write!(f, " {for_values}")?;
         }
         write!(f, " SERVER {}", self.server_name)?;
         if let Some(options) = &self.options {
@@ -6617,6 +7065,8 @@ impl Spanned for CreateForeignTable {
                 .chain(self.columns.iter().map(|column| column.span()))
                 .chain(self.constraints.iter().map(|constraint| constraint.span()))
                 .chain(self.inherits.iter().flatten().map(|parent| parent.span()))
+                .chain(self.partition_of.iter().map(|parent| parent.span()))
+                .chain(self.for_values.iter().map(|for_values| for_values.span()))
                 .chain(core::iter::once(self.server_name.span))
                 .chain(
                     self.options

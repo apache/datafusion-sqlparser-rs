@@ -1,0 +1,1 @@
+DO 'BEGIN RAISE NOTICE ''hi''; END'

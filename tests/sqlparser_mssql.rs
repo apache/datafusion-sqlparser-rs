@@ -134,7 +134,7 @@ fn parse_create_procedure() {
         ms().verified_stmt(sql),
         Statement::CreateProcedure {
             or_alter: true,
-            body: ConditionalStatements::BeginEnd(BeginEndStatements {
+            body: CreateProcedureBody::As(ConditionalStatements::BeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
                 statements: vec![Statement::Query(Box::new(Query {
                     with: None,
@@ -176,7 +176,7 @@ fn parse_create_procedure() {
                     })))
                 }))],
                 end_token: AttachedToken::empty(),
-            }),
+            })),
             params: Some(vec![
                 ProcedureParam {
                     name: Ident {
@@ -276,6 +276,11 @@ fn parse_create_function() {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             using: None,
             language: None,
@@ -451,6 +456,11 @@ fn parse_create_function_parameter_default_values() {
             called_on_null: None,
             parallel: None,
             security: None,
+            leakproof: None,
+            window: false,
+            cost: None,
+            rows: None,
+            support: None,
             set_params: vec![],
             using: None,
             language: None,

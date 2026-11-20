@@ -1,0 +1,1 @@
+CREATE FOREIGN TABLE ft (id INT OPTIONS (column_name 'remote_id') NOT NULL) SERVER s

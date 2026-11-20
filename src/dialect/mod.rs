@@ -1340,6 +1340,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a dollar-quote opening tag with no matching closing tag, such as
+    /// `$a$` in `SELECT $a$ x`, is a word rather than an unterminated dollar-quoted string.
+    fn supports_unterminated_dollar_tag_as_word(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `$` as a prefix for money literals
     /// e.g. `SELECT $123.45` (SQL Server)
     fn supports_dollar_as_money_prefix(&self) -> bool {
@@ -1509,6 +1515,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `DO` statement
+    fn supports_do_statement(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LISTEN`, `UNLISTEN` and `NOTIFY` statements
     fn supports_listen_notify(&self) -> bool {
         false
@@ -1518,6 +1529,20 @@ pub trait Dialect: Debug + Any {
     /// `EXCLUDE USING gist (c WITH &&)` in `CREATE TABLE`/`ALTER TABLE`.
     /// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>.
     fn supports_exclude_constraint(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports table-level `NOT NULL` constraints, e.g.
+    /// `CONSTRAINT nn NOT NULL a NO INHERIT` in `CREATE TABLE`/`ALTER TABLE`.
+    /// See <https://www.postgresql.org/docs/current/sql-createtable.html>.
+    fn supports_table_not_null_constraint(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports a conflict clause such as `ON CONFLICT IGNORE`
+    /// on column constraints and on `PRIMARY KEY`, `UNIQUE` and `CHECK` table constraints.
+    /// See <https://www.sqlite.org/lang_conflict.html>.
+    fn supports_constraint_conflict_clause(&self) -> bool {
         false
     }
 
@@ -1628,6 +1653,21 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports detaching a partition with
+    /// `ALTER TABLE ... DETACH PARTITION name [ CONCURRENTLY | FINALIZE ]`.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-altertable.html>
+    fn supports_detach_partition_of(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `OPTIONS ( option 'value' [, ...] )`
+    /// in a column definition.
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
+    fn supports_column_generic_options(&self) -> bool {
+        false
+    }
     /// Returns true if the specified keyword is reserved and cannot be
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {

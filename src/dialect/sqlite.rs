@@ -259,6 +259,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_constraint_conflict_clause(&self) -> bool {
+        true
+    }
+
     /// The keywords SQLite does not accept as a name, as opposed to the
     /// keywords its grammar lets fall back to an identifier.
     /// See <https://www.sqlite.org/lang_keywords.html> and the `%fallback ID`

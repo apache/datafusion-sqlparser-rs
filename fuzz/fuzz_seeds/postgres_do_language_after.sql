@@ -1,0 +1,1 @@
+DO $$BEGIN UPDATE t SET a = a + 1 WHERE b > 0; END$$ LANGUAGE plpgsql

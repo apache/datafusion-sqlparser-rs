@@ -29,9 +29,9 @@ use test_utils::*;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
-use sqlparser::dialect::{AnsiDialect, GenericDialect, SQLiteDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::dialect::{AnsiDialect, GenericDialect, MySqlDialect, SQLiteDialect};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::{Location, Span, Token};
 
 #[test]
 fn pragma_no_value() {
@@ -155,10 +155,15 @@ fn parse_create_virtual_table() {
             module_name,
             module_args,
         } => {
-            let args = vec![Ident::new("arg1"), Ident::new("arg2")];
             assert_eq!("t", name.to_string());
             assert_eq!("module_name", module_name.to_string());
-            assert_eq!(args, module_args);
+            assert_eq!(
+                vec!["arg1", "arg2"],
+                module_args
+                    .iter()
+                    .map(|arg| arg.value.as_str())
+                    .collect::<Vec<_>>()
+            );
         }
         _ => unreachable!(),
     }
@@ -2206,6 +2211,127 @@ fn parse_create_table_on_conflict_table_constraint_err() {
         "CREATE TABLE t (a INT, CHECK (a > 0) ON CONFLICT IGNORE)",
     ] {
         assert!(unsupported.parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_round_trip() {
+    for sql in [
+        "CREATE VIRTUAL TABLE ft USING fts5 (body, tokenize = 'porter')",
+        "CREATE VIRTUAL TABLE ft USING fts5 (a, b UNINDEXED)",
+        "CREATE VIRTUAL TABLE ft USING fts5 (a, content='')",
+        "CREATE VIRTUAL TABLE ft USING fts5 (a, content='it''s')",
+        r#"CREATE VIRTUAL TABLE t USING m ("a""b", [c d], `e`)"#,
+        "CREATE VIRTUAL TABLE c USING csv (filename=data.csv)",
+        "CREATE VIRTUAL TABLE r USING rtree (id, minX, maxX)",
+        "CREATE VIRTUAL TABLE t USING m (a; b)",
+    ] {
+        sqlite_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_without_unescape() {
+    sqlite_with_options(ParserOptions::new().with_unescape(false))
+        .verified_stmt("CREATE VIRTUAL TABLE ft USING fts5 (a, content='it''s')");
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_double_quoted_string() {
+    TestedDialects::new(vec![Box::new(MySqlDialect {})])
+        .verified_stmt(r#"CREATE VIRTUAL TABLE t USING m ("a""b")"#);
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_split_on_top_level_commas() {
+    let sql = "CREATE VIRTUAL TABLE t USING m (f(x, (y)), tokenize = 'p,q')";
+    let statement = Parser::parse_sql(&SQLiteDialect {}, sql).unwrap().remove(0);
+    assert_eq!(
+        Span::new(Location::new(1, 22), Location::new(1, 60)),
+        statement.span()
+    );
+    let Statement::CreateVirtualTable { module_args, .. } = statement else {
+        unreachable!()
+    };
+    assert_eq!(
+        vec!["f(x, (y))", "tokenize = 'p,q'"],
+        module_args
+            .iter()
+            .map(|arg| arg.value.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        Span::new(Location::new(1, 44), Location::new(1, 60)),
+        module_args[1].span
+    );
+    sqlite_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_ignore_spans_in_comparison() {
+    let sql = "CREATE VIRTUAL TABLE t USING m (tokenize = 'porter')";
+    let located = Parser::parse_sql(&SQLiteDialect {}, sql).unwrap().remove(0);
+    let unlocated = sqlite_and_generic().verified_stmt(sql);
+    let (
+        Statement::CreateVirtualTable {
+            module_args: located_args,
+            ..
+        },
+        Statement::CreateVirtualTable {
+            module_args: unlocated_args,
+            ..
+        },
+    ) = (&located, &unlocated)
+    else {
+        unreachable!()
+    };
+    assert_ne!(located_args[0].span, unlocated_args[0].span);
+    assert_eq!(located_args, unlocated_args);
+    assert_eq!(
+        Some(std::cmp::Ordering::Equal),
+        located_args[0].partial_cmp(&unlocated_args[0])
+    );
+    assert_eq!(std::cmp::Ordering::Equal, located.cmp(&unlocated));
+    let hash = |statement: &Statement| {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(statement, &mut hasher);
+        std::hash::Hasher::finish(&hasher)
+    };
+    assert_eq!(hash(&located), hash(&unlocated));
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_drop_empty() {
+    sqlite_and_generic().one_statement_parses_to(
+        "CREATE VIRTUAL TABLE t USING m( a ,, b )",
+        "CREATE VIRTUAL TABLE t USING m (a, b)",
+    );
+    sqlite_and_generic().one_statement_parses_to(
+        "CREATE VIRTUAL TABLE t USING m()",
+        "CREATE VIRTUAL TABLE t USING m",
+    );
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_unbalanced_err() {
+    for (sql, error) in [
+        (
+            "CREATE VIRTUAL TABLE t USING m (a",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "CREATE VIRTUAL TABLE t USING m (f(a)",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "CREATE VIRTUAL TABLE t USING m (a))",
+            "Expected: end of statement, found: )",
+        ),
+    ] {
+        assert_eq!(
+            ParserError::ParserError(error.to_string()),
+            sqlite_and_generic().parse_sql_statements(sql).unwrap_err()
+        );
     }
 }
 

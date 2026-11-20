@@ -1628,9 +1628,14 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Some(Expr::Value(self.parse_value()?)))
             }
+            // `current_schema()` is also an ordinary function call
+            Keyword::CURRENT_SCHEMA if self.peek_token_ref().token == Token::LParen => Ok(None),
             Keyword::CURRENT_CATALOG
+            | Keyword::CURRENT_ROLE
+            | Keyword::CURRENT_SCHEMA
             | Keyword::CURRENT_USER
             | Keyword::SESSION_USER
+            | Keyword::SYSTEM_USER
             | Keyword::USER
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
                 {
@@ -5903,17 +5908,79 @@ impl<'a> Parser<'a> {
         let table_name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::USING)?;
         let module_name = self.parse_identifier()?;
-        // SQLite docs note that module "arguments syntax is sufficiently
-        // general that the arguments can be made to appear as column
-        // definitions in a traditional CREATE TABLE statement", but
-        // we don't implement that.
-        let module_args = self.parse_parenthesized_column_list(Optional, false)?;
+        let module_args = if self.consume_token(&Token::LParen) {
+            self.parse_virtual_table_module_args()?
+        } else {
+            vec![]
+        };
         Ok(Statement::CreateVirtualTable {
             name: table_name,
             if_not_exists,
             module_name,
             module_args,
         })
+    }
+
+    /// Parses the arguments of `CREATE VIRTUAL TABLE ... USING module(...)`
+    /// after the opening parenthesis. An argument is any token sequence with
+    /// balanced parentheses, and empty arguments are dropped as SQLite does.
+    fn parse_virtual_table_module_args(
+        &mut self,
+    ) -> Result<Vec<VirtualTableModuleArgument>, ParserError> {
+        use core::fmt::Write;
+
+        let unescape = self.options.unescape;
+        let mut args = vec![];
+        let mut value = String::new();
+        let mut span = Span::empty();
+        let mut pending_whitespace = String::new();
+        let mut depth = 0usize;
+        loop {
+            let token = match self.next_token_no_skip() {
+                None
+                | Some(TokenWithSpan {
+                    token: Token::EOF, ..
+                }) => return self.expected_ref(")", self.peek_token_ref()),
+                Some(token) => token,
+            };
+            match &token.token {
+                Token::Comma | Token::RParen if depth == 0 => {
+                    let closed = token.token == Token::RParen;
+                    if !value.is_empty() {
+                        args.push(VirtualTableModuleArgument {
+                            value: core::mem::take(&mut value),
+                            span: core::mem::replace(&mut span, Span::empty()),
+                        });
+                    }
+                    pending_whitespace.clear();
+                    if closed {
+                        return Ok(args);
+                    }
+                    continue;
+                }
+                Token::Whitespace(whitespace) => {
+                    if !value.is_empty() {
+                        let _ = write!(pending_whitespace, "{whitespace}");
+                    }
+                    continue;
+                }
+                Token::LParen => depth += 1,
+                Token::RParen => depth -= 1,
+                _ => {}
+            }
+            value.push_str(&pending_whitespace);
+            pending_whitespace.clear();
+            let _ = match &token.token {
+                Token::SingleQuotedString(s) if unescape => {
+                    write!(value, "'{}'", escape_quoted_string(s, '\''))
+                }
+                Token::DoubleQuotedString(s) if unescape => {
+                    write!(value, "\"{}\"", escape_quoted_string(s, '"'))
+                }
+                other => write!(value, "{other}"),
+            };
+            span = span.union(&token.span);
+        }
     }
 
     /// Parse a `CREATE SCHEMA` statement.

@@ -4313,7 +4313,7 @@ impl<'a> Parser<'a> {
             Ok(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
-                data_type: self.parse_data_type()?,
+                data_type: self.parse_double_colon_data_type()?,
                 format: None,
             })
         } else if Token::ExclamationMark == *tok && self.dialect.supports_factorial_operator() {
@@ -4640,7 +4640,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Cast {
             kind: CastKind::DoubleColon,
             expr: Box::new(expr),
-            data_type: self.parse_data_type()?,
+            data_type: self.parse_double_colon_data_type()?,
             format: None,
         })
     }
@@ -13503,6 +13503,18 @@ impl<'a> Parser<'a> {
         Ok(ty)
     }
 
+    /// Parses the target type of `expr::type`, which never continues into a multi-word name.
+    fn parse_double_colon_data_type(&mut self) -> Result<DataType, ParserError> {
+        let (ty, trailing_bracket) = self.parse_data_type_inner()?;
+        if trailing_bracket.0 {
+            return parser_err!(
+                format!("unmatched > after parsing data type {ty}"),
+                self.peek_token_ref()
+            );
+        }
+        Ok(ty)
+    }
+
     fn parse_data_type_helper(
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
@@ -13994,10 +14006,6 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::SIGNED => {
-                    if self.dialect.supports_multiword_type_names() {
-                        let first = w.clone().into_ident(next_token.span);
-                        return self.parse_multiword_type_name(first);
-                    }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::SignedInteger)
                     } else {
@@ -14005,10 +14013,6 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::UNSIGNED => {
-                    if self.dialect.supports_multiword_type_names() {
-                        let first = w.clone().into_ident(next_token.span);
-                        return self.parse_multiword_type_name(first);
-                    }
                     if self.parse_keyword(Keyword::INTEGER) {
                         Ok(DataType::UnsignedInteger)
                     } else {
@@ -14022,10 +14026,6 @@ impl<'a> Parser<'a> {
                     Ok(DataType::TsQuery)
                 }
                 _ => {
-                    if self.dialect.supports_multiword_type_names() {
-                        let first = w.clone().into_ident(next_token.span);
-                        return self.parse_multiword_type_name(first);
-                    }
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;
                     if let Some(modifiers) = self.parse_optional_type_modifiers()? {

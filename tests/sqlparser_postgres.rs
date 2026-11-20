@@ -14217,3 +14217,51 @@ fn parse_alter_table_alter_column_identity() {
         );
     }
 }
+
+#[test]
+fn parse_alter_table_alter_column_identity_sequence_options() {
+    for sql in [
+        "ALTER TABLE tab ALTER COLUMN id SET INCREMENT BY 2",
+        "ALTER TABLE tab ALTER COLUMN id SET INCREMENT 2 SET NO MINVALUE SET MAXVALUE 1000 SET START WITH 5 SET CACHE 3 SET NO CYCLE",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    match alter_table_op(pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ALTER COLUMN id SET GENERATED ALWAYS SET INCREMENT BY 1 RESTART",
+    )) {
+        AlterTableOperation::AlterColumn { op, .. } => {
+            assert_eq!(
+                op,
+                AlterColumnOperation::AlterIdentity {
+                    options: vec![
+                        AlterIdentityOption::SetGenerated(GeneratedAs::Always),
+                        AlterIdentityOption::Set(SequenceOptions::IncrementBy(
+                            Expr::value(number("1")),
+                            true
+                        )),
+                        AlterIdentityOption::Restart,
+                    ],
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE tab ALTER COLUMN id SET INCREMENT BY 2 CACHE 3",
+            "Expected: end of statement, found: CACHE",
+        ),
+        (
+            "ALTER TABLE tab ALTER COLUMN id SET AS INT",
+            "Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: SET",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}

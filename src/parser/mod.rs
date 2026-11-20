@@ -21921,65 +21921,7 @@ impl<'a> Parser<'a> {
         allow_type_and_owner: bool,
     ) -> Result<Vec<SequenceOptions>, ParserError> {
         let mut sequence_options: Vec<SequenceOptions> = vec![];
-        loop {
-            let (option, name) = if self.parse_keyword(Keyword::INCREMENT) {
-                //[ INCREMENT [ BY ] increment ]
-                let by = self.parse_keyword(Keyword::BY);
-                (
-                    SequenceOptions::IncrementBy(self.parse_number()?, by),
-                    "INCREMENT",
-                )
-            } else if self.parse_keyword(Keyword::MINVALUE) {
-                //[ MINVALUE minvalue | NO MINVALUE ]
-                (
-                    SequenceOptions::MinValue(Some(self.parse_number()?)),
-                    "MINVALUE | NO MINVALUE",
-                )
-            } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
-                (SequenceOptions::MinValue(None), "MINVALUE | NO MINVALUE")
-            } else if self.parse_keyword(Keyword::MAXVALUE) {
-                //[ MAXVALUE maxvalue | NO MAXVALUE ]
-                (
-                    SequenceOptions::MaxValue(Some(self.parse_number()?)),
-                    "MAXVALUE | NO MAXVALUE",
-                )
-            } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
-                (SequenceOptions::MaxValue(None), "MAXVALUE | NO MAXVALUE")
-            } else if self.parse_keyword(Keyword::START) {
-                //[ START [ WITH ] start ]
-                let with = self.parse_keyword(Keyword::WITH);
-                (
-                    SequenceOptions::StartWith(self.parse_number()?, with),
-                    "START",
-                )
-            } else if self.parse_keyword(Keyword::CACHE) {
-                //[ CACHE cache ]
-                (SequenceOptions::Cache(self.parse_number()?), "CACHE")
-            } else if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {
-                // [ [ NO ] CYCLE ]
-                (SequenceOptions::Cycle(true), "CYCLE | NO CYCLE")
-            } else if self.parse_keyword(Keyword::CYCLE) {
-                (SequenceOptions::Cycle(false), "CYCLE | NO CYCLE")
-            } else if allow_type_and_owner && self.parse_keyword(Keyword::AS) {
-                //[ AS data_type ]
-                (SequenceOptions::DataType(self.parse_data_type()?), "AS")
-            } else if allow_type_and_owner && self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
-                // [ OWNED BY { table_name.column_name | NONE } ]
-                // Only the single bare word `NONE` means no owner, `none.c` is a column.
-                let owner = self.parse_object_name(false)?;
-                let is_none = matches!(
-                    owner.0.as_slice(),
-                    [ObjectNamePart::Identifier(ident)]
-                        if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("NONE")
-                );
-                (
-                    SequenceOptions::OwnedBy((!is_none).then_some(owner)),
-                    "OWNED BY",
-                )
-            } else {
-                break;
-            };
-
+        while let Some((option, name)) = self.parse_sequence_option(allow_type_and_owner)? {
             if sequence_options
                 .iter()
                 .any(|seen| discriminant(seen) == discriminant(&option))
@@ -21992,6 +21934,73 @@ impl<'a> Parser<'a> {
         }
 
         Ok(sequence_options)
+    }
+
+    /// Parse one sequence option with the name used to report it as a duplicate,
+    /// or `None` when the next tokens start no option.
+    fn parse_sequence_option(
+        &mut self,
+        allow_type_and_owner: bool,
+    ) -> Result<Option<(SequenceOptions, &'static str)>, ParserError> {
+        let parsed = if self.parse_keyword(Keyword::INCREMENT) {
+            //[ INCREMENT [ BY ] increment ]
+            let by = self.parse_keyword(Keyword::BY);
+            (
+                SequenceOptions::IncrementBy(self.parse_number()?, by),
+                "INCREMENT",
+            )
+        } else if self.parse_keyword(Keyword::MINVALUE) {
+            //[ MINVALUE minvalue | NO MINVALUE ]
+            (
+                SequenceOptions::MinValue(Some(self.parse_number()?)),
+                "MINVALUE | NO MINVALUE",
+            )
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
+            (SequenceOptions::MinValue(None), "MINVALUE | NO MINVALUE")
+        } else if self.parse_keyword(Keyword::MAXVALUE) {
+            //[ MAXVALUE maxvalue | NO MAXVALUE ]
+            (
+                SequenceOptions::MaxValue(Some(self.parse_number()?)),
+                "MAXVALUE | NO MAXVALUE",
+            )
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
+            (SequenceOptions::MaxValue(None), "MAXVALUE | NO MAXVALUE")
+        } else if self.parse_keyword(Keyword::START) {
+            //[ START [ WITH ] start ]
+            let with = self.parse_keyword(Keyword::WITH);
+            (
+                SequenceOptions::StartWith(self.parse_number()?, with),
+                "START",
+            )
+        } else if self.parse_keyword(Keyword::CACHE) {
+            //[ CACHE cache ]
+            (SequenceOptions::Cache(self.parse_number()?), "CACHE")
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {
+            // [ [ NO ] CYCLE ]
+            (SequenceOptions::Cycle(true), "CYCLE | NO CYCLE")
+        } else if self.parse_keyword(Keyword::CYCLE) {
+            (SequenceOptions::Cycle(false), "CYCLE | NO CYCLE")
+        } else if allow_type_and_owner && self.parse_keyword(Keyword::AS) {
+            //[ AS data_type ]
+            (SequenceOptions::DataType(self.parse_data_type()?), "AS")
+        } else if allow_type_and_owner && self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
+            // [ OWNED BY { table_name.column_name | NONE } ]
+            // Only the single bare word `NONE` means no owner, `none.c` is a column.
+            let owner = self.parse_object_name(false)?;
+            let is_none = matches!(
+                owner.0.as_slice(),
+                [ObjectNamePart::Identifier(ident)]
+                    if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("NONE")
+            );
+            (
+                SequenceOptions::OwnedBy((!is_none).then_some(owner)),
+                "OWNED BY",
+            )
+        } else {
+            return Ok(None);
+        };
+
+        Ok(Some(parsed))
     }
 
     /// Parse one item of the identity column changes of `ALTER COLUMN`, or
@@ -22018,6 +22027,12 @@ impl<'a> Parser<'a> {
                 return self.expected_ref("ALWAYS or BY DEFAULT", self.peek_token_ref());
             };
             return Ok(Some(AlterIdentityOption::SetGenerated(generated_as)));
+        }
+        if self.parse_keyword(Keyword::SET) {
+            if let Some((option, _)) = self.parse_sequence_option(false)? {
+                return Ok(Some(AlterIdentityOption::Set(option)));
+            }
+            self.prev_token();
         }
         Ok(None)
     }

@@ -1431,7 +1431,7 @@ pub enum AlterColumnOperation {
         /// Optional sequence options for identity generation.
         sequence_options: Option<Vec<SequenceOptions>>,
     },
-    /// `{ SET GENERATED { ALWAYS | BY DEFAULT } | RESTART [ [ WITH ] restart ] } [...]`
+    /// `{ SET GENERATED { ALWAYS | BY DEFAULT } | SET sequence_option | RESTART [ [ WITH ] restart ] } [...]`
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
     AlterIdentity {
@@ -1528,6 +1528,8 @@ impl fmt::Display for AlterColumnOperation {
 pub enum AlterIdentityOption {
     /// `SET GENERATED { ALWAYS | BY DEFAULT }`
     SetGenerated(GeneratedAs),
+    /// `SET <sequence_option>`
+    Set(SequenceOptions),
     /// `RESTART`, restarting at the sequence's start value.
     Restart,
     /// `RESTART [WITH] <expr>`, with `true` when `WITH` is present.
@@ -1545,6 +1547,7 @@ impl fmt::Display for AlterIdentityOption {
                 };
                 write!(f, "SET GENERATED {generated_as}")
             }
+            AlterIdentityOption::Set(option) => write!(f, "SET{option}"),
             AlterIdentityOption::Restart => write!(f, "RESTART"),
             AlterIdentityOption::RestartWith(restart, with) => {
                 let with = if *with { " WITH" } else { "" };

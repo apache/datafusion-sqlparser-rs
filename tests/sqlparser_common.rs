@@ -4477,6 +4477,7 @@ fn parse_create_table() {
                                     include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
+                                    on_conflict: None,
                                 }),
                             },
                             ColumnOptionDef {
@@ -4495,6 +4496,7 @@ fn parse_create_table() {
                                     index_options: vec![],
                                     characteristics: None,
                                     nulls_distinct: NullsDistinctOption::None,
+                                    on_conflict: None,
                                 }),
                             },
                             ColumnOptionDef {
@@ -4504,6 +4506,7 @@ fn parse_create_table() {
                                     expr: Box::new(verified_expr("constrained > 0")),
                                     no_inherit: false,
                                     enforced: None,
+                                    on_conflict: None,
                                 }),
                             },
                         ],
@@ -4835,6 +4838,7 @@ fn parse_create_table_column_constraint_characteristics() {
                                 index_options: vec![],
                                 characteristics: expected_value,
                                 nulls_distinct: NullsDistinctOption::None,
+                                on_conflict: None,
                             })
                         }]
                     }],
@@ -16196,7 +16200,7 @@ fn parse_alter_trigger_spans() {
 
 #[test]
 fn parse_alter_rejects_missing_or_unknown_object_type() {
-    let objects = "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR";
+    let objects = "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or EXTENSION";
     for (sql, found) in [
         ("ALTER", "EOF"),
         ("ALTER 1", "1"),
@@ -23515,4 +23519,114 @@ fn parse_national_character_string_types() {
             .unwrap_err(),
         ParserError::ParserError("Expected: ), found: EOF".to_string())
     );
+}
+
+#[test]
+fn parse_create_procedure_string_body() {
+    match verified_stmt("CREATE PROCEDURE p (a INT) LANGUAGE sql AS 'INSERT INTO t VALUES (a)'") {
+        Statement::CreateProcedure {
+            language,
+            body: CreateProcedureBody::AsString { body, link_symbol },
+            ..
+        } => {
+            assert_eq!(language, Some(Ident::new("sql")));
+            assert_eq!(
+                body,
+                Expr::Value(
+                    Value::SingleQuotedString("INSERT INTO t VALUES (a)".to_string())
+                        .with_empty_span()
+                )
+            );
+            assert_eq!(link_symbol, None);
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    verified_stmt("CREATE PROCEDURE p () LANGUAGE C AS 'MODULE_PATHNAME', 'p_wrapper'");
+    one_statement_parses_to(
+        "CREATE PROCEDURE p () AS 'SELECT 1' LANGUAGE sql",
+        "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1'",
+    );
+
+    pg_and_generic().verified_stmt(
+        "CREATE PROCEDURE p (a INT) LANGUAGE plpgsql AS $$ BEGIN INSERT INTO t VALUES (a); END; $$",
+    );
+    pg_and_generic().verified_stmt("CREATE PROCEDURE p () LANGUAGE sql AS $body$ SELECT 1 $body$");
+    pg_and_generic().one_statement_parses_to(
+        "CREATE PROCEDURE p () LANGUAGE sql AS E'SELECT 1'",
+        "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE PROCEDURE insert_data(a integer, b integer)
+LANGUAGE SQL
+AS $$
+INSERT INTO tbl VALUES (a);
+INSERT INTO tbl VALUES (b);
+$$"#,
+        "CREATE PROCEDURE insert_data (a INTEGER, b INTEGER) LANGUAGE SQL AS $$\nINSERT INTO tbl VALUES (a);\nINSERT INTO tbl VALUES (b);\n$$",
+    );
+
+    for (sql, err) in [
+        (
+            "CREATE PROCEDURE p () LANGUAGE sql AS 'SELECT 1' LANGUAGE sql",
+            "Expected: end of statement, found: LANGUAGE",
+        ),
+        (
+            "CREATE PROCEDURE p () LANGUAGE C AS 'MODULE_PATHNAME',",
+            "Expected: literal string, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(err.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_only_table_name() {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    for (sql, expected_name, expected_alias) in [
+        ("SELECT * FROM only", "only", None),
+        ("SELECT * FROM only;", "only", None),
+        ("SELECT * FROM only t", "only", Some("t")),
+        ("SELECT * FROM only AS t", "only", Some("t")),
+        ("SELECT * FROM ONLY t", "ONLY", Some("t")),
+        ("SELECT * FROM only.t", "only.t", None),
+    ] {
+        let select = dialects.verified_only_select_with_canonical(sql, sql.trim_end_matches(';'));
+        let TableFactor::Table {
+            name,
+            alias,
+            inheritance,
+            ..
+        } = &select.from[0].relation
+        else {
+            panic!("expected a table: {select:?}");
+        };
+        assert_eq!(name.to_string(), expected_name);
+        assert_eq!(
+            alias.as_ref().map(|a| a.name.value.as_str()),
+            expected_alias
+        );
+        assert_eq!(*inheritance, None);
+    }
+
+    for sql in [
+        "SELECT * FROM only WHERE id = 1",
+        "SELECT * FROM only ORDER BY id",
+        "SELECT * FROM only LIMIT 1",
+        "SELECT * FROM only JOIN other ON only.id = other.id",
+        "SELECT * FROM only, other",
+        "SELECT * FROM only UNION SELECT * FROM other",
+        "SELECT * FROM other JOIN only ON other.id = only.id",
+        "SELECT * FROM (SELECT * FROM only) AS t",
+        "UPDATE only SET id = 1",
+        "UPDATE only AS t SET id = 1",
+        "DELETE FROM only",
+        "DELETE FROM only WHERE id = 1",
+    ] {
+        dialects.verified_stmt(sql);
+    }
 }

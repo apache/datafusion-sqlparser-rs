@@ -1535,6 +1535,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports a conflict clause such as `ON CONFLICT IGNORE`
+    /// on column constraints and on `PRIMARY KEY`, `UNIQUE` and `CHECK` table constraints.
+    /// See <https://www.sqlite.org/lang_conflict.html>.
+    fn supports_constraint_conflict_clause(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LOAD DATA` statement
     fn supports_load_data(&self) -> bool {
         false

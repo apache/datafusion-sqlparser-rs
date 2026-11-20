@@ -1068,6 +1068,13 @@ fn parse_drop_extension() {
             cascade_or_restrict: Some(ReferentialAction::Restrict),
         })
     );
+
+    let stmt = pg_and_generic().verified_stmt("DROP EXTENSION extension_name");
+    if let Statement::DropExtension(drop_extension) = stmt {
+        assert_eq!(Span::empty(), drop_extension.span());
+    } else {
+        unreachable!("expected DROP EXTENSION statement");
+    }
 }
 
 #[test]
@@ -7194,6 +7201,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7215,6 +7223,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7236,6 +7245,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7257,6 +7267,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7278,6 +7289,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -9229,7 +9241,7 @@ fn parse_alter_function_and_aggregate() {
         assert!(matches!(
             statement,
             Statement::AlterFunction(AlterFunction {
-                kind: AlterFunctionKind::Aggregate,
+                signature: AlterFunctionSignature::Aggregate(_),
                 ..
             })
         ));
@@ -9369,7 +9381,7 @@ fn parse_alter_function_and_aggregate() {
         assert!(matches!(
             statement,
             Statement::AlterFunction(AlterFunction {
-                kind: AlterFunctionKind::Function,
+                signature: AlterFunctionSignature::Function(_),
                 ..
             })
         ));
@@ -10754,23 +10766,29 @@ fn parse_quoted_argument_names_in_function_signatures() {
     pg_and_generic().verified_stmt(r#"ALTER FUNCTION f("Role" TEXT) RENAME TO g"#);
     pg_and_generic().verified_stmt(r#"ALTER AGGREGATE my_agg("Role" TEXT) RENAME TO other_agg"#);
 
-    // An aggregate's `ORDER BY` arguments are parsed by the same reader as its
-    // direct ones.
+    // Aggregate arguments preserve quoted names in both lists.
     let sql = r#"ALTER AGGREGATE my_agg("A" INT ORDER BY "B" INT) OWNER TO some_role"#;
     let Statement::AlterFunction(alter) = pg_and_generic().verified_stmt(sql) else {
         panic!("expected an ALTER AGGREGATE statement");
     };
+    let AlterFunctionSignature::Aggregate(AggregateSignature {
+        args: AggregateArgs::List { args, order_by },
+        ..
+    }) = alter.signature
+    else {
+        panic!("expected an aggregate argument list");
+    };
     assert_eq!(
-        alter.function.args,
-        Some(vec![OperateFunctionArg {
+        args,
+        vec![OperateFunctionArg {
             mode: None,
             name: Some(Ident::with_quote('"', "A")),
             data_type: DataType::Int(None),
             default_expr: None,
-        }])
+        }]
     );
     assert_eq!(
-        alter.aggregate_order_by,
+        order_by,
         Some(vec![OperateFunctionArg {
             mode: None,
             name: Some(Ident::with_quote('"', "B")),
@@ -10798,6 +10816,7 @@ fn parse_alter_table_constraint_check_no_inherit() {
                         }),
                         no_inherit: true,
                         enforced: None,
+                        on_conflict: None,
                     }
                     .into(),
                     not_valid: true,
@@ -12178,12 +12197,11 @@ fn parse_table_inheritance_markers() {
         ),
         ("SELECT * FROM \"only\"", "\"only\"", None, None),
     ] {
-        let select = pg_and_generic().verified_only_select(sql);
+        let select = pg().verified_only_select(sql);
         assert_relation(&select.from[0].relation, name, alias, inheritance);
     }
 
-    let select =
-        pg_and_generic().verified_only_select("SELECT * FROM ONLY a JOIN b * ON a.id = b.id");
+    let select = pg().verified_only_select("SELECT * FROM ONLY a JOIN b * ON a.id = b.id");
     assert_relation(&select.from[0].relation, "a", None, only);
     assert_relation(&select.from[0].joins[0].relation, "b", None, descendants);
 
@@ -12192,7 +12210,7 @@ fn parse_table_inheritance_markers() {
         ("UPDATE ONLY (t) SET id = 1", only_parenthesized),
         ("UPDATE t * SET id = 1", descendants),
     ] {
-        match pg_and_generic().verified_stmt(sql) {
+        match pg().verified_stmt(sql) {
             Statement::Update(Update { table, .. }) => {
                 assert_relation(&table.relation, "t", None, inheritance)
             }
@@ -12205,7 +12223,7 @@ fn parse_table_inheritance_markers() {
         ("DELETE FROM ONLY (t)", only_parenthesized),
         ("DELETE FROM t *", descendants),
     ] {
-        match pg_and_generic().verified_stmt(sql) {
+        match pg().verified_stmt(sql) {
             Statement::Delete(Delete {
                 from: FromTable::WithFromKeyword(from),
                 ..
@@ -12214,19 +12232,23 @@ fn parse_table_inheritance_markers() {
         }
     }
 
-    pg_and_generic().one_statement_parses_to("SELECT * FROM t*", "SELECT * FROM t *");
-    pg_and_generic().one_statement_parses_to("SELECT * FROM ONLY(t)", "SELECT * FROM ONLY (t)");
-    pg_and_generic().one_statement_parses_to("UPDATE t* SET id = 1", "UPDATE t * SET id = 1");
-    pg_and_generic().one_statement_parses_to("DELETE FROM t*", "DELETE FROM t *");
+    pg().one_statement_parses_to("SELECT * FROM t*", "SELECT * FROM t *");
+    pg().one_statement_parses_to("SELECT * FROM ONLY(t)", "SELECT * FROM ONLY (t)");
+    pg().one_statement_parses_to("UPDATE t* SET id = 1", "UPDATE t * SET id = 1");
+    pg().one_statement_parses_to("DELETE FROM t*", "DELETE FROM t *");
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT * FROM ONLY").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 
     for sql in [
-        "SELECT * FROM ONLY",
         "SELECT * FROM ONLY t *",
         "SELECT * FROM ONLY (t *)",
         "SELECT * FROM ONLY (t",
         "SELECT * FROM ONLY ()",
     ] {
-        assert!(pg_and_generic().parse_sql_statements(sql).is_err(), "{sql}");
+        assert!(pg().parse_sql_statements(sql).is_err(), "{sql}");
     }
 
     let other_dialects = all_dialects_where(|d| !d.supports_table_inheritance_markers());
@@ -12266,7 +12288,7 @@ fn display_table_inheritance_propagates_write_errors() {
         ("SELECT * FROM t *", " *"),
         ("SELECT * FROM t", "t"),
     ] {
-        let stmt = pg_and_generic().verified_stmt(sql);
+        let stmt = pg().verified_stmt(sql);
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{sql}");
     }
@@ -13517,6 +13539,612 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
+}
+
+fn alter_extension_member_round_trip_forms(action: &str) {
+    let sqls = [
+        format!("ALTER EXTENSION ext_name {action} ACCESS METHOD btree"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(*)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(INT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(INT, TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(IN INT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(ORDER BY TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} AGGREGATE agg(INT ORDER BY TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} CAST (INT AS TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} CAST (src AS tgt)"),
+        format!("ALTER EXTENSION ext_name {action} COLLATION en_US"),
+        format!("ALTER EXTENSION ext_name {action} COLLATION schema.en_US"),
+        format!("ALTER EXTENSION ext_name {action} CONVERSION conv"),
+        format!("ALTER EXTENSION ext_name {action} DATABASE db_name"),
+        format!("ALTER EXTENSION ext_name {action} DOMAIN my_domain"),
+        format!("ALTER EXTENSION ext_name {action} EVENT TRIGGER trg"),
+        format!("ALTER EXTENSION ext_name {action} EXTENSION other_ext"),
+        format!("ALTER EXTENSION ext_name {action} FOREIGN DATA WRAPPER fdw"),
+        format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE ft"),
+        format!("ALTER EXTENSION ext_name {action} FOREIGN TABLE schema.ft"),
+        format!("ALTER EXTENSION ext_name {action} FUNCTION f"),
+        format!("ALTER EXTENSION ext_name {action} FUNCTION f()"),
+        format!("ALTER EXTENSION ext_name {action} FUNCTION f(INT)"),
+        format!("ALTER EXTENSION ext_name {action} FUNCTION f(INT, TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} INDEX idx"),
+        format!("ALTER EXTENSION ext_name {action} LANGUAGE plpgsql"),
+        format!("ALTER EXTENSION ext_name {action} PROCEDURAL LANGUAGE plpgsql"),
+        format!("ALTER EXTENSION ext_name {action} MATERIALIZED VIEW mv"),
+        format!("ALTER EXTENSION ext_name {action} OPERATOR + (INT, TEXT)"),
+        format!("ALTER EXTENSION ext_name {action} OPERATOR - (NONE, INT)"),
+        format!("ALTER EXTENSION ext_name {action} OPERATOR CLASS oc USING btree"),
+        format!("ALTER EXTENSION ext_name {action} OPERATOR FAMILY of USING btree"),
+        format!("ALTER EXTENSION ext_name {action} PROCEDURE p"),
+        format!("ALTER EXTENSION ext_name {action} PROCEDURE p()"),
+        format!("ALTER EXTENSION ext_name {action} PROCEDURE p(INT)"),
+        format!("ALTER EXTENSION ext_name {action} PUBLICATION pub"),
+        format!("ALTER EXTENSION ext_name {action} ROUTINE r"),
+        format!("ALTER EXTENSION ext_name {action} ROUTINE r()"),
+        format!("ALTER EXTENSION ext_name {action} ROLE role_name"),
+        format!("ALTER EXTENSION ext_name {action} SCHEMA schema_name"),
+        format!("ALTER EXTENSION ext_name {action} SEQUENCE seq"),
+        format!("ALTER EXTENSION ext_name {action} SERVER srv"),
+        format!("ALTER EXTENSION ext_name {action} STATISTICS stats"),
+        format!("ALTER EXTENSION ext_name {action} SUBSCRIPTION sub"),
+        format!("ALTER EXTENSION ext_name {action} TABLE t"),
+        format!("ALTER EXTENSION ext_name {action} TABLE schema.t"),
+        format!("ALTER EXTENSION ext_name {action} TABLESPACE ts"),
+        format!("ALTER EXTENSION ext_name {action} TEXT SEARCH CONFIGURATION cfg"),
+        format!("ALTER EXTENSION ext_name {action} TEXT SEARCH DICTIONARY dict"),
+        format!("ALTER EXTENSION ext_name {action} TEXT SEARCH PARSER pgrm"),
+        format!("ALTER EXTENSION ext_name {action} TEXT SEARCH TEMPLATE tpl"),
+        format!("ALTER EXTENSION ext_name {action} TRANSFORM FOR my_type LANGUAGE plpgsql"),
+        format!("ALTER EXTENSION ext_name {action} TYPE my_type"),
+        format!("ALTER EXTENSION ext_name {action} VIEW v"),
+    ];
+    for sql in sqls {
+        pg_and_generic().verified_stmt(&sql);
+    }
+}
+
+#[test]
+fn parse_alter_extension_update() {
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE");
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE TO latest");
+    pg_and_generic().verified_stmt("ALTER EXTENSION \"uuid-ossp\" UPDATE TO '1.1'");
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE TO latest") {
+        Statement::AlterExtension(AlterExtension { name, operation }) => {
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(
+                operation,
+                AlterExtensionOperation::Update {
+                    new_version: Some(Ident::new("latest"))
+                }
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name UPDATE") {
+        Statement::AlterExtension(AlterExtension {
+            name,
+            operation: AlterExtensionOperation::Update { new_version },
+        }) => {
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(new_version, None);
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "ALTER EXTENSION ext_name",
+            "Expected: UPDATE, SET SCHEMA, ADD, or DROP after ALTER EXTENSION name, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name UPDATE TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name UPDATE TO 1.1",
+            "Expected: identifier, found: 1.1",
+        ),
+        (
+            "ALTER EXTENSION ext_name UPDATE TO latest latest",
+            "Expected: end of statement, found: latest",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_extension_update_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg().verified_stmt("ALTER EXTENSION ext_name UPDATE TO latest");
+    for rejected in ["UPDATE", " TO "] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected}");
+    }
+}
+
+#[test]
+fn parse_alter_extension_set_schema() {
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA other_schema");
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA schema.other");
+    pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA \"other schema\"");
+
+    let stmt = pg_and_generic().verified_stmt("ALTER EXTENSION ext_name SET SCHEMA other_schema");
+    assert_eq!(Span::empty(), stmt.span());
+    match stmt {
+        Statement::AlterExtension(alter_extension) => {
+            assert_eq!(Span::empty(), alter_extension.span());
+            let AlterExtension { name, operation } = alter_extension;
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(
+                operation,
+                AlterExtensionOperation::SetSchema {
+                    schema_name: ObjectName::from(Ident::new("other_schema"))
+                }
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "ALTER EXTENSION ext_name SET SCHEMA",
+            "Expected: identifier, found: EOF",
+        ),
+        ("ALTER EXTENSION 1", "Expected: identifier, found: 1"),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_extension_add_member() {
+    alter_extension_member_round_trip_forms("ADD");
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD ACCESS METHOD btree") {
+        Statement::AlterExtension(AlterExtension { name, operation }) => {
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(
+                operation,
+                AlterExtensionOperation::Add(AlterExtensionMember::AccessMethod(Ident::new(
+                    "btree"
+                )))
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("ALTER EXTENSION ext_name ADD AGGREGATE agg(INT ORDER BY TEXT)"),
+        Statement::AlterExtension(AlterExtension {
+            name: Ident::new("ext_name"),
+            operation: AlterExtensionOperation::Add(AlterExtensionMember::Aggregate(
+                AggregateSignature {
+                    name: ObjectName::from(Ident::new("agg")),
+                    args: AggregateArgs::List {
+                        args: vec![OperateFunctionArg::unnamed(DataType::Int(None))],
+                        order_by: Some(vec![OperateFunctionArg::unnamed(DataType::Text)]),
+                    },
+                },
+            )),
+        })
+    );
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD CAST (src AS tgt)") {
+        Statement::AlterExtension(AlterExtension {
+            operation:
+                AlterExtensionOperation::Add(AlterExtensionMember::Cast {
+                    source_type,
+                    target_type,
+                }),
+            ..
+        }) => {
+            assert_eq!(
+                source_type,
+                DataType::Custom(ObjectName::from(Ident::new("src")), vec![])
+            );
+            assert_eq!(
+                target_type,
+                DataType::Custom(ObjectName::from(Ident::new("tgt")), vec![])
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD FUNCTION f(INT)") {
+        Statement::AlterExtension(AlterExtension {
+            operation: AlterExtensionOperation::Add(AlterExtensionMember::Function(function)),
+            ..
+        }) => {
+            assert_eq!(function.name, ObjectName::from(Ident::new("f")));
+            assert_eq!(
+                function.args,
+                Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))])
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD PROCEDURAL LANGUAGE plpgsql")
+    {
+        Statement::AlterExtension(AlterExtension {
+            operation:
+                AlterExtensionOperation::Add(AlterExtensionMember::Language { procedural, name }),
+            ..
+        }) => {
+            assert!(procedural);
+            assert_eq!(name, Ident::new("plpgsql"));
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name ADD OPERATOR - (NONE, INT)") {
+        Statement::AlterExtension(AlterExtension {
+            operation: AlterExtensionOperation::Add(AlterExtensionMember::Operator(signature)),
+            ..
+        }) => {
+            assert_eq!(signature.name, ObjectName::from(Ident::new("-")));
+            assert_eq!(signature.left_type, None);
+            assert_eq!(signature.right_type, DataType::Int(None));
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    match pg_and_generic()
+        .verified_stmt("ALTER EXTENSION ext_name ADD TRANSFORM FOR my_type LANGUAGE plpgsql")
+    {
+        Statement::AlterExtension(AlterExtension {
+            operation:
+                AlterExtensionOperation::Add(AlterExtensionMember::Transform {
+                    type_name,
+                    language,
+                }),
+            ..
+        }) => {
+            assert_eq!(
+                type_name,
+                DataType::Custom(ObjectName::from(Ident::new("my_type")), vec![])
+            );
+            assert_eq!(language, Ident::new("plpgsql"));
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "ALTER EXTENSION ext_name ADD",
+            "Expected: member object type after ADD or DROP, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD FOO bar",
+            "Expected: member object type after ADD or DROP, found: FOO",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD SCHEMA a.b",
+            "Expected: end of statement, found: .",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD AGGREGATE agg",
+            "Expected: (, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD FUNCTION 1",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD PROCEDURE 1",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD ROUTINE 1",
+            "Expected: identifier, found: 1",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST (INT)",
+            "Expected: AS, found: )",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TRANSFORM FOR my_type",
+            "Expected: LANGUAGE, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR +",
+            "Expected: (, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR CLASS oc",
+            "Expected: USING, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR CLASS oc USING",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST",
+            "Expected: (, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST (1)",
+            "Expected: a data type name, found: 1",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST (INT AS)",
+            "Expected: a data type name, found: )",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD CAST (INT AS INT",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD DOMAIN",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR CLASS",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR FAMILY",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR FAMILY of",
+            "Expected: USING, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD OPERATOR FAMILY of USING",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TRANSFORM FOR",
+            "Expected: a data type name, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TRANSFORM FOR my_type LANGUAGE",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name ADD TYPE",
+            "Expected: a data type name, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+
+    for member in [
+        "ACCESS METHOD",
+        "COLLATION",
+        "CONVERSION",
+        "DATABASE",
+        "EVENT TRIGGER",
+        "EXTENSION",
+        "FOREIGN DATA WRAPPER",
+        "FOREIGN TABLE",
+        "INDEX",
+        "LANGUAGE",
+        "MATERIALIZED VIEW",
+        "PROCEDURAL LANGUAGE",
+        "PUBLICATION",
+        "ROLE",
+        "SCHEMA",
+        "SEQUENCE",
+        "SERVER",
+        "STATISTICS",
+        "SUBSCRIPTION",
+        "TABLE",
+        "TABLESPACE",
+        "TEXT SEARCH CONFIGURATION",
+        "TEXT SEARCH DICTIONARY",
+        "TEXT SEARCH PARSER",
+        "TEXT SEARCH TEMPLATE",
+        "VIEW",
+    ] {
+        let sql = format!("ALTER EXTENSION ext_name ADD {member}");
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(&sql).unwrap_err(),
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_extension_drop_member() {
+    alter_extension_member_round_trip_forms("DROP");
+
+    match pg_and_generic().verified_stmt("ALTER EXTENSION ext_name DROP TABLE schema.t") {
+        Statement::AlterExtension(AlterExtension { name, operation }) => {
+            assert_eq!(name, Ident::new("ext_name"));
+            assert_eq!(
+                operation,
+                AlterExtensionOperation::Drop(AlterExtensionMember::Table(ObjectName::from(vec![
+                    Ident::new("schema"),
+                    Ident::new("t")
+                ])))
+            );
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    for (sql, error) in [
+        (
+            "ALTER EXTENSION ext_name DROP",
+            "Expected: member object type after ADD or DROP, found: EOF",
+        ),
+        (
+            "ALTER EXTENSION ext_name DROP FOO bar",
+            "Expected: member object type after ADD or DROP, found: FOO",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_aggregate_signature_propagates_write_errors() {
+    for (sql, fragments) in [
+        (
+            "ALTER AGGREGATE agg(*) RENAME TO other",
+            vec!["ALTER ", "AGGREGATE ", "agg", "(", "*", ")"],
+        ),
+        (
+            "ALTER AGGREGATE agg(INT ORDER BY TEXT) RENAME TO other",
+            vec!["INT", " ", "ORDER BY ", "TEXT"],
+        ),
+        (
+            "ALTER AGGREGATE agg(ORDER BY TEXT) RENAME TO other",
+            vec!["ORDER BY ", "TEXT"],
+        ),
+        (
+            "ALTER FUNCTION fun(INT) RENAME TO other",
+            vec!["FUNCTION ", "fun"],
+        ),
+    ] {
+        let statement = pg_and_generic().verified_stmt(sql);
+        assert_display_propagates_write_errors(&statement, &fragments);
+    }
+}
+
+#[test]
+fn parse_alter_aggregate_signatures() {
+    for (signature, args) in [
+        ("agg(*)", AggregateArgs::Star),
+        (
+            "agg()",
+            AggregateArgs::List {
+                args: vec![],
+                order_by: None,
+            },
+        ),
+        (
+            "agg(INT)",
+            AggregateArgs::List {
+                args: vec![OperateFunctionArg::unnamed(DataType::Int(None))],
+                order_by: None,
+            },
+        ),
+        (
+            "agg(ORDER BY TEXT)",
+            AggregateArgs::List {
+                args: vec![],
+                order_by: Some(vec![OperateFunctionArg::unnamed(DataType::Text)]),
+            },
+        ),
+    ] {
+        let statement =
+            pg_and_generic().verified_stmt(&format!("ALTER AGGREGATE {signature} RENAME TO other"));
+        assert_eq!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                signature: AlterFunctionSignature::Aggregate(AggregateSignature {
+                    name: ObjectName::from(Ident::new("agg")),
+                    args,
+                }),
+                operation: AlterFunctionOperation::RenameTo {
+                    new_name: Ident::new("other"),
+                },
+            })
+        );
+    }
+
+    for (sql, error) in [
+        ("ALTER FUNCTION 1", "Expected: identifier, found: 1"),
+        ("ALTER AGGREGATE 1", "Expected: identifier, found: 1"),
+        ("ALTER AGGREGATE agg", "Expected: (, found: EOF"),
+        ("ALTER AGGREGATE agg(*", "Expected: ), found: EOF"),
+        (
+            "ALTER AGGREGATE agg(ORDER BY)",
+            "Expected: a data type name, found: )",
+        ),
+        (
+            "ALTER FUNCTION fun() NO",
+            "Expected: DEPENDS after NO, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql),
+            Err(ParserError::ParserError(error.into())),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_alter_extension_aggregate_propagates_write_errors() {
+    let statement = pg().verified_stmt("ALTER EXTENSION ext_name ADD AGGREGATE agg(*)");
+    assert_display_propagates_write_errors(&statement, &["AGGREGATE "]);
+}
+
+#[test]
+fn parse_select_for_key_lock_strengths() {
+    for (sql, lock_type) in [
+        ("SELECT id FROM t FOR NO KEY UPDATE", LockType::NoKeyUpdate),
+        (
+            "SELECT id FROM t FOR NO KEY UPDATE OF t SKIP LOCKED",
+            LockType::NoKeyUpdate,
+        ),
+        ("SELECT id FROM t FOR KEY SHARE", LockType::KeyShare),
+        (
+            "SELECT id FROM t FOR KEY SHARE OF t NOWAIT",
+            LockType::KeyShare,
+        ),
+    ] {
+        let query = pg_and_generic().verified_query(sql);
+        assert_eq!(query.locks.len(), 1, "{sql}");
+        assert_eq!(query.locks[0].lock_type, lock_type, "{sql}");
+    }
+
+    for (sql, expected) in [
+        (
+            "SELECT id FROM t FOR NO KEY",
+            "Expected: UPDATE, found: EOF",
+        ),
+        (
+            "SELECT id FROM t FOR NO KEY SHARE",
+            "Expected: UPDATE, found: SHARE",
+        ),
+        (
+            "SELECT id FROM t FOR KEY UPDATE",
+            "Expected: SHARE, found: UPDATE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
 }
 
 #[test]

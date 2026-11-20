@@ -4348,12 +4348,7 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == *tok {
-            Ok(Expr::Cast {
-                kind: CastKind::DoubleColon,
-                expr: Box::new(expr),
-                data_type: self.parse_double_colon_data_type()?,
-                format: None,
-            })
+            self.parse_pg_cast(expr)
         } else if Token::ExclamationMark == *tok && self.dialect.supports_factorial_operator() {
             Ok(Expr::UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
@@ -13845,20 +13840,21 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
-        let (ty, trailing_bracket) = self.parse_data_type_helper()?;
-        if trailing_bracket.0 {
-            return parser_err!(
-                format!("unmatched > after parsing data type {ty}"),
-                self.peek_token_ref()
-            );
-        }
-
-        Ok(ty)
+        let parsed = self.parse_data_type_helper()?;
+        self.reject_unmatched_bracket(parsed)
     }
 
     /// Parses the target type of `expr::type`, which never continues into a multi-word name.
     fn parse_double_colon_data_type(&mut self) -> Result<DataType, ParserError> {
-        let (ty, trailing_bracket) = self.parse_data_type_inner()?;
+        let parsed = self.parse_data_type_inner()?;
+        self.reject_unmatched_bracket(parsed)
+    }
+
+    /// Fails when the `>>` that closed the type also closed a bracket the type never opened.
+    fn reject_unmatched_bracket(
+        &self,
+        (ty, trailing_bracket): (DataType, MatchedTrailingBracket),
+    ) -> Result<DataType, ParserError> {
         if trailing_bracket.0 {
             return parser_err!(
                 format!("unmatched > after parsing data type {ty}"),

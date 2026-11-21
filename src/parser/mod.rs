@@ -9516,10 +9516,25 @@ impl<'a> Parser<'a> {
         };
 
         // parse optional column list (schema)
+        let mut like_elements = vec![];
         let (columns, constraints) = if partition_of.is_some() {
             self.parse_partition_of_columns()?
         } else {
-            self.parse_columns()?
+            let accepts_like = self.dialect.supports_create_table_like_parenthesized();
+            self.parse_table_elements(
+                Parser::parse_column_def,
+                accepts_like.then_some(&mut like_elements),
+            )?
+        };
+        let like = if like_elements.is_empty() {
+            like
+        } else if like.is_some() {
+            return parser_err!(
+                "CREATE TABLE cannot take LIKE both before and inside the column list",
+                like_elements[0].like.name.span().start
+            );
+        } else {
+            Some(CreateTableLikeKind::Parenthesized(like_elements))
         };
         let comment_after_column_def =
             if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
@@ -9759,69 +9774,60 @@ impl<'a> Parser<'a> {
         &mut self,
         allow_unquoted_hyphen: bool,
     ) -> Result<Option<CreateTableLikeKind>, ParserError> {
-        let like = if self.dialect.supports_create_table_like_parenthesized()
-            && self.consume_token(&Token::LParen)
-        {
-            if self.parse_keyword(Keyword::LIKE) {
-                let name = self.parse_object_name(allow_unquoted_hyphen)?;
-                let mut options = Vec::new();
-                while let Some(keyword) =
-                    self.parse_one_of_keywords(&[Keyword::INCLUDING, Keyword::EXCLUDING])
-                {
-                    let property = match self.expect_one_of_keywords(&[
-                        Keyword::ALL,
-                        Keyword::COMMENTS,
-                        Keyword::COMPRESSION,
-                        Keyword::CONSTRAINTS,
-                        Keyword::DEFAULTS,
-                        Keyword::GENERATED,
-                        Keyword::IDENTITY,
-                        Keyword::INDEXES,
-                        Keyword::STATISTICS,
-                        Keyword::STORAGE,
-                    ])? {
-                        Keyword::ALL => CreateTableLikeProperty::All,
-                        Keyword::COMMENTS => CreateTableLikeProperty::Comments,
-                        Keyword::COMPRESSION => CreateTableLikeProperty::Compression,
-                        Keyword::CONSTRAINTS => CreateTableLikeProperty::Constraints,
-                        Keyword::DEFAULTS => CreateTableLikeProperty::Defaults,
-                        Keyword::GENERATED => CreateTableLikeProperty::Generated,
-                        Keyword::IDENTITY => CreateTableLikeProperty::Identity,
-                        Keyword::INDEXES => CreateTableLikeProperty::Indexes,
-                        Keyword::STATISTICS => CreateTableLikeProperty::Statistics,
-                        Keyword::STORAGE => CreateTableLikeProperty::Storage,
-                        other => {
-                            return Err(ParserError::ParserError(format!(
-                                "Internal parser error: unexpected LIKE option {other:?}"
-                            )))
-                        }
-                    };
-                    options.push(if keyword == Keyword::INCLUDING {
-                        CreateTableLikeOption::Including(property)
-                    } else {
-                        CreateTableLikeOption::Excluding(property)
-                    });
-                }
-                self.expect_token(&Token::RParen)?;
-                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                    name,
-                    options,
-                }))
-            } else {
-                // Rollback the '(' it's probably the columns list
-                self.prev_token();
-                None
-            }
-        } else if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
+        if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
             let name = self.parse_object_name(allow_unquoted_hyphen)?;
-            Some(CreateTableLikeKind::Plain(CreateTableLike {
+            Ok(Some(CreateTableLikeKind::Plain(CreateTableLike {
                 name,
                 options: vec![],
-            }))
+            })))
         } else {
-            None
-        };
-        Ok(like)
+            Ok(None)
+        }
+    }
+
+    /// Parse the `INCLUDING` and `EXCLUDING` options of a `LIKE` element in a `CREATE TABLE` column list.
+    fn parse_create_table_like_options(
+        &mut self,
+    ) -> Result<Vec<CreateTableLikeOption>, ParserError> {
+        let mut options = Vec::new();
+        while let Some(keyword) =
+            self.parse_one_of_keywords(&[Keyword::INCLUDING, Keyword::EXCLUDING])
+        {
+            let property = match self.expect_one_of_keywords(&[
+                Keyword::ALL,
+                Keyword::COMMENTS,
+                Keyword::COMPRESSION,
+                Keyword::CONSTRAINTS,
+                Keyword::DEFAULTS,
+                Keyword::GENERATED,
+                Keyword::IDENTITY,
+                Keyword::INDEXES,
+                Keyword::STATISTICS,
+                Keyword::STORAGE,
+            ])? {
+                Keyword::ALL => CreateTableLikeProperty::All,
+                Keyword::COMMENTS => CreateTableLikeProperty::Comments,
+                Keyword::COMPRESSION => CreateTableLikeProperty::Compression,
+                Keyword::CONSTRAINTS => CreateTableLikeProperty::Constraints,
+                Keyword::DEFAULTS => CreateTableLikeProperty::Defaults,
+                Keyword::GENERATED => CreateTableLikeProperty::Generated,
+                Keyword::IDENTITY => CreateTableLikeProperty::Identity,
+                Keyword::INDEXES => CreateTableLikeProperty::Indexes,
+                Keyword::STATISTICS => CreateTableLikeProperty::Statistics,
+                Keyword::STORAGE => CreateTableLikeProperty::Storage,
+                other => {
+                    return Err(ParserError::ParserError(format!(
+                        "Internal parser error: unexpected LIKE option {other:?}"
+                    )))
+                }
+            };
+            options.push(if keyword == Keyword::INCLUDING {
+                CreateTableLikeOption::Including(property)
+            } else {
+                CreateTableLikeOption::Excluding(property)
+            });
+        }
+        Ok(options)
     }
 
     pub(crate) fn parse_create_table_on_commit(&mut self) -> Result<OnCommit, ParserError> {
@@ -10237,7 +10243,7 @@ impl<'a> Parser<'a> {
 
     /// Parse columns and constraints.
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
-        self.parse_table_elements(Parser::parse_column_def)
+        self.parse_table_elements(Parser::parse_column_def, None)
     }
 
     /// Parse the columns and constraints of a `PARTITION OF` table, whose column entries
@@ -10247,20 +10253,26 @@ impl<'a> Parser<'a> {
     fn parse_partition_of_columns(
         &mut self,
     ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
-        self.parse_table_elements(|parser| {
-            let name = parser.parse_identifier()?;
-            let _ = parser.parse_keywords(&[Keyword::WITH, Keyword::OPTIONS]); // [ WITH OPTIONS ]
-            Ok(ColumnDef {
-                name,
-                data_type: DataType::Unspecified,
-                options: parser.parse_column_option_defs()?,
-            })
-        })
+        self.parse_table_elements(
+            |parser| {
+                let name = parser.parse_identifier()?;
+                let _ = parser.parse_keywords(&[Keyword::WITH, Keyword::OPTIONS]); // [ WITH OPTIONS ]
+                Ok(ColumnDef {
+                    name,
+                    data_type: DataType::Unspecified,
+                    options: parser.parse_column_option_defs()?,
+                })
+            },
+            None,
+        )
     }
 
+    /// Parse a parenthesized list of columns and constraints, and of `LIKE` elements when
+    /// `like_elements` is given.
     fn parse_table_elements(
         &mut self,
         mut parse_column: impl FnMut(&mut Self) -> Result<ColumnDef, ParserError>,
+        mut like_elements: Option<&mut Vec<CreateTableLikeElement>>,
     ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
@@ -10269,7 +10281,18 @@ impl<'a> Parser<'a> {
         }
 
         loop {
-            if let Some(constraint) = self.parse_optional_table_constraint()? {
+            if let Some(like_elements) = like_elements
+                .as_deref_mut()
+                .filter(|_| self.parse_keyword(Keyword::LIKE))
+            {
+                like_elements.push(CreateTableLikeElement {
+                    like: CreateTableLike {
+                        name: self.parse_object_name(false)?,
+                        options: self.parse_create_table_like_options()?,
+                    },
+                    columns_before: columns.len(),
+                });
+            } else if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = &self.peek_token_ref().token {
                 columns.push(parse_column(self)?);

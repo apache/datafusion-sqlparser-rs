@@ -42,18 +42,18 @@ use crate::ast::{
         UniqueConstraint,
     },
     ArgMode, AttachedToken, BeginEndStatements, CommentDef, ConditionalStatements,
-    CreateFunctionBody, CreateFunctionUsing, CreateServerOption, CreateTableLikeKind,
-    CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior,
-    FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc, FunctionDeterminismSpecifier,
-    FunctionParallel, FunctionSecurity, HiveDistributionStyle, HiveFormat, HiveIOFormat,
-    HiveRowFormat, HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName,
-    OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query,
-    RefreshModeKind, ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, Statement,
-    StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    CreateFunctionBody, CreateFunctionUsing, CreateServerOption, CreateTableLikeElement,
+    CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat,
+    FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
+    FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
+    HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
+    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
+    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, ResetConfig, RowAccessPolicy,
+    SequenceOptions, Spanned, SqlOption, Statement, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject,
+    TriggerPeriod, TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
 };
-use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
+use crate::display_utils::{Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
 use crate::tokenizer::{Span, Token};
 
@@ -3453,15 +3453,19 @@ impl fmt::Display for CreateTable {
         if let Some(on_cluster) = &self.on_cluster {
             write!(f, " ON CLUSTER {on_cluster}")?;
         }
-        if !self.columns.is_empty() || !self.constraints.is_empty() {
+        let like_elements: &[CreateTableLikeElement] = match &self.like {
+            Some(CreateTableLikeKind::Parenthesized(like_elements)) => like_elements,
+            _ => &[],
+        };
+        if !self.columns.is_empty() || !self.constraints.is_empty() || !like_elements.is_empty() {
             f.write_str(" (")?;
             NewLine.fmt(f)?;
-            Indent(DisplayCommaSeparated(&self.columns)).fmt(f)?;
-            if !self.columns.is_empty() && !self.constraints.is_empty() {
-                f.write_str(",")?;
-                SpaceOrNewline.fmt(f)?;
-            }
-            Indent(DisplayCommaSeparated(&self.constraints)).fmt(f)?;
+            Indent(TableElements {
+                columns: &self.columns,
+                like_elements,
+                constraints: &self.constraints,
+            })
+            .fmt(f)?;
             NewLine.fmt(f)?;
             f.write_str(")")?;
         } else if self.query.is_none()
@@ -3471,8 +3475,6 @@ impl fmt::Display for CreateTable {
         {
             // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
             f.write_str(" ()")?;
-        } else if let Some(CreateTableLikeKind::Parenthesized(like_in_columns_list)) = &self.like {
-            write!(f, " ({like_in_columns_list})")?;
         }
         if let Some(for_values) = &self.for_values {
             write!(f, " {for_values}")?;
@@ -3739,6 +3741,43 @@ impl fmt::Display for CreateTable {
         }
         if let Some(with_data) = &self.with_data {
             write!(f, " {with_data}")?;
+        }
+        Ok(())
+    }
+}
+
+/// The column list of `CREATE TABLE`, with each `LIKE` element after the columns written before it.
+struct TableElements<'a> {
+    columns: &'a [ColumnDef],
+    like_elements: &'a [CreateTableLikeElement],
+    constraints: &'a [TableConstraint],
+}
+
+impl fmt::Display for TableElements<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut first = true;
+        let mut write_element = |f: &mut fmt::Formatter, element: &dyn fmt::Display| {
+            if !first {
+                f.write_char(',')?;
+                SpaceOrNewline.fmt(f)?;
+            }
+            first = false;
+            element.fmt(f)
+        };
+        let mut like_elements = self.like_elements.iter().peekable();
+        for (index, column) in self.columns.iter().enumerate() {
+            while let Some(like_element) =
+                like_elements.next_if(|like| like.columns_before <= index)
+            {
+                write_element(f, &like_element.like)?;
+            }
+            write_element(f, column)?;
+        }
+        for like_element in like_elements {
+            write_element(f, &like_element.like)?;
+        }
+        for constraint in self.constraints {
+            write_element(f, constraint)?;
         }
         Ok(())
     }

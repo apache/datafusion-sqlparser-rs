@@ -20299,10 +20299,15 @@ fn parse_create_table_like() {
             );
             assert_eq!(
                 stmt.like,
-                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    options: vec![],
-                }))
+                Some(CreateTableLikeKind::Parenthesized(vec![
+                    CreateTableLikeElement {
+                        like: CreateTableLike {
+                            name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                            options: vec![],
+                        },
+                        columns_before: 0,
+                    }
+                ]))
             )
         }
         _ => unreachable!(),
@@ -20316,12 +20321,17 @@ fn parse_create_table_like() {
             );
             assert_eq!(
                 stmt.like,
-                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    options: vec![CreateTableLikeOption::Including(
-                        CreateTableLikeProperty::Defaults
-                    )],
-                }))
+                Some(CreateTableLikeKind::Parenthesized(vec![
+                    CreateTableLikeElement {
+                        like: CreateTableLike {
+                            name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                            options: vec![CreateTableLikeOption::Including(
+                                CreateTableLikeProperty::Defaults
+                            )],
+                        },
+                        columns_before: 0,
+                    }
+                ]))
             )
         }
         _ => unreachable!(),
@@ -20335,12 +20345,17 @@ fn parse_create_table_like() {
             );
             assert_eq!(
                 stmt.like,
-                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    options: vec![CreateTableLikeOption::Excluding(
-                        CreateTableLikeProperty::Defaults
-                    )],
-                }))
+                Some(CreateTableLikeKind::Parenthesized(vec![
+                    CreateTableLikeElement {
+                        like: CreateTableLike {
+                            name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                            options: vec![CreateTableLikeOption::Excluding(
+                                CreateTableLikeProperty::Defaults
+                            )],
+                        },
+                        columns_before: 0,
+                    }
+                ]))
             )
         }
         _ => unreachable!(),
@@ -23641,4 +23656,96 @@ fn parse_only_table_name() {
     ] {
         dialects.verified_stmt(sql);
     }
+}
+
+#[test]
+fn parse_create_table_like_among_columns() {
+    let dialects = all_dialects_where(|dialect| dialect.supports_create_table_like_parenthesized());
+    let like = |name: &str, options, columns_before| CreateTableLikeElement {
+        like: CreateTableLike {
+            name: ObjectName::from(vec![Ident::new(name)]),
+            options,
+        },
+        columns_before,
+    };
+    let column_names = |create_table: &CreateTable| -> Vec<String> {
+        create_table
+            .columns
+            .iter()
+            .map(|column| column.name.to_string())
+            .collect()
+    };
+
+    match dialects.verified_stmt("CREATE TABLE t (LIKE a, b INT)") {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(
+                create_table.like,
+                Some(CreateTableLikeKind::Parenthesized(vec![like(
+                    "a",
+                    vec![],
+                    0
+                )]))
+            );
+            assert_eq!(column_names(&create_table), ["b"]);
+        }
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt("CREATE TABLE t (b INT, LIKE a)") {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(
+                create_table.like,
+                Some(CreateTableLikeKind::Parenthesized(vec![like(
+                    "a",
+                    vec![],
+                    1
+                )]))
+            );
+            assert_eq!(column_names(&create_table), ["b"]);
+        }
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt(
+        "CREATE TABLE t (b INT, LIKE a INCLUDING DEFAULTS, c INT, LIKE d, PRIMARY KEY (b))",
+    ) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(
+                create_table.like,
+                Some(CreateTableLikeKind::Parenthesized(vec![
+                    like(
+                        "a",
+                        vec![CreateTableLikeOption::Including(
+                            CreateTableLikeProperty::Defaults
+                        )],
+                        1
+                    ),
+                    like("d", vec![], 2),
+                ]))
+            );
+            assert_eq!(column_names(&create_table), ["b", "c"]);
+            assert_eq!(create_table.constraints.len(), 1);
+        }
+        _ => unreachable!(),
+    }
+    match dialects.verified_stmt(r#"CREATE TABLE t ("LIKE" INT)"#) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(create_table.like, None);
+            assert_eq!(column_names(&create_table), [r#""LIKE""#]);
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t (b INT, LIKE)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE TABLE t LIKE a (LIKE b)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "CREATE TABLE cannot take LIKE both before and inside the column list".to_string()
+        )
+    );
 }

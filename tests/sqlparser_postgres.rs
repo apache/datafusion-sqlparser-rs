@@ -7555,6 +7555,7 @@ fn parse_drop_trigger() {
                 "DROP TRIGGER{} check_update ON table_name{}",
                 if if_exists { " IF EXISTS" } else { "" },
                 option
+                    .as_ref()
                     .map(|o| format!(" {o}"))
                     .unwrap_or_else(|| "".to_string())
             );
@@ -14320,4 +14321,74 @@ fn display_create_index_on_only_propagates_formatter_errors() {
         let mut writer = RejectingWriter(rejected);
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
+}
+
+#[test]
+fn parse_referential_action_set_column_list() {
+    let foreign_key_actions = |statement: Statement| match statement {
+        Statement::CreateTable(CreateTable { constraints, .. }) => {
+            match <[_; 1]>::try_from(constraints) {
+                Ok([TableConstraint::ForeignKey(fk)]) => (fk.on_delete, fk.on_update),
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    };
+    let verified_actions = |sql: &str| foreign_key_actions(pg_and_generic().verified_stmt(sql));
+
+    let sql =
+        "CREATE TABLE c (a INT, b INT, FOREIGN KEY (a, b) REFERENCES r ON DELETE SET NULL (b))";
+    assert_eq!(
+        verified_actions(sql),
+        (Some(ReferentialAction::SetNull(vec!["b".into()])), None)
+    );
+    let (on_delete, _) = foreign_key_actions(
+        Parser::parse_sql(&PostgreSqlDialect {}, sql)
+            .unwrap()
+            .remove(0),
+    );
+    assert_eq!(
+        on_delete.unwrap().span(),
+        Span::new(Location::new(1, 83), Location::new(1, 84))
+    );
+    assert_eq!(
+        verified_actions(
+            "CREATE TABLE c (a INT, b INT, FOREIGN KEY (a, b) REFERENCES r ON DELETE SET DEFAULT (a, b))"
+        ),
+        (
+            Some(ReferentialAction::SetDefault(vec!["a".into(), "b".into()])),
+            None
+        )
+    );
+    assert_eq!(
+        verified_actions(
+            "CREATE TABLE c (a INT, b INT, FOREIGN KEY (a, b) REFERENCES r ON DELETE SET NULL ON UPDATE SET DEFAULT)"
+        ),
+        (
+            Some(ReferentialAction::SetNull(vec![])),
+            Some(ReferentialAction::SetDefault(vec![]))
+        )
+    );
+    assert_eq!(
+        verified_actions(
+            "CREATE TABLE c (a INT, b INT, FOREIGN KEY (a, b) REFERENCES r ON UPDATE SET NULL (b))"
+        ),
+        (None, Some(ReferentialAction::SetNull(vec!["b".into()])))
+    );
+
+    pg_and_generic()
+        .verified_stmt("CREATE TABLE c (a INT, b INT REFERENCES r (b) ON DELETE SET NULL (b))");
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE c ADD FOREIGN KEY (a, b) REFERENCES r ON DELETE SET DEFAULT (a)",
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements(
+                "CREATE TABLE c (a INT, FOREIGN KEY (a) REFERENCES r ON DELETE SET NULL ())"
+            )
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: )"
+    );
 }

@@ -922,10 +922,19 @@ impl Spanned for ColumnOption {
     }
 }
 
-/// # missing span
+/// # partial span
+///
+/// Covers only the column list of `SET NULL` and `SET DEFAULT`.
 impl Spanned for ReferentialAction {
     fn span(&self) -> Span {
-        Span::empty()
+        match self {
+            ReferentialAction::SetNull(columns) | ReferentialAction::SetDefault(columns) => {
+                union_spans(columns.iter().map(|column| column.span))
+            }
+            ReferentialAction::Restrict
+            | ReferentialAction::Cascade
+            | ReferentialAction::NoAction => Span::empty(),
+        }
     }
 }
 

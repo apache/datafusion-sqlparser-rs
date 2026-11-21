@@ -3994,9 +3994,10 @@ impl<'a> Parser<'a> {
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
             Token::Caret => {
-                // In PostgreSQL, ^ stands for the exponentiation operation,
-                // and # stands for XOR. See https://www.postgresql.org/docs/current/functions-math.html
-                if dialect_is!(dialect is PostgreSqlDialect) {
+                // In PostgreSQL and DuckDB, ^ stands for the exponentiation operation.
+                // See https://www.postgresql.org/docs/current/functions-math.html,
+                // https://duckdb.org/docs/2.0/sql/functions/numeric.
+                if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect) {
                     Some(BinaryOperator::PGExp)
                 } else {
                     Some(BinaryOperator::BitwiseXor)

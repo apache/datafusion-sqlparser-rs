@@ -128,4 +128,8 @@ impl Dialect for OracleDialect {
     fn supports_insert_table_query(&self) -> bool {
         true
     }
+
+    fn supports_flashback_query(&self) -> bool {
+        true
+    }
 }

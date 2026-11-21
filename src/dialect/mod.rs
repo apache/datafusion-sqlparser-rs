@@ -1798,6 +1798,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports Oracle's flashback query clause
+    /// after a table, e.g. `SELECT * FROM t AS OF SCN 123`.
+    ///
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/SELECT.html)
+    fn supports_flashback_query(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the E'...' syntax for string literals
     ///
     /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>

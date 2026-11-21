@@ -2449,15 +2449,25 @@ pub struct ConstraintCharacteristics {
     pub enforced: Option<bool>,
 }
 
-/// Initial setting for deferrable constraints (`INITIALLY IMMEDIATE` or `INITIALLY DEFERRED`).
+/// When a deferrable constraint is checked, as set by `INITIALLY` in its definition or by
+/// `SET CONSTRAINTS`.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DeferrableInitial {
-    /// `INITIALLY IMMEDIATE`
+    /// `IMMEDIATE`
     Immediate,
-    /// `INITIALLY DEFERRED`
+    /// `DEFERRED`
     Deferred,
+}
+
+impl fmt::Display for DeferrableInitial {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DeferrableInitial::Immediate => "IMMEDIATE",
+            DeferrableInitial::Deferred => "DEFERRED",
+        })
+    }
 }
 
 impl ConstraintCharacteristics {

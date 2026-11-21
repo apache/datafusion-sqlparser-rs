@@ -17129,6 +17129,22 @@ impl<'a> Parser<'a> {
                 session: false,
             }
             .into());
+        } else if self.parse_keyword(Keyword::CONSTRAINTS) {
+            let target = if self.parse_keyword(Keyword::ALL) {
+                SetConstraintsTarget::All
+            } else {
+                SetConstraintsTarget::Constraints(
+                    self.parse_comma_separated(|parser| parser.parse_object_name(false))?,
+                )
+            };
+            let mode = if self.parse_keyword(Keyword::DEFERRED) {
+                DeferrableInitial::Deferred
+            } else if self.parse_keyword(Keyword::IMMEDIATE) {
+                DeferrableInitial::Immediate
+            } else {
+                return self.expected_ref("one of DEFERRED or IMMEDIATE", self.peek_token_ref());
+            };
+            return Ok(Set::SetConstraints { target, mode }.into());
         } else if self.parse_keyword(Keyword::AUTHORIZATION) {
             let scope = match scope {
                 Some(s) => s,

@@ -10269,6 +10269,48 @@ fn parse_set_transaction() {
 }
 
 #[test]
+fn parse_set_constraints() {
+    for (sql, target, mode) in [
+        (
+            "SET CONSTRAINTS ALL DEFERRED",
+            SetConstraintsTarget::All,
+            DeferrableInitial::Deferred,
+        ),
+        (
+            "SET CONSTRAINTS ALL IMMEDIATE",
+            SetConstraintsTarget::All,
+            DeferrableInitial::Immediate,
+        ),
+        (
+            "SET CONSTRAINTS resources_parent_required, public.grants_last_admin DEFERRED",
+            SetConstraintsTarget::Constraints(vec![
+                ObjectName::from(vec!["resources_parent_required".into()]),
+                ObjectName::from(vec!["public".into(), "grants_last_admin".into()]),
+            ]),
+            DeferrableInitial::Deferred,
+        ),
+    ] {
+        assert_eq!(
+            verified_stmt(sql),
+            Statement::Set(Set::SetConstraints { target, mode })
+        );
+    }
+
+    for (sql, found) in [
+        ("SET CONSTRAINTS ALL", "EOF"),
+        ("SET CONSTRAINTS resources_parent_required", "EOF"),
+        ("SET CONSTRAINTS ALL FOO", "FOO"),
+    ] {
+        assert_eq!(
+            parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!(
+                "Expected: one of DEFERRED or IMMEDIATE, found: {found}"
+            ))
+        );
+    }
+}
+
+#[test]
 fn parse_set_variable() {
     match verified_stmt("SET SOMETHING = '1'") {
         Statement::Set(Set::SingleAssignment {

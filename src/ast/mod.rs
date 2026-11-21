@@ -3455,6 +3455,17 @@ pub enum Set {
         /// `true` when the `SESSION` keyword was used.
         session: bool,
     },
+    /// ```sql
+    /// SET CONSTRAINTS { ALL | name [, ...] } { DEFERRED | IMMEDIATE }
+    /// ```
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-set-constraints.html>
+    SetConstraints {
+        /// `ALL` or the constraint names, possibly schema-qualified.
+        target: SetConstraintsTarget,
+        /// `DEFERRED` or `IMMEDIATE`.
+        mode: DeferrableInitial,
+    },
 }
 
 impl Display for Set {
@@ -3500,6 +3511,7 @@ impl Display for Set {
                 }
                 Ok(())
             }
+            Self::SetConstraints { target, mode } => write!(f, "SET CONSTRAINTS {target} {mode}"),
             Self::SetTimeZone { local, value } => {
                 f.write_str("SET ")?;
                 if *local {
@@ -3540,6 +3552,26 @@ impl Display for Set {
                     display_comma_separated(values)
                 )
             }
+        }
+    }
+}
+
+/// The constraints a `SET CONSTRAINTS` statement applies to.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SetConstraintsTarget {
+    /// `ALL`
+    All,
+    /// The constraint names, possibly schema-qualified.
+    Constraints(Vec<ObjectName>),
+}
+
+impl fmt::Display for SetConstraintsTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::All => f.write_str("ALL"),
+            Self::Constraints(constraints) => write!(f, "{}", display_comma_separated(constraints)),
         }
     }
 }

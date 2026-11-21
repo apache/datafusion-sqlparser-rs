@@ -3526,6 +3526,22 @@ SETTINGS update_parallel_mode = 'auto'"#;
     }
 
     #[test]
+    fn test_alter_column_set_expression_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let sql = "ALTER TABLE d ALTER COLUMN x SET EXPRESSION AS (y + 2)";
+        let mut test = SpanTest::new(dialect, sql);
+
+        let operations = match test.0.parse_statement().unwrap() {
+            Statement::AlterTable(alter) => alter.operations,
+            stmt => panic!("expected ALTER TABLE, got {stmt:?}"),
+        };
+        let AlterTableOperation::AlterColumn { op, .. } = &operations[0] else {
+            panic!("expected ALTER COLUMN, got {:?}", operations[0]);
+        };
+        assert_eq!(test.get_source(op.span()), "y + 2");
+    }
+
+    #[test]
     fn test_create_foreign_table_partition_of_span() {
         let dialect = &crate::dialect::PostgreSqlDialect {};
         let sql =

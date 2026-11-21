@@ -5193,8 +5193,35 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated_with_trailing_commas(
             |p| p.parse_select_item(),
             trailing_commas,
-            Self::is_reserved_for_column_alias,
+            |kw, parser| {
+                Self::is_reserved_for_column_alias(kw, parser)
+                    && !(matches!(kw, Keyword::LIMIT | Keyword::OFFSET)
+                        && parser.peek_select_item_end(0))
+            },
         )
+    }
+
+    /// Returns true if the `n`th next token ends a select item, so that a `LIMIT`
+    /// or `OFFSET` before it names a column, as in `SELECT offset, limit FROM t`.
+    fn peek_select_item_end(&self, n: usize) -> bool {
+        match &self.peek_nth_token_ref(n).token {
+            Token::Comma | Token::EOF | Token::SemiColon | Token::RParen => true,
+            Token::Word(w) => matches!(
+                w.keyword,
+                Keyword::AS
+                    | Keyword::INTO
+                    | Keyword::FROM
+                    | Keyword::WHERE
+                    | Keyword::GROUP
+                    | Keyword::HAVING
+                    | Keyword::WINDOW
+                    | Keyword::ORDER
+                    | Keyword::UNION
+                    | Keyword::INTERSECT
+                    | Keyword::EXCEPT
+            ),
+            _ => false,
+        }
     }
 
     /// Parse a list of actions for `GRANT` statements.
@@ -16743,6 +16770,9 @@ impl<'a> Parser<'a> {
     fn peek_empty_projection(&self) -> bool {
         match &self.peek_token_ref().token {
             Token::EOF | Token::SemiColon | Token::RParen => true,
+            Token::Word(w) if matches!(w.keyword, Keyword::LIMIT | Keyword::OFFSET) => {
+                !self.peek_select_item_end(1)
+            }
             Token::Word(w) => matches!(
                 w.keyword,
                 Keyword::INTO

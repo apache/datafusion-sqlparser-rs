@@ -23522,6 +23522,53 @@ fn parse_national_character_string_types() {
 }
 
 #[test]
+fn parse_projection_trailing_comma_keyword_column() {
+    let dialects = all_dialects_where(|d| d.supports_projection_trailing_commas());
+
+    for sql in [
+        "SELECT offset FROM t",
+        "SELECT offset, 'a' AS a FROM t",
+        "SELECT 'a' AS a, offset FROM t",
+        "SELECT a, offset FROM t",
+        "SELECT a, limit FROM t",
+        "SELECT a, offset, b FROM t",
+        "SELECT a, offset AS o FROM t",
+        "SELECT * FROM (SELECT a, offset FROM t)",
+        "SELECT a, offset",
+        "SELECT * FROM (SELECT a, offset) AS s",
+        "SELECT a, offset WHERE b",
+        "SELECT a, offset INTO u FROM t",
+        "SELECT a, offset UNION SELECT 1, 2",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    dialects.one_statement_parses_to("SELECT a, FROM t", "SELECT a FROM t");
+    dialects.one_statement_parses_to("SELECT a, LIMIT 1", "SELECT a LIMIT 1");
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT a, union, b FROM t")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: ,".to_string()
+        )
+    );
+
+    let dialects = all_dialects_where(|d| d.supports_empty_projections());
+    for sql in [
+        "SELECT offset FROM t",
+        "SELECT limit, offset FROM t",
+        "SELECT offset AS o FROM t",
+        "SELECT offset",
+        "SELECT offset WHERE b",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    dialects.verified_stmt("SELECT LIMIT 1");
+    dialects.verified_stmt("SELECT OFFSET 1");
+}
+
+#[test]
 fn parse_create_procedure_string_body() {
     match verified_stmt("CREATE PROCEDURE p (a INT) LANGUAGE sql AS 'INSERT INTO t VALUES (a)'") {
         Statement::CreateProcedure {

@@ -14652,14 +14652,17 @@ fn test_match_recognize() {
             }],
             measures: vec![
                 Measure {
+                    semantics: None,
                     expr: call("MATCH_NUMBER", []),
                     alias: Ident::new("match_number"),
                 },
                 Measure {
+                    semantics: None,
                     expr: call("FIRST", [Expr::Identifier(Ident::new("price_date"))]),
                     alias: Ident::new("start_date"),
                 },
                 Measure {
+                    semantics: None,
                     expr: call("LAST", [Expr::Identifier(Ident::new("price_date"))]),
                     alias: Ident::new("end_date"),
                 },
@@ -14750,6 +14753,20 @@ fn test_match_recognize() {
 
     for sql in examples {
         all_dialects_where(|d| d.supports_match_recognize()).verified_query(sql);
+    }
+
+    // RUNNING and FINAL measure semantics modifiers
+    let select = all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(
+        "SELECT * FROM my_table MATCH_RECOGNIZE(MEASURES RUNNING COUNT(*) AS r_cnt, FINAL LAST(a.price) AS f_price, running AS raw_col ALL ROWS PER MATCH PATTERN (a+) DEFINE a AS price > 0)",
+    );
+    match &select.from[0].relation {
+        TableFactor::MatchRecognize { measures, .. } => {
+            assert_eq!(measures.len(), 3);
+            assert_eq!(measures[0].semantics, Some(MeasureSemantics::Running));
+            assert_eq!(measures[1].semantics, Some(MeasureSemantics::Final));
+            assert_eq!(measures[2].semantics, None);
+        }
+        other => panic!("expected MatchRecognize, got {other:?}"),
     }
 }
 

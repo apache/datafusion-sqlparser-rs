@@ -2040,14 +2040,36 @@ impl fmt::Display for PivotValueSource {
     }
 }
 
+/// Optional SQL:2016 evaluation semantics modifier (`RUNNING` or `FINAL`) on a `MATCH_RECOGNIZE`
+/// measure.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MeasureSemantics {
+    /// `RUNNING <expr>`
+    Running,
+    /// `FINAL <expr>`
+    Final,
+}
+
+impl fmt::Display for MeasureSemantics {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MeasureSemantics::Running => write!(f, "RUNNING"),
+            MeasureSemantics::Final => write!(f, "FINAL"),
+        }
+    }
+}
+
 /// An item in the `MEASURES` subclause of a `MATCH_RECOGNIZE` operation.
 ///
 /// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize#measures-specifying-additional-output-columns>.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// An item in the `MEASURES` clause of `MATCH_RECOGNIZE`.
 pub struct Measure {
+    /// Optional `RUNNING` or `FINAL` semantics modifier.
+    pub semantics: Option<MeasureSemantics>,
     /// Expression producing the measure value.
     pub expr: Expr,
     /// Alias for the measure column.
@@ -2056,6 +2078,9 @@ pub struct Measure {
 
 impl fmt::Display for Measure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(semantics) = &self.semantics {
+            write!(f, "{semantics} ")?;
+        }
         write!(f, "{} AS {}", self.expr, self.alias)
     }
 }

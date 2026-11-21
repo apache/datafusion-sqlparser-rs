@@ -18535,10 +18535,37 @@ impl<'a> Parser<'a> {
 
         let measures = if self.parse_keyword(Keyword::MEASURES) {
             self.parse_comma_separated(|p| {
+                // Only treat RUNNING / FINAL as a MeasureSemantics prefix when not followed by
+                // an alias or expression terminator (preserving columns named `running` / `final`).
+                let semantics = if p.parse_keyword(Keyword::RUNNING) {
+                    if matches!(p.peek_token_ref().token, Token::Comma | Token::RParen)
+                        || p.peek_keyword(Keyword::AS)
+                    {
+                        p.prev_token();
+                        None
+                    } else {
+                        Some(MeasureSemantics::Running)
+                    }
+                } else if p.parse_keyword(Keyword::FINAL) {
+                    if matches!(p.peek_token_ref().token, Token::Comma | Token::RParen)
+                        || p.peek_keyword(Keyword::AS)
+                    {
+                        p.prev_token();
+                        None
+                    } else {
+                        Some(MeasureSemantics::Final)
+                    }
+                } else {
+                    None
+                };
                 let expr = p.parse_expr()?;
                 let _ = p.parse_keyword(Keyword::AS);
                 let alias = p.parse_identifier()?;
-                Ok(Measure { expr, alias })
+                Ok(Measure {
+                    semantics,
+                    expr,
+                    alias,
+                })
             })?
         } else {
             vec![]

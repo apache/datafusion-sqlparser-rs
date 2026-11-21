@@ -191,6 +191,10 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    fn single_line_comment_ends_at_carriage_return(&self) -> bool {
+        true
+    }
+
     /// `INTERVAL` is listed as reserved in Redshift docs but the actual parser allows it as an
     /// identifier, consistent with pgsql.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {

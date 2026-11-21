@@ -89,21 +89,22 @@ function trustedComment(comment, issue) {
   return comment.user.id === issue.user.id || TRUSTED_ASSOCIATIONS.includes(comment.author_association);
 }
 
-async function run({ github, context }) {
+async function run({ github, context, pull }) {
   const { owner, repo } = context.repo;
   const { payload } = context;
-  const issue = payload.pull_request ?? payload.issue;
+  const issue = pull ?? payload.pull_request ?? payload.issue;
+  if (!issue) return;
   const issue_number = issue.number;
   let labels = [];
   let comment;
 
-  if (context.eventName === "issue_comment") {
+  if (!pull && context.eventName === "issue_comment") {
     if (!trustedComment(payload.comment, issue)) return;
     labels = declaredDialects(payload.comment.body) ?? [];
   } else {
     const resolved = resolve(issue);
     labels = resolved.labels;
-    if (!resolved.answered && payload.pull_request && payload.action === "opened") {
+    if (!resolved.answered && (pull || (payload.pull_request && payload.action === "opened"))) {
       const files = await github.paginate(github.rest.pulls.listFiles, {
         owner,
         repo,

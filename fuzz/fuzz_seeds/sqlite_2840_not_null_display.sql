@@ -1,0 +1,1 @@
+SELECT a NOT NULL + 1;

@@ -4190,9 +4190,15 @@ impl<'a> Parser<'a> {
             match w.keyword {
                 Keyword::IS => {
                     if self.parse_keyword(Keyword::NULL) {
-                        Ok(Expr::IsNull(Box::new(expr)))
+                        Ok(Expr::IsNull {
+                            expr: Box::new(expr),
+                            syntax: IsNullSyntax::IsNull,
+                        })
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
-                        Ok(Expr::IsNotNull(Box::new(expr)))
+                        Ok(Expr::IsNotNull {
+                            expr: Box::new(expr),
+                            syntax: IsNotNullSyntax::IsNotNull,
+                        })
                     } else if self.parse_keywords(&[Keyword::TRUE]) {
                         Ok(Expr::IsTrue(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::TRUE]) {
@@ -4281,7 +4287,10 @@ impl<'a> Parser<'a> {
                             regexp,
                         })
                     } else if negated && null {
-                        Ok(Expr::IsNotNull(Box::new(expr)))
+                        Ok(Expr::IsNotNull {
+                            expr: Box::new(expr),
+                            syntax: IsNotNullSyntax::NotNull,
+                        })
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated, false)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
@@ -4319,12 +4328,14 @@ impl<'a> Parser<'a> {
                         self.expected_ref("IN or BETWEEN after NOT", self.peek_token_ref())
                     }
                 }
-                Keyword::NOTNULL if dialect.supports_notnull_operator() => {
-                    Ok(Expr::IsNotNull(Box::new(expr)))
-                }
-                Keyword::ISNULL if dialect.supports_isnull_operator() => {
-                    Ok(Expr::IsNull(Box::new(expr)))
-                }
+                Keyword::NOTNULL if dialect.supports_notnull_operator() => Ok(Expr::IsNotNull {
+                    expr: Box::new(expr),
+                    syntax: IsNotNullSyntax::Notnull,
+                }),
+                Keyword::ISNULL if dialect.supports_isnull_operator() => Ok(Expr::IsNull {
+                    expr: Box::new(expr),
+                    syntax: IsNullSyntax::Isnull,
+                }),
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {
                         self.expect_token(&Token::LParen)?;

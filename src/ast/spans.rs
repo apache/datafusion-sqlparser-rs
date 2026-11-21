@@ -984,6 +984,7 @@ impl Spanned for AlterColumnOperation {
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
             AlterColumnOperation::DropExpression { .. } => Span::empty(),
+            AlterColumnOperation::SetExpression { expr } => expr.span(),
             AlterColumnOperation::GenericOptions { options } => {
                 union_spans(options.iter().map(|option| option.span()))
             }

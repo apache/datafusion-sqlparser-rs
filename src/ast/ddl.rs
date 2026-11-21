@@ -2514,10 +2514,12 @@ impl fmt::Display for ConstraintCharacteristics {
 }
 
 /// `<referential_action> =
-/// { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }`
+/// { RESTRICT | CASCADE | SET NULL [ ( column [, ...] ) ] | NO ACTION | SET DEFAULT [ ( column [, ...] ) ] }`
 ///
 /// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-REFERENCES)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ReferentialAction {
@@ -2525,23 +2527,29 @@ pub enum ReferentialAction {
     Restrict,
     /// `CASCADE` - propagate the action to referencing rows.
     Cascade,
-    /// `SET NULL` - set referencing columns to NULL.
-    SetNull,
+    /// `SET NULL [(columns)]` - set the listed referencing columns, or all of them, to NULL.
+    SetNull(Vec<Ident>),
     /// `NO ACTION` - no action at the time; may be deferred.
     NoAction,
-    /// `SET DEFAULT` - set referencing columns to their default values.
-    SetDefault,
+    /// `SET DEFAULT [(columns)]` - set the listed referencing columns, or all of them, to their
+    /// default values.
+    SetDefault(Vec<Ident>),
 }
 
 impl fmt::Display for ReferentialAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            ReferentialAction::Restrict => "RESTRICT",
-            ReferentialAction::Cascade => "CASCADE",
-            ReferentialAction::SetNull => "SET NULL",
-            ReferentialAction::NoAction => "NO ACTION",
-            ReferentialAction::SetDefault => "SET DEFAULT",
-        })
+        let (action, columns) = match self {
+            ReferentialAction::Restrict => return f.write_str("RESTRICT"),
+            ReferentialAction::Cascade => return f.write_str("CASCADE"),
+            ReferentialAction::NoAction => return f.write_str("NO ACTION"),
+            ReferentialAction::SetNull(columns) => ("SET NULL", columns),
+            ReferentialAction::SetDefault(columns) => ("SET DEFAULT", columns),
+        };
+        f.write_str(action)?;
+        if !columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(columns))?;
+        }
+        Ok(())
     }
 }
 

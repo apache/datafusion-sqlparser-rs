@@ -10753,18 +10753,23 @@ impl<'a> Parser<'a> {
 
     /// Parse a referential action used in foreign key clauses.
     ///
-    /// Recognized forms: `RESTRICT`, `CASCADE`, `SET NULL`, `NO ACTION`, `SET DEFAULT`.
+    /// Recognized forms: `RESTRICT`, `CASCADE`, `SET NULL [(columns)]`, `NO ACTION`,
+    /// `SET DEFAULT [(columns)]`.
     pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {
         if self.parse_keyword(Keyword::RESTRICT) {
             Ok(ReferentialAction::Restrict)
         } else if self.parse_keyword(Keyword::CASCADE) {
             Ok(ReferentialAction::Cascade)
         } else if self.parse_keywords(&[Keyword::SET, Keyword::NULL]) {
-            Ok(ReferentialAction::SetNull)
+            Ok(ReferentialAction::SetNull(
+                self.parse_parenthesized_column_list(Optional, false)?,
+            ))
         } else if self.parse_keywords(&[Keyword::NO, Keyword::ACTION]) {
             Ok(ReferentialAction::NoAction)
         } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
-            Ok(ReferentialAction::SetDefault)
+            Ok(ReferentialAction::SetDefault(
+                self.parse_parenthesized_column_list(Optional, false)?,
+            ))
         } else {
             self.expected_ref(
                 "one of RESTRICT, CASCADE, SET NULL, NO ACTION or SET DEFAULT",

@@ -4583,7 +4583,7 @@ fn parse_create_table() {
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
-                        on_update: Some(ReferentialAction::SetDefault),
+                        on_update: Some(ReferentialAction::SetDefault(vec![])),
                         match_kind: None,
                         characteristics: None,
                     }
@@ -4595,7 +4595,7 @@ fn parse_create_table() {
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
-                        on_update: Some(ReferentialAction::SetNull),
+                        on_update: Some(ReferentialAction::SetNull(vec![])),
                         match_kind: None,
                         characteristics: None,
                     }
@@ -4726,7 +4726,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
-                        on_update: Some(ReferentialAction::SetDefault),
+                        on_update: Some(ReferentialAction::SetDefault(vec![])),
                         match_kind: None,
                         characteristics: Some(ConstraintCharacteristics {
                             deferrable: Some(false),
@@ -4742,7 +4742,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
-                        on_update: Some(ReferentialAction::SetNull),
+                        on_update: Some(ReferentialAction::SetNull(vec![])),
                         match_kind: None,
                         characteristics: Some(ConstraintCharacteristics {
                             deferrable: Some(false),
@@ -22555,10 +22555,10 @@ fn parse_reference_clauses_leave_duplicates_unconsumed() {
             assert_eq!(
                 (
                     constraint.match_kind,
-                    constraint.on_delete,
-                    constraint.on_update
+                    constraint.on_delete.as_ref(),
+                    constraint.on_update.as_ref()
                 ),
-                (match_kind, on_delete, on_update),
+                (match_kind, on_delete.as_ref(), on_update.as_ref()),
                 "{sql}"
             );
             assert!(parser.peek_keyword(keyword), "{sql}");

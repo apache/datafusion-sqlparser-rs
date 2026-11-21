@@ -571,6 +571,7 @@ define_keywords!(
     INVOKER,
     IO,
     IS,
+    ISNULL,
     ISODOW,
     ISOLATION,
     ISOWEEK,

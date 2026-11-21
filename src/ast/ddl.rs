@@ -558,6 +558,17 @@ pub enum AlterTableOperation {
         /// Name of the constraint to validate.
         name: Ident,
     },
+    /// `ALTER CONSTRAINT <name> [ <characteristics> ]` or `ALTER CONSTRAINT <name> [ NO ] INHERIT`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    AlterConstraint {
+        /// Name of the constraint to alter.
+        name: Ident,
+        /// `[ NOT ] DEFERRABLE`, `INITIALLY { DEFERRED | IMMEDIATE }` and `[ NOT ] ENFORCED`.
+        characteristics: Option<ConstraintCharacteristics>,
+        /// `INHERIT` (`true`) or `NO INHERIT` (`false`).
+        inherit: Option<bool>,
+    },
     /// `INHERIT <parent_table>`
     ///
     /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
@@ -1166,6 +1177,21 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
+            }
+            AlterTableOperation::AlterConstraint {
+                name,
+                characteristics,
+                inherit,
+            } => {
+                write!(f, "ALTER CONSTRAINT {name}")?;
+                if let Some(characteristics) = characteristics {
+                    write!(f, " {characteristics}")?;
+                }
+                match inherit {
+                    Some(true) => write!(f, " INHERIT"),
+                    Some(false) => write!(f, " NO INHERIT"),
+                    None => Ok(()),
+                }
             }
             AlterTableOperation::Inherit { parent } => write!(f, "INHERIT {parent}"),
             AlterTableOperation::NoInherit { parent } => write!(f, "NO INHERIT {parent}"),

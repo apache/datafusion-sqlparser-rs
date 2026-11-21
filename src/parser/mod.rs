@@ -11806,6 +11806,25 @@ impl<'a> Parser<'a> {
                 options,
                 column_position,
             }
+        } else if self.parse_keywords(&[Keyword::ALTER, Keyword::CONSTRAINT]) {
+            let name = self.parse_identifier()?;
+            let inherit = if self.parse_keyword(Keyword::INHERIT) {
+                Some(true)
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]) {
+                Some(false)
+            } else {
+                None
+            };
+            let characteristics = if inherit.is_none() {
+                self.parse_constraint_characteristics()?
+            } else {
+                None
+            };
+            AlterTableOperation::AlterConstraint {
+                name,
+                characteristics,
+                inherit,
+            }
         } else if self.parse_keyword(Keyword::ALTER) {
             if self.peek_keyword(Keyword::SORTKEY) {
                 self.prev_token();

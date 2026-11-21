@@ -14321,3 +14321,90 @@ fn display_create_index_on_only_propagates_formatter_errors() {
         assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
     }
 }
+
+#[test]
+fn parse_alter_table_alter_constraint() {
+    let alter_constraint =
+        |sql| alter_table_op(pg_and_generic().verified_stmt(&format!("ALTER TABLE tab {sql}")));
+    let characteristics = |deferrable, initially, enforced| ConstraintCharacteristics {
+        deferrable,
+        initially,
+        enforced,
+    };
+
+    for (sql, expected_characteristics, expected_inherit) in [
+        ("ALTER CONSTRAINT f", None, None),
+        (
+            "ALTER CONSTRAINT f DEFERRABLE INITIALLY DEFERRED",
+            Some(characteristics(
+                Some(true),
+                Some(DeferrableInitial::Deferred),
+                None,
+            )),
+            None,
+        ),
+        (
+            "ALTER CONSTRAINT f NOT DEFERRABLE INITIALLY IMMEDIATE ENFORCED",
+            Some(characteristics(
+                Some(false),
+                Some(DeferrableInitial::Immediate),
+                Some(true),
+            )),
+            None,
+        ),
+        (
+            "ALTER CONSTRAINT f NOT ENFORCED",
+            Some(characteristics(None, None, Some(false))),
+            None,
+        ),
+        ("ALTER CONSTRAINT f INHERIT", None, Some(true)),
+        ("ALTER CONSTRAINT f NO INHERIT", None, Some(false)),
+    ] {
+        assert_eq!(
+            alter_constraint(sql),
+            AlterTableOperation::AlterConstraint {
+                name: "f".into(),
+                characteristics: expected_characteristics,
+                inherit: expected_inherit,
+            },
+            "{sql}"
+        );
+    }
+
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ALTER CONSTRAINT f DEFERRABLE, ALTER CONSTRAINT g NO INHERIT, ALTER COLUMN c SET NOT NULL",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "ALTER TABLE tab ALTER CONSTRAINT f NOT ENFORCED INITIALLY DEFERRED DEFERRABLE",
+        "ALTER TABLE tab ALTER CONSTRAINT f DEFERRABLE INITIALLY DEFERRED NOT ENFORCED",
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE tab ALTER CONSTRAINT f INHERIT DEFERRABLE",
+            "Expected: end of statement, found: DEFERRABLE",
+        ),
+        (
+            "ALTER TABLE tab ALTER CONSTRAINT f NO INHERIT DEFERRABLE",
+            "Expected: end of statement, found: DEFERRABLE",
+        ),
+        (
+            "ALTER TABLE tab ALTER CONSTRAINT f DEFERRABLE NO INHERIT",
+            "Expected: end of statement, found: NO",
+        ),
+        (
+            "ALTER TABLE tab ALTER CONSTRAINT f NOT VALID",
+            "Expected: end of statement, found: NOT",
+        ),
+        (
+            "ALTER TABLE tab ALTER CONSTRAINT",
+            "Expected: identifier, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

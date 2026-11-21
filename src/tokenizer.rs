@@ -1686,6 +1686,20 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
+                    if self.dialect.supports_long_suffix_before_numeric_prefix()
+                        && chars.peek() == Some(&'L')
+                    {
+                        let mut ahead = chars.peekable.clone();
+                        ahead.next();
+                        if !ahead
+                            .peek()
+                            .is_some_and(|ch| self.dialect.is_identifier_part(*ch))
+                        {
+                            chars.next();
+                            return Ok(Some(Token::Number(s, true)));
+                        }
+                    }
+
                     // If the dialect supports identifiers that start with a numeric prefix,
                     // we need to check if the value is in fact an identifier and must thus
                     // be tokenized as a word.

@@ -78,6 +78,11 @@ impl Dialect for HiveDialect {
         true
     }
 
+    /// See <https://hive.apache.org/docs/latest/language/languagemanual-types/>
+    fn supports_long_suffix_before_numeric_prefix(&self) -> bool {
+        true
+    }
+
     fn require_interval_qualifier(&self) -> bool {
         true
     }

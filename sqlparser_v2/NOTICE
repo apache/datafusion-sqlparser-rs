@@ -1,0 +1,12 @@
+sqlparser
+
+This product includes software derived from Apache DataFusion sqlparser-rs
+(https://github.com/apache/datafusion-sqlparser-rs): tests/corpus/v1.corpus
+is generated from its test suite, and the benchmark queries come from its
+sqlparser_bench. That project carries the following notice:
+
+Apache DataFusion sqlparser-rs
+Copyright 2024-2026 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).

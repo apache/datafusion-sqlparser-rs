@@ -1,0 +1,307 @@
+bigquery	SELECT '%\\_\\%' LIKE '%\\_\\%'
+bigquery	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+bigquery	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+bigquery	SELECT '\\_\\%' LIKE CONCAT('\\_', '\\%')
+bigquery	SELECT 'a\\%c' LIKE 'a\\%c'
+bigquery	SELECT 'a\\_c' LIKE 'a\\_c'
+bigquery	SELECT 'one', N'national string', X'deadBEEF'
+bigquery	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+bigquery	SELECT B'abc', B"abc", B'f\\(abc,(.*),def\\)', B"f\\(abc,(.*),def\\)", B'''abc''', B"""abc"""
+bigquery	SELECT CONVERT('abc', CHAR(60))
+bigquery	SELECT CONVERT(123.456, DECIMAL(5,2))
+bigquery	SELECT E'\\080'
+bigquery	SELECT E'\\U00110000'
+bigquery	SELECT E'\\u0000'
+bigquery	SELECT E'\\u0001', E'\\U0010FFFF', E'\\xC', E'\\x25', E'\\2', E'\\45', E'\\445'
+bigquery	SELECT E'\\u{0001}'
+bigquery	SELECT E'\\xCAD'
+bigquery	SELECT E's1 \\n s1', E's2 \\\\n s2', E's3 \\\\\\n s3', E's4 \\\\\\\\n s4', E'\\'', E'foo \\\\'
+bigquery	SELECT N'Tu geres '';'' et ''"'' ?'
+bigquery	SELECT N'national string'
+bigquery	SELECT _binary 'abc'
+bigquery	SELECT _binary 'abc', _utf8mb4 'abc'
+bigquery	SELECT _utf8 'abc'
+bigquery	SELECT _utf8'abc'
+bigquery	SELECT _utf8mb4 'abc'
+bigquery	SELECT _utf8mb4'abc'
+bigquery	SELECT n'Tu geres '';'' et ''"'' ?'
+bigquery	SELECT n'national string'
+bigquery	select E'\\''
+bigquery	select e'\\''
+clickhouse	SELECT '%\\_\\%' LIKE '%\\_\\%'
+clickhouse	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+clickhouse	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+clickhouse	SELECT '\\_\\%' LIKE CONCAT('\\_', '\\%')
+clickhouse	SELECT 'a\\%c' LIKE 'a\\%c'
+clickhouse	SELECT 'a\\_c' LIKE 'a\\_c'
+clickhouse	SELECT * FROM customers WHERE segment IN UNNEST(expr)
+clickhouse	SELECT * FROM customers WHERE segment NOT IN UNNEST(expr)
+clickhouse	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+clickhouse	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+clickhouse	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+clickhouse	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+clickhouse	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+clickhouse	SELECT CONVERT('abc', CHAR(60))
+clickhouse	SELECT CONVERT(123.456, DECIMAL(5,2))
+clickhouse	SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL
+clickhouse	SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL OFFSET 1
+clickhouse	SELECT id, fname, lname FROM customer WHERE id = 1 OFFSET 1 LIMIT ALL
+databricks	SELECT '%\\_\\%' LIKE '%\\_\\%'
+databricks	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+databricks	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+databricks	SELECT '\\_\\%' LIKE CONCAT('\\_', '\\%')
+databricks	SELECT 'a\\%c' LIKE 'a\\%c'
+databricks	SELECT 'a\\_c' LIKE 'a\\_c'
+databricks	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+databricks	SELECT * FROM tbl GLOBAL
+databricks	SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2
+databricks	SELECT 1e1_
+databricks	SELECT 1e1__0
+databricks	SELECT 1e_1
+databricks	SELECT 3 + 5 || '.3' || 7 - 9 FROM dual
+databricks	SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual
+databricks	SELECT CONVERT('abc', CHAR(60))
+databricks	SELECT CONVERT(123.456, DECIMAL(5,2))
+databricks	SELECT STRUCT<DATE>("2011-05-05"), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)
+databricks	SELECT STRUCT<DATE>('2011-05-05'), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)
+databricks	SELECT STRUCT<STRING(42)>("foo"), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')
+databricks	SELECT STRUCT<STRING(42)>('foo'), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')
+duckdb	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+duckdb	SELECT * FROM tbl GLOBAL
+duckdb	SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')
+duckdb	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+duckdb	SELECT 3 + 5 || '.3' || 7 - 9 FROM dual
+duckdb	SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual
+duckdb	SELECT CONVERT('abc', CHAR(60))
+duckdb	SELECT CONVERT(123.456, DECIMAL(5,2))
+duckdb	SELECT FUN(a = '1', b = '2') FROM foo
+duckdb	SELECT a -> b
+duckdb	SELECT info -> 'items' ->> 'product' FROM orders
+duckdb	SELECT obj -> 3 * 2
+duckdb	SELECT obj -> 42
+duckdb	SELECT obj -> key
+duckdb	SELECT params -> 'name' FROM events
+hive	SELECT $0
+hive	SELECT $123
+hive	SELECT 'I\\"m fine'
+hive	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+hive	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+hive	SELECT * FROM student LIMIT $1 OFFSET $2
+hive	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+hive	SELECT * FROM tbl GLOBAL
+hive	SELECT * FROM tbl LIMIT $1
+hive	SELECT 1 LIMIT $1
+hive	SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2
+hive	SELECT 1e_1
+hive	SELECT 3 + 5 || '.3' || 7 - 9 FROM dual
+hive	SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual
+hive	SELECT CONVERT('abc', CHAR(60))
+hive	SELECT CONVERT(123.456, DECIMAL(5,2))
+hive	SELECT MIN(MIN(10, 5), 1L) AS a
+hive	SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)
+hive	SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)
+mssql	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+mssql	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+mssql	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+mssql	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+mssql	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+mssql	SELECT * FROM tbl GLOBAL
+mssql	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+mssql	SELECT BIGNUMERIC '-0.54321'
+mssql	SELECT BIGNUMERIC '-3.14'
+mssql	SELECT BIGNUMERIC '-9.876e-3'
+mssql	SELECT BIGNUMERIC '0'
+mssql	SELECT BIGNUMERIC '1.23456e05'
+mssql	SELECT BIGNUMERIC '123456'
+mssql	SELECT INTERVAL '1' + '1' DAY
+mssql	SELECT INTERVAL '1' + '2' - '3' DAY
+mssql	SELECT INTERVAL 1 + 1 DAY
+mssql	SELECT JSON '{\n  "id": 10,\n  "type": "fruit",\n  "name": "apple",\n  "on_menu": true,\n  "recipes":\n    {\n      "salads":\n      [\n        { "id": 2001, "type": "Walnut Apple Salad" },\n        { "id": 2002, "type": "Apple Spinach Salad" }\n      ],\n      "desserts":\n      [\n        { "id": 3001, "type": "Apple Pie" },\n        { "id": 3002, "type": "Apple Scones" },\n        { "id": 3003, "type": "Apple Crumble" }\n      ]\n    }\n}'
+mssql	SELECT _binary 'abc'
+mssql	SELECT _binary 'abc', _utf8mb4 'abc'
+mssql	SELECT _utf8 'abc'
+mssql	SELECT _utf8'abc'
+mssql	SELECT _utf8mb4 'abc'
+mssql	SELECT _utf8mb4'abc'
+mysql	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+mysql	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+mysql	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+mysql	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+mysql	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+mysql	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+mysql	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+mysql	SELECT * FROM tbl GLOBAL
+mysql	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+mysql	SELECT /*+ A */ /* Regular comment */ /*x2+ B */ 1
+mysql	SELECT /*+ A */ /*x2+ B */ 1
+mysql	SELECT /*+ SET_VAR(optimizer_switch = 'mrr_cost_based=off') SET_VAR(max_heap_table_size = 1G) */ 1
+mysql	SELECT /*+ SET_VAR(target_partitions=1) */ * FROM (SELECT /*+ SET_VAR(target_partitions=8) */ * FROM t1 LIMIT 1) AS dt
+mysql	SELECT /*+four five six*/ 1 FROM dual
+mysql	SELECT /*+one two three*/ /*+four five six*/ 1 FROM dual
+mysql	SELECT /*abc+ text */ 1
+mysql	SELECT /*one two three*/ /*+four five six*/ 1 FROM dual
+mysql	SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2
+mysql	SELECT 1e1_
+mysql	SELECT 1e1__0
+mysql	SELECT 1e_1
+mysql	SELECT @@error.stack_trace, @@error.message
+mysql	SELECT B'123', B"123", B'''123''', B"""123"""
+mysql	SELECT B'abc', B"abc", B'f\\(abc,(.*),def\\)', B"f\\(abc,(.*),def\\)", B'''abc''', B"""abc"""
+mysql	SELECT BIGNUMERIC '-0.54321'
+mysql	SELECT BIGNUMERIC '-3.14'
+mysql	SELECT BIGNUMERIC '-9.876e-3'
+mysql	SELECT BIGNUMERIC '0'
+mysql	SELECT BIGNUMERIC '1.23456e05'
+mysql	SELECT BIGNUMERIC '123456'
+mysql	SELECT BINARY 1+1
+mysql	SELECT E'\\080'
+mysql	SELECT E'\\U00110000'
+mysql	SELECT E'\\u0000'
+mysql	SELECT E'\\u0001', E'\\U0010FFFF', E'\\xC', E'\\x25', E'\\2', E'\\45', E'\\445'
+mysql	SELECT E'\\u{0001}'
+mysql	SELECT E'\\xCAD'
+mysql	SELECT E's1 \\n s1', E's2 \\\\n s2', E's3 \\\\\\n s3', E's4 \\\\\\\\n s4', E'\\'', E'foo \\\\'
+mysql	SELECT JSON '{\n  "id": 10,\n  "type": "fruit",\n  "name": "apple",\n  "on_menu": true,\n  "recipes":\n    {\n      "salads":\n      [\n        { "id": 2001, "type": "Walnut Apple Salad" },\n        { "id": 2002, "type": "Apple Spinach Salad" }\n      ],\n      "desserts":\n      [\n        { "id": 3001, "type": "Apple Pie" },\n        { "id": 3002, "type": "Apple Scones" },\n        { "id": 3003, "type": "Apple Crumble" }\n      ]\n    }\n}'
+mysql	SELECT R'abc', R"abc", R'f\\(abc,(.*),def\\)', R"f\\(abc,(.*),def\\)", R'''abc''', R"""abc"""
+mysql	SELECT b'123', b"123", b'''123''', b"""123"""
+mysql	select E'\\''
+mysql	select e'\\''
+oracle	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+oracle	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+oracle	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+oracle	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+oracle	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+oracle	SELECT * FROM tbl GLOBAL
+oracle	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+oracle	SELECT CONVERT('abc', CHAR(60))
+oracle	SELECT CONVERT(123.456, DECIMAL(5,2))
+oracle	SELECT INTERVAL '1' + '1' DAY
+oracle	SELECT INTERVAL '1' + '2' - '3' DAY
+oracle	SELECT INTERVAL 1 + 1 DAY
+postgres	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+postgres	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+postgres	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+postgres	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+postgres	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+postgres	SELECT * FROM tbl GLOBAL
+postgres	SELECT * FROM x WHERE a ILIKE ANY '%abc%'
+postgres	SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')
+postgres	SELECT * FROM x WHERE a LIKE ANY '%abc%'
+postgres	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+postgres	SELECT --+ one two three /* asdf */\n 1 FROM dual
+postgres	SELECT --abc+ text\n 1 FROM dual
+postgres	SELECT /*+ A */ /* Regular comment */ /*x2+ B */ 1
+postgres	SELECT /*+ A */ /*x2+ B */ 1
+postgres	SELECT /*+ SET_VAR(optimizer_switch = 'mrr_cost_based=off') SET_VAR(max_heap_table_size = 1G) */ 1
+postgres	SELECT /*+ SET_VAR(target_partitions=1) */ * FROM (SELECT /*+ SET_VAR(target_partitions=8) */ * FROM t1 LIMIT 1) AS dt
+postgres	SELECT /*+four five six*/ 1 FROM dual
+postgres	SELECT /*+one two three*/ /*+four five six*/ 1 FROM dual
+postgres	SELECT /*abc+ text */ 1
+postgres	SELECT /*one two three*/ /*+four five six*/ 1 FROM dual
+postgres	SELECT CONVERT('abc', CHAR(60))
+postgres	SELECT CONVERT(123.456, DECIMAL(5,2))
+postgres	SELECT FUN(a := '1', b := '2') FROM foo
+postgres	SELECT FUN(a => '1', b => '2') FROM foo
+redshift	SELECT '%\\_\\%' LIKE '%\\_\\%'
+redshift	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+redshift	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+redshift	SELECT '\\_\\%' LIKE CONCAT('\\_', '\\%')
+redshift	SELECT 'a\\%c' LIKE 'a\\%c'
+redshift	SELECT 'a\\_c' LIKE 'a\\_c'
+redshift	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+redshift	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+redshift	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+redshift	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+redshift	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+redshift	SELECT * FROM tbl GLOBAL
+redshift	SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')
+redshift	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+redshift	SELECT 1 AS [ " 1 " ]
+redshift	SELECT 3 + 5 || '.3' || 7 - 9 FROM dual
+redshift	SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual
+redshift	SELECT STRING_TO_ARRAY('1,2,3', ',')::INT[3]
+redshift	SELECT a.b["asdf"] FROM db.table WHERE a = 2
+redshift	SELECT a[2 + 2] FROM t
+redshift	SELECT arr[1]
+redshift	SELECT arr[1][2]
+redshift	SELECT cust.c_orders[0]['id'] FROM customer_orders_lineitem
+redshift	SELECT data::FLOAT[1536] FROM embeddings
+redshift	SELECT db1.sc1.tbl1.col1[0]['id'] FROM customer_orders_lineitem
+redshift	SELECT f1.abc[1] FROM t
+redshift	SELECT f1.f2.abc[1] FROM t
+redshift	SELECT foo[0] FROM foos
+redshift	SELECT foo[0][0] FROM foos
+redshift	SELECT make_array(1, 2, 3)[1]
+snowflake	SELECT '%\\_\\%' LIKE '%\\_\\%'
+snowflake	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+snowflake	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+snowflake	SELECT '\\_\\%' LIKE CONCAT('\\_', '\\%')
+snowflake	SELECT 'a\\%c' LIKE 'a\\%c'
+snowflake	SELECT 'a\\_c' LIKE 'a\\_c'
+snowflake	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+snowflake	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+snowflake	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+snowflake	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+snowflake	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+snowflake	SELECT CONVERT('abc', CHAR(60))
+snowflake	SELECT CONVERT(123.456, DECIMAL(5,2))
+snowflake	SELECT EXTRACT('hour', d)
+snowflake	SELECT EXTRACT(HOUR, d)
+snowflake	SELECT STRING_TO_ARRAY('1,2,3', ',')::INT[3]
+snowflake	SELECT a.b["asdf"] FROM db.table WHERE a = 2
+snowflake	SELECT a[2 + 2] FROM t
+snowflake	SELECT arr[1]
+snowflake	SELECT arr[1][2]
+snowflake	SELECT bar[0]["baz"]["fooz"] FROM foos
+snowflake	SELECT cust.c_orders[0]['id'] FROM customer_orders_lineitem
+snowflake	SELECT data::FLOAT[1536] FROM embeddings
+snowflake	SELECT db1.sc1.tbl1.col1[0]['id'] FROM customer_orders_lineitem
+snowflake	SELECT f1.abc[1] FROM t
+snowflake	SELECT f1.f2.abc[1] FROM t
+snowflake	SELECT foo[0] FROM foos
+snowflake	SELECT foo[0][0] FROM foos
+snowflake	SELECT identifier('alias1').* FROM tbl AS alias1
+snowflake	SELECT make_array(1, 2, 3)[1]
+snowflake	SELECT string_values[indexOf(string_names, 'endpoint')] FROM foos WHERE id = 'test' AND string_value[indexOf(string_name, 'app')] <> 'foo'
+spark	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\ '
+spark	SELECT 'Testing: \\0 \\\\ \\% \\_ \\b \\n \\r \\t \\Z \\a \\h \\ '
+spark	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+spark	SELECT * FROM tbl GLOBAL
+spark	SELECT 3 + 5 || '.3' || 7 - 9 FROM dual
+spark	SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual
+spark	SELECT CONVERT('abc', CHAR(60))
+spark	SELECT CONVERT(123.456, DECIMAL(5,2))
+spark	SELECT STRUCT<DATE>("2011-05-05"), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)
+spark	SELECT STRUCT<DATE>('2011-05-05'), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)
+spark	SELECT STRUCT<STRING(42)>("foo"), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')
+spark	SELECT STRUCT<STRING(42)>('foo'), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')
+sqlite	SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')
+sqlite	SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual
+sqlite	SELECT BIGNUMERIC '-0.54321'
+sqlite	SELECT BIGNUMERIC '-3.14'
+sqlite	SELECT BIGNUMERIC '-9.876e-3'
+sqlite	SELECT BIGNUMERIC '0'
+sqlite	SELECT BIGNUMERIC '1.23456e05'
+sqlite	SELECT BIGNUMERIC '123456'
+sqlite	SELECT CONVERT('abc', CHAR(60))
+sqlite	SELECT CONVERT(123.456, DECIMAL(5,2))
+sqlite	SELECT INTERVAL '1' + '1' DAY
+sqlite	SELECT INTERVAL '1' + '2' - '3' DAY
+sqlite	SELECT INTERVAL 1 + 1 DAY
+sqlite	SELECT JSON '{\n  "id": 10,\n  "type": "fruit",\n  "name": "apple",\n  "on_menu": true,\n  "recipes":\n    {\n      "salads":\n      [\n        { "id": 2001, "type": "Walnut Apple Salad" },\n        { "id": 2002, "type": "Apple Spinach Salad" }\n      ],\n      "desserts":\n      [\n        { "id": 3001, "type": "Apple Pie" },\n        { "id": 3002, "type": "Apple Scones" },\n        { "id": 3003, "type": "Apple Crumble" }\n      ]\n    }\n}'
+sqlite	SELECT _binary 'abc'
+sqlite	SELECT _binary 'abc', _utf8mb4 'abc'
+sqlite	SELECT _utf8 'abc'
+sqlite	SELECT _utf8'abc'
+sqlite	SELECT _utf8mb4 'abc'
+sqlite	SELECT _utf8mb4'abc'
+sqlite	SELECT obj -> 3 * 2
+sqlite	SELECT transform(arr, x -> x * 2) FROM t
+teradata	SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2
+teradata	SELECT * FROM t1 ANTI JOIN t2 USING(c1)
+teradata	SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2
+teradata	SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2
+teradata	SELECT * FROM t1 SEMI JOIN t2 USING(c1)
+teradata	SELECT * FROM tbl GLOBAL
+teradata	SELECT CONVERT('abc', CHAR(60))
+teradata	SELECT CONVERT(123.456, DECIMAL(5,2))

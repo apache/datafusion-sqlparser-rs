@@ -12823,7 +12823,7 @@ fn parse_alter_foreign_table() {
         pg().parse_sql_statements("ALTER FOREIGN TABLE ft ALTER COLUMN id RESET")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: RESET"
+        "sql parser error: Expected: SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, SET/DROP EXPRESSION, ADD GENERATED, or OPTIONS after ALTER COLUMN, found: RESET"
     );
     assert_eq!(
         TestedDialects::new(vec![Box::new(GenericDialect {})])
@@ -14593,6 +14593,57 @@ fn parse_alter_column_set_storage() {
         assert_eq!(
             pg_and_generic().parse_sql_statements(sql).unwrap_err().to_string(),
             format!("sql parser error: Expected: storage value (plain, external, extended, or main), found: {found}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_column_set_expression() {
+    let stmt =
+        pg_and_generic().verified_stmt("ALTER TABLE d ALTER COLUMN x SET EXPRESSION AS (y + 2)");
+    let Statement::AlterTable(AlterTable { operations, .. }) = stmt else {
+        panic!("expected ALTER TABLE, got {stmt:?}");
+    };
+    assert_eq!(
+        operations,
+        vec![AlterTableOperation::AlterColumn {
+            column_name: Ident::new("x"),
+            op: AlterColumnOperation::SetExpression {
+                expr: Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("y"))),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(Expr::value(number("2"))),
+                },
+            },
+        }]
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "ALTER TABLE d ALTER x SET EXPRESSION AS ((y))",
+        "ALTER TABLE d ALTER COLUMN x SET EXPRESSION AS ((y))",
+    );
+
+    for (sql, expected) in [
+        (
+            "ALTER TABLE d ALTER COLUMN x SET EXPRESSION AS y + 2",
+            "Expected: (, found: y",
+        ),
+        (
+            "ALTER TABLE d ALTER COLUMN x SET EXPRESSION (y + 2)",
+            "Expected: AS, found: (",
+        ),
+        (
+            "ALTER TABLE d ALTER COLUMN x SET EXPRESSION AS (y + 2",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
             "{sql}"
         );
     }

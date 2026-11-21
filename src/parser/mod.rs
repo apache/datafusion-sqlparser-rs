@@ -2215,18 +2215,17 @@ impl<'a> Parser<'a> {
                     // recursive `parse_subexpr` would re-walk the rest of the chain at
                     // every dot.
                     _ => {
-                        // For a plain `Word` field (not followed by `(`), skip the
-                        // speculative `parse_prefix`. The only result the validator
-                        // below would accept is `Identifier`, which `parse_identifier`
-                        // in the None branch produces directly. This avoids 2^N work
-                        // on chains like `.not-b.not-b...` where `parse_prefix` would
+                        // For a `Word` field, skip the speculative `parse_prefix`:
+                        // the None branch reads it directly as an identifier or, when
+                        // `(` follows, as a function call. This avoids 2^N work on
+                        // chains like `.not-b.not-b...`, where `parse_prefix` would
                         // descend into `parse_not` and re-walk the remaining chain at
-                        // every segment.
-                        let word_field_no_lparen =
-                            matches!(self.peek_token_ref().token, Token::Word(_))
-                                && self.peek_nth_token_ref(1).token != Token::LParen;
+                        // every segment, and on nested calls like `a.ceil(a.ceil(...`,
+                        // where a call that `parse_prefix` rejects or fails on would
+                        // have its arguments parsed a second time by the None branch.
+                        let word_field = matches!(self.peek_token_ref().token, Token::Word(_));
 
-                        let expr = if word_field_no_lparen {
+                        let expr = if word_field {
                             None
                         } else {
                             self.maybe_parse(|parser| {
@@ -2266,7 +2265,9 @@ impl<'a> Parser<'a> {
                             }
                             None => {
                                 let ident = self.parse_identifier()?;
-                                let field = if self.peek_token_ref().token == Token::LParen {
+                                let field = if self.peek_token_ref().token == Token::LParen
+                                    && !self.peek_outer_join_operator()
+                                {
                                     self.parse_function(ObjectName::from(vec![ident]))?
                                 } else {
                                     Expr::Identifier(ident)

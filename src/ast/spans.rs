@@ -2357,6 +2357,7 @@ impl Spanned for FunctionArg {
                 arg,
                 operator: _,
             } => name.span().union(&arg.span()),
+            FunctionArg::Variadic(arg) => arg.span(),
         }
     }
 }

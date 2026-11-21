@@ -3376,6 +3376,7 @@ fn parse_create_index() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3413,6 +3414,7 @@ fn parse_create_anonymous_index() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name,
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3533,6 +3535,7 @@ fn parse_create_indices_with_operator_classes() {
             match pg().verified_stmt(&single_column_sql_statement) {
                 Statement::CreateIndex(CreateIndex {
                     name: Some(ObjectName(name)),
+                    only: false,
                     table_name: ObjectName(table_name),
                     using: Some(using),
                     columns,
@@ -3562,6 +3565,7 @@ fn parse_create_indices_with_operator_classes() {
             match pg().verified_stmt(&multi_column_sql_statement) {
                 Statement::CreateIndex(CreateIndex {
                     name: Some(ObjectName(name)),
+                    only: false,
                     table_name: ObjectName(table_name),
                     using: Some(using),
                     columns,
@@ -3646,6 +3650,7 @@ fn parse_create_bloom() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using: Some(using),
             columns,
@@ -3703,6 +3708,7 @@ fn parse_create_brin() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using: Some(using),
             columns,
@@ -3771,6 +3777,7 @@ fn parse_create_index_concurrently() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3808,6 +3815,7 @@ fn parse_create_index_with_predicate() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3845,6 +3853,7 @@ fn parse_create_index_with_include() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3882,6 +3891,7 @@ fn parse_create_index_with_nulls_distinct() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3917,6 +3927,7 @@ fn parse_create_index_with_nulls_distinct() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -14257,4 +14268,56 @@ fn parse_current_role_system_user_current_schema() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: (".to_string())
     );
+}
+
+#[test]
+fn parse_create_index_on_only() {
+    for sql in [
+        "CREATE INDEX orders_note_idx ON ONLY d.orders USING BTREE (note)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS orders_id_idx ON ONLY orders(id)",
+        "CREATE INDEX ON ONLY orders(note)",
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::CreateIndex(CreateIndex { only, .. }) => assert!(only, "{sql}"),
+            _ => unreachable!(),
+        }
+    }
+
+    match pg().verified_stmt("CREATE INDEX ON orders(note)") {
+        Statement::CreateIndex(CreateIndex { only, .. }) => assert!(!only),
+        _ => unreachable!(),
+    }
+
+    let without_markers = all_dialects_where(|d| !d.supports_table_inheritance_markers());
+    without_markers.verified_stmt("CREATE INDEX idx ON only(note)");
+    assert_eq!(
+        without_markers
+            .parse_sql_statements("CREATE INDEX idx ON ONLY orders (note)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: a list of columns in parentheses, found: orders"
+    );
+}
+
+#[test]
+fn display_create_index_on_only_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg().verified_stmt("CREATE INDEX ON ONLY orders(note)");
+    for rejected in ["ON ", "ONLY ", "orders"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
 }

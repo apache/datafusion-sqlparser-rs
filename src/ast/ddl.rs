@@ -3036,6 +3036,8 @@ impl fmt::Display for ClusteredBy {
 pub struct CreateIndex {
     /// index name
     pub name: Option<ObjectName>,
+    /// `ONLY` before the table name, so the index is not created on partitions.
+    pub only: bool,
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     /// table name
     pub table_name: ObjectName,
@@ -3094,7 +3096,11 @@ impl fmt::Display for CreateIndex {
         if let Some(value) = &self.name {
             write!(f, "{value} ")?;
         }
-        write!(f, "ON {}", self.table_name)?;
+        f.write_str("ON ")?;
+        if self.only {
+            f.write_str("ONLY ")?;
+        }
+        write!(f, "{}", self.table_name)?;
         if let Some(value) = &self.using {
             write!(f, " USING {value} ")?;
         }

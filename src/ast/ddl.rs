@@ -803,6 +803,13 @@ pub enum AlterIndexOperation {
         /// The new name for the index.
         index_name: ObjectName,
     },
+    /// Attach the partition index `index_name` to the index.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-alterindex.html>
+    AttachPartition {
+        /// The partition index to attach.
+        index_name: ObjectName,
+    },
 }
 
 impl fmt::Display for AlterTableOperation {
@@ -1187,6 +1194,9 @@ impl fmt::Display for AlterIndexOperation {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => {
                 write!(f, "RENAME TO {index_name}")
+            }
+            AlterIndexOperation::AttachPartition { index_name } => {
+                write!(f, "ATTACH PARTITION {index_name}")
             }
         }
     }

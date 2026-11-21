@@ -14298,6 +14298,10 @@ fn parse_alter_column_set_expression() {
             "ALTER TABLE d ALTER COLUMN x SET EXPRESSION AS (y + 2",
             "Expected: ), found: EOF",
         ),
+        (
+            "ALTER TABLE d ALTER COLUMN x SET EXPRESSION AS ()",
+            "Expected: an expression, found: )",
+        ),
     ] {
         assert_eq!(
             pg_and_generic()

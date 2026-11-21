@@ -2653,6 +2653,10 @@ fn test_sql_keywords_as_column_aliases() {
             "SELECT col AS ELSE FROM tbl",
             "Expected: an identifier after AS, found: ELSE",
         ),
+        (
+            "SELECT col AS SET FROM tbl",
+            "Expected: an identifier after AS, found: SET",
+        ),
     ] {
         assert_eq!(
             tsql().parse_sql_statements(sql),
@@ -2782,6 +2786,17 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
         ("select 1\ncreate table t (id int)", 2),
         ("select 1\nalter table t add col int", 2),
         ("select 1\nreturn", 2),
+        ("select 1\nset @x = 1", 2),
+        ("select 1\nbegin tran", 2),
+        ("select 1\nopen c", 2),
+        ("select 1\nclose c", 2),
+        ("select 1\ndeallocate c", 2),
+        ("select 1\ngrant select on t to u", 2),
+        ("select 1\ndeny select on t to u", 2),
+        ("select 1\nwaitfor delay '00:00:01'", 2),
+        ("select 1\nkill 52", 2),
+        ("select 1\ncommit", 2),
+        ("select 1\nrollback tran", 2),
     ];
     for (sql, expected) in col_alias_cases {
         let stmts = tsql()
@@ -2800,6 +2815,15 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
         ("select * from t\ndrop table t", 2),
         ("select * from t\ncreate table u (id int)", 2),
         ("select * from t\nexec sp_who", 2),
+        ("select * from t\nbegin tran", 2),
+        ("select * from t\nclose c", 2),
+        ("select * from t\ndeallocate c", 2),
+        ("select * from t\ngrant select on t to u", 2),
+        ("select * from t\ndeny select on t to u", 2),
+        ("select * from t\nwaitfor delay '00:00:01'", 2),
+        ("select * from t\nkill 52", 2),
+        ("select * from t\ncommit", 2),
+        ("select * from t\nrollback tran", 2),
     ];
     for (sql, expected) in tbl_alias_cases {
         let stmts = tsql()
@@ -2810,6 +2834,14 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
             *expected,
             "expected {expected} stmts for: {sql:?}"
         );
+    }
+
+    for sql in [
+        "select 1\nrevoke select on t from u",
+        "select * from t\nrevoke select on t from u",
+    ] {
+        let stmts = tsql().parse_sql_statements(sql).unwrap();
+        assert!(matches!(stmts[..], [_, Statement::Revoke(_)]), "{sql:?}");
     }
 }
 
@@ -2982,4 +3014,66 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().one_statement_parses_to("SELECT 1 [PRINT]", "SELECT 1 AS [PRINT]");
     ms().verified_stmt("SELECT * FROM t [PRINT]");
     ms().verified_stmt("SELECT * FROM t AS [PRINT]");
+    ms().one_statement_parses_to("SELECT 1 [SET]", "SELECT 1 AS [SET]");
+    ms().verified_stmt("SELECT * FROM t AS [BEGIN]");
+}
+
+#[test]
+fn parse_mssql_return_before_statement() {
+    for (sql, canonical) in [
+        (
+            r#"IF @f = 1 RETURN
+SELECT id FROM t"#,
+            "IF @f = 1 RETURN; SELECT id FROM t",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+SELECT * FROM t"#,
+            "IF @f = 1 RETURN; SELECT * FROM t",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+SET @x = 1"#,
+            "IF @f = 1 RETURN; SET @x = 1",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+PRINT ('x')"#,
+            "IF @f = 1 RETURN; PRINT ('x')",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+IF (@g = 1) RETURN"#,
+            "IF @f = 1 RETURN; IF (@g = 1) RETURN",
+        ),
+        (
+            r#"IF @f = 1 RETURN
+WITH c AS (SELECT 1 AS a) SELECT a FROM c"#,
+            "IF @f = 1 RETURN; WITH c AS (SELECT 1 AS a) SELECT a FROM c",
+        ),
+    ] {
+        tsql().statements_parse_to(sql, canonical);
+    }
+
+    ms().one_statement_parses_to("IF @f = 1 BEGIN RETURN END", "IF @f = 1 BEGIN RETURN; END");
+    ms().one_statement_parses_to(
+        "IF @f = 1 RETURN ELSE SELECT 1",
+        "IF @f = 1 RETURN; ELSE SELECT 1;",
+    );
+
+    ms().verified_stmt("RETURN @x");
+    ms().verified_stmt("RETURN @@ERROR");
+    ms().verified_stmt("RETURN -1");
+    ms().verified_stmt("RETURN (SELECT 1)");
+    ms().verified_stmt("RETURN ABS(@x)");
+    ms().verified_stmt("RETURN CASE WHEN @x = 1 THEN 1 ELSE 0 END");
+    ms().verified_stmt("RETURN SYSTEM_USER");
+    ms().verified_stmt("RETURN CURRENT_USER");
+
+    assert_eq!(
+        ms().parse_sql_statements("RETURN SELECT 1"),
+        Err(ParserError::ParserError(
+            "Expected: end of statement, found: SELECT".to_owned()
+        ))
+    );
 }

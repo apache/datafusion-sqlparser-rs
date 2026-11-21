@@ -12311,16 +12311,28 @@ impl Display for AlterUserPassword {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableLikeKind {
     /// '''sql
-    /// CREATE TABLE new (LIKE old ...)
+    /// CREATE TABLE new (LIKE old ..., column ...)
     /// '''
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
-    Parenthesized(CreateTableLike),
+    Parenthesized(Vec<CreateTableLikeElement>),
     /// '''sql
     /// CREATE TABLE new LIKE old ...
     /// '''
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-table#label-create-table-like)
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like)
     Plain(CreateTableLike),
+}
+
+/// A `LIKE` element of a `CREATE TABLE` column list.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTableLikeElement {
+    /// The copied table and its options.
+    pub like: CreateTableLike,
+    /// The number of columns written before this element, which sets where the copied columns go.
+    pub columns_before: usize,
 }
 
 /// An option of a `CREATE TABLE ... (LIKE ...)` clause. A later option overrides an earlier one.

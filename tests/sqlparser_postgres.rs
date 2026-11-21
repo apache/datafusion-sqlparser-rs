@@ -692,12 +692,17 @@ fn parse_create_table_like_with_defaults() {
             );
             assert_eq!(
                 stmt.like,
-                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    options: vec![CreateTableLikeOption::Including(
-                        CreateTableLikeProperty::Defaults
-                    )],
-                }))
+                Some(CreateTableLikeKind::Parenthesized(vec![
+                    CreateTableLikeElement {
+                        like: CreateTableLike {
+                            name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                            options: vec![CreateTableLikeOption::Including(
+                                CreateTableLikeProperty::Defaults
+                            )],
+                        },
+                        columns_before: 0,
+                    }
+                ]))
             )
         }
         _ => unreachable!(),
@@ -712,12 +717,17 @@ fn parse_create_table_like_with_defaults() {
             );
             assert_eq!(
                 stmt.like,
-                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
-                    options: vec![CreateTableLikeOption::Excluding(
-                        CreateTableLikeProperty::Defaults
-                    )],
-                }))
+                Some(CreateTableLikeKind::Parenthesized(vec![
+                    CreateTableLikeElement {
+                        like: CreateTableLike {
+                            name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                            options: vec![CreateTableLikeOption::Excluding(
+                                CreateTableLikeProperty::Defaults
+                            )],
+                        },
+                        columns_before: 0,
+                    }
+                ]))
             )
         }
         _ => unreachable!(),
@@ -14386,14 +14396,19 @@ fn parse_create_table_like_options() {
     ) {
         Statement::CreateTable(stmt) => assert_eq!(
             stmt.like,
-            Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                name: ObjectName::from(vec![Ident::new("old")]),
-                options: vec![
-                    CreateTableLikeOption::Including(CreateTableLikeProperty::All),
-                    CreateTableLikeOption::Excluding(CreateTableLikeProperty::Indexes),
-                    CreateTableLikeOption::Including(CreateTableLikeProperty::Indexes),
-                ],
-            }))
+            Some(CreateTableLikeKind::Parenthesized(vec![
+                CreateTableLikeElement {
+                    like: CreateTableLike {
+                        name: ObjectName::from(vec![Ident::new("old")]),
+                        options: vec![
+                            CreateTableLikeOption::Including(CreateTableLikeProperty::All),
+                            CreateTableLikeOption::Excluding(CreateTableLikeProperty::Indexes),
+                            CreateTableLikeOption::Including(CreateTableLikeProperty::Indexes),
+                        ],
+                    },
+                    columns_before: 0,
+                }
+            ]))
         ),
         _ => unreachable!(),
     }
@@ -14408,7 +14423,9 @@ fn parse_create_table_like_options() {
     assert_eq!(
         pg().parse_sql_statements("CREATE TABLE new (LIKE old COMMENTS)")
             .unwrap_err(),
-        ParserError::ParserError("Expected: ), found: COMMENTS".to_string())
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: COMMENTS".to_string()
+        )
     );
     assert_eq!(
         pg().parse_sql_statements("CREATE TABLE new (LIKE)")

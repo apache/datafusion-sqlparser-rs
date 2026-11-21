@@ -13560,6 +13560,42 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
     );
 }
 
+#[test]
+fn parse_alter_column_drop_expression() {
+    for (sql, if_exists) in [
+        ("ALTER TABLE d ALTER COLUMN x DROP EXPRESSION", false),
+        (
+            "ALTER TABLE d ALTER COLUMN x DROP EXPRESSION IF EXISTS",
+            true,
+        ),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        let Statement::AlterTable(AlterTable { operations, .. }) = stmt else {
+            panic!("expected ALTER TABLE, got {stmt:?}");
+        };
+        assert_eq!(
+            operations,
+            vec![AlterTableOperation::AlterColumn {
+                column_name: Ident::new("x"),
+                op: AlterColumnOperation::DropExpression { if_exists },
+            }]
+        );
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "ALTER TABLE d ALTER x DROP EXPRESSION",
+        "ALTER TABLE d ALTER COLUMN x DROP EXPRESSION",
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("ALTER TABLE d ALTER COLUMN x DROP EXPRESSION IF")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: IF"
+    );
+}
+
 fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
         format!("ALTER EXTENSION ext_name {action} ACCESS METHOD btree"),

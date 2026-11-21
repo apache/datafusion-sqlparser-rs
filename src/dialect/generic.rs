@@ -157,6 +157,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_constraint_conflict_clause(&self) -> bool {
+        true
+    }
+
     fn supports_limit_comma(&self) -> bool {
         true
     }
@@ -334,10 +338,6 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_table_partitions(&self) -> bool {
-        true
-    }
-
-    fn supports_table_inheritance_markers(&self) -> bool {
         true
     }
 

@@ -276,6 +276,7 @@ impl Spanned for Values {
 /// - [Statement::CreateExtension]
 /// - [Statement::CreateCollation]
 /// - [Statement::AlterCollation]
+/// - [Statement::AlterExtension]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -387,7 +388,7 @@ impl Spanned for Statement {
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(core::iter::once(module_name.span))
-                    .chain(module_args.iter().map(|i| i.span)),
+                    .chain(module_args.iter().map(|arg| arg.span)),
             ),
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),
@@ -416,6 +417,7 @@ impl Spanned for Statement {
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterCollation { .. } => Span::empty(),
+            Statement::AlterExtension { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),

@@ -5152,6 +5152,13 @@ pub enum Statement {
     /// ```
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html)
     RefreshMaterializedView(RefreshMaterializedView),
+    /// Rebuild indexes.
+    ///
+    /// ```sql
+    /// REINDEX [ ( option [, ...] ) ] { INDEX | TABLE | SCHEMA | DATABASE | SYSTEM } [ CONCURRENTLY ] [ name ]
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reindex.html)
+    Reindex(Reindex),
 }
 
 impl From<Analyze> for Statement {
@@ -6646,6 +6653,7 @@ impl fmt::Display for Statement {
             Statement::AlterUser(s) => write!(f, "{s}"),
             Statement::Reset(s) => write!(f, "{s}"),
             Statement::RefreshMaterializedView(s) => write!(f, "{s}"),
+            Statement::Reindex(s) => write!(f, "{s}"),
         }
     }
 }
@@ -12521,6 +12529,69 @@ impl fmt::Display for RefreshMaterializedView {
     }
 }
 
+/// `REINDEX [ ( option [, ...] ) ] { INDEX | TABLE | SCHEMA | DATABASE | SYSTEM } [ CONCURRENTLY ] [ name ]`
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reindex.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Reindex {
+    /// Parenthesised options, such as `(VERBOSE, TABLESPACE ts)`.
+    pub options: Option<Vec<UtilityOption>>,
+    /// Kind of object whose indexes are rebuilt.
+    pub object_type: ReindexObjectType,
+    /// Whether `CONCURRENTLY` was specified.
+    pub concurrently: bool,
+    /// Name of the object, optional for `DATABASE` and `SYSTEM`.
+    pub name: Option<ObjectName>,
+}
+
+impl fmt::Display for Reindex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("REINDEX ")?;
+        if let Some(options) = &self.options {
+            write!(f, "({}) ", display_comma_separated(options))?;
+        }
+        write!(f, "{}", self.object_type)?;
+        if self.concurrently {
+            f.write_str(" CONCURRENTLY")?;
+        }
+        if let Some(name) = &self.name {
+            write!(f, " {name}")?;
+        }
+        Ok(())
+    }
+}
+
+/// Object kind targeted by [`Reindex`].
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ReindexObjectType {
+    /// `INDEX`
+    Index,
+    /// `TABLE`
+    Table,
+    /// `SCHEMA`
+    Schema,
+    /// `DATABASE`
+    Database,
+    /// `SYSTEM`
+    System,
+}
+
+impl fmt::Display for ReindexObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            ReindexObjectType::Index => "INDEX",
+            ReindexObjectType::Table => "TABLE",
+            ReindexObjectType::Schema => "SCHEMA",
+            ReindexObjectType::Database => "DATABASE",
+            ReindexObjectType::System => "SYSTEM",
+        })
+    }
+}
+
 /// Query optimizer hints are optionally supported comments after the
 /// `SELECT`, `INSERT`, `UPDATE`, `REPLACE`, `MERGE`, and `DELETE` keywords in
 /// the corresponding statements.
@@ -12968,6 +13039,12 @@ impl From<ResetStatement> for Statement {
 impl From<RefreshMaterializedView> for Statement {
     fn from(r: RefreshMaterializedView) -> Self {
         Self::RefreshMaterializedView(r)
+    }
+}
+
+impl From<Reindex> for Statement {
+    fn from(r: Reindex) -> Self {
+        Self::Reindex(r)
     }
 }
 

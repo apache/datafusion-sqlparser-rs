@@ -46,9 +46,9 @@ use super::{
     OnConflictAction, OnInsert, OpenStatement, OperateFunctionArg, OrderBy, OrderByExpr,
     OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource,
     ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RefreshMaterializedView, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript, SymbolDefinition,
-    TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    RefreshMaterializedView, Reindex, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem,
+    Select, SelectInto, SelectItem, SetExpr, Setting, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
     TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, UserMappingUser,
     Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
@@ -531,6 +531,7 @@ impl Spanned for Statement {
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
             Statement::RefreshMaterializedView(refresh) => refresh.span(),
+            Statement::Reindex(reindex) => reindex.span(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
     }
@@ -960,6 +961,12 @@ impl Spanned for Analyze {
 impl Spanned for RefreshMaterializedView {
     fn span(&self) -> Span {
         self.name.span()
+    }
+}
+
+impl Spanned for Reindex {
+    fn span(&self) -> Span {
+        self.name.as_ref().map_or(Span::empty(), |name| name.span())
     }
 }
 

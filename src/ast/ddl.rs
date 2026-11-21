@@ -1439,6 +1439,14 @@ pub enum AlterColumnOperation {
         /// Whether `IF EXISTS` was specified.
         if_exists: bool,
     },
+    /// `SET EXPRESSION AS ( <expr> )`, replacing the expression of a generated
+    /// column.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetExpression {
+        /// The new generation expression.
+        expr: Expr,
+    },
     /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
     /// options of a foreign table column.
     ///
@@ -1502,6 +1510,9 @@ impl fmt::Display for AlterColumnOperation {
                     write!(f, " IF EXISTS")?;
                 }
                 Ok(())
+            }
+            AlterColumnOperation::SetExpression { expr } => {
+                write!(f, "SET EXPRESSION AS ({expr})")
             }
             AlterColumnOperation::GenericOptions { options } => {
                 write!(f, "OPTIONS ({})", display_comma_separated(options))

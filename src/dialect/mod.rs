@@ -1047,6 +1047,11 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
+            Token::Word(w)
+                if w.keyword == Keyword::COLLATE && !parser.in_column_definition_state() =>
+            {
+                Ok(p!(Collate))
+            }
             Token::Period => Ok(p!(Period)),
             Token::Assignment
             | Token::Eq
@@ -1151,6 +1156,7 @@ pub trait Dialect: Debug + Any {
         match prec {
             Precedence::Period => 100,
             Precedence::DoubleColon => 50,
+            Precedence::Collate => 42,
             Precedence::AtTz => 41,
             Precedence::MulDivModOp => 40,
             Precedence::PlusMinus => 30,
@@ -2376,6 +2382,8 @@ pub enum Precedence {
     Period,
     /// Postgres style type cast `::`.
     DoubleColon,
+    /// Collation operator `COLLATE`.
+    Collate,
     /// Timezone operator (e.g. `AT TIME ZONE`).
     AtTz,
     /// Multiplication / Division / Modulo operators (`*`, `/`, `%`).

@@ -127,6 +127,7 @@ impl Dialect for SQLiteDialect {
         match prec {
             Precedence::Period => 100,
             Precedence::DoubleColon => 50,
+            Precedence::Collate => 42,
             Precedence::AtTz => 41,
             Precedence::MulDivModOp => 40,
             Precedence::PlusMinus => 30,

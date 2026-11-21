@@ -7555,7 +7555,7 @@ impl<'a> Parser<'a> {
     /// Parses a [Statement::CreateDomain] statement.
     fn parse_create_domain(&mut self) -> Result<CreateDomain, ParserError> {
         let name = self.parse_object_name(false)?;
-        self.expect_keyword_is(Keyword::AS)?;
+        let as_keyword = self.parse_keyword(Keyword::AS);
         let data_type = self.parse_data_type()?;
         let collation = if self.parse_keyword(Keyword::COLLATE) {
             Some(self.parse_identifier()?)
@@ -7574,6 +7574,7 @@ impl<'a> Parser<'a> {
 
         Ok(CreateDomain {
             name,
+            as_keyword,
             data_type,
             collation,
             default,

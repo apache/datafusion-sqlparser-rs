@@ -3886,6 +3886,8 @@ impl fmt::Display for DistStyle {
 pub struct CreateDomain {
     /// The name of the domain to be created.
     pub name: ObjectName,
+    /// Whether the `AS` keyword was present in the original syntax.
+    pub as_keyword: bool,
     /// The data type of the domain.
     pub data_type: DataType,
     /// The collation of the domain.
@@ -3898,12 +3900,11 @@ pub struct CreateDomain {
 
 impl fmt::Display for CreateDomain {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "CREATE DOMAIN {name} AS {data_type}",
-            name = self.name,
-            data_type = self.data_type
-        )?;
+        write!(f, "CREATE DOMAIN {name}", name = self.name)?;
+        if self.as_keyword {
+            write!(f, " AS")?;
+        }
+        write!(f, " {data_type}", data_type = self.data_type)?;
         if let Some(collation) = &self.collation {
             write!(f, " COLLATE {collation}")?;
         }

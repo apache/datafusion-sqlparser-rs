@@ -227,6 +227,18 @@ impl MsSqlDialect {
                 | Keyword::THROW
                 | Keyword::RAISERROR
                 | Keyword::MERGE
+                | Keyword::SET
+                | Keyword::BEGIN
+                | Keyword::OPEN
+                | Keyword::CLOSE
+                | Keyword::DEALLOCATE
+                | Keyword::GRANT
+                | Keyword::DENY
+                | Keyword::WAITFOR
+                | Keyword::KILL
+                | Keyword::COMMIT
+                | Keyword::ROLLBACK
+                | Keyword::REVOKE
         )
     }
 

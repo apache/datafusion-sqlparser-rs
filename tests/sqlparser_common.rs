@@ -2013,7 +2013,10 @@ fn parse_is_null() {
     use self::Expr::*;
     let sql = "a IS NULL";
     assert_eq!(
-        IsNull(Box::new(Identifier(Ident::new("a")))),
+        IsNull {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            syntax: IsNullSyntax::IsNull,
+        },
         verified_expr(sql)
     );
 }
@@ -2023,7 +2026,10 @@ fn parse_is_not_null() {
     use self::Expr::*;
     let sql = "a IS NOT NULL";
     assert_eq!(
-        IsNotNull(Box::new(Identifier(Ident::new("a")))),
+        IsNotNull {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            syntax: IsNotNullSyntax::IsNotNull,
+        },
         verified_expr(sql)
     );
 }
@@ -2141,10 +2147,13 @@ fn parse_is_distinct_from_precedence() {
     // `a IS NULL IS NULL` already parses. Deliberately more permissive than
     // PostgreSQL, which declares IS as %nonassoc and rejects the chain.
     assert_eq!(
-        IsNull(Box::new(IsDistinctFrom(
-            Box::new(Identifier(Ident::new("a"))),
-            Box::new(Identifier(Ident::new("b"))),
-        ))),
+        IsNull {
+            expr: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Identifier(Ident::new("b"))),
+            )),
+            syntax: IsNullSyntax::IsNull,
+        },
         verified_expr("a IS DISTINCT FROM b IS NULL")
     );
 
@@ -2413,15 +2422,18 @@ fn parse_ilike() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::ILike {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
-                )),
-                escape_char: None,
-                any: false,
-            })),
+            Expr::IsNull {
+                expr: Box::new(Expr::ILike {
+                    expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                    negated,
+                    pattern: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    )),
+                    escape_char: None,
+                    any: false,
+                }),
+                syntax: IsNullSyntax::IsNull,
+            },
             select.selection.unwrap()
         );
     }
@@ -2510,15 +2522,18 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
-                )),
-                escape_char: None,
-                any: false,
-            })),
+            Expr::IsNull {
+                expr: Box::new(Expr::Like {
+                    expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                    negated,
+                    pattern: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    )),
+                    escape_char: None,
+                    any: false,
+                }),
+                syntax: IsNullSyntax::IsNull,
+            },
             select.selection.unwrap()
         );
     }
@@ -2595,16 +2610,19 @@ fn parse_similar_to() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
-                )),
-                escape_char: Some(Box::new(Expr::value(
-                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
-                ))),
-            })),
+            Expr::IsNull {
+                expr: Box::new(Expr::SimilarTo {
+                    expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                    negated,
+                    pattern: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                    )),
+                    escape_char: Some(Box::new(Expr::value(
+                        Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                    ))),
+                }),
+                syntax: IsNullSyntax::IsNull,
+            },
             select.selection.unwrap()
         );
     }
@@ -2967,20 +2985,23 @@ fn parse_between_with_expr() {
     let sql = "SELECT * FROM t WHERE 1 BETWEEN 1 + 2 AND 3 + 4 IS NULL";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::IsNull(Box::new(Expr::Between {
-            expr: Box::new(Expr::value(number("1"))),
-            low: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::value(number("1"))),
-                op: Plus,
-                right: Box::new(Expr::value(number("2"))),
+        Expr::IsNull {
+            expr: Box::new(Expr::Between {
+                expr: Box::new(Expr::value(number("1"))),
+                low: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::value(number("1"))),
+                    op: Plus,
+                    right: Box::new(Expr::value(number("2"))),
+                }),
+                high: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::value(number("3"))),
+                    op: Plus,
+                    right: Box::new(Expr::value(number("4"))),
+                }),
+                negated: false,
             }),
-            high: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::value(number("3"))),
-                op: Plus,
-                right: Box::new(Expr::value(number("4"))),
-            }),
-            negated: false,
-        })),
+            syntax: IsNullSyntax::IsNull,
+        },
         select.selection.unwrap()
     );
 
@@ -8259,7 +8280,10 @@ fn parse_searched_case_expr() {
             operand: None,
             conditions: vec![
                 CaseWhen {
-                    condition: IsNull(Box::new(Identifier(Ident::new("bar")))),
+                    condition: IsNull {
+                        expr: Box::new(Identifier(Ident::new("bar"))),
+                        syntax: IsNullSyntax::IsNull,
+                    },
                     result: Expr::value(Value::SingleQuotedString("null".to_string())),
                 },
                 CaseWhen {
@@ -14495,9 +14519,10 @@ fn test_selective_aggregation() {
                     ))],
                     clauses: vec![],
                 }),
-                filter: Some(Box::new(Expr::IsNotNull(Box::new(Expr::Identifier(
-                    Ident::new("name")
-                ))))),
+                filter: Some(Box::new(Expr::IsNotNull {
+                    expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                    syntax: IsNotNullSyntax::IsNotNull,
+                })),
                 over: None,
                 within_group: vec![],
                 null_treatment: None
@@ -17489,7 +17514,13 @@ fn parse_composite_access_expr() {
     };
 
     assert_eq!(stmt.projection[0], SelectItem::UnnamedExpr(expr.clone()));
-    assert_eq!(stmt.selection.unwrap(), Expr::IsNotNull(Box::new(expr)));
+    assert_eq!(
+        stmt.selection.unwrap(),
+        Expr::IsNotNull {
+            expr: Box::new(expr),
+            syntax: IsNotNullSyntax::IsNotNull,
+        }
+    );
 
     // Compound access with quoted identifier.
     all_dialects_where(|d| d.is_delimited_identifier_start('"'))
@@ -19821,18 +19852,19 @@ fn parse_create_procedure_with_parameter_modes() {
 
 #[test]
 fn parse_not_null() {
-    let _ = all_dialects().expr_parses_to("x NOT NULL", "x IS NOT NULL");
-    let _ = all_dialects().expr_parses_to("NULL NOT NULL", "NULL IS NOT NULL");
+    all_dialects().verified_expr("x NOT NULL");
+    all_dialects().verified_expr("x NOT NULL + 1");
+    all_dialects().verified_expr("NULL NOT NULL");
 
     assert_matches!(
-        all_dialects().expr_parses_to("NOT NULL NOT NULL", "NOT NULL IS NOT NULL"),
+        all_dialects().verified_expr("NOT NULL NOT NULL"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             ..
         }
     );
     assert_matches!(
-        all_dialects().expr_parses_to("NOT x NOT NULL", "NOT x IS NOT NULL"),
+        all_dialects().verified_expr("NOT x NOT NULL"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             ..
@@ -20028,12 +20060,13 @@ fn parse_notnull() {
 
     // Supported dialects consider `x NOTNULL` as an alias for `x IS NOT NULL`
     let notnull_supported_dialects = all_dialects_where(|d| d.supports_notnull_operator());
-    let _ = notnull_supported_dialects.expr_parses_to("x NOTNULL", "x IS NOT NULL");
+    notnull_supported_dialects.verified_expr("x NOTNULL");
+    notnull_supported_dialects.verified_expr("x NOTNULL + 1");
 
     // For dialects which support it, `NOT NULL NOTNULL` should
     // parse as `(NOT (NULL IS NOT NULL))`
     assert_matches!(
-        notnull_supported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL IS NOT NULL"),
+        notnull_supported_dialects.verified_expr("NOT NULL NOTNULL"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             ..
@@ -20055,26 +20088,17 @@ fn parse_isnull() {
 
     // Supported dialects consider `x ISNULL` as an alias for `x IS NULL`
     let isnull_supported_dialects = all_dialects_where(|d| d.supports_isnull_operator());
-    let _ = isnull_supported_dialects.expr_parses_to("x ISNULL", "x IS NULL");
-    isnull_supported_dialects
-        .one_statement_parses_to("SELECT a ISNULL FROM t", "SELECT a IS NULL FROM t");
-    isnull_supported_dialects.one_statement_parses_to(
-        "SELECT a ISNULL AND b ISNULL FROM t",
-        "SELECT a IS NULL AND b IS NULL FROM t",
-    );
-    isnull_supported_dialects.one_statement_parses_to(
-        "SELECT * FROM t WHERE a ISNULL",
-        "SELECT * FROM t WHERE a IS NULL",
-    );
-    isnull_supported_dialects.one_statement_parses_to(
-        "SELECT CASE WHEN a ISNULL THEN 1 ELSE 2 END FROM t",
-        "SELECT CASE WHEN a IS NULL THEN 1 ELSE 2 END FROM t",
-    );
+    isnull_supported_dialects.verified_expr("x ISNULL");
+    isnull_supported_dialects.verified_expr("x ISNULL + 1");
+    isnull_supported_dialects.verified_stmt("SELECT a ISNULL FROM t");
+    isnull_supported_dialects.verified_stmt("SELECT a ISNULL AND b ISNULL FROM t");
+    isnull_supported_dialects.verified_stmt("SELECT * FROM t WHERE a ISNULL");
+    isnull_supported_dialects.verified_stmt("SELECT CASE WHEN a ISNULL THEN 1 ELSE 2 END FROM t");
 
     // For dialects which support it, `NOT NULL ISNULL` should
     // parse as `(NOT (NULL IS NULL))`
     assert_matches!(
-        isnull_supported_dialects.expr_parses_to("NOT NULL ISNULL", "NOT NULL IS NULL"),
+        isnull_supported_dialects.verified_expr("NOT NULL ISNULL"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             ..
@@ -20249,26 +20273,22 @@ fn parse_create_view_if_not_exists() {
 
 #[test]
 fn test_parse_not_null_in_column_options() {
-    let canonical = concat!(
+    all_dialects().verified_stmt(concat!(
         "CREATE TABLE foo (",
         "abc INT DEFAULT (42 IS NOT NULL) NOT NULL,",
         " def INT,",
         " def_null BOOL GENERATED ALWAYS AS (def IS NOT NULL) STORED,",
         " CHECK (abc IS NOT NULL)",
         ")"
-    );
-    all_dialects().verified_stmt(canonical);
-    all_dialects().one_statement_parses_to(
-        concat!(
-            "CREATE TABLE foo (",
-            "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
-            " def INT,",
-            " def_null BOOL GENERATED ALWAYS AS (def NOT NULL) STORED,",
-            " CHECK (abc NOT NULL)",
-            ")"
-        ),
-        canonical,
-    );
+    ));
+    all_dialects().verified_stmt(concat!(
+        "CREATE TABLE foo (",
+        "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
+        " def INT,",
+        " def_null BOOL GENERATED ALWAYS AS (def NOT NULL) STORED,",
+        " CHECK (abc NOT NULL)",
+        ")"
+    ));
 }
 
 #[test]

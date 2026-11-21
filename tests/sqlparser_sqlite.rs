@@ -1161,7 +1161,7 @@ fn parse_between_low_bound_precedence() {
     }
     sqlite().verified_expr("a BETWEEN b LIKE 'x' AND c");
     sqlite().verified_expr("a BETWEEN b IS NOT NULL AND c");
-    sqlite().expr_parses_to("a BETWEEN b NOTNULL AND c", "a BETWEEN b IS NOT NULL AND c");
+    sqlite().verified_expr("a BETWEEN b NOTNULL AND c");
     sqlite().verified_expr("a BETWEEN b BETWEEN 1 AND 2 AND c");
 
     // Operators after the high bound apply to the whole BETWEEN.

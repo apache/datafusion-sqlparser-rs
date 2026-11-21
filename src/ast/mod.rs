@@ -807,6 +807,52 @@ pub enum CastKind {
     DoubleColon,
 }
 
+/// The spelling of an [`Expr::IsNull`] test.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IsNullSyntax {
+    /// `<expr> IS NULL`
+    IsNull,
+    /// `<expr> ISNULL`
+    Isnull,
+}
+
+impl fmt::Display for IsNullSyntax {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IsNullSyntax::IsNull => f.write_str("IS NULL"),
+            IsNullSyntax::Isnull => f.write_str("ISNULL"),
+        }
+    }
+}
+
+/// The spelling of an [`Expr::IsNotNull`] test.
+///
+/// In SQLite `IS NOT` is a binary operator, so `a NOT NULL + 1` means
+/// `(a NOT NULL) + 1` while `a IS NOT NULL + 1` means `a IS NOT (NULL + 1)`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IsNotNullSyntax {
+    /// `<expr> IS NOT NULL`
+    IsNotNull,
+    /// `<expr> NOT NULL`
+    NotNull,
+    /// `<expr> NOTNULL`
+    Notnull,
+}
+
+impl fmt::Display for IsNotNullSyntax {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IsNotNullSyntax::IsNotNull => f.write_str("IS NOT NULL"),
+            IsNotNullSyntax::NotNull => f.write_str("NOT NULL"),
+            IsNotNullSyntax::Notnull => f.write_str("NOTNULL"),
+        }
+    }
+}
+
 /// `MATCH` type for constraint references
 ///
 /// See: <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-REFERENCES>
@@ -1002,9 +1048,19 @@ pub enum Expr {
     /// `IS NOT TRUE` operator
     IsNotTrue(Box<Expr>),
     /// `IS NULL` operator
-    IsNull(Box<Expr>),
+    IsNull {
+        /// The tested expression.
+        expr: Box<Expr>,
+        /// How the test was written.
+        syntax: IsNullSyntax,
+    },
     /// `IS NOT NULL` operator
-    IsNotNull(Box<Expr>),
+    IsNotNull {
+        /// The tested expression.
+        expr: Box<Expr>,
+        /// How the test was written.
+        syntax: IsNotNullSyntax,
+    },
     /// `IS UNKNOWN` operator
     IsUnknown(Box<Expr>),
     /// `IS NOT UNKNOWN` operator
@@ -1816,8 +1872,8 @@ impl fmt::Display for Expr {
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
             Expr::IsFalse(ast) => write!(f, "{ast} IS FALSE"),
             Expr::IsNotFalse(ast) => write!(f, "{ast} IS NOT FALSE"),
-            Expr::IsNull(ast) => write!(f, "{ast} IS NULL"),
-            Expr::IsNotNull(ast) => write!(f, "{ast} IS NOT NULL"),
+            Expr::IsNull { expr, syntax } => write!(f, "{expr} {syntax}"),
+            Expr::IsNotNull { expr, syntax } => write!(f, "{expr} {syntax}"),
             Expr::IsUnknown(ast) => write!(f, "{ast} IS UNKNOWN"),
             Expr::IsNotUnknown(ast) => write!(f, "{ast} IS NOT UNKNOWN"),
             Expr::IsJson {

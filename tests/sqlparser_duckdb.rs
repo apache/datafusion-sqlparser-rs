@@ -374,6 +374,7 @@ fn test_duckdb_specific_int_types() {
     let duckdb_dtypes = vec![
         ("UTINYINT", DataType::UTinyInt),
         ("USMALLINT", DataType::USmallInt),
+        ("UINTEGER", DataType::UInteger),
         ("UBIGINT", DataType::UBigInt),
         ("UHUGEINT", DataType::UHugeInt),
         ("HUGEINT", DataType::HugeInt),
@@ -975,4 +976,25 @@ fn display_create_macro_propagates_argument_list_errors() {
             assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
         }
     }
+}
+
+#[test]
+fn parse_create_table_with_uinteger_column() {
+    let sql = "CREATE TABLE t (uinteger UINTEGER)";
+    match duckdb_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns[0].name.value, "uinteger");
+            assert_eq!(columns[0].data_type, DataType::UInteger);
+        }
+        statement => panic!("unexpected statement: {statement:?}"),
+    }
+
+    assert_eq!(
+        duckdb_and_generic()
+            .parse_sql_statements("CREATE TABLE t (c UINTEGER(10))")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: (".to_string()
+        )
+    );
 }

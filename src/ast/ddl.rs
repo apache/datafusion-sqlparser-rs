@@ -64,8 +64,8 @@ use crate::tokenizer::{Span, Token};
 pub struct IndexColumn {
     /// The indexed column expression.
     pub column: OrderByExpr,
-    /// Optional operator class (index operator name).
-    pub operator_class: Option<ObjectName>,
+    /// Optional operator class.
+    pub operator_class: Option<IndexOperatorClass>,
 }
 
 impl From<Ident> for IndexColumn {
@@ -91,6 +91,31 @@ impl fmt::Display for IndexColumn {
             write!(f, " {operator_class}")?;
         }
         self.column.fmt_sort_modifiers(f)
+    }
+}
+
+/// Operator class of an index column, with its optional parameters.
+///
+/// `opclass [ ( opclass_parameter = value [, ... ] ) ]`
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createindex.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IndexOperatorClass {
+    /// The operator class name.
+    pub name: ObjectName,
+    /// The operator class parameters, such as `siglen = 100`.
+    pub parameters: Vec<Expr>,
+}
+
+impl fmt::Display for IndexOperatorClass {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if !self.parameters.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.parameters))?;
+        }
+        Ok(())
     }
 }
 

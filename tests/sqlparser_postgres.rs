@@ -3527,7 +3527,12 @@ fn parse_create_indices_with_operator_classes() {
                     },
                     with_fill: None,
                 },
-                operator_class: expected_operator_class.clone(),
+                operator_class: expected_operator_class
+                    .clone()
+                    .map(|name| IndexOperatorClass {
+                        name,
+                        parameters: vec![],
+                    }),
             };
 
             match pg().verified_stmt(&single_column_sql_statement) {
@@ -3628,11 +3633,11 @@ fn parse_create_index_with_schema_qualified_operator_class() {
 
             // Verify the schema-qualified operator class
             assert_eq!(
-                Some(ObjectName(vec![
+                Some(&ObjectName(vec![
                     ObjectNamePart::Identifier(Ident::new("public")),
                     ObjectNamePart::Identifier(Ident::new("vector_cosine_ops")),
                 ])),
-                idx_col.operator_class
+                idx_col.operator_class.as_ref().map(|class| &class.name)
             );
         }
         _ => unreachable!(),
@@ -14221,4 +14226,54 @@ fn parse_current_role_system_user_current_schema() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: (".to_string())
     );
+}
+
+#[test]
+fn parse_create_index_operator_class_parameters() {
+    let sql = "CREATE INDEX probe ON docs USING GIST (tsv tsvector_ops (siglen = 100), body gist_trgm_ops (siglen = 32, flag) DESC)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex { columns, .. }) => {
+            assert_eq!(
+                columns[0].operator_class,
+                Some(IndexOperatorClass {
+                    name: ObjectName::from(vec![Ident::new("tsvector_ops")]),
+                    parameters: vec![Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("siglen"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(number("100").into())),
+                    }],
+                })
+            );
+            let operator_class = columns[1].operator_class.as_ref().unwrap();
+            assert_eq!(operator_class.name.to_string(), "gist_trgm_ops");
+            assert_eq!(operator_class.parameters.len(), 2);
+            assert_eq!(columns[1].column.options.sort, Some(OrderBySort::Desc));
+        }
+        other => panic!("unexpected statement: {other:?}"),
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE INDEX probe ON docs USING gist (tsv tsvector_ops (siglen='100'))",
+        "CREATE INDEX probe ON docs USING GIST (tsv tsvector_ops (siglen = '100'))",
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT c EXCLUDE USING GIST (c gist_int4_ops (siglen = 8) WITH &&)",
+    );
+
+    for (sql, error) in [
+        (
+            "CREATE INDEX probe ON docs USING GIST (tsv tsvector_ops ())",
+            "Expected: an expression, found: )",
+        ),
+        (
+            "CREATE INDEX probe ON docs USING GIST (tsv tsvector_ops (siglen = 100)",
+            "Expected: ), found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
 }

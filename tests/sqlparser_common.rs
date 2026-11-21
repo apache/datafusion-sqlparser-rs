@@ -10747,7 +10747,10 @@ fn parse_create_index_operator_class_before_sort_options() {
     assert_eq!(column.column.expr, Expr::Identifier(Ident::new("c")));
     assert_eq!(
         column.operator_class,
-        Some(ObjectName::from(vec![Ident::new("ops")]))
+        Some(IndexOperatorClass {
+            name: ObjectName::from(vec![Ident::new("ops")]),
+            parameters: vec![],
+        })
     );
     assert_eq!(column.column.options.sort, Some(OrderBySort::Desc));
 }

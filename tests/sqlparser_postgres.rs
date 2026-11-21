@@ -14456,3 +14456,38 @@ fn display_create_table_like_propagates_write_errors() {
         assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{rejected}");
     }
 }
+
+#[test]
+fn display_create_table_like_among_columns_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    /// Fails only the write numbered `failing`, so a swallowed error lets formatting succeed.
+    struct FailingWriter {
+        failing: usize,
+        writes: usize,
+    }
+
+    impl Write for FailingWriter {
+        fn write_str(&mut self, _: &str) -> fmt::Result {
+            let index = self.writes;
+            self.writes += 1;
+            if index == self.failing {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let statement = pg()
+        .verified_stmt("CREATE TABLE t (LIKE a, b INT, LIKE c, d INT, LIKE e, PRIMARY KEY (b))");
+    let mut counter = FailingWriter {
+        failing: usize::MAX,
+        writes: 0,
+    };
+    write!(counter, "{statement}").unwrap();
+    for failing in 0..counter.writes {
+        let mut writer = FailingWriter { failing, writes: 0 };
+        assert_eq!(write!(writer, "{statement}"), Err(fmt::Error), "{failing}");
+    }
+}

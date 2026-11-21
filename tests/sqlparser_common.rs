@@ -23632,3 +23632,49 @@ fn parse_only_table_name() {
         dialects.verified_stmt(sql);
     }
 }
+
+#[test]
+fn parse_stacked_collate() {
+    let dialects = all_dialects();
+    let select = dialects.verified_only_select("SELECT a COLLATE NOCASE COLLATE RTRIM FROM t");
+    assert_eq!(
+        &Expr::Collate {
+            expr: Box::new(Expr::Collate {
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                collation: ObjectName::from(vec![Ident::new("NOCASE")]),
+            }),
+            collation: ObjectName::from(vec![Ident::new("RTRIM")]),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    dialects.verified_stmt("SELECT a FROM t ORDER BY a COLLATE NOCASE COLLATE RTRIM");
+    dialects.verified_stmt("CREATE INDEX i ON t(a COLLATE NOCASE COLLATE RTRIM)");
+
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        dialects
+            .parse_sql_statements("SELECT a COLLATE NOCASE COLLATE")
+            .unwrap_err(),
+    );
+}
+
+#[test]
+fn parse_collate_after_double_colon_cast() {
+    let select = all_dialects().verified_only_select("SELECT a::TEXT COLLATE x = 1 FROM t");
+    assert_eq!(
+        &Expr::BinaryOp {
+            left: Box::new(Expr::Collate {
+                expr: Box::new(Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                    data_type: DataType::Text,
+                    format: None,
+                }),
+                collation: ObjectName::from(vec![Ident::new("x")]),
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::value(number("1"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}

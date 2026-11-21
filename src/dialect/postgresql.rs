@@ -311,11 +311,6 @@ impl Dialect for PostgreSqlDialect {
         // we only return some custom value here when the behaviour (not merely the numeric value) differs
         // from the default implementation
         match &token.token {
-            Token::Word(w)
-                if w.keyword == Keyword::COLLATE && !parser.in_column_definition_state() =>
-            {
-                Some(Ok(COLLATE_PREC))
-            }
             Token::LBracket => Some(Ok(BRACKET_PREC)),
             Token::Arrow
             | Token::LongArrow
@@ -371,6 +366,7 @@ impl Dialect for PostgreSqlDialect {
         match prec {
             Precedence::Period => PERIOD_PREC,
             Precedence::DoubleColon => DOUBLE_COLON_PREC,
+            Precedence::Collate => COLLATE_PREC,
             Precedence::AtTz => AT_TZ_PREC,
             Precedence::MulDivModOp => MUL_DIV_MOD_OP_PREC,
             Precedence::PlusMinus => PLUS_MINUS_PREC,

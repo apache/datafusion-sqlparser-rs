@@ -14437,3 +14437,40 @@ fn parse_alter_table_set_schema() {
         "sql parser error: Expected: identifier, found: EOF"
     );
 }
+
+#[test]
+fn parse_alter_column_set_storage() {
+    for (input, output, storage) in [
+        ("PLAIN", "plain", UserDefinedTypeStorage::Plain),
+        ("EXTERNAL", "external", UserDefinedTypeStorage::External),
+        ("EXTENDED", "extended", UserDefinedTypeStorage::Extended),
+        ("MAIN", "main", UserDefinedTypeStorage::Main),
+    ] {
+        let statement = pg_and_generic().one_statement_parses_to(
+            &format!("ALTER TABLE t ALTER COLUMN b SET STORAGE {input}"),
+            &format!("ALTER TABLE t ALTER COLUMN b SET STORAGE {output}"),
+        );
+
+        let Statement::AlterTable(AlterTable { operations, .. }) = statement else {
+            panic!("expected ALTER TABLE, got {statement:?}")
+        };
+        assert_eq!(
+            operations,
+            vec![AlterTableOperation::AlterColumn {
+                column_name: Ident::new("b"),
+                op: AlterColumnOperation::SetStorage { storage }
+            }]
+        )
+    }
+
+    for (sql, found) in [
+        ("ALTER TABLE t ALTER COLUMN b SET STORAGE", "EOF"),
+        ("ALTER TABLE t ALTER COLUMN b SET STORAGE fast", "fast"),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: Expected: storage value (plain, external, extended, or main), found: {found}"),
+            "{sql}"
+        );
+    }
+}

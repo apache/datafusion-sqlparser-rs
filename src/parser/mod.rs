@@ -11862,6 +11862,10 @@ impl<'a> Parser<'a> {
                 AlterColumnOperation::GenericOptions {
                     options: self.parse_alter_generic_options()?,
                 }
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::STORAGE]) {
+                AlterColumnOperation::SetStorage {
+                    storage: self.parse_user_defined_type_storage()?,
+                }
             } else {
                 let message = if is_postgresql {
                     "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN"
@@ -22643,30 +22647,9 @@ impl<'a> Parser<'a> {
             }
             Some(Keyword::STORAGE) => {
                 self.expect_token(&Token::Eq)?;
-                let storage_keyword = self.parse_one_of_keywords(&[
-                    Keyword::PLAIN,
-                    Keyword::EXTERNAL,
-                    Keyword::EXTENDED,
-                    Keyword::MAIN,
-                ]);
-                match storage_keyword {
-                    Some(Keyword::PLAIN) => Ok(UserDefinedTypeSqlDefinitionOption::Storage(
-                        UserDefinedTypeStorage::Plain,
-                    )),
-                    Some(Keyword::EXTERNAL) => Ok(UserDefinedTypeSqlDefinitionOption::Storage(
-                        UserDefinedTypeStorage::External,
-                    )),
-                    Some(Keyword::EXTENDED) => Ok(UserDefinedTypeSqlDefinitionOption::Storage(
-                        UserDefinedTypeStorage::Extended,
-                    )),
-                    Some(Keyword::MAIN) => Ok(UserDefinedTypeSqlDefinitionOption::Storage(
-                        UserDefinedTypeStorage::Main,
-                    )),
-                    _ => self.expected_ref(
-                        "storage value (plain, external, extended, or main)",
-                        self.peek_token_ref(),
-                    ),
-                }
+                Ok(UserDefinedTypeSqlDefinitionOption::Storage(
+                    self.parse_user_defined_type_storage()?,
+                ))
             }
             Some(Keyword::LIKE) => {
                 self.expect_token(&Token::Eq)?;
@@ -22711,6 +22694,26 @@ impl<'a> Parser<'a> {
                 Ok(UserDefinedTypeSqlDefinitionOption::Collatable(value))
             }
             _ => self.expected_ref("SQL definition option keyword", self.peek_token_ref()),
+        }
+    }
+
+    /// Parses `PLAIN`, `EXTERNAL`, `EXTENDED` or `MAIN`.
+    fn parse_user_defined_type_storage(&mut self) -> Result<UserDefinedTypeStorage, ParserError> {
+        let storage_keyword = self.parse_one_of_keywords(&[
+            Keyword::PLAIN,
+            Keyword::EXTERNAL,
+            Keyword::EXTENDED,
+            Keyword::MAIN,
+        ]);
+        match storage_keyword {
+            Some(Keyword::PLAIN) => Ok(UserDefinedTypeStorage::Plain),
+            Some(Keyword::EXTERNAL) => Ok(UserDefinedTypeStorage::External),
+            Some(Keyword::EXTENDED) => Ok(UserDefinedTypeStorage::Extended),
+            Some(Keyword::MAIN) => Ok(UserDefinedTypeStorage::Main),
+            _ => self.expected_ref(
+                "storage value (plain, external, extended, or main)",
+                self.peek_token_ref(),
+            ),
         }
     }
 

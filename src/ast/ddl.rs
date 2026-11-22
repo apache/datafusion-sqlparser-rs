@@ -1459,6 +1459,13 @@ pub enum AlterColumnOperation {
         /// Whether `IF EXISTS` was specified.
         if_exists: bool,
     },
+    /// `SET STORAGE { PLAIN | EXTERNAL | EXTENDED | MAIN }`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetStorage {
+        /// The type of storage.
+        storage: UserDefinedTypeStorage,
+    },
     /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
     /// options of a foreign table column.
     ///
@@ -1522,6 +1529,9 @@ impl fmt::Display for AlterColumnOperation {
                     write!(f, " IF EXISTS")?;
                 }
                 Ok(())
+            }
+            AlterColumnOperation::SetStorage { storage } => {
+                write!(f, "SET STORAGE {storage}")
             }
             AlterColumnOperation::GenericOptions { options } => {
                 write!(f, "OPTIONS ({})", display_comma_separated(options))

@@ -1209,6 +1209,7 @@ fn parse_drop_and_comment_collation_ast() {
         Statement::Comment {
             object_type: CommentObject::Collation,
             object_name: ObjectName::from(vec![Ident::new("test0")]),
+            parent_name: None,
             comment: Some("US English".to_string()),
             if_exists: false,
         }
@@ -11687,6 +11688,7 @@ fn parse_comment_on_foreign_table() {
         Statement::Comment {
             object_type,
             object_name,
+            parent_name: None,
             comment,
             if_exists,
         } => {
@@ -13439,6 +13441,118 @@ fn parse_create_function_support() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_comment_on_constraint() {
+    match pg_and_generic().verified_stmt("COMMENT ON CONSTRAINT p_a_check ON public.p IS 'x'") {
+        Statement::Comment {
+            object_type,
+            object_name,
+            parent_name,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(object_type, CommentObject::Constraint);
+            assert_eq!(object_name, ObjectName::from(vec![Ident::new("p_a_check")]));
+            assert_eq!(
+                parent_name,
+                Some(ObjectName::from(vec![
+                    Ident::new("public"),
+                    Ident::new("p")
+                ]))
+            );
+            assert_eq!(comment, Some("x".to_string()));
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+    match pg_and_generic().verified_stmt("COMMENT ON CONSTRAINT d_check ON DOMAIN d IS NULL") {
+        Statement::Comment {
+            object_type,
+            parent_name,
+            comment,
+            ..
+        } => {
+            assert_eq!(object_type, CommentObject::DomainConstraint);
+            assert_eq!(parent_name, Some(ObjectName::from(vec![Ident::new("d")])));
+            assert_eq!(comment, None);
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, expected_type, expected_parent) in [
+        (
+            "COMMENT ON CONSTRAINT c ON domain IS 'x'",
+            CommentObject::Constraint,
+            vec!["domain"],
+        ),
+        (
+            "COMMENT ON CONSTRAINT c ON domain.t IS 'x'",
+            CommentObject::Constraint,
+            vec!["domain", "t"],
+        ),
+        (
+            "COMMENT ON CONSTRAINT c ON DOMAIN domain IS 'x'",
+            CommentObject::DomainConstraint,
+            vec!["domain"],
+        ),
+        (
+            "COMMENT ON CONSTRAINT c ON DOMAIN domain.d IS 'x'",
+            CommentObject::DomainConstraint,
+            vec!["domain", "d"],
+        ),
+    ] {
+        let Statement::Comment {
+            object_type,
+            parent_name,
+            ..
+        } = pg_and_generic().verified_stmt(sql)
+        else {
+            unreachable!()
+        };
+        assert_eq!(object_type, expected_type, "{sql}");
+        assert_eq!(
+            parent_name,
+            Some(ObjectName::from(
+                expected_parent
+                    .into_iter()
+                    .map(Ident::new)
+                    .collect::<Vec<_>>()
+            )),
+            "{sql}"
+        );
+    }
+
+    for (sql, expected) in [
+        ("COMMENT ON CONSTRAINT c IS 'x'", "Expected: ON, found: IS"),
+        (
+            "COMMENT ON CONSTRAINT c ON DOMAIN",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "COMMENT ON CONSTRAINT s.c ON t IS 'x'",
+            "Expected: ON, found: .",
+        ),
+        ("COMMENT ON CONSTRAINT", "Expected: identifier, found: EOF"),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(sql)
+                .unwrap_err()
+                .to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn display_comment_on_constraint_propagates_write_errors() {
+    let stmt = pg().verified_stmt("COMMENT ON CONSTRAINT c ON p IS 'x'");
+    assert_display_propagates_write_errors(&stmt, &["CONSTRAINT", "p", "IS "]);
+    let stmt = pg().verified_stmt("COMMENT ON CONSTRAINT c ON DOMAIN d IS 'x'");
+    assert_display_propagates_write_errors(&stmt, &["DOMAIN "]);
 }
 
 #[test]

@@ -7116,6 +7116,8 @@ pub enum Privileges {
     All {
         /// Optional keyword from the spec, ignored in practice
         with_privileges_keyword: bool,
+        /// Optional list of columns, as in PostgreSQL `GRANT ALL (col) ON t`.
+        columns: Option<Vec<Ident>>,
     },
     /// Specific privileges (e.g. `SELECT`, `INSERT`)
     Actions(Vec<Action>),
@@ -7126,15 +7128,18 @@ impl fmt::Display for Privileges {
         match self {
             Privileges::All {
                 with_privileges_keyword,
+                columns,
             } => {
+                use crate::ast::ddl::display_option;
                 write!(
                     f,
-                    "ALL{}",
+                    "ALL{}{}",
                     if *with_privileges_keyword {
                         " PRIVILEGES"
                     } else {
                         ""
-                    }
+                    },
+                    display_option(" (", ")", &columns.as_deref().map(display_comma_separated))
                 )
             }
             Privileges::Actions(actions) => {

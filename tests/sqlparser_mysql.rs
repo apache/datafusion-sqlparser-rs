@@ -4105,7 +4105,8 @@ fn parse_grant() {
         assert_eq!(
             privileges,
             Privileges::All {
-                with_privileges_keyword: false
+                with_privileges_keyword: false,
+                columns: None,
             }
         );
         assert_eq!(
@@ -4150,7 +4151,8 @@ fn parse_revoke() {
         assert_eq!(
             privileges,
             Privileges::All {
-                with_privileges_keyword: false
+                with_privileges_keyword: false,
+                columns: None,
             }
         );
         assert_eq!(

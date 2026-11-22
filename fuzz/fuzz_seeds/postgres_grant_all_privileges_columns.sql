@@ -1,0 +1,1 @@
+GRANT ALL PRIVILEGES (id, x) ON t TO r

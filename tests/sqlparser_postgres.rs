@@ -13351,6 +13351,49 @@ fn parse_comment_on_constraint() {
         _ => unreachable!(),
     }
 
+    for (sql, expected_type, expected_parent) in [
+        (
+            "COMMENT ON CONSTRAINT c ON domain IS 'x'",
+            CommentObject::Constraint,
+            vec!["domain"],
+        ),
+        (
+            "COMMENT ON CONSTRAINT c ON domain.t IS 'x'",
+            CommentObject::Constraint,
+            vec!["domain", "t"],
+        ),
+        (
+            "COMMENT ON CONSTRAINT c ON DOMAIN domain IS 'x'",
+            CommentObject::DomainConstraint,
+            vec!["domain"],
+        ),
+        (
+            "COMMENT ON CONSTRAINT c ON DOMAIN domain.d IS 'x'",
+            CommentObject::DomainConstraint,
+            vec!["domain", "d"],
+        ),
+    ] {
+        let Statement::Comment {
+            object_type,
+            parent_name,
+            ..
+        } = pg_and_generic().verified_stmt(sql)
+        else {
+            unreachable!()
+        };
+        assert_eq!(object_type, expected_type, "{sql}");
+        assert_eq!(
+            parent_name,
+            Some(ObjectName::from(
+                expected_parent
+                    .into_iter()
+                    .map(Ident::new)
+                    .collect::<Vec<_>>()
+            )),
+            "{sql}"
+        );
+    }
+
     for (sql, expected) in [
         ("COMMENT ON CONSTRAINT c IS 'x'", "Expected: ON, found: IS"),
         (

@@ -23632,3 +23632,138 @@ fn parse_only_table_name() {
         dialects.verified_stmt(sql);
     }
 }
+
+#[test]
+fn parse_reindex() {
+    let sql = "REINDEX (VERBOSE, TABLESPACE ts, CONCURRENTLY 0) TABLE CONCURRENTLY app.t";
+    assert_eq!(
+        Parser::parse_sql(&GenericDialect {}, sql).unwrap()[0].span(),
+        Span::new(Location::new(1, 69), Location::new(1, 74))
+    );
+    match verified_stmt(sql) {
+        Statement::Reindex(Reindex {
+            options,
+            object_type,
+            concurrently,
+            name,
+        }) => {
+            assert_eq!(
+                options,
+                Some(vec![
+                    UtilityOption {
+                        name: Ident::new("VERBOSE"),
+                        arg: None,
+                    },
+                    UtilityOption {
+                        name: Ident::new("TABLESPACE"),
+                        arg: Some(Expr::Identifier(Ident::new("ts"))),
+                    },
+                    UtilityOption {
+                        name: Ident::new("CONCURRENTLY"),
+                        arg: Some(Expr::value(number("0"))),
+                    },
+                ])
+            );
+            assert_eq!(object_type, ReindexObjectType::Table);
+            assert!(concurrently);
+            assert_eq!(
+                name,
+                Some(ObjectName::from(vec![Ident::new("app"), Ident::new("t")]))
+            );
+        }
+        stmt => panic!("unexpected statement: {stmt:?}"),
+    }
+
+    for (sql, object_type, concurrently, name) in [
+        (
+            "REINDEX INDEX i",
+            ReindexObjectType::Index,
+            false,
+            Some("i"),
+        ),
+        (
+            "REINDEX INDEX CONCURRENTLY i",
+            ReindexObjectType::Index,
+            true,
+            Some("i"),
+        ),
+        (
+            "REINDEX TABLE t",
+            ReindexObjectType::Table,
+            false,
+            Some("t"),
+        ),
+        (
+            "REINDEX SCHEMA CONCURRENTLY s",
+            ReindexObjectType::Schema,
+            true,
+            Some("s"),
+        ),
+        ("REINDEX DATABASE", ReindexObjectType::Database, false, None),
+        (
+            "REINDEX DATABASE CONCURRENTLY d",
+            ReindexObjectType::Database,
+            true,
+            Some("d"),
+        ),
+        ("REINDEX SYSTEM", ReindexObjectType::System, false, None),
+        (
+            "REINDEX SYSTEM d",
+            ReindexObjectType::System,
+            false,
+            Some("d"),
+        ),
+    ] {
+        assert_eq!(
+            verified_stmt(sql),
+            Statement::Reindex(Reindex {
+                options: None,
+                object_type,
+                concurrently,
+                name: name.map(|name| ObjectName::from(vec![Ident::new(name)])),
+            }),
+            "{sql}"
+        );
+    }
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("REINDEX SYSTEM; REINDEX DATABASE")
+            .unwrap(),
+        [ReindexObjectType::System, ReindexObjectType::Database].map(|object_type| {
+            Statement::Reindex(Reindex {
+                options: None,
+                object_type,
+                concurrently: false,
+                name: None,
+            })
+        })
+    );
+
+    for (sql, error) in [
+        (
+            "REINDEX",
+            "Expected: one of INDEX or TABLE or SCHEMA or DATABASE or SYSTEM, found: EOF",
+        ),
+        ("REINDEX TABLE", "Expected: identifier, found: EOF"),
+        (
+            "REINDEX SCHEMA CONCURRENTLY",
+            "Expected: identifier, found: EOF",
+        ),
+        ("REINDEX () TABLE t", "Expected: identifier, found: )"),
+        (
+            "REINDEX VIEW v",
+            "Expected: one of INDEX or TABLE or SCHEMA or DATABASE or SYSTEM, found: VIEW",
+        ),
+        (
+            "REINDEX TABLE t CONCURRENTLY",
+            "Expected: end of statement, found: CONCURRENTLY",
+        ),
+        ("REINDEX DATABASE 1", "Expected: identifier, found: 1"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}

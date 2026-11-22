@@ -572,6 +572,13 @@ pub enum AlterTableOperation {
         /// Parent table to remove.
         parent: ObjectName,
     },
+    /// `SET SCHEMA <new_schema>`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
     /// Arbitrary parenthesized `SET` options.
     ///
     /// Example:
@@ -801,6 +808,13 @@ pub enum AlterIndexOperation {
     /// Rename the index to `index_name`.
     RenameIndex {
         /// The new name for the index.
+        index_name: ObjectName,
+    },
+    /// Attach the partition index `index_name` to the index.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-alterindex.html>
+    AttachPartition {
+        /// The partition index to attach.
         index_name: ObjectName,
     },
 }
@@ -1169,6 +1183,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::Inherit { parent } => write!(f, "INHERIT {parent}"),
             AlterTableOperation::NoInherit { parent } => write!(f, "NO INHERIT {parent}"),
+            AlterTableOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
             }
@@ -1187,6 +1204,9 @@ impl fmt::Display for AlterIndexOperation {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => {
                 write!(f, "RENAME TO {index_name}")
+            }
+            AlterIndexOperation::AttachPartition { index_name } => {
+                write!(f, "ATTACH PARTITION {index_name}")
             }
         }
     }
@@ -1431,6 +1451,14 @@ pub enum AlterColumnOperation {
         /// Optional sequence options for identity generation.
         sequence_options: Option<Vec<SequenceOptions>>,
     },
+    /// `DROP EXPRESSION [ IF EXISTS ]`, turning a generated column into an
+    /// ordinary one.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    DropExpression {
+        /// Whether `IF EXISTS` was specified.
+        if_exists: bool,
+    },
     /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
     /// options of a foreign table column.
     ///
@@ -1485,6 +1513,13 @@ impl fmt::Display for AlterColumnOperation {
                     }
 
                     write!(f, " )")?;
+                }
+                Ok(())
+            }
+            AlterColumnOperation::DropExpression { if_exists } => {
+                write!(f, "DROP EXPRESSION")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
                 }
                 Ok(())
             }
@@ -3021,6 +3056,8 @@ impl fmt::Display for ClusteredBy {
 pub struct CreateIndex {
     /// index name
     pub name: Option<ObjectName>,
+    /// `ONLY` before the table name, so the index is not created on partitions.
+    pub only: bool,
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     /// table name
     pub table_name: ObjectName,
@@ -3079,7 +3116,11 @@ impl fmt::Display for CreateIndex {
         if let Some(value) = &self.name {
             write!(f, "{value} ")?;
         }
-        write!(f, "ON {}", self.table_name)?;
+        f.write_str("ON ")?;
+        if self.only {
+            f.write_str("ONLY ")?;
+        }
+        write!(f, "{}", self.table_name)?;
         if let Some(value) = &self.using {
             write!(f, " USING {value} ")?;
         }
@@ -3143,6 +3184,50 @@ pub struct SqliteTableOptions {
     pub leading_comma: bool,
     /// The options, in source order.
     pub options: Vec<SqliteTableOption>,
+}
+
+/// An argument of `CREATE VIRTUAL TABLE ... USING module(...)`, kept as
+/// written because its meaning belongs to the module.
+///
+/// See [SQLite documentation](https://www.sqlite.org/lang_createvtab.html).
+#[derive(Debug, Clone, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct VirtualTableModuleArgument {
+    /// The argument text.
+    pub value: String,
+    /// The source `Span` of the argument.
+    pub span: Span,
+}
+
+impl PartialEq for VirtualTableModuleArgument {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Ord for VirtualTableModuleArgument {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl PartialOrd for VirtualTableModuleArgument {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(Ord::cmp(self, other))
+    }
+}
+
+impl core::hash::Hash for VirtualTableModuleArgument {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+impl fmt::Display for VirtualTableModuleArgument {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.value)
+    }
 }
 
 /// CREATE TABLE statement.

@@ -3376,6 +3376,7 @@ fn parse_create_index() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3413,6 +3414,7 @@ fn parse_create_anonymous_index() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name,
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3533,6 +3535,7 @@ fn parse_create_indices_with_operator_classes() {
             match pg().verified_stmt(&single_column_sql_statement) {
                 Statement::CreateIndex(CreateIndex {
                     name: Some(ObjectName(name)),
+                    only: false,
                     table_name: ObjectName(table_name),
                     using: Some(using),
                     columns,
@@ -3562,6 +3565,7 @@ fn parse_create_indices_with_operator_classes() {
             match pg().verified_stmt(&multi_column_sql_statement) {
                 Statement::CreateIndex(CreateIndex {
                     name: Some(ObjectName(name)),
+                    only: false,
                     table_name: ObjectName(table_name),
                     using: Some(using),
                     columns,
@@ -3646,6 +3650,7 @@ fn parse_create_bloom() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using: Some(using),
             columns,
@@ -3703,6 +3708,7 @@ fn parse_create_brin() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using: Some(using),
             columns,
@@ -3771,6 +3777,7 @@ fn parse_create_index_concurrently() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3808,6 +3815,7 @@ fn parse_create_index_with_predicate() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3845,6 +3853,7 @@ fn parse_create_index_with_include() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3882,6 +3891,7 @@ fn parse_create_index_with_nulls_distinct() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -3917,6 +3927,7 @@ fn parse_create_index_with_nulls_distinct() {
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
+            only: false,
             table_name: ObjectName(table_name),
             using,
             columns,
@@ -6030,11 +6041,11 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: true,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: None
         })
     );
@@ -6044,11 +6055,11 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: false,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: None
         })
     );
@@ -6058,11 +6069,11 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: true,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: Some(DropBehavior::Cascade)
         })
     );
@@ -6073,13 +6084,32 @@ fn parse_drop_domain() {
         pg().verified_stmt(sql),
         Statement::DropDomain(DropDomain {
             if_exists: true,
-            name: ObjectName::from(vec![Ident {
+            names: vec![ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
                 quote_style: None,
                 span: Span::empty(),
-            }]),
+            }])],
             drop_behavior: Some(DropBehavior::Restrict)
         })
+    );
+
+    assert_eq!(
+        pg().verified_stmt("DROP DOMAIN IF EXISTS s2.span, d2 CASCADE"),
+        Statement::DropDomain(DropDomain {
+            if_exists: true,
+            names: vec![
+                ObjectName::from(vec![Ident::new("s2"), Ident::new("span")]),
+                ObjectName::from(vec![Ident::new("d2")]),
+            ],
+            drop_behavior: Some(DropBehavior::Cascade)
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("DROP DOMAIN d1,")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
     );
 }
 
@@ -7201,6 +7231,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7222,6 +7253,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7243,6 +7275,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7264,6 +7297,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -7285,6 +7319,7 @@ fn parse_create_domain() {
             }),
             no_inherit: false,
             enforced: None,
+            on_conflict: None,
         }
         .into()],
     });
@@ -10811,6 +10846,7 @@ fn parse_alter_table_constraint_check_no_inherit() {
                         }),
                         no_inherit: true,
                         enforced: None,
+                        on_conflict: None,
                     }
                     .into(),
                     not_valid: true,
@@ -13535,6 +13571,42 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
     );
 }
 
+#[test]
+fn parse_alter_column_drop_expression() {
+    for (sql, if_exists) in [
+        ("ALTER TABLE d ALTER COLUMN x DROP EXPRESSION", false),
+        (
+            "ALTER TABLE d ALTER COLUMN x DROP EXPRESSION IF EXISTS",
+            true,
+        ),
+    ] {
+        let stmt = pg_and_generic().verified_stmt(sql);
+        let Statement::AlterTable(AlterTable { operations, .. }) = stmt else {
+            panic!("expected ALTER TABLE, got {stmt:?}");
+        };
+        assert_eq!(
+            operations,
+            vec![AlterTableOperation::AlterColumn {
+                column_name: Ident::new("x"),
+                op: AlterColumnOperation::DropExpression { if_exists },
+            }]
+        );
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "ALTER TABLE d ALTER x DROP EXPRESSION",
+        "ALTER TABLE d ALTER COLUMN x DROP EXPRESSION",
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("ALTER TABLE d ALTER COLUMN x DROP EXPRESSION IF")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: IF"
+    );
+}
+
 fn alter_extension_member_round_trip_forms(action: &str) {
     let sqls = [
         format!("ALTER EXTENSION ext_name {action} ACCESS METHOD btree"),
@@ -14098,4 +14170,270 @@ fn parse_alter_aggregate_signatures() {
 fn display_alter_extension_aggregate_propagates_write_errors() {
     let statement = pg().verified_stmt("ALTER EXTENSION ext_name ADD AGGREGATE agg(*)");
     assert_display_propagates_write_errors(&statement, &["AGGREGATE "]);
+}
+
+#[test]
+fn parse_select_for_key_lock_strengths() {
+    for (sql, lock_type) in [
+        ("SELECT id FROM t FOR NO KEY UPDATE", LockType::NoKeyUpdate),
+        (
+            "SELECT id FROM t FOR NO KEY UPDATE OF t SKIP LOCKED",
+            LockType::NoKeyUpdate,
+        ),
+        ("SELECT id FROM t FOR KEY SHARE", LockType::KeyShare),
+        (
+            "SELECT id FROM t FOR KEY SHARE OF t NOWAIT",
+            LockType::KeyShare,
+        ),
+    ] {
+        let query = pg_and_generic().verified_query(sql);
+        assert_eq!(query.locks.len(), 1, "{sql}");
+        assert_eq!(query.locks[0].lock_type, lock_type, "{sql}");
+    }
+
+    for (sql, expected) in [
+        (
+            "SELECT id FROM t FOR NO KEY",
+            "Expected: UPDATE, found: EOF",
+        ),
+        (
+            "SELECT id FROM t FOR NO KEY SHARE",
+            "Expected: UPDATE, found: SHARE",
+        ),
+        (
+            "SELECT id FROM t FOR KEY UPDATE",
+            "Expected: SHARE, found: UPDATE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_current_role_system_user_current_schema() {
+    let select =
+        pg_and_generic().verified_only_select("SELECT CURRENT_ROLE, SYSTEM_USER, CURRENT_SCHEMA");
+    for (item, name) in
+        select
+            .projection
+            .iter()
+            .zip(["CURRENT_ROLE", "SYSTEM_USER", "CURRENT_SCHEMA"])
+    {
+        assert_eq!(
+            &Expr::Function(Function {
+                name: ObjectName::from(vec![Ident::new(name)]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::None,
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+            }),
+            expr_from_projection(item)
+        );
+    }
+
+    let select = pg_and_generic().verified_only_select("SELECT current_schema()");
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName::from(vec![Ident::new("current_schema")]),
+            uses_odbc_syntax: false,
+            parameters: FunctionArguments::None,
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
+            null_treatment: None,
+            filter: None,
+            over: None,
+            within_group: vec![],
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+
+    let select = pg_and_generic().verified_only_select(r#"SELECT "current_role""#);
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('"', "current_role")),
+        expr_from_projection(only(&select.projection))
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("SELECT CURRENT_ROLE()")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: (".to_string())
+    );
+}
+
+#[test]
+fn parse_create_index_on_only() {
+    for sql in [
+        "CREATE INDEX orders_note_idx ON ONLY d.orders USING BTREE (note)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS orders_id_idx ON ONLY orders(id)",
+        "CREATE INDEX ON ONLY orders(note)",
+    ] {
+        match pg().verified_stmt(sql) {
+            Statement::CreateIndex(CreateIndex { only, .. }) => assert!(only, "{sql}"),
+            _ => unreachable!(),
+        }
+    }
+
+    match pg().verified_stmt("CREATE INDEX ON orders(note)") {
+        Statement::CreateIndex(CreateIndex { only, .. }) => assert!(!only),
+        _ => unreachable!(),
+    }
+
+    let without_markers = all_dialects_where(|d| !d.supports_table_inheritance_markers());
+    without_markers.verified_stmt("CREATE INDEX idx ON only(note)");
+    assert_eq!(
+        without_markers
+            .parse_sql_statements("CREATE INDEX idx ON ONLY orders (note)")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: a list of columns in parentheses, found: orders"
+    );
+}
+
+#[test]
+fn display_create_index_on_only_propagates_formatter_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value == self.0 {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let stmt = pg().verified_stmt("CREATE INDEX ON ONLY orders(note)");
+    for rejected in ["ON ", "ONLY ", "orders"] {
+        let mut writer = RejectingWriter(rejected);
+        assert_eq!(write!(writer, "{stmt}"), Err(fmt::Error), "{rejected:?}");
+    }
+}
+
+#[test]
+fn parse_alter_index_attach_partition() {
+    let sql = "ALTER INDEX d.orders_note_idx ATTACH PARTITION d.p0_note_idx";
+    assert_eq!(
+        Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap()[0].span(),
+        Span::new(Location::new(1, 13), Location::new(1, 61))
+    );
+    match pg().verified_stmt(sql) {
+        Statement::AlterIndex {
+            name,
+            operation: AlterIndexOperation::AttachPartition { index_name },
+        } => {
+            assert_eq!("d.orders_note_idx", name.to_string());
+            assert_eq!("d.p0_note_idx", index_name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    for (sql, expected) in [
+        ("ALTER INDEX i ATTACH p", "Expected: PARTITION, found: p"),
+        (
+            "ALTER INDEX i ATTACH PARTITION",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER INDEX i DETACH PARTITION p",
+            "Expected: RENAME or ATTACH PARTITION after ALTER INDEX, found: DETACH",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            format!("sql parser error: {expected}"),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_create_table_generated_column_mode() {
+    for (sql, expected_mode) in [
+        (
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a * 2) VIRTUAL)",
+            Some(GeneratedExpressionMode::Virtual),
+        ),
+        (
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a * 2) STORED)",
+            Some(GeneratedExpressionMode::Stored),
+        ),
+        (
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a * 2))",
+            None,
+        ),
+    ] {
+        let Statement::CreateTable(create) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        let ColumnOption::Generated {
+            generation_expr_mode,
+            ..
+        } = &create.columns[1].options[0].option
+        else {
+            unreachable!()
+        };
+        assert_eq!(generation_expr_mode, &expected_mode, "{sql}");
+    }
+
+    pg_and_generic()
+        .verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a || 'x') NOT NULL)");
+
+    assert_eq!(
+        pg().parse_sql_statements(
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a) VIRTUAL STORED)"
+        )
+        .unwrap_err()
+        .to_string(),
+        "sql parser error: Expected: ',' or ')' after column definition, found: STORED"
+    );
+}
+
+#[test]
+fn parse_alter_table_set_schema() {
+    let Statement::AlterTable(alter) =
+        pg_and_generic().verified_stmt("ALTER TABLE IF EXISTS public.p SET SCHEMA o")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations,
+        vec![AlterTableOperation::SetSchema {
+            schema_name: ObjectName::from(vec![Ident::new("o")]),
+        }]
+    );
+
+    let Statement::AlterTable(alter) = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("ALTER TABLE p SET SCHEMA o")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        alter.operations[0].span(),
+        Span::new(Location::new(1, 26), Location::new(1, 27))
+    );
+
+    pg_and_generic().verified_stmt("ALTER FOREIGN TABLE ft SET SCHEMA o");
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TABLE p SET SCHEMA")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
 }

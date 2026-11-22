@@ -388,7 +388,7 @@ impl Spanned for Statement {
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(core::iter::once(module_name.span))
-                    .chain(module_args.iter().map(|i| i.span)),
+                    .chain(module_args.iter().map(|arg| arg.span)),
             ),
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),
@@ -750,6 +750,7 @@ impl Spanned for CreateIndex {
     fn span(&self) -> Span {
         let CreateIndex {
             name,
+            only: _, // bool
             table_name,
             using: _,
             columns,
@@ -983,6 +984,7 @@ impl Spanned for AlterColumnOperation {
                 had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
+            AlterColumnOperation::DropExpression { .. } => Span::empty(),
             AlterColumnOperation::GenericOptions { options } => {
                 union_spans(options.iter().map(|option| option.span()))
             }
@@ -1386,6 +1388,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Inherit { parent } | AlterTableOperation::NoInherit { parent } => {
                 parent.span()
             }
+            AlterTableOperation::SetSchema { schema_name } => schema_name.span(),
             AlterTableOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
             }
@@ -1481,6 +1484,7 @@ impl Spanned for AlterIndexOperation {
     fn span(&self) -> Span {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => index_name.span(),
+            AlterIndexOperation::AttachPartition { index_name } => index_name.span(),
         }
     }
 }

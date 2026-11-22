@@ -667,6 +667,7 @@ fn parse_create_table_auto_increment() {
                                 include: vec![],
                                 index_options: vec![],
                                 characteristics: None,
+                                on_conflict: None,
                             }),
                         },
                         ColumnOptionDef {
@@ -720,6 +721,7 @@ fn table_constraint_unique_primary_ctor(
             index_options,
             characteristics,
             nulls_distinct: NullsDistinctOption::None,
+            on_conflict: None,
         }
         .into(),
         None => PrimaryKeyConstraint {
@@ -730,6 +732,7 @@ fn table_constraint_unique_primary_ctor(
             include: vec![],
             index_options,
             characteristics,
+            on_conflict: None,
         }
         .into(),
     }
@@ -779,6 +782,7 @@ fn parse_create_table_primary_and_unique_key() {
                                         include: vec![],
                                         index_options: vec![],
                                         characteristics: None,
+                                        on_conflict: None,
                                     }),
                                 },
                                 ColumnOptionDef {
@@ -1452,6 +1456,7 @@ fn parse_quote_identifiers() {
                             include: vec![],
                             index_options: vec![],
                             characteristics: None,
+                            on_conflict: None,
                         }),
                     }],
                 }],
@@ -4100,7 +4105,8 @@ fn parse_grant() {
         assert_eq!(
             privileges,
             Privileges::All {
-                with_privileges_keyword: false
+                with_privileges_keyword: false,
+                columns: None,
             }
         );
         assert_eq!(
@@ -4145,7 +4151,8 @@ fn parse_revoke() {
         assert_eq!(
             privileges,
             Privileges::All {
-                with_privileges_keyword: false
+                with_privileges_keyword: false,
+                columns: None,
             }
         );
         assert_eq!(

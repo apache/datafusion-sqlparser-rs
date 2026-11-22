@@ -1,0 +1,1 @@
+ALTER INDEX d.orders_note_idx ATTACH PARTITION d.p0_note_idx

@@ -93,7 +93,7 @@ pub use self::ddl::{
     SqliteTableOptions, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
     UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, WithData,
+    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, VirtualTableModuleArgument, WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -3817,7 +3817,7 @@ pub enum Statement {
         /// Module name used by the virtual table.
         module_name: Ident,
         /// Arguments passed to the module.
-        module_args: Vec<Ident>,
+        module_args: Vec<VirtualTableModuleArgument>,
     },
     /// ```sql
     /// `CREATE INDEX`
@@ -5886,13 +5886,14 @@ impl fmt::Display for Statement {
             Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
             Statement::DropDomain(DropDomain {
                 if_exists,
-                name,
+                names,
                 drop_behavior,
             }) => {
                 write!(
                     f,
-                    "DROP DOMAIN{} {name}",
+                    "DROP DOMAIN{} {}",
                     if *if_exists { " IF EXISTS" } else { "" },
+                    display_comma_separated(names),
                 )?;
                 if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;
@@ -7115,6 +7116,8 @@ pub enum Privileges {
     All {
         /// Optional keyword from the spec, ignored in practice
         with_privileges_keyword: bool,
+        /// Optional list of columns, as in PostgreSQL `GRANT ALL (col) ON t`.
+        columns: Option<Vec<Ident>>,
     },
     /// Specific privileges (e.g. `SELECT`, `INSERT`)
     Actions(Vec<Action>),
@@ -7125,15 +7128,18 @@ impl fmt::Display for Privileges {
         match self {
             Privileges::All {
                 with_privileges_keyword,
+                columns,
             } => {
+                use crate::ast::ddl::display_option;
                 write!(
                     f,
-                    "ALL{}",
+                    "ALL{}{}",
                     if *with_privileges_keyword {
                         " PRIVILEGES"
                     } else {
                         ""
-                    }
+                    },
+                    display_option(" (", ")", &columns.as_deref().map(display_comma_separated))
                 )
             }
             Privileges::Actions(actions) => {
@@ -8313,8 +8319,8 @@ impl fmt::Display for CloseCursor {
 pub struct DropDomain {
     /// Whether to drop the domain if it exists
     pub if_exists: bool,
-    /// The name of the domain to drop
-    pub name: ObjectName,
+    /// The names of the domains to drop
+    pub names: Vec<ObjectName>,
     /// The behavior to apply when dropping the domain
     pub drop_behavior: Option<DropBehavior>,
 }

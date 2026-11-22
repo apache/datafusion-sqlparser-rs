@@ -20,12 +20,29 @@
 //! This crate provides:
 //! - [`Visit`] and [`VisitMut`] derive macros for AST traversal.
 //! - [`derive_dialect!`] macro for creating custom SQL dialects.
+//! - [`GuardedClone`] and [`GuardedPartialEq`] derive macros whose methods are guarded by
+//!   `recursive-protection`.
 
 use quote::quote;
 use syn::parse_macro_input;
 
 mod dialect;
+mod guarded;
 mod visit;
+
+/// Derives `Clone` with each `clone` call guarded by `recursive-protection`.
+#[proc_macro_derive(GuardedClone)]
+pub fn derive_guarded_clone(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    guarded::derive_guarded_clone(input).into()
+}
+
+/// Derives `PartialEq` with each `eq` call guarded by `recursive-protection`.
+#[proc_macro_derive(GuardedPartialEq)]
+pub fn derive_guarded_partial_eq(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    guarded::derive_guarded_partial_eq(input).into()
+}
 
 /// Implementation of `#[derive(VisitMut)]`
 #[proc_macro_derive(VisitMut, attributes(visit))]

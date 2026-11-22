@@ -23665,3 +23665,21 @@ fn parse_grant_revoke_all_privileges_columns() {
         ParserError::ParserError("Expected: identifier, found: )".to_string())
     );
 }
+
+#[test]
+fn clone_and_eq_of_a_deep_operator_chain_complete() {
+    let sql = format!("SELECT 1{}", " + 1".repeat(20_000));
+    std::thread::Builder::new()
+        .stack_size(2 * 1024 * 1024)
+        .spawn(move || {
+            let statements = Parser::parse_sql(&GenericDialect {}, &sql).unwrap();
+            let copy = statements.clone();
+            assert_eq!(copy, statements);
+            // Recursive drop glue would overflow too.
+            core::mem::forget(copy);
+            core::mem::forget(statements);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}

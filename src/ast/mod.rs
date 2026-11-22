@@ -41,6 +41,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
 use core::ops::ControlFlow;
+#[cfg(feature = "recursive-protection")]
+use sqlparser_derive::{GuardedClone, GuardedPartialEq};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -946,7 +948,13 @@ impl fmt::Display for InTarget {
 /// of the expression (not bitwise comparison). This means that `Expr` instances
 /// that are semantically equivalent but have different spans (locations in the
 /// source tree) will compare as equal.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, PartialOrd, Eq, Ord, Hash)]
+// A parsed operator chain nests one `Expr` per operator.
+#[cfg_attr(
+    feature = "recursive-protection",
+    derive(GuardedClone, GuardedPartialEq)
+)]
+#[cfg_attr(not(feature = "recursive-protection"), derive(Clone, PartialEq))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(
     feature = "visitor",

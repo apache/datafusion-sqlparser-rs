@@ -55,7 +55,7 @@ members = ["sqlparser_bench"]
 [features]
 default = ["std", "recursive-protection"]
 std = []
-recursive-protection = ["std", "recursive"]
+recursive-protection = ["std", "recursive", "sqlparser_derive"]
 # Enable JSON output in the `cli` example:
 json_example = ["serde_json", "serde"]
 derive-dialect = ["sqlparser_derive"]

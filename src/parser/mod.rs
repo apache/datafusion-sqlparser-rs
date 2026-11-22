@@ -1461,17 +1461,6 @@ impl<'a> Parser<'a> {
         let mut expr = self.parse_prefix()?;
 
         expr = self.parse_compound_expr(expr, vec![])?;
-
-        // Parse an optional collation cast operator following `expr`.
-        //
-        // For example (MSSQL): t1.a COLLATE Latin1_General_CI_AS
-        if !self.in_column_definition_state() && self.parse_keyword(Keyword::COLLATE) {
-            expr = Expr::Collate {
-                expr: Box::new(expr),
-                collation: self.parse_object_name(false)?,
-            };
-        }
-
         debug!("prefix: {expr:?}");
         loop {
             let next_precedence = self.get_next_precedence()?;
@@ -4335,9 +4324,6 @@ impl<'a> Parser<'a> {
                         self.expected_ref("OF after MEMBER", self.peek_token_ref())
                     }
                 }
-                // Reached when the dialect assigns `COLLATE` a lower precedence than `::`, e.g.
-                // Postgres's `expr::type COLLATE collation`.
-                // See <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE>
                 Keyword::COLLATE => Ok(Expr::Collate {
                     expr: Box::new(expr),
                     collation: self.parse_object_name(false)?,

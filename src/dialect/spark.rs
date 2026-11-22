@@ -15,9 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::Expr;
 use crate::dialect::Dialect;
-use crate::parser::{Parser, ParserError};
 
 /// A [`Dialect`] for [Apache Spark SQL](https://spark.apache.org/docs/latest/sql-ref.html).
 ///
@@ -148,19 +146,5 @@ impl Dialect for SparkSqlDialect {
     /// - <https://issues.apache.org/jira/browse/SPARK-49528>
     fn supports_pipe_operator(&self) -> bool {
         true
-    }
-
-    /// Parse the `DIV` keyword as integer division.
-    ///
-    /// Example: `SELECT 10 DIV 3` returns `3`.
-    ///
-    /// See <https://spark.apache.org/docs/latest/sql-ref-functions-builtin-math.html>
-    fn parse_infix(
-        &self,
-        parser: &mut Parser,
-        expr: &Expr,
-        precedence: u8,
-    ) -> Option<Result<Expr, ParserError>> {
-        super::parse_div_infix(parser, expr, precedence)
     }
 }

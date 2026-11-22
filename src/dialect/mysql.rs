@@ -16,7 +16,7 @@
 // under the License.
 
 use crate::{
-    ast::{Expr, LockTable, LockTableType, Statement},
+    ast::{LockTable, LockTableType, Statement},
     dialect::{BindPlaceholderStyle, Dialect, Precedence},
     keywords::Keyword,
     parser::{Parser, ParserError},
@@ -108,15 +108,6 @@ impl Dialect for MySqlDialect {
     /// see <https://dev.mysql.com/doc/refman/8.4/en/comments.html>
     fn supports_multiline_comment_hints(&self) -> bool {
         true
-    }
-
-    fn parse_infix(
-        &self,
-        parser: &mut Parser,
-        expr: &Expr,
-        precedence: u8,
-    ) -> Option<Result<Expr, ParserError>> {
-        super::parse_div_infix(parser, expr, precedence)
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

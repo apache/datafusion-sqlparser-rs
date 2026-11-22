@@ -64,10 +64,11 @@ pub use self::dcl::{
     SetConfigValue, Use,
 };
 pub use self::ddl::{
-    AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,
-    AlterConnectorOwner, AlterFunction, AlterFunctionAction, AlterFunctionKind,
-    AlterFunctionOperation, AlterGenericOption, AlterIndexOperation, AlterOperator,
-    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
+    AggregateArgs, AggregateModifyKind, AggregateSignature, Alignment, AlterCollation,
+    AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner, AlterExtension,
+    AlterExtensionMember, AlterExtensionOperation, AlterFunction, AlterFunctionAction,
+    AlterFunctionOperation, AlterFunctionSignature, AlterGenericOption, AlterIndexOperation,
+    AlterOperator, AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
     AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
     AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
     AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
@@ -92,7 +93,7 @@ pub use self::ddl::{
     SqliteTableOptions, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
     UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, WithData,
+    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, VirtualTableModuleArgument, WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -151,7 +152,7 @@ pub mod table_constraints;
 pub use table_constraints::{
     CheckConstraint, ConstraintUsingIndex, ExcludeConstraint, ExcludeConstraintElement,
     ExcludeConstraintOperator, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
-    PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
+    NotNullConstraint, PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
 };
 mod operator;
 mod query;
@@ -3816,7 +3817,7 @@ pub enum Statement {
         /// Module name used by the virtual table.
         module_name: Ident,
         /// Arguments passed to the module.
-        module_args: Vec<Ident>,
+        module_args: Vec<VirtualTableModuleArgument>,
     },
     /// ```sql
     /// `CREATE INDEX`
@@ -3942,6 +3943,11 @@ pub enum Statement {
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
     AlterCollation(AlterCollation),
+    /// ```sql
+    /// ALTER EXTENSION
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterextension.html)
+    AlterExtension(AlterExtension),
     /// ```sql
     /// ALTER OPERATOR
     /// ```
@@ -5633,6 +5639,13 @@ impl fmt::Display for Statement {
 
                 match body {
                     CreateProcedureBody::As(body) => write!(f, " AS {body}"),
+                    CreateProcedureBody::AsString { body, link_symbol } => {
+                        write!(f, " AS {body}")?;
+                        if let Some(link_symbol) = link_symbol {
+                            write!(f, ", {link_symbol}")?;
+                        }
+                        Ok(())
+                    }
                     CreateProcedureBody::BeginAtomic(BeginEndStatements { statements, .. }) => {
                         format_begin_atomic(f, statements)
                     }
@@ -5785,6 +5798,7 @@ impl fmt::Display for Statement {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
             Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
+            Statement::AlterExtension(alter_extension) => write!(f, "{alter_extension}"),
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
             Statement::AlterOperatorFamily(alter_operator_family) => {
                 write!(f, "{alter_operator_family}")
@@ -5872,13 +5886,14 @@ impl fmt::Display for Statement {
             Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
             Statement::DropDomain(DropDomain {
                 if_exists,
-                name,
+                names,
                 drop_behavior,
             }) => {
                 write!(
                     f,
-                    "DROP DOMAIN{} {name}",
+                    "DROP DOMAIN{} {}",
                     if *if_exists { " IF EXISTS" } else { "" },
+                    display_comma_separated(names),
                 )?;
                 if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;
@@ -7310,6 +7325,8 @@ pub enum Action {
         /// Optional list of target columns for insert.
         columns: Option<Vec<Ident>>,
     },
+    /// Maintain permission.
+    Maintain,
     /// Manage operation with a specific manage type.
     Manage {
         /// The specific manage sub-type.
@@ -7413,6 +7430,7 @@ impl fmt::Display for Action {
             Action::ImportedPrivileges => f.write_str("IMPORTED PRIVILEGES")?,
             Action::ImportShare => f.write_str("IMPORT SHARE")?,
             Action::Insert { .. } => f.write_str("INSERT")?,
+            Action::Maintain => f.write_str("MAINTAIN")?,
             Action::Manage { manage_type } => write!(f, "MANAGE {manage_type}")?,
             Action::ManageReleases => f.write_str("MANAGE RELEASES")?,
             Action::ManageVersions => f.write_str("MANAGE VERSIONS")?,
@@ -8301,8 +8319,8 @@ impl fmt::Display for CloseCursor {
 pub struct DropDomain {
     /// Whether to drop the domain if it exists
     pub if_exists: bool,
-    /// The name of the domain to drop
-    pub name: ObjectName,
+    /// The names of the domains to drop
+    pub names: Vec<ObjectName>,
     /// The behavior to apply when dropping the domain
     pub drop_behavior: Option<DropBehavior>,
 }
@@ -10613,6 +10631,15 @@ pub enum CreateFunctionBody {
 pub enum CreateProcedureBody {
     /// Statements after `AS`.
     As(ConditionalStatements),
+    /// A definition string after `AS`, e.g. `AS $$ body $$` or `AS 'obj_file', 'link_symbol'`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
+    AsString {
+        /// The definition.
+        body: Expr,
+        /// The symbol to link when the definition names a shared library file.
+        link_symbol: Option<Expr>,
+    },
     /// SQL-standard body enclosed by `BEGIN ATOMIC` and `END`.
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createprocedure.html
@@ -12766,6 +12793,12 @@ impl From<AlterType> for Statement {
 impl From<AlterCollation> for Statement {
     fn from(a: AlterCollation) -> Self {
         Self::AlterCollation(a)
+    }
+}
+
+impl From<AlterExtension> for Statement {
+    fn from(a: AlterExtension) -> Self {
+        Self::AlterExtension(a)
     }
 }
 

@@ -80,20 +80,21 @@ pub use self::ddl::{
     CreateConnector, CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable,
     CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily,
     CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateRule, CreateRuleAction,
-    CreateRuleDoKind, CreateRuleEvent, CreateTable, CreateTextSearch, CreateTrigger,
-    CreateUserMapping, CreateView, Deduplicate, DeferrableInitial, DetachPartitionMode, DistStyle,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
-    ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
-    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
-    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, SqliteTableOption,
-    SqliteTableOptions, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef, VirtualTableModuleArgument, WithData,
+    CreateRuleDoKind, CreateRuleEvent, CreateStatistics, CreateTable, CreateTextSearch,
+    CreateTrigger, CreateUserMapping, CreateView, Deduplicate, DeferrableInitial,
+    DetachPartitionMode, DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator,
+    DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy, DropRule,
+    DropTrigger, ForValues, ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
+    OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition,
+    PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
+    SqliteTableOption, SqliteTableOptions, TagsColumnOption, TextSearchObjectType,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, UserMappingUser, ViewColumnDef,
+    VirtualTableModuleArgument, WithData,
 };
 pub use self::dml::{
     Delete, Insert, InsertOverriding, Merge, MergeAction, MergeClause, MergeClauseKind,
@@ -4889,6 +4890,8 @@ pub enum Statement {
     },
     /// A `CREATE DOMAIN` statement.
     CreateDomain(CreateDomain),
+    /// PostgreSQL extended statistics definition.
+    CreateStatistics(CreateStatistics),
     /// ```sql
     /// CREATE TYPE <name>
     /// ```
@@ -5613,6 +5616,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateFunction(create_function) => create_function.fmt(f),
             Statement::CreateDomain(create_domain) => create_domain.fmt(f),
+            Statement::CreateStatistics(statistics) => statistics.fmt(f),
             Statement::CreateTrigger(create_trigger) => create_trigger.fmt(f),
             Statement::DropTrigger(drop_trigger) => drop_trigger.fmt(f),
             Statement::CreateProcedure {

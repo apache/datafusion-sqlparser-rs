@@ -137,6 +137,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_create_statistics(&self) -> bool {
+        true
+    }
+
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }

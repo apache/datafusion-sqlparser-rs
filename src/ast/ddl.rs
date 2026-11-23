@@ -3966,6 +3966,44 @@ impl fmt::Display for CreateDomain {
     }
 }
 
+/// [PostgreSQL extended statistics definition](https://www.postgresql.org/docs/current/sql-createstatistics.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateStatistics {
+    /// Name of the statistics object, if explicitly specified.
+    pub name: Option<ObjectName>,
+    /// Whether an existing statistics object should be skipped.
+    pub if_not_exists: bool,
+    /// Requested kinds, such as `ndistinct` or `mcv`.
+    pub kinds: Vec<Ident>,
+    /// Expressions on which to collect statistics.
+    pub expressions: Vec<Expr>,
+    /// Relation on which to collect statistics.
+    pub table: ObjectName,
+}
+
+impl fmt::Display for CreateStatistics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("CREATE STATISTICS")?;
+        if self.if_not_exists {
+            f.write_str(" IF NOT EXISTS")?;
+        }
+        if let Some(name) = &self.name {
+            write!(f, " {name}")?;
+        }
+        if !self.kinds.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.kinds))?;
+        }
+        write!(
+            f,
+            " ON {} FROM {}",
+            display_comma_separated(&self.expressions),
+            self.table
+        )
+    }
+}
+
 /// The return type of a `CREATE FUNCTION` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

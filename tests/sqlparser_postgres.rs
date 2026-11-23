@@ -14597,3 +14597,41 @@ fn parse_alter_column_set_storage() {
         );
     }
 }
+
+#[test]
+fn parse_create_statistics() {
+    let statement = pg_and_generic().verified_stmt(
+        "CREATE STATISTICS IF NOT EXISTS public.s (mcv, dependencies) ON a, (b + 1) FROM public.t",
+    );
+    let Statement::CreateStatistics(statistics) = statement else {
+        panic!("expected CREATE STATISTICS");
+    };
+    assert!(statistics.if_not_exists);
+    assert_eq!(
+        statistics.name.expect("statistics name").to_string(),
+        "public.s"
+    );
+    assert_eq!(statistics.table.to_string(), "public.t");
+    assert_eq!(
+        statistics.kinds,
+        vec![Ident::new("mcv"), Ident::new("dependencies")]
+    );
+    assert!(matches!(
+        statistics.expressions.as_slice(),
+        [Expr::Identifier(_), Expr::Nested(_)]
+    ));
+
+    for sql in [
+        "CREATE STATISTICS s ON a, b FROM t",
+        "CREATE STATISTICS ON (a + b) FROM t",
+        "CREATE STATISTICS ON lower(a) FROM t",
+        "CREATE STATISTICS (ndistinct) ON a, b FROM t",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    let error = pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS s ON a, b")
+        .expect_err("expected missing FROM clause");
+    assert!(error.to_string().contains("Expected: FROM"), "{error}");
+}

@@ -23665,3 +23665,8 @@ fn parse_grant_revoke_all_privileges_columns() {
         ParserError::ParserError("Expected: identifier, found: )".to_string())
     );
 }
+
+#[test]
+fn parse_pgq_keywords_as_identifiers() {
+    all_dialects().verified_stmt("SELECT edge.label AS property FROM graph AS edge");
+}

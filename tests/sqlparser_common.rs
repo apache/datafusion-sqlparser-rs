@@ -23947,4 +23947,37 @@ fn display_pgq_graph_table_propagates_write_errors() {
             "{rejected}"
         );
     }
+
+    for (label, filter, rejected) in [
+        (None, None, "v"),
+        (
+            Some(GraphLabelExpression::Label(Ident::new("person"))),
+            None,
+            " ",
+        ),
+        (None, Some(verified_expr("v.id = 1")), " "),
+    ] {
+        let pattern = GraphElementPattern {
+            variable: Some(Ident::new("v")),
+            label,
+            filter,
+        };
+        assert_eq!(
+            write!(RejectingWriter(rejected), "{pattern}"),
+            Err(fmt::Error),
+            "{pattern} rejecting {rejected:?}"
+        );
+    }
+}
+
+#[test]
+fn display_pgq_graph_table_without_alias() {
+    let table = TableFactor::GraphTable {
+        graph_table: Box::new(pgq_graph_table()),
+        alias: None,
+    };
+    assert_eq!(
+        table.to_string(),
+        "GRAPH_TABLE (social MATCH (a IS person) -[e IS knows WHERE e.weight > 0]-> (b IS person) WHERE a.id = 1 COLUMNS (a.name AS source_name, b.name))"
+    );
 }

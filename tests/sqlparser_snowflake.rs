@@ -5042,3 +5042,40 @@ fn test_stage_name_delimiters() {
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
 }
+
+#[test]
+fn test_drop_external_volume() {
+    match snowflake().verified_stmt("DROP EXTERNAL VOLUME my_vol") {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            ..
+        } => {
+            assert_eq!(ObjectType::ExternalVolume, object_type);
+            assert!(!if_exists);
+            assert_eq!("my_vol", names[0].to_string());
+        }
+        _ => unreachable!(),
+    }
+    let err = snowflake()
+        .parse_sql_statements("DROP EXTERNAL my_vol")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("EXTERNAL VOLUME"), "{err}");
+}
+
+#[test]
+fn test_drop_external_volume_if_exists() {
+    match snowflake().verified_stmt("DROP EXTERNAL VOLUME IF EXISTS my_vol") {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq!(ObjectType::ExternalVolume, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}

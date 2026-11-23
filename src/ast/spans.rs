@@ -2200,6 +2200,9 @@ impl Spanned for TableFactor {
                     .chain(args.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
+            TableFactor::GraphTable { graph_table, alias } => graph_table
+                .span()
+                .union_opt(&alias.as_ref().map(Spanned::span)),
             TableFactor::JsonTable { .. } => Span::empty(),
             TableFactor::XmlTable { .. } => Span::empty(),
             TableFactor::Pivot {

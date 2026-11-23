@@ -17927,6 +17927,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::JsonTable { alias, .. }
+                        | TableFactor::GraphTable { alias, .. }
                         | TableFactor::XmlTable { alias, .. }
                         | TableFactor::OpenJsonTable { alias, .. }
                         | TableFactor::TableFunction { alias, .. }

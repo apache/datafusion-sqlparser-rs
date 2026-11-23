@@ -1588,6 +1588,13 @@ pub enum TableFactor {
         /// Whether `WITH ORDINALITY` was specified to include ordinality.
         with_ordinality: bool,
     },
+    /// A SQL/PGQ graph query projected as a table.
+    GraphTable {
+        /// The graph query and output columns.
+        graph_table: Box<GraphTable>,
+        /// Correlation name; `COLUMNS` requires this or row pattern recognition.
+        alias: Option<TableAlias>,
+    },
     /// The `JSON_TABLE` table-valued function.
     /// Part of the SQL standard, but implemented only by MySQL, Oracle, and DB2.
     ///
@@ -2396,6 +2403,13 @@ impl fmt::Display for TableFactor {
                     write!(f, " WITH OFFSET")?;
                 }
                 if let Some(alias) = with_offset_alias {
+                    write!(f, " {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::GraphTable { graph_table, alias } => {
+                write!(f, "{graph_table}")?;
+                if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }
                 Ok(())

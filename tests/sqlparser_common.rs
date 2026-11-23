@@ -23670,3 +23670,281 @@ fn parse_grant_revoke_all_privileges_columns() {
 fn parse_pgq_keywords_as_identifiers() {
     all_dialects().verified_stmt("SELECT edge.label AS property FROM graph AS edge");
 }
+
+fn pgq_graph_table() -> GraphTable {
+    let vertex = |variable| {
+        GraphPatternElement::Vertex(GraphElementPattern {
+            variable: Some(Ident::new(variable)),
+            label: Some(GraphLabelExpression::Label(Ident::new("person"))),
+            filter: None,
+        })
+    };
+    GraphTable {
+        graph: ObjectName::from(vec![Ident::new("social")]),
+        pattern: GraphPattern {
+            paths: vec![GraphPathPattern {
+                elements: vec![
+                    vertex("a"),
+                    GraphPatternElement::Edge {
+                        direction: GraphEdgeDirection::Right,
+                        pattern: GraphElementPattern {
+                            variable: Some(Ident::new("e")),
+                            label: Some(GraphLabelExpression::Label(Ident::new("knows"))),
+                            filter: Some(verified_expr("e.weight > 0")),
+                        },
+                    },
+                    vertex("b"),
+                ],
+            }],
+            filter: Some(verified_expr("a.id = 1")),
+        },
+        columns: vec![
+            ExprWithAlias {
+                expr: verified_expr("a.name"),
+                alias: Some(Ident::new("source_name")),
+            },
+            ExprWithAlias {
+                expr: verified_expr("b.name"),
+                alias: None,
+            },
+        ],
+    }
+}
+
+#[test]
+fn display_pgq_graph_table_in_query() {
+    let mut select = verified_only_select("SELECT * FROM placeholder");
+    select.from[0].relation = TableFactor::GraphTable {
+        graph_table: Box::new(pgq_graph_table()),
+        alias: table_alias(true, "g"),
+    };
+    assert_eq!(
+        select.to_string(),
+        "SELECT * FROM GRAPH_TABLE (social MATCH (a IS person) -[e IS knows WHERE e.weight > 0]-> (b IS person) WHERE a.id = 1 COLUMNS (a.name AS source_name, b.name)) AS g"
+    );
+    select.from[0].relation = TableFactor::GraphTable {
+        graph_table: Box::new(pgq_graph_table()),
+        alias: table_alias(false, "g"),
+    };
+    assert!(select.to_string().ends_with(")) g"));
+}
+
+#[test]
+fn display_pgq_graph_pattern() {
+    assert_eq!(
+        pgq_graph_table().pattern.to_string(),
+        "(a IS person) -[e IS knows WHERE e.weight > 0]-> (b IS person) WHERE a.id = 1"
+    );
+}
+
+#[test]
+fn display_pgq_element_patterns() {
+    let empty = GraphElementPattern::default();
+    assert_eq!(GraphPatternElement::Vertex(empty.clone()).to_string(), "()");
+    for (direction, expected) in [
+        (GraphEdgeDirection::Right, "-[]->"),
+        (GraphEdgeDirection::Left, "<-[]-"),
+        (GraphEdgeDirection::Any, "-[]-"),
+    ] {
+        assert_eq!(
+            GraphPatternElement::Edge {
+                direction,
+                pattern: empty.clone(),
+            }
+            .to_string(),
+            expected
+        );
+    }
+    for (variable, label, filter, expected) in [
+        (None, None, None, ""),
+        (Some("v"), None, None, "v"),
+        (None, Some("person"), None, "IS person"),
+        (None, None, Some("x = 1"), "WHERE x = 1"),
+        (Some("v"), None, Some("v.x = 1"), "v WHERE v.x = 1"),
+        (None, Some("person"), Some("x = 1"), "IS person WHERE x = 1"),
+        (Some("v"), Some("person"), None, "v IS person"),
+        (
+            Some("v"),
+            Some("person"),
+            Some("v.x = 1"),
+            "v IS person WHERE v.x = 1",
+        ),
+    ] {
+        assert_eq!(
+            GraphElementPattern {
+                variable: variable.map(Ident::new),
+                label: label.map(|name| GraphLabelExpression::Label(Ident::new(name))),
+                filter: filter.map(verified_expr),
+            }
+            .to_string(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn display_pgq_multiple_paths_and_quoted_names() {
+    let edge = GraphPatternElement::Edge {
+        direction: GraphEdgeDirection::Left,
+        pattern: GraphElementPattern::default(),
+    };
+    let table = GraphTable {
+        graph: ObjectName::from(vec![
+            Ident::new("app"),
+            Ident::with_quote('"', "Social Graph"),
+        ]),
+        pattern: GraphPattern {
+            paths: vec![
+                GraphPathPattern {
+                    elements: vec![GraphPatternElement::Vertex(GraphElementPattern {
+                        variable: Some(Ident::with_quote('"', "a b")),
+                        label: Some(GraphLabelExpression::Label(Ident::with_quote(
+                            '"', "Person",
+                        ))),
+                        filter: None,
+                    })],
+                },
+                GraphPathPattern {
+                    elements: vec![edge.clone(), edge],
+                },
+            ],
+            filter: None,
+        },
+        columns: vec![ExprWithAlias {
+            expr: verified_expr("1"),
+            alias: Some(Ident::new("dummy")),
+        }],
+    };
+    assert_eq!(
+        TableFactor::GraphTable {
+            graph_table: Box::new(table),
+            alias: table_alias(true, "g"),
+        }
+        .to_string(),
+        r#"GRAPH_TABLE (app."Social Graph" MATCH ("a b" IS "Person"), <-[]- <-[]- COLUMNS (1 AS dummy)) AS g"#
+    );
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn visit_pgq_graph_table() {
+    use core::ops::ControlFlow;
+
+    let mut table = TableFactor::GraphTable {
+        graph_table: Box::new(pgq_graph_table()),
+        alias: table_alias(true, "g"),
+    };
+    let mut relations = vec![];
+    let _ = visit_relations(&table, |relation| {
+        relations.push(relation.to_string());
+        ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(relations, vec!["social"]);
+    let mut properties = vec![];
+    let _ = visit_expressions(&table, |expr| {
+        if let Expr::CompoundIdentifier(_) = expr {
+            properties.push(expr.to_string());
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(properties, vec!["e.weight", "a.id", "a.name", "b.name"]);
+
+    let _ = visit_relations_mut(&mut table, |relation| {
+        *relation = ObjectName::from(vec![Ident::new("renamed")]);
+        ControlFlow::<()>::Continue(())
+    });
+    let _ = visit_expressions_mut(&mut table, |expr| {
+        if let Expr::CompoundIdentifier(parts) = expr {
+            if parts.last().is_some_and(|part| part.value == "name") {
+                *parts.last_mut().unwrap() = Ident::new("full_name");
+            }
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(
+        table.to_string(),
+        "GRAPH_TABLE (renamed MATCH (a IS person) -[e IS knows WHERE e.weight > 0]-> (b IS person) WHERE a.id = 1 COLUMNS (a.full_name AS source_name, b.full_name)) AS g"
+    );
+}
+
+#[test]
+#[cfg(feature = "json_example")]
+fn serialize_pgq_graph_table() {
+    let table = TableFactor::GraphTable {
+        graph_table: Box::new(pgq_graph_table()),
+        alias: table_alias(true, "g"),
+    };
+    let json = serde_json::to_string(&table).unwrap();
+    let decoded: TableFactor = serde_json::from_str(&json).unwrap();
+    assert_eq!(table, decoded);
+}
+
+#[test]
+fn pgq_graph_table_spans() {
+    let mut graph_table = pgq_graph_table();
+    let GraphPatternElement::Vertex(vertex) = &mut graph_table.pattern.paths[0].elements[0] else {
+        unreachable!()
+    };
+    let variable_span = Span::new(Location::new(2, 10), Location::new(2, 11));
+    vertex.variable.as_mut().unwrap().span = variable_span;
+    let label_span = Span::new(Location::new(2, 15), Location::new(2, 21));
+    let GraphLabelExpression::Label(label) = vertex.label.as_mut().unwrap();
+    label.span = label_span;
+    vertex.filter = None;
+    assert_eq!(vertex.span(), variable_span.union(&label_span));
+
+    graph_table.pattern.filter = None;
+    graph_table.columns.clear();
+    let GraphPatternElement::Edge { pattern, .. } = &mut graph_table.pattern.paths[0].elements[1]
+    else {
+        unreachable!()
+    };
+    pattern.filter = None;
+    assert_eq!(graph_table.span(), variable_span.union(&label_span));
+
+    let mut alias = table_alias(true, "g").unwrap();
+    let alias_span = Span::new(Location::new(3, 5), Location::new(3, 6));
+    alias.name.span = alias_span;
+    let table = TableFactor::GraphTable {
+        graph_table: Box::new(graph_table),
+        alias: Some(alias),
+    };
+    assert_eq!(table.span(), variable_span.union(&alias_span));
+}
+
+#[test]
+fn display_pgq_graph_table_propagates_write_errors() {
+    use core::fmt::{self, Write};
+
+    struct RejectingWriter(&'static str);
+
+    impl Write for RejectingWriter {
+        fn write_str(&mut self, value: &str) -> fmt::Result {
+            if value.contains(self.0) {
+                Err(fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let table = TableFactor::GraphTable {
+        graph_table: Box::new(pgq_graph_table()),
+        alias: table_alias(true, "output_alias"),
+    };
+    for rejected in [
+        "social",
+        "person",
+        "knows",
+        "weight",
+        "id",
+        "source_name",
+        "output_alias",
+    ] {
+        assert_eq!(
+            write!(RejectingWriter(rejected), "{table}"),
+            Err(fmt::Error),
+            "{rejected}"
+        );
+    }
+}

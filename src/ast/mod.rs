@@ -101,6 +101,10 @@ pub use self::dml::{
     MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
     MultiTableInsertWhenClause, OutputClause, Update,
 };
+pub use self::graph::{
+    GraphEdgeDirection, GraphElementPattern, GraphLabelExpression, GraphPathPattern, GraphPattern,
+    GraphPatternElement, GraphTable,
+};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectByKind, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -146,6 +150,7 @@ mod data_type;
 mod dcl;
 mod ddl;
 mod dml;
+mod graph;
 /// Helper modules for building and manipulating AST nodes.
 pub mod helpers;
 pub mod table_constraints;

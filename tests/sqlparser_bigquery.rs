@@ -917,7 +917,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Datetime(None),
+                data_type: DataType::Datetime(None, None),
                 value: ValueWithSpan {
                     value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
                     span: Span::empty(),
@@ -926,7 +926,7 @@ fn parse_typed_struct_syntax_bigquery() {
             })],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Datetime(None),
+                field_type: DataType::Datetime(None, None),
                 options: None,
             }]
         },
@@ -1259,7 +1259,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Datetime(None),
+                data_type: DataType::Datetime(None, None),
                 value: ValueWithSpan {
                     value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
                     span: Span::empty(),
@@ -1268,7 +1268,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             })],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Datetime(None),
+                field_type: DataType::Datetime(None, None),
                 options: None,
             }]
         },

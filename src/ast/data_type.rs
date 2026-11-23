@@ -413,10 +413,11 @@ pub enum DataType {
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     Time(Option<u64>, TimezoneInfo),
-    /// Datetime with optional time precision, see [MySQL][1].
+    /// Datetime with optional precision and time zone, see [MySQL][1] and [ClickHouse][2].
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-    Datetime(Option<u64>),
+    /// [2]: https://clickhouse.com/docs/sql-reference/data-types/datetime
+    Datetime(Option<u64>, Option<String>),
     /// Datetime with time precision and optional timezone, see [ClickHouse][1].
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/datetime64
@@ -743,8 +744,20 @@ impl fmt::Display for DataType {
             DataType::Time(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIME", precision, timezone_info)
             }
-            DataType::Datetime(precision) => {
-                format_type_with_optional_length(f, "DATETIME", precision, false)
+            DataType::Datetime(precision, time_zone) => {
+                write!(f, "DATETIME")?;
+                match (precision, time_zone) {
+                    (None, None) => Ok(()),
+                    (Some(precision), None) => write!(f, "({precision})"),
+                    (None, Some(time_zone)) => {
+                        write!(f, "('{}')", escape_single_quote_string(time_zone))
+                    }
+                    (Some(precision), Some(time_zone)) => write!(
+                        f,
+                        "({precision}, '{}')",
+                        escape_single_quote_string(time_zone)
+                    ),
+                }
             }
             DataType::Timestamp(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)

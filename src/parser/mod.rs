@@ -8926,9 +8926,34 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse `FETCH [direction] { FROM | IN } cursor INTO target;` statement.
+    /// Parse `FETCH [direction] [FROM | IN] cursor [INTO target]` statement.
     pub fn parse_fetch_statement(&mut self) -> Result<Statement, ParserError> {
-        let direction = if self.parse_keyword(Keyword::NEXT) {
+        // Direction keywords other than ALL are unreserved in PostgreSQL, so a
+        // lone one with nothing after it (`FETCH NEXT;`) is the cursor name.
+        let direction_is_cursor = matches!(
+            self.peek_token_ref().token,
+            Token::Word(Word {
+                keyword: Keyword::NEXT
+                    | Keyword::PRIOR
+                    | Keyword::FIRST
+                    | Keyword::LAST
+                    | Keyword::ABSOLUTE
+                    | Keyword::RELATIVE
+                    | Keyword::FORWARD
+                    | Keyword::BACKWARD,
+                ..
+            })
+        ) && matches!(
+            self.peek_nth_token_ref(1).token,
+            Token::EOF
+                | Token::SemiColon
+                | Token::Word(Word {
+                    keyword: Keyword::INTO,
+                    ..
+                })
+        );
+
+        let direction = if direction_is_cursor || self.parse_keyword(Keyword::NEXT) {
             FetchDirection::Next
         } else if self.parse_keyword(Keyword::PRIOR) {
             FetchDirection::Prior
@@ -8938,19 +8963,18 @@ impl<'a> Parser<'a> {
             FetchDirection::Last
         } else if self.parse_keyword(Keyword::ABSOLUTE) {
             FetchDirection::Absolute {
-                limit: self.parse_number_value()?,
+                limit: self.parse_fetch_count()?,
             }
         } else if self.parse_keyword(Keyword::RELATIVE) {
             FetchDirection::Relative {
-                limit: self.parse_number_value()?,
+                limit: self.parse_fetch_count()?,
             }
         } else if self.parse_keyword(Keyword::FORWARD) {
             if self.parse_keyword(Keyword::ALL) {
                 FetchDirection::ForwardAll
             } else {
                 FetchDirection::Forward {
-                    // TODO: Support optional
-                    limit: Some(self.parse_number_value()?),
+                    limit: self.maybe_parse_fetch_count()?,
                 }
             }
         } else if self.parse_keyword(Keyword::BACKWARD) {
@@ -8958,26 +8982,24 @@ impl<'a> Parser<'a> {
                 FetchDirection::BackwardAll
             } else {
                 FetchDirection::Backward {
-                    // TODO: Support optional
-                    limit: Some(self.parse_number_value()?),
+                    limit: self.maybe_parse_fetch_count()?,
                 }
             }
         } else if self.parse_keyword(Keyword::ALL) {
             FetchDirection::All
+        } else if let Some(limit) = self.maybe_parse_fetch_count()? {
+            FetchDirection::Count { limit }
         } else {
-            FetchDirection::Count {
-                limit: self.parse_number_value()?,
-            }
+            // Omitting the direction is the same as specifying NEXT.
+            FetchDirection::Next
         };
 
-        let position = if self.peek_keyword(Keyword::FROM) {
-            self.expect_keyword(Keyword::FROM)?;
-            FetchPosition::From
-        } else if self.peek_keyword(Keyword::IN) {
-            self.expect_keyword(Keyword::IN)?;
+        // FROM and IN are interchangeable and may both be omitted.
+        let position = if self.parse_keyword(Keyword::IN) {
             FetchPosition::In
         } else {
-            return parser_err!("Expected FROM or IN", self.peek_token_ref().span.start);
+            let _ = self.parse_keyword(Keyword::FROM);
+            FetchPosition::From
         };
 
         let name = self.parse_identifier()?;
@@ -8994,6 +9016,46 @@ impl<'a> Parser<'a> {
             position,
             into,
         })
+    }
+
+    /// Parse the row count of a `FETCH` direction when one follows, such as
+    /// the `5` in `FETCH FORWARD 5 FROM cursor_name`.
+    fn maybe_parse_fetch_count(&mut self) -> Result<Option<ValueWithSpan>, ParserError> {
+        match self.peek_token_ref().token {
+            Token::Number(..) | Token::Plus | Token::Minus | Token::Placeholder(_) => {
+                Ok(Some(self.parse_fetch_count()?))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Parse the row count of a `FETCH` direction, which may be signed: a
+    /// negative count moves the cursor the other way.
+    fn parse_fetch_count(&mut self) -> Result<ValueWithSpan, ParserError> {
+        let sign_span = self.peek_token_ref().span;
+        let negative = self.consume_token(&Token::Minus);
+        let signed = negative || self.consume_token(&Token::Plus);
+        let count = self.parse_number_value()?;
+        if !signed {
+            return Ok(count);
+        }
+        match count.value {
+            Value::Number(n, long) => {
+                let value = if negative {
+                    Self::parse(format!("-{n}"), sign_span.start)?
+                } else {
+                    n
+                };
+                Ok(ValueWithSpan {
+                    value: Value::Number(value, long),
+                    span: sign_span.union(&count.span),
+                })
+            }
+            _ => {
+                self.prev_token();
+                self.expected_ref("literal number", self.peek_token_ref())
+            }
+        }
     }
 
     /// Parse a `DISCARD` statement.

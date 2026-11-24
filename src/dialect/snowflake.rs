@@ -1643,7 +1643,11 @@ fn parse_select_item_for_data_load(
     // parser so it can preserve the complete JsonAccess / Cast expression.
     if matches!(
         parser.peek_token_ref().token,
-        Token::Colon | Token::Period | Token::LBracket | Token::DoubleColon
+        Token::Colon
+            | Token::Period
+            | Token::LBracket
+            | Token::DoubleColon
+            | Token::QuestionDoubleColon
     ) {
         let token = parser.next_token();
         return parser.expected("end of simple staged field", token);

@@ -1090,9 +1090,11 @@ pub trait Dialect: Debug + Any {
             Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
                 Ok(p!(MulDivModOp))
             }
-            Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
-                Ok(p!(DoubleColon))
-            }
+            Token::DoubleColon
+            | Token::QuestionDoubleColon
+            | Token::ExclamationMark
+            | Token::LBracket
+            | Token::CaretAt => Ok(p!(DoubleColon)),
             Token::Colon => match &parser.peek_nth_token_ref(1).token {
                 // When colon is followed by a string or a number, it's usually in MAP syntax.
                 Token::SingleQuotedString(_) | Token::Number(_, _) => Ok(self.prec_unknown()),

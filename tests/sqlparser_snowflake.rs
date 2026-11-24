@@ -5084,3 +5084,8 @@ fn test_stage_params_and_pattern_single_quote_escape() {
         )
     );
 }
+
+#[test]
+fn copy_into_try_cast_shortcut() {
+    snowflake().verified_stmt("COPY INTO t FROM (SELECT $1?::INT FROM @stg)");
+}

@@ -23720,3 +23720,39 @@ fn test_select_where_with_ilike_any_escape() {
         ParserError::ParserError("Expected: an expression, found: EOF".to_string())
     );
 }
+
+#[test]
+fn parse_try_cast_shortcut() {
+    let dialects = all_dialects();
+    for sql in [
+        "SELECT 'bad'?::INT",
+        "SELECT v?::INT + 1",
+        "SELECT 1 + '2'?::INT",
+        "SELECT v?::INT::BIGINT",
+        "SELECT v?::INT?::BIGINT",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    dialects.one_statement_parses_to("SELECT v ?:: INT", "SELECT v?::INT");
+    assert_eq!(
+        dialects.verified_expr("v?::INT"),
+        Expr::Cast {
+            kind: CastKind::QuestionDoubleColon,
+            expr: Box::new(Expr::Identifier(Ident::new("v"))),
+            data_type: DataType::Int(None),
+            format: None,
+        }
+    );
+    for dialect in dialects.dialects {
+        for sql in ["SELECT v?::", "SELECT v? ::INT"] {
+            Parser::parse_sql(dialect.as_ref(), sql).unwrap_err();
+        }
+    }
+    let dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(DatabricksDialect {}),
+    ]);
+    dialects.one_statement_parses_to("SELECT ? ::INT", "SELECT ?::INT");
+    dialects.verified_stmt("SELECT v:price?::DOUBLE");
+    dialects.verified_stmt("SELECT v:items[0].price?::DECIMAL(10,2)");
+}

@@ -2140,6 +2140,17 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
+            Token::QuestionDoubleColon => {
+                // In prefix position, `?::INT` casts a positional parameter.
+                let end = if span == Span::empty() {
+                    span.end
+                } else {
+                    Location::new(span.start.line, span.start.column + 1)
+                };
+                self.parse_pg_cast(Expr::Value(
+                    Value::Placeholder("?".into()).with_span(Span::new(span.start, end)),
+                ))
+            }
             Token::Placeholder(_) | Token::Colon | Token::AtSign => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
@@ -4348,9 +4359,13 @@ impl<'a> Parser<'a> {
                     tok.span.start
                 ),
             }
-        } else if Token::DoubleColon == *tok {
+        } else if matches!(tok.token, Token::DoubleColon | Token::QuestionDoubleColon) {
             Ok(Expr::Cast {
-                kind: CastKind::DoubleColon,
+                kind: if tok.token == Token::QuestionDoubleColon {
+                    CastKind::QuestionDoubleColon
+                } else {
+                    CastKind::DoubleColon
+                },
                 expr: Box::new(expr),
                 data_type: self.parse_data_type()?,
                 format: None,

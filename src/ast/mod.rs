@@ -1903,7 +1903,7 @@ impl fmt::Display for Expr {
                     "{} {}ILIKE {}{} ESCAPE {}",
                     expr,
                     if *negated { "NOT " } else { "" },
-                    if *any { "ANY" } else { "" },
+                    if *any { "ANY " } else { "" },
                     pattern,
                     ch
                 ),

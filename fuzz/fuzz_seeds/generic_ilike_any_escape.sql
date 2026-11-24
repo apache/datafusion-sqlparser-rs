@@ -1,0 +1,1 @@
+SELECT a ILIKE ANY pat ESCAPE '!';

@@ -20999,6 +20999,10 @@ fn parse_reset_statement() {
         reset("RESET TRANSACTION ISOLATION LEVEL"),
         ResetConfig::TransactionIsolationLevel
     );
+    assert_eq!(
+        parse_sql_statements("RESET").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }
 
 #[test]

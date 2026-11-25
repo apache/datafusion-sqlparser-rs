@@ -23673,7 +23673,7 @@ fn parse_pgq_keywords_as_identifiers() {
 
 #[test]
 fn test_select_where_with_ilike_any_escape() {
-    match verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY pat ESCAPE '!'"#) {
+    match verified_stmt("SELECT * FROM x WHERE a ILIKE ANY pat ESCAPE '!'") {
         Statement::Query(query) => {
             let select = query.body.as_select().unwrap();
             assert_eq!(
@@ -23692,10 +23692,10 @@ fn test_select_where_with_ilike_any_escape() {
         _ => unreachable!(),
     }
 
-    verified_stmt(r#"SELECT * FROM x WHERE a NOT ILIKE ANY pat ESCAPE '!'"#);
-    verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY '%abc%' ESCAPE '!'"#);
-    verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY ('%a%', '%b%') ESCAPE '!'"#);
-    verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY pat ESCAPE '!'"#);
+    verified_stmt("SELECT * FROM x WHERE a NOT ILIKE ANY pat ESCAPE '!'");
+    verified_stmt("SELECT * FROM x WHERE a ILIKE ANY '%abc%' ESCAPE '!'");
+    verified_stmt("SELECT * FROM x WHERE a ILIKE ANY ('%a%', '%b%') ESCAPE '!'");
+    verified_stmt("SELECT * FROM x WHERE a LIKE ANY pat ESCAPE '!'");
 
     assert_eq!(
         all_dialects()

@@ -667,6 +667,7 @@ fn parse_create_table_auto_increment() {
                                 include: vec![],
                                 index_options: vec![],
                                 characteristics: None,
+                                on_conflict: None,
                             }),
                         },
                         ColumnOptionDef {
@@ -720,6 +721,7 @@ fn table_constraint_unique_primary_ctor(
             index_options,
             characteristics,
             nulls_distinct: NullsDistinctOption::None,
+            on_conflict: None,
         }
         .into(),
         None => PrimaryKeyConstraint {
@@ -730,6 +732,7 @@ fn table_constraint_unique_primary_ctor(
             include: vec![],
             index_options,
             characteristics,
+            on_conflict: None,
         }
         .into(),
     }
@@ -779,6 +782,7 @@ fn parse_create_table_primary_and_unique_key() {
                                         include: vec![],
                                         index_options: vec![],
                                         characteristics: None,
+                                        on_conflict: None,
                                     }),
                                 },
                                 ColumnOptionDef {
@@ -1452,6 +1456,7 @@ fn parse_quote_identifiers() {
                             include: vec![],
                             index_options: vec![],
                             characteristics: None,
+                            on_conflict: None,
                         }),
                     }],
                 }],
@@ -4100,7 +4105,8 @@ fn parse_grant() {
         assert_eq!(
             privileges,
             Privileges::All {
-                with_privileges_keyword: false
+                with_privileges_keyword: false,
+                columns: None,
             }
         );
         assert_eq!(
@@ -4145,7 +4151,8 @@ fn parse_revoke() {
         assert_eq!(
             privileges,
             Privileges::All {
-                with_privileges_keyword: false
+                with_privileges_keyword: false,
+                columns: None,
             }
         );
         assert_eq!(
@@ -5246,4 +5253,122 @@ fn parse_key_constraint_index_type_before_columns() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_create_trigger_single_statement_body() {
+    let sql = "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.id = 1; DROP TRIGGER tr";
+    let statements = mysql_and_generic().parse_sql_statements(sql).unwrap();
+    let [Statement::CreateTrigger(CreateTrigger {
+        statements: Some(body),
+        ..
+    }), Statement::DropTrigger(_)] = &statements[..]
+    else {
+        panic!("{statements:?}")
+    };
+    assert!(
+        matches!(body.statements()[..], [Statement::Set(_)]),
+        "{body:?}"
+    );
+
+    assert_eq!(
+        mysql_and_generic()
+            .parse_sql_statements("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW"),
+        Err(ParserError::ParserError(
+            "Expected: an SQL statement, found: EOF".to_string()
+        ))
+    );
+}
+
+#[test]
+fn test_index_option_comment_escape() {
+    match mysql_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT, INDEX idx (a) COMMENT 'foo''bar')")
+    {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Index(c)] => {
+                assert_eq!(
+                    c.index_options,
+                    vec![IndexOption::Comment("foo'bar".to_string())]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    match mysql_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT, UNIQUE KEY uk (a) COMMENT 'it''s an ''index''')")
+    {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Unique(c)] => {
+                assert_eq!(
+                    c.index_options,
+                    vec![IndexOption::Comment("it's an 'index'".to_string())]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        mysql_and_generic()
+            .parse_sql_statements("CREATE TABLE t (a INT, INDEX idx (a) COMMENT 'unterminated)")
+            .unwrap_err(),
+        ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 46".to_string()
+        )
+    );
+}
+
+#[test]
+fn test_index_constraint_multiple_index_options() {
+    match mysql_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, INDEX idx (a, b) USING BTREE COMMENT 'lookup')",
+    ) {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Index(c)] => {
+                assert!(!c.display_as_key);
+                assert_eq!(
+                    c.index_options,
+                    vec![
+                        IndexOption::Using(IndexType::BTree),
+                        IndexOption::Comment("lookup".to_string()),
+                    ]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    match mysql_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, KEY k (a) USING HASH COMMENT 'hash index' USING BTREE)",
+    ) {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Index(c)] => {
+                assert!(c.display_as_key);
+                assert_eq!(
+                    c.index_options,
+                    vec![
+                        IndexOption::Using(IndexType::Hash),
+                        IndexOption::Comment("hash index".to_string()),
+                        IndexOption::Using(IndexType::BTree),
+                    ]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        mysql_and_generic()
+            .parse_sql_statements(
+                "CREATE TABLE t (a INT, INDEX idx (a) USING BTREE, COMMENT 'lookup')",
+            )
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a data type name, found: 'lookup'".to_string())
+    );
 }

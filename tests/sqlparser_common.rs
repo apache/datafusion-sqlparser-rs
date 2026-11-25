@@ -23674,3 +23674,37 @@ fn parse_grant_revoke_all_privileges_columns() {
 fn parse_pgq_keywords_as_identifiers() {
     all_dialects().verified_stmt("SELECT edge.label AS property FROM graph AS edge");
 }
+
+#[test]
+fn test_select_where_with_ilike_any_escape() {
+    match verified_stmt("SELECT * FROM x WHERE a ILIKE ANY pat ESCAPE '!'") {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+            assert_eq!(
+                select.selection,
+                Some(Expr::ILike {
+                    negated: false,
+                    any: true,
+                    expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                    pattern: Box::new(Expr::Identifier(Ident::new("pat"))),
+                    escape_char: Some(Box::new(Expr::Value(
+                        Value::SingleQuotedString("!".into()).with_empty_span()
+                    ))),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("SELECT * FROM x WHERE a NOT ILIKE ANY pat ESCAPE '!'");
+    verified_stmt("SELECT * FROM x WHERE a ILIKE ANY '%abc%' ESCAPE '!'");
+    verified_stmt("SELECT * FROM x WHERE a ILIKE ANY ('%a%', '%b%') ESCAPE '!'");
+    verified_stmt("SELECT * FROM x WHERE a LIKE ANY pat ESCAPE '!'");
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("SELECT * FROM x WHERE a ILIKE ANY")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
+}

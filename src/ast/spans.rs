@@ -982,9 +982,15 @@ impl Spanned for AlterColumnOperation {
             AlterColumnOperation::DropDefault => Span::empty(),
             AlterColumnOperation::SetDataType {
                 data_type: _,
+                collation,
                 using,
                 had_set: _,
-            } => using.as_ref().map_or(Span::empty(), |u| u.span()),
+            } => union_spans(
+                collation
+                    .iter()
+                    .map(|c| c.span())
+                    .chain(using.iter().map(|u| u.span())),
+            ),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
             AlterColumnOperation::DropExpression { .. } => Span::empty(),
             AlterColumnOperation::GenericOptions { options } => {
@@ -3663,6 +3669,26 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let mut test = SpanTest::new(dialect, sql);
             let constraint = test.0.parse_optional_table_constraint().unwrap().unwrap();
             assert_eq!(test.get_source(constraint.span()), expected, "{sql}");
+        }
+    }
+
+    #[test]
+    fn test_alter_column_set_data_type_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            (
+                r#"ALTER COLUMN a TYPE TEXT COLLATE "C""#,
+                r#"a TYPE TEXT COLLATE "C""#,
+            ),
+            (
+                r#"ALTER COLUMN a TYPE TEXT COLLATE "C" USING b"#,
+                r#"a TYPE TEXT COLLATE "C" USING b"#,
+            ),
+            ("ALTER COLUMN a TYPE TEXT", "a"),
+        ] {
+            let mut test = SpanTest::new(dialect, sql);
+            let operation = test.0.parse_alter_table_operation().unwrap();
+            assert_eq!(test.get_source(operation.span()), expected, "{sql}");
         }
     }
 }

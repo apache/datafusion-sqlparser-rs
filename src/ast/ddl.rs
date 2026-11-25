@@ -1432,10 +1432,12 @@ pub enum AlterColumnOperation {
     },
     /// `DROP DEFAULT`
     DropDefault,
-    /// `[SET DATA] TYPE <data_type> [USING <expr>]`
+    /// `[SET DATA] TYPE <data_type> [COLLATE <collation>] [USING <expr>]`
     SetDataType {
         /// Target data type for the column.
         data_type: DataType,
+        /// Optional `COLLATE <collation>` clause.
+        collation: Option<ObjectName>,
         /// PostgreSQL-specific `USING <expr>` expression for conversion.
         using: Option<Expr>,
         /// Set to true if the statement includes the `SET DATA TYPE` keywords.
@@ -1482,6 +1484,7 @@ impl fmt::Display for AlterColumnOperation {
             }
             AlterColumnOperation::SetDataType {
                 data_type,
+                collation,
                 using,
                 had_set,
             } => {
@@ -1489,6 +1492,9 @@ impl fmt::Display for AlterColumnOperation {
                     write!(f, "SET DATA ")?;
                 }
                 write!(f, "TYPE {data_type}")?;
+                if let Some(collation) = collation {
+                    write!(f, " COLLATE {collation}")?;
+                }
                 if let Some(expr) = using {
                     write!(f, " USING {expr}")?;
                 }

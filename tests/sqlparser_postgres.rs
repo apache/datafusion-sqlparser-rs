@@ -14771,3 +14771,31 @@ fn parse_alter_role_set() {
         );
     }
 }
+
+#[test]
+fn parse_alter_role_reset() {
+    assert_eq!(
+        pg().verified_stmt("ALTER ROLE app IN DATABASE d RESET TIME ZONE"),
+        Statement::AlterRole {
+            name: Ident::new("app"),
+            operation: AlterRoleOperation::Reset {
+                config_name: ResetConfig::TimeZone,
+                in_database: Some(ObjectName::from(vec![Ident::new("d")])),
+            },
+        }
+    );
+    assert_eq!(
+        pg().verified_stmt("ALTER ROLE app RESET time"),
+        Statement::AlterRole {
+            name: Ident::new("app"),
+            operation: AlterRoleOperation::Reset {
+                config_name: ResetConfig::ConfigName(ObjectName::from(vec![Ident::new("time")])),
+                in_database: None,
+            },
+        }
+    );
+
+    pg().verified_stmt("ALTER ROLE app RESET SESSION AUTHORIZATION");
+    pg().verified_stmt("ALTER ROLE app RESET TRANSACTION ISOLATION LEVEL");
+    pg().verified_stmt("ALTER FUNCTION f(INT) RESET TIME ZONE");
+}

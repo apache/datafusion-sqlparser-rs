@@ -22,8 +22,7 @@ use crate::{
         AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterTrigger,
         AlterTriggerOperation, AlterUser, AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation,
         AlterUserModifyMfaMethod, AlterUserPassword, AlterUserRemoveRoleDelegation,
-        AlterUserSetPolicy, Expr, MfaMethodKind, Password, ResetConfig, RoleOption, Statement,
-        UserPolicyKind,
+        AlterUserSetPolicy, Expr, MfaMethodKind, Password, RoleOption, Statement, UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -440,17 +439,9 @@ impl Parser<'_> {
             }
         // RESET
         } else if self.parse_keyword(Keyword::RESET) {
-            if self.parse_keyword(Keyword::ALL) {
-                AlterRoleOperation::Reset {
-                    config_name: ResetConfig::ALL,
-                    in_database,
-                }
-            } else {
-                let config_name = self.parse_object_name(false)?;
-                AlterRoleOperation::Reset {
-                    config_name: ResetConfig::ConfigName(config_name),
-                    in_database,
-                }
+            AlterRoleOperation::Reset {
+                config_name: self.parse_reset_config()?,
+                in_database,
             }
         // option
         } else {

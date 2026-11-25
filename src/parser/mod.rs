@@ -12300,12 +12300,7 @@ impl<'a> Parser<'a> {
                 self.parse_function_definition_set_param()?,
             ))
         } else if self.parse_keyword(Keyword::RESET) {
-            let reset_config = if self.parse_keyword(Keyword::ALL) {
-                ResetConfig::ALL
-            } else {
-                ResetConfig::ConfigName(self.parse_object_name(false)?)
-            };
-            Some(AlterFunctionAction::Reset(reset_config))
+            Some(AlterFunctionAction::Reset(self.parse_reset_config()?))
         } else {
             None
         };
@@ -12332,6 +12327,21 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(FunctionDefinitionSetParam { name, value })
+    }
+
+    /// Parse what follows `RESET` in `ALTER ROLE`, `ALTER FUNCTION` and similar statements.
+    fn parse_reset_config(&mut self) -> Result<ResetConfig, ParserError> {
+        Ok(if self.parse_keyword(Keyword::ALL) {
+            ResetConfig::ALL
+        } else if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
+            ResetConfig::TimeZone
+        } else if self.parse_keywords(&[Keyword::TRANSACTION, Keyword::ISOLATION, Keyword::LEVEL]) {
+            ResetConfig::TransactionIsolationLevel
+        } else if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
+            ResetConfig::SessionAuthorization
+        } else {
+            ResetConfig::ConfigName(self.parse_object_name(false)?)
+        })
     }
 
     fn parse_alter_function_actions(

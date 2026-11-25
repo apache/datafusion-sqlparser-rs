@@ -134,6 +134,9 @@ impl fmt::Display for RoleOption {
 /// RESET config option:
 /// * RESET `configuration_parameter`
 /// * RESET ALL
+/// * RESET TIME ZONE
+/// * RESET TRANSACTION ISOLATION LEVEL
+/// * RESET SESSION AUTHORIZATION
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -142,6 +145,26 @@ pub enum ResetConfig {
     ALL,
     /// Reset the named configuration parameter.
     ConfigName(ObjectName),
+    /// `TIME ZONE`
+    TimeZone,
+    /// `TRANSACTION ISOLATION LEVEL`
+    TransactionIsolationLevel,
+    /// `SESSION AUTHORIZATION`
+    SessionAuthorization,
+}
+
+impl fmt::Display for ResetConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ResetConfig::ALL => f.write_str("RESET ALL"),
+            ResetConfig::ConfigName(name) => write!(f, "RESET {name}"),
+            ResetConfig::TimeZone => f.write_str("RESET TIME ZONE"),
+            ResetConfig::TransactionIsolationLevel => {
+                f.write_str("RESET TRANSACTION ISOLATION LEVEL")
+            }
+            ResetConfig::SessionAuthorization => f.write_str("RESET SESSION AUTHORIZATION"),
+        }
+    }
 }
 
 /// An `ALTER ROLE` (`Statement::AlterRole`) operation
@@ -183,8 +206,6 @@ pub enum AlterRoleOperation {
     },
     /// PostgreSQL
     /// <https://www.postgresql.org/docs/current/sql-alterrole.html>
-    ///
-    /// `RESET configuration_parameter` | `RESET ALL`
     Reset {
         /// Configuration to reset.
         config_name: ResetConfig,
@@ -224,11 +245,7 @@ impl fmt::Display for AlterRoleOperation {
                 if let Some(database_name) = in_database {
                     write!(f, "IN DATABASE {database_name} ")?;
                 }
-
-                match config_name {
-                    ResetConfig::ALL => write!(f, "RESET ALL"),
-                    ResetConfig::ConfigName(name) => write!(f, "RESET {name}"),
-                }
+                write!(f, "{config_name}")
             }
         }
     }

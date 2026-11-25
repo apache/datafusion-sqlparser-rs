@@ -20974,31 +20974,35 @@ fn parse_generic_unary_ops() {
 
 #[test]
 fn parse_reset_statement() {
-    match verified_stmt("RESET some_parameter") {
-        Statement::Reset(ResetStatement {
-            reset: Reset::ConfigurationParameter(o),
-        }) => assert_eq!(o, ObjectName::from(vec!["some_parameter".into()])),
+    let reset = |sql| match verified_stmt(sql) {
+        Statement::Reset(ResetStatement { reset }) => reset,
         _ => unreachable!(),
-    }
-    match verified_stmt("RESET some_extension.some_parameter") {
-        Statement::Reset(ResetStatement {
-            reset: Reset::ConfigurationParameter(o),
-        }) => assert_eq!(
-            o,
-            ObjectName::from(vec!["some_extension".into(), "some_parameter".into()])
-        ),
-        _ => unreachable!(),
-    }
-    match verified_stmt("RESET ALL") {
-        Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
-        _ => unreachable!(),
-    }
-    match verified_stmt("RESET SESSION AUTHORIZATION") {
-        Statement::Reset(ResetStatement { reset }) => {
-            assert_eq!(reset, Reset::SessionAuthorization)
-        }
-        _ => unreachable!(),
-    }
+    };
+    assert_eq!(
+        reset("RESET some_parameter"),
+        ResetConfig::ConfigName(ObjectName::from(vec!["some_parameter".into()]))
+    );
+    assert_eq!(
+        reset("RESET some_extension.some_parameter"),
+        ResetConfig::ConfigName(ObjectName::from(vec![
+            "some_extension".into(),
+            "some_parameter".into()
+        ]))
+    );
+    assert_eq!(reset("RESET ALL"), ResetConfig::ALL);
+    assert_eq!(
+        reset("RESET SESSION AUTHORIZATION"),
+        ResetConfig::SessionAuthorization
+    );
+    assert_eq!(reset("RESET TIME ZONE"), ResetConfig::TimeZone);
+    assert_eq!(
+        reset("RESET TRANSACTION ISOLATION LEVEL"),
+        ResetConfig::TransactionIsolationLevel
+    );
+    assert_eq!(
+        parse_sql_statements("RESET").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string())
+    );
 }
 
 #[test]

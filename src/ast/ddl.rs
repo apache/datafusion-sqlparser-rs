@@ -5420,7 +5420,7 @@ impl Spanned for AlterDatabase {
 }
 
 /// A `SET` clause that stores a configuration parameter default, as in
-/// `ALTER DATABASE ... SET`.
+/// `ALTER DATABASE ... SET` and `ALTER ROLE ... SET`.
 ///
 /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-set.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -6498,7 +6498,7 @@ pub enum AlterFunctionAction {
     /// `SET configuration_parameter { TO | = } { value | DEFAULT }`
     /// or `SET configuration_parameter FROM CURRENT`
     Set(FunctionDefinitionSetParam),
-    /// `RESET configuration_parameter` or `RESET ALL`
+    /// `RESET ...`
     Reset(ResetConfig),
 }
 
@@ -6561,10 +6561,7 @@ impl fmt::Display for AlterFunctionAction {
                 write!(f, "SUPPORT {support_function}")
             }
             AlterFunctionAction::Set(set_param) => write!(f, "{set_param}"),
-            AlterFunctionAction::Reset(reset_config) => match reset_config {
-                ResetConfig::ALL => write!(f, "RESET ALL"),
-                ResetConfig::ConfigName(name) => write!(f, "RESET {name}"),
-            },
+            AlterFunctionAction::Reset(reset_config) => write!(f, "{reset_config}"),
         }
     }
 }

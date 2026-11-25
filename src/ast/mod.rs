@@ -61,7 +61,7 @@ pub use self::dcl::{
     AlterDefaultPrivileges, AlterDefaultPrivilegesOperation, AlterRoleOperation, CreateRole,
     DefaultPrivilegesObjectType, DefaultPrivilegesOption, Grant, GrantRole, ResetConfig, Revoke,
     RevokeRole, RoleGrantOption, RoleGrantOptionValue, RoleKeyword, RoleOption, SecondaryRoles,
-    SetConfigValue, Use,
+    Use,
 };
 pub use self::ddl::{
     AggregateArgs, AggregateModifyKind, AggregateSignature, Alignment, AlterCollation,
@@ -12476,31 +12476,16 @@ impl fmt::Display for VacuumStatement {
     }
 }
 
-/// Variants of the RESET statement
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Reset {
-    /// Resets all session parameters to their default values.
-    ALL,
-
-    /// Resets session authorization to the session user.
-    SessionAuthorization,
-
-    /// Resets a specific session parameter to its default value.
-    ConfigurationParameter(ObjectName),
-}
-
 /// Resets a session parameter to its default value.
 /// ```sql
-/// RESET { ALL | SESSION AUTHORIZATION | <configuration_parameter> }
+/// RESET { ALL | TIME ZONE | TRANSACTION ISOLATION LEVEL | SESSION AUTHORIZATION | <configuration_parameter> }
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ResetStatement {
-    /// The reset action to perform (either `ALL` or a specific configuration parameter).
-    pub reset: Reset,
+    /// What to reset.
+    pub reset: ResetConfig,
 }
 
 /// `REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] name [ WITH [ NO ] DATA ]`
@@ -12598,11 +12583,7 @@ impl fmt::Display for OptimizerHint {
 
 impl fmt::Display for ResetStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self.reset {
-            Reset::ALL => write!(f, "RESET ALL"),
-            Reset::SessionAuthorization => write!(f, "RESET SESSION AUTHORIZATION"),
-            Reset::ConfigurationParameter(param) => write!(f, "RESET {}", param),
-        }
+        write!(f, "{}", self.reset)
     }
 }
 

@@ -12300,12 +12300,7 @@ impl<'a> Parser<'a> {
                 self.parse_function_definition_set_param()?,
             ))
         } else if self.parse_keyword(Keyword::RESET) {
-            let reset_config = if self.parse_keyword(Keyword::ALL) {
-                ResetConfig::ALL
-            } else {
-                ResetConfig::ConfigName(self.parse_object_name(false)?)
-            };
-            Some(AlterFunctionAction::Reset(reset_config))
+            Some(AlterFunctionAction::Reset(self.parse_reset_config()?))
         } else {
             None
         };
@@ -12332,6 +12327,21 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(FunctionDefinitionSetParam { name, value })
+    }
+
+    /// Parse what follows `RESET`, as a statement or in `ALTER ROLE` and `ALTER FUNCTION`.
+    fn parse_reset_config(&mut self) -> Result<ResetConfig, ParserError> {
+        Ok(if self.parse_keyword(Keyword::ALL) {
+            ResetConfig::ALL
+        } else if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
+            ResetConfig::TimeZone
+        } else if self.parse_keywords(&[Keyword::TRANSACTION, Keyword::ISOLATION, Keyword::LEVEL]) {
+            ResetConfig::TransactionIsolationLevel
+        } else if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
+            ResetConfig::SessionAuthorization
+        } else {
+            ResetConfig::ConfigName(self.parse_object_name(false)?)
+        })
     }
 
     fn parse_alter_function_actions(
@@ -12632,7 +12642,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the clause after `SET` that stores a configuration parameter
-    /// default, as in `ALTER DATABASE ... SET`.
+    /// default, as in `ALTER DATABASE ... SET` and `ALTER ROLE ... SET`.
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-set.html)
     fn parse_configuration_set(&mut self) -> Result<ConfigurationSet, ParserError> {
@@ -23161,19 +23171,8 @@ impl<'a> Parser<'a> {
 
     /// Parses a RESET statement
     fn parse_reset(&mut self) -> Result<ResetStatement, ParserError> {
-        if self.parse_keyword(Keyword::ALL) {
-            return Ok(ResetStatement { reset: Reset::ALL });
-        }
-
-        if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
-            return Ok(ResetStatement {
-                reset: Reset::SessionAuthorization,
-            });
-        }
-
-        let obj = self.parse_object_name(false)?;
         Ok(ResetStatement {
-            reset: Reset::ConfigurationParameter(obj),
+            reset: self.parse_reset_config()?,
         })
     }
 

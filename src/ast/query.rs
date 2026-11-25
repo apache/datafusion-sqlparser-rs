@@ -1883,6 +1883,12 @@ pub enum TableSampleMethod {
     System,
     /// `BLOCK` sampling method.
     Block,
+    /// `RESERVOIR` sampling method.
+    ///
+    /// Picks a fixed number of rows (`n ROWS`) at random, or every row when the input has fewer.
+    ///
+    /// [Spanner](https://cloud.google.com/spanner/docs/reference/standard-sql/query-syntax#tablesample_operator)
+    Reservoir,
 }
 
 impl fmt::Display for TableSampleMethod {
@@ -1892,6 +1898,7 @@ impl fmt::Display for TableSampleMethod {
             TableSampleMethod::Row => write!(f, "ROW"),
             TableSampleMethod::System => write!(f, "SYSTEM"),
             TableSampleMethod::Block => write!(f, "BLOCK"),
+            TableSampleMethod::Reservoir => write!(f, "RESERVOIR"),
         }
     }
 }
@@ -3658,6 +3665,10 @@ pub enum LockType {
     Share,
     /// `UPDATE` lock (exclusive/update lock).
     Update,
+    /// `NO KEY UPDATE` lock (PostgreSQL).
+    NoKeyUpdate,
+    /// `KEY SHARE` lock (PostgreSQL).
+    KeyShare,
 }
 
 impl fmt::Display for LockType {
@@ -3665,6 +3676,8 @@ impl fmt::Display for LockType {
         let select_lock = match self {
             LockType::Share => "SHARE",
             LockType::Update => "UPDATE",
+            LockType::NoKeyUpdate => "NO KEY UPDATE",
+            LockType::KeyShare => "KEY SHARE",
         };
         write!(f, "{select_lock}")
     }

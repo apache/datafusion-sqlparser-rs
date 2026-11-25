@@ -1,0 +1,1 @@
+CREATE TABLE t (a INT, b INT, INDEX idx (a, b) USING BTREE COMMENT 'lookup', KEY k (a) USING HASH COMMENT 'hash')

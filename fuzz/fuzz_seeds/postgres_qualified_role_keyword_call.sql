@@ -1,0 +1,1 @@
+SELECT app.current_user()

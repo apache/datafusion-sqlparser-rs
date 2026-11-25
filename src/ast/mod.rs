@@ -8873,6 +8873,8 @@ pub enum ObjectType {
     User,
     /// A stream.
     Stream,
+    /// A Snowflake external volume.
+    ExternalVolume,
     /// A warehouse.
     Warehouse,
 }
@@ -8895,6 +8897,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
+            ObjectType::ExternalVolume => "EXTERNAL VOLUME",
             ObjectType::Warehouse => "WAREHOUSE",
         })
     }

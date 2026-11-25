@@ -155,7 +155,7 @@ pub enum Token {
     Period,
     /// Colon `:`
     Colon,
-    /// DoubleColon `::` (shorthand for `CAST` in PostgreSQL)
+    /// DoubleColon `::` (used for casting in PostgreSQL)
     DoubleColon,
     /// QuestionDoubleColon `?::` (shorthand for `TRY_CAST` in Databricks)
     QuestionDoubleColon,
@@ -2078,9 +2078,7 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::AtSign)),
                     }
                 }
-                '?' if chars.peekable.clone().nth(1) == Some(':')
-                    && chars.peekable.clone().nth(2) == Some(':') =>
-                {
+                '?' if chars.peekable.clone().take(3).eq("?::".chars()) => {
                     chars.next();
                     chars.next();
                     self.consume_and_return(chars, Token::QuestionDoubleColon)

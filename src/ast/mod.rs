@@ -803,7 +803,7 @@ pub enum CastKind {
     ///
     /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting>.
     SafeCast,
-    /// `<expr>::<datatype>`, shorthand for `CAST(<expr> AS <datatype>)`.
+    /// `<expr> :: <datatype>`
     DoubleColon,
     /// `<expr>?::<datatype>`, shorthand for `TRY_CAST(<expr> AS <datatype>)`.
     QuestionDoubleColon,

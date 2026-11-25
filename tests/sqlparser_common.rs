@@ -23725,7 +23725,6 @@ fn test_select_where_with_ilike_any_escape() {
 fn parse_try_cast_shortcut() {
     let dialects = all_dialects();
     for sql in [
-        "SELECT 'bad'?::INT",
         "SELECT v?::INT + 1",
         "SELECT 1 + '2'?::INT",
         "SELECT v?::INT::BIGINT",
@@ -23733,9 +23732,8 @@ fn parse_try_cast_shortcut() {
     ] {
         dialects.verified_stmt(sql);
     }
-    dialects.one_statement_parses_to("SELECT v ?:: INT", "SELECT v?::INT");
     assert_eq!(
-        dialects.verified_expr("v?::INT"),
+        dialects.expr_parses_to("v ?:: INT", "v?::INT"),
         Expr::Cast {
             kind: CastKind::QuestionDoubleColon,
             expr: Box::new(Expr::Identifier(Ident::new("v"))),
@@ -23744,8 +23742,20 @@ fn parse_try_cast_shortcut() {
         }
     );
     for dialect in dialects.dialects {
-        for sql in ["SELECT v?::", "SELECT v? ::INT"] {
-            Parser::parse_sql(dialect.as_ref(), sql).unwrap_err();
+        let split_operator_error = if dialect.supports_geometric_types() {
+            "Expected: an expression, found: :: at Line: 1, Column: 11"
+        } else {
+            "Expected: end of statement, found: ? at Line: 1, Column: 9"
+        };
+        for (sql, expected) in [
+            ("SELECT v?::", "Expected: a data type name, found: EOF"),
+            ("SELECT v? ::INT", split_operator_error),
+        ] {
+            assert_eq!(
+                Parser::parse_sql(dialect.as_ref(), sql).unwrap_err(),
+                ParserError::ParserError(expected.to_string()),
+                "{dialect:?}: {sql}"
+            );
         }
     }
     let dialects = TestedDialects::new(vec![
@@ -23753,6 +23763,5 @@ fn parse_try_cast_shortcut() {
         Box::new(DatabricksDialect {}),
     ]);
     dialects.one_statement_parses_to("SELECT ? ::INT", "SELECT ?::INT");
-    dialects.verified_stmt("SELECT v:price?::DOUBLE");
     dialects.verified_stmt("SELECT v:items[0].price?::DECIMAL(10,2)");
 }

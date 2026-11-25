@@ -276,6 +276,7 @@ impl Spanned for Values {
 /// - [Statement::CreateExtension]
 /// - [Statement::CreateCollation]
 /// - [Statement::AlterCollation]
+/// - [Statement::AlterExtension]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -387,7 +388,7 @@ impl Spanned for Statement {
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(core::iter::once(module_name.span))
-                    .chain(module_args.iter().map(|i| i.span)),
+                    .chain(module_args.iter().map(|arg| arg.span)),
             ),
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),
@@ -416,6 +417,7 @@ impl Spanned for Statement {
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterCollation { .. } => Span::empty(),
+            Statement::AlterExtension { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
@@ -635,6 +637,7 @@ impl Spanned for CreateTable {
             inherits: _,     // todo, PostgreSQL specific
             partition_of,
             for_values,
+            of_type,
             copy_grants: _,                     // bool
             enable_schema_evolution: _,         // bool
             change_tracking: _,                 // bool
@@ -675,7 +678,8 @@ impl Spanned for CreateTable {
                 .chain(query.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span()))
                 .chain(partition_of.iter().map(|i| i.span()))
-                .chain(for_values.iter().map(|i| i.span())),
+                .chain(for_values.iter().map(|i| i.span()))
+                .chain(of_type.iter().map(|i| i.span())),
         )
     }
 }
@@ -748,6 +752,7 @@ impl Spanned for CreateIndex {
     fn span(&self) -> Span {
         let CreateIndex {
             name,
+            only: _, // bool
             table_name,
             using: _,
             columns,
@@ -981,6 +986,7 @@ impl Spanned for AlterColumnOperation {
                 had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
+            AlterColumnOperation::DropExpression { .. } => Span::empty(),
             AlterColumnOperation::GenericOptions { options } => {
                 union_spans(options.iter().map(|option| option.span()))
             }
@@ -1182,9 +1188,7 @@ impl Spanned for CreateTableOptions {
         match self {
             CreateTableOptions::None => Span::empty(),
             CreateTableOptions::With(vec) => union_spans(vec.iter().map(|i| i.span())),
-            CreateTableOptions::Options(vec) => {
-                union_spans(vec.as_slice().iter().map(|i| i.span()))
-            }
+            CreateTableOptions::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
         }
@@ -1386,6 +1390,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Inherit { parent } | AlterTableOperation::NoInherit { parent } => {
                 parent.span()
             }
+            AlterTableOperation::SetSchema { schema_name } => schema_name.span(),
             AlterTableOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
             }
@@ -1481,6 +1486,7 @@ impl Spanned for AlterIndexOperation {
     fn span(&self) -> Span {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => index_name.span(),
+            AlterIndexOperation::AttachPartition { index_name } => index_name.span(),
         }
     }
 }
@@ -3585,6 +3591,19 @@ SETTINGS update_parallel_mode = 'auto'"#;
         assert_eq!(
             test.get_source(options[0].span()),
             "toast.autovacuum_enabled = false"
+        );
+    }
+
+    #[test]
+    fn test_create_table_options_span() {
+        let dialect = &crate::dialect::BigQueryDialect {};
+        let sql =
+            "CREATE TABLE t (a INT64) OPTIONS (description = 'd', expiration_timestamp = NULL)";
+        let mut test = SpanTest::new(dialect, sql);
+        let stmt = test.0.parse_statement().unwrap();
+        assert_eq!(
+            test.get_source(stmt.span()),
+            "t (a INT64) OPTIONS (description = 'd', expiration_timestamp = NULL"
         );
     }
 

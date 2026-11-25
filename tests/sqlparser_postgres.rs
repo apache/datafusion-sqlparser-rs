@@ -14798,4 +14798,12 @@ fn parse_alter_role_reset() {
     pg().verified_stmt("ALTER ROLE app RESET SESSION AUTHORIZATION");
     pg().verified_stmt("ALTER ROLE app RESET TRANSACTION ISOLATION LEVEL");
     pg().verified_stmt("ALTER FUNCTION f(INT) RESET TIME ZONE");
+
+    for sql in ["ALTER ROLE app RESET", "ALTER FUNCTION f(INT) RESET"] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            "{sql}"
+        );
+    }
 }

@@ -29,9 +29,9 @@ use test_utils::*;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
-use sqlparser::dialect::{AnsiDialect, GenericDialect, SQLiteDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::dialect::{AnsiDialect, GenericDialect, MySqlDialect, SQLiteDialect};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::{Location, Span, Token};
 
 #[test]
 fn pragma_no_value() {
@@ -155,10 +155,15 @@ fn parse_create_virtual_table() {
             module_name,
             module_args,
         } => {
-            let args = vec![Ident::new("arg1"), Ident::new("arg2")];
             assert_eq!("t", name.to_string());
             assert_eq!("module_name", module_name.to_string());
-            assert_eq!(args, module_args);
+            assert_eq!(
+                vec!["arg1", "arg2"],
+                module_args
+                    .iter()
+                    .map(|arg| arg.value.as_str())
+                    .collect::<Vec<_>>()
+            );
         }
         _ => unreachable!(),
     }
@@ -230,6 +235,7 @@ fn parse_create_table_auto_increment() {
                                 include: vec![],
                                 index_options: vec![],
                                 characteristics: None,
+                                on_conflict: None,
                             }),
                         },
                         ColumnOptionDef {
@@ -263,6 +269,7 @@ fn parse_create_table_primary_key_asc_desc() {
                     include: vec![],
                     index_options: vec![],
                     characteristics: None,
+                    on_conflict: None,
                 }),
             },
             ColumnOptionDef {
@@ -2009,4 +2016,179 @@ fn parse_create_table_string_literal_column_with_dangling_constraint_name() {
             .to_string(),
         "sql parser error: Expected: constraint details after CONSTRAINT <name>, found: )"
     );
+}
+
+#[test]
+fn parse_create_table_on_conflict_table_constraint() {
+    for keyword in [
+        Keyword::ROLLBACK,
+        Keyword::ABORT,
+        Keyword::FAIL,
+        Keyword::IGNORE,
+        Keyword::REPLACE,
+    ] {
+        let sql = format!(
+            "CREATE TABLE t (a INT, b INT, PRIMARY KEY (a) ON CONFLICT {keyword:?}, CONSTRAINT u UNIQUE (b) ON CONFLICT {keyword:?}, CHECK (a > b) ON CONFLICT {keyword:?})"
+        );
+        let Statement::CreateTable(CreateTable { constraints, .. }) =
+            sqlite_and_generic().verified_stmt(&sql)
+        else {
+            unreachable!()
+        };
+        let [TableConstraint::PrimaryKey(primary_key), TableConstraint::Unique(unique), TableConstraint::Check(check)] =
+            constraints.as_slice()
+        else {
+            panic!("unexpected constraints: {constraints:?}")
+        };
+        assert_eq!(primary_key.on_conflict, Some(keyword));
+        assert_eq!(unique.on_conflict, Some(keyword));
+        assert_eq!(check.on_conflict, Some(keyword));
+    }
+
+    sqlite().verified_stmt(
+        "CREATE TABLE c (x, y, z GENERATED ALWAYS AS (x + y) VIRTUAL, PRIMARY KEY (x, y) ON CONFLICT ABORT) WITHOUT ROWID",
+    );
+}
+
+#[test]
+fn parse_create_table_on_conflict_table_constraint_err() {
+    assert_eq!(
+        sqlite_and_generic()
+            .parse_sql_statements("CREATE TABLE t (a INT, UNIQUE (a) ON CONFLICT BOH)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: one of ROLLBACK or ABORT or FAIL or IGNORE or REPLACE, found: BOH"
+                .to_string()
+        )
+    );
+
+    let unsupported = all_dialects_where(|d| !d.supports_constraint_conflict_clause());
+    for sql in [
+        "CREATE TABLE t (a INT, PRIMARY KEY (a) ON CONFLICT IGNORE)",
+        "CREATE TABLE t (a INT, UNIQUE (a) ON CONFLICT IGNORE)",
+        "CREATE TABLE t (a INT, CHECK (a > 0) ON CONFLICT IGNORE)",
+    ] {
+        assert!(unsupported.parse_sql_statements(sql).is_err(), "{sql}");
+    }
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_round_trip() {
+    for sql in [
+        "CREATE VIRTUAL TABLE ft USING fts5 (body, tokenize = 'porter')",
+        "CREATE VIRTUAL TABLE ft USING fts5 (a, b UNINDEXED)",
+        "CREATE VIRTUAL TABLE ft USING fts5 (a, content='')",
+        "CREATE VIRTUAL TABLE ft USING fts5 (a, content='it''s')",
+        r#"CREATE VIRTUAL TABLE t USING m ("a""b", [c d], `e`)"#,
+        "CREATE VIRTUAL TABLE c USING csv (filename=data.csv)",
+        "CREATE VIRTUAL TABLE r USING rtree (id, minX, maxX)",
+        "CREATE VIRTUAL TABLE t USING m (a; b)",
+    ] {
+        sqlite_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_without_unescape() {
+    sqlite_with_options(ParserOptions::new().with_unescape(false))
+        .verified_stmt("CREATE VIRTUAL TABLE ft USING fts5 (a, content='it''s')");
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_double_quoted_string() {
+    TestedDialects::new(vec![Box::new(MySqlDialect {})])
+        .verified_stmt(r#"CREATE VIRTUAL TABLE t USING m ("a""b")"#);
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_split_on_top_level_commas() {
+    let sql = "CREATE VIRTUAL TABLE t USING m (f(x, (y)), tokenize = 'p,q')";
+    let statement = Parser::parse_sql(&SQLiteDialect {}, sql).unwrap().remove(0);
+    assert_eq!(
+        Span::new(Location::new(1, 22), Location::new(1, 60)),
+        statement.span()
+    );
+    let Statement::CreateVirtualTable { module_args, .. } = statement else {
+        unreachable!()
+    };
+    assert_eq!(
+        vec!["f(x, (y))", "tokenize = 'p,q'"],
+        module_args
+            .iter()
+            .map(|arg| arg.value.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        Span::new(Location::new(1, 44), Location::new(1, 60)),
+        module_args[1].span
+    );
+    sqlite_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_ignore_spans_in_comparison() {
+    let sql = "CREATE VIRTUAL TABLE t USING m (tokenize = 'porter')";
+    let located = Parser::parse_sql(&SQLiteDialect {}, sql).unwrap().remove(0);
+    let unlocated = sqlite_and_generic().verified_stmt(sql);
+    let (
+        Statement::CreateVirtualTable {
+            module_args: located_args,
+            ..
+        },
+        Statement::CreateVirtualTable {
+            module_args: unlocated_args,
+            ..
+        },
+    ) = (&located, &unlocated)
+    else {
+        unreachable!()
+    };
+    assert_ne!(located_args[0].span, unlocated_args[0].span);
+    assert_eq!(located_args, unlocated_args);
+    assert_eq!(
+        Some(std::cmp::Ordering::Equal),
+        located_args[0].partial_cmp(&unlocated_args[0])
+    );
+    assert_eq!(std::cmp::Ordering::Equal, located.cmp(&unlocated));
+    let hash = |statement: &Statement| {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(statement, &mut hasher);
+        std::hash::Hasher::finish(&hasher)
+    };
+    assert_eq!(hash(&located), hash(&unlocated));
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_drop_empty() {
+    sqlite_and_generic().one_statement_parses_to(
+        "CREATE VIRTUAL TABLE t USING m( a ,, b )",
+        "CREATE VIRTUAL TABLE t USING m (a, b)",
+    );
+    sqlite_and_generic().one_statement_parses_to(
+        "CREATE VIRTUAL TABLE t USING m()",
+        "CREATE VIRTUAL TABLE t USING m",
+    );
+}
+
+#[test]
+fn parse_create_virtual_table_module_arguments_unbalanced_err() {
+    for (sql, error) in [
+        (
+            "CREATE VIRTUAL TABLE t USING m (a",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "CREATE VIRTUAL TABLE t USING m (f(a)",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "CREATE VIRTUAL TABLE t USING m (a))",
+            "Expected: end of statement, found: )",
+        ),
+    ] {
+        assert_eq!(
+            ParserError::ParserError(error.to_string()),
+            sqlite_and_generic().parse_sql_statements(sql).unwrap_err()
+        );
+    }
 }

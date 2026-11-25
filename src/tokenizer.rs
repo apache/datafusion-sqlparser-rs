@@ -2365,9 +2365,7 @@ impl<'a> Tokenizer<'a> {
     /// Tokenize an identifier or keyword, after the first char is already consumed.
     fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
         let mut s = first_chars.into();
-        s.push_str(&peeking_take_while(chars, |ch| {
-            self.dialect.is_identifier_part(ch)
-        }));
+        peeking_push_while(chars, &mut s, |ch| self.dialect.is_identifier_part(ch));
         s
     }
 
@@ -2722,8 +2720,14 @@ impl<'a> Tokenizer<'a> {
 /// Read from `chars` until `predicate` returns `false` or EOF is hit.
 /// Return the characters read as String, and keep the first non-matching
 /// char available as `chars.next()`.
-fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool) -> String {
+fn peeking_take_while(chars: &mut State, predicate: impl FnMut(char) -> bool) -> String {
     let mut s = String::new();
+    peeking_push_while(chars, &mut s, predicate);
+    s
+}
+
+/// Same as `peeking_take_while`, but appends the chars to `s`.
+fn peeking_push_while(chars: &mut State, s: &mut String, mut predicate: impl FnMut(char) -> bool) {
     while let Some(&ch) = chars.peek() {
         if predicate(ch) {
             chars.next(); // consume
@@ -2732,7 +2736,6 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
             break;
         }
     }
-    s
 }
 
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {

@@ -19,7 +19,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
-use sqlparser::tokenizer::{Span, Word};
+use sqlparser::tokenizer::{Span, Tokenizer, Word};
 
 fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");
@@ -297,6 +297,33 @@ fn parse_function_arg_call_chain(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark tokenizing TPC-H Q1, a query with many identifiers.
+fn tokenize_tpch_q1(c: &mut Criterion) {
+    let mut group = c.benchmark_group("tokenize");
+    let dialect = GenericDialect {};
+
+    let sql = "SELECT l_returnflag, l_linestatus, SUM(l_quantity) AS sum_qty, \
+               SUM(l_extendedprice) AS sum_base_price, \
+               SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price, \
+               SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, \
+               AVG(l_quantity) AS avg_qty, AVG(l_extendedprice) AS avg_price, \
+               AVG(l_discount) AS avg_disc, COUNT(*) AS count_order \
+               FROM lineitem \
+               WHERE l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY \
+               GROUP BY l_returnflag, l_linestatus \
+               ORDER BY l_returnflag, l_linestatus";
+
+    group.bench_function("tpch_q1", |b| {
+        b.iter(|| {
+            Tokenizer::new(&dialect, std::hint::black_box(sql))
+                .tokenize()
+                .unwrap()
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     basic_queries,
@@ -307,6 +334,7 @@ criterion_group!(
     parse_prefix_keyword_call_chain,
     parse_prefix_case_chain,
     parse_table_factor_paren_chain,
-    parse_function_arg_call_chain
+    parse_function_arg_call_chain,
+    tokenize_tpch_q1
 );
 criterion_main!(benches);

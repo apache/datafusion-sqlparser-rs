@@ -125,6 +125,11 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    /// See DuckDB <https://duckdb.org/docs/sql/data_types/map>
+    fn supports_map_typedef_with_parentheses(&self) -> bool {
+        true
+    }
+
     fn supports_from_first_select(&self) -> bool {
         true
     }

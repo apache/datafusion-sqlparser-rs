@@ -81,6 +81,11 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
+    /// See <https://spark.apache.org/docs/latest/sql-ref-functions-builtin.html#collection-functions>
+    fn supports_exists_function(&self) -> bool {
+        true
+    }
+
     /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html>
     fn supports_select_wildcard_except(&self) -> bool {
         true

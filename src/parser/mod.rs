@@ -7568,9 +7568,11 @@ impl<'a> Parser<'a> {
 
     fn parse_create_statistics(&mut self) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let name = if !if_not_exists
-            && (self.peek_keyword(Keyword::ON) || self.peek_token_ref().token == Token::LParen)
+        let name = if self.peek_keyword(Keyword::ON) || self.peek_token_ref().token == Token::LParen
         {
+            if if_not_exists {
+                return self.expected_ref("identifier", self.peek_token_ref());
+            }
             None
         } else {
             Some(self.parse_object_name(false)?)

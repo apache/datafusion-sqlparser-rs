@@ -5321,3 +5321,54 @@ fn test_index_option_comment_escape() {
         )
     );
 }
+
+#[test]
+fn test_index_constraint_multiple_index_options() {
+    match mysql_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, INDEX idx (a, b) USING BTREE COMMENT 'lookup')",
+    ) {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Index(c)] => {
+                assert!(!c.display_as_key);
+                assert_eq!(
+                    c.index_options,
+                    vec![
+                        IndexOption::Using(IndexType::BTree),
+                        IndexOption::Comment("lookup".to_string()),
+                    ]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    match mysql_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, KEY k (a) USING HASH COMMENT 'hash index' USING BTREE)",
+    ) {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Index(c)] => {
+                assert!(c.display_as_key);
+                assert_eq!(
+                    c.index_options,
+                    vec![
+                        IndexOption::Using(IndexType::Hash),
+                        IndexOption::Comment("hash index".to_string()),
+                        IndexOption::Using(IndexType::BTree),
+                    ]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        mysql_and_generic()
+            .parse_sql_statements(
+                "CREATE TABLE t (a INT, INDEX idx (a) USING BTREE, COMMENT 'lookup')",
+            )
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a data type name, found: 'lookup'".to_string())
+    );
+}

@@ -23674,10 +23674,6 @@ fn parse_pgq_keywords_as_identifiers() {
 #[test]
 fn parse_qualified_role_keyword_function_calls() {
     let dialects = all_dialects();
-    let pg_and_generic = TestedDialects::new(vec![
-        Box::new(PostgreSqlDialect {}),
-        Box::new(GenericDialect {}),
-    ]);
 
     for func in ["current_user", "session_user", "user", "current_catalog"] {
         for (sql_args, expected_args) in [
@@ -23715,7 +23711,7 @@ fn parse_qualified_role_keyword_function_calls() {
         }
 
         assert_eq!(
-            pg_and_generic
+            pg_and_generic()
                 .parse_sql_statements(&format!("SELECT {func}()"))
                 .unwrap_err(),
             ParserError::ParserError("Expected: end of statement, found: (".to_string())

@@ -23722,11 +23722,17 @@ fn parse_values_subquery_expr() {
         expr => panic!("expected ANY over a subquery, got {expr:?}"),
     }
     dialects.verified_stmt("SELECT (VALUES (1) LIMIT 1) + 1");
+    match dialects.verified_expr("(values)") {
+        Expr::Nested(expr) => assert!(matches!(*expr, Expr::Identifier(_))),
+        expr => panic!("expected a nested identifier, got {expr:?}"),
+    }
+    dialects.verified_expr("1 = ANY(values)");
+    dialects.verified_stmt("SET search_path = values, public");
     assert_eq!(
         dialects
-            .parse_sql_statements("SELECT (VALUES 1)")
+            .parse_sql_statements("SELECT (VALUES (1) + 1)")
             .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: 1".to_string())
+        ParserError::ParserError("Expected: ), found: +".to_string())
     );
 
     let dialects = all_dialects_where(|d| !d.supports_values_subquery_expr());
@@ -23734,4 +23740,5 @@ fn parse_values_subquery_expr() {
         Expr::Nested(expr) => assert!(matches!(*expr, Expr::Function(_))),
         expr => panic!("expected a nested function call, got {expr:?}"),
     }
+    dialects.verified_expr("(VALUES(a) + 1)");
 }

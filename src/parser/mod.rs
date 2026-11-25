@@ -22856,11 +22856,21 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH,
-    /// or VALUES where [`Dialect::supports_values_subquery_expr`] holds
+    /// or `VALUES (` where [`Dialect::supports_values_subquery_expr`] holds
     fn peek_sub_query(&mut self) -> bool {
         self.peek_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
             .is_some()
-            || (self.dialect.supports_values_subquery_expr() && self.peek_keyword(Keyword::VALUES))
+            || (self.dialect.supports_values_subquery_expr()
+                && matches!(
+                    self.peek_tokens_ref().map(|token| &token.token),
+                    [
+                        Token::Word(Word {
+                            keyword: Keyword::VALUES,
+                            ..
+                        }),
+                        Token::LParen
+                    ]
+                ))
     }
 
     pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {

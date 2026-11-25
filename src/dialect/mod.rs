@@ -1331,7 +1331,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if `VALUES` starts a subquery in expression position,
+    /// Returns true if `VALUES (` starts a subquery in expression position,
     /// rather than calling a function named `VALUES` (MySQL).
     ///
     /// Example:

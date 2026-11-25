@@ -463,7 +463,7 @@ impl fmt::Display for IndexConstraint {
         }
         write!(f, " ({})", display_comma_separated(&self.columns))?;
         if !self.index_options.is_empty() {
-            write!(f, " {}", display_comma_separated(&self.index_options))?;
+            write!(f, " {}", display_separated(&self.index_options, " "))?;
         }
         Ok(())
     }

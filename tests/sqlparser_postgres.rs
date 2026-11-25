@@ -14611,7 +14611,7 @@ fn parse_create_statistics() {
         statistics.name.expect("statistics name").to_string(),
         "public.s"
     );
-    assert_eq!(statistics.table.to_string(), "public.t");
+    assert_eq!(statistics.from[0].relation.to_string(), "public.t");
     assert_eq!(
         statistics.kinds,
         vec![Ident::new("mcv"), Ident::new("dependencies")]
@@ -14626,12 +14626,37 @@ fn parse_create_statistics() {
         "CREATE STATISTICS ON (a + b) FROM t",
         "CREATE STATISTICS ON lower(a) FROM t",
         "CREATE STATISTICS (ndistinct) ON a, b FROM t",
+        "CREATE STATISTICS s ON CAST(a AS INT), EXTRACT(YEAR FROM b), SUBSTRING(c FROM 1 FOR 2), TRIM(d), POSITION('x' IN e), OVERLAY(f PLACING 'x' FROM 1), CEIL(g), FLOOR(h) FROM t",
+        "CREATE STATISTICS s ON a, b FROM t alias",
+        "CREATE STATISTICS s ON a, b FROM t AS alias",
+        "CREATE STATISTICS s ON a, b FROM t1, t2",
+        "CREATE STATISTICS s ON a, b FROM t1 JOIN t2 ON t1.id = t2.id",
+        "CREATE STATISTICS s ON a, b FROM (SELECT 1) AS sub",
+        "CREATE STATISTICS s ON a, b FROM generate_series(1, 10) AS s",
     ] {
         pg_and_generic().verified_stmt(sql);
+    }
+
+    for sql in [
+        "CREATE STATISTICS s ON a, b FROM ONLY t",
+        "CREATE STATISTICS s ON a, b FROM t *",
+    ] {
+        pg().verified_stmt(sql);
     }
 
     let error = pg_and_generic()
         .parse_sql_statements("CREATE STATISTICS s ON a, b")
         .expect_err("expected missing FROM clause");
     assert!(error.to_string().contains("Expected: FROM"), "{error}");
+
+    for invalid_sql in [
+        "CREATE STATISTICS s ON a + 1 FROM t",
+        "CREATE STATISTICS s ON a::INT FROM t",
+        "CREATE STATISTICS s ON row_number() OVER () FROM t",
+        "CREATE STATISTICS IF NOT EXISTS ON a FROM t",
+    ] {
+        pg_and_generic()
+            .parse_sql_statements(invalid_sql)
+            .expect_err(invalid_sql);
+    }
 }

@@ -49,9 +49,9 @@ use crate::ast::{
     HiveRowFormat, HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName,
     OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query,
     RefreshModeKind, ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, Statement,
-    StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, TableWithJoins, Tag,
+    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3979,8 +3979,8 @@ pub struct CreateStatistics {
     pub kinds: Vec<Ident>,
     /// Expressions on which to collect statistics.
     pub expressions: Vec<Expr>,
-    /// Relation on which to collect statistics.
-    pub table: ObjectName,
+    /// Relations on which to collect statistics.
+    pub from: Vec<TableWithJoins>,
 }
 
 impl fmt::Display for CreateStatistics {
@@ -3999,7 +3999,7 @@ impl fmt::Display for CreateStatistics {
             f,
             " ON {} FROM {}",
             display_comma_separated(&self.expressions),
-            self.table
+            display_comma_separated(&self.from)
         )
     }
 }

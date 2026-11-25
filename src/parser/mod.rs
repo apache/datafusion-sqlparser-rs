@@ -7587,7 +7587,19 @@ impl<'a> Parser<'a> {
             let location = parser.peek_token_ref().span.start;
             let expr = parser.parse_expr()?;
             match expr {
-                Expr::Identifier(_) | Expr::Nested(_) => Ok(expr),
+                Expr::Identifier(_)
+                | Expr::Nested(_)
+                | Expr::Cast {
+                    kind: CastKind::Cast,
+                    ..
+                }
+                | Expr::Extract { .. }
+                | Expr::Substring { .. }
+                | Expr::Trim { .. }
+                | Expr::Position { .. }
+                | Expr::Overlay { .. }
+                | Expr::Ceil { .. }
+                | Expr::Floor { .. } => Ok(expr),
                 Expr::Function(ref fun) if fun.over.is_none() => Ok(expr),
                 _ => parser_err!(
                     "Expected a column, function call, or parenthesized expression",
@@ -7596,13 +7608,13 @@ impl<'a> Parser<'a> {
             }
         })?;
         self.expect_keyword_is(Keyword::FROM)?;
-        let table = self.parse_object_name(false)?;
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
         Ok(Statement::CreateStatistics(CreateStatistics {
             name,
             if_not_exists,
             kinds,
             expressions,
-            table,
+            from,
         }))
     }
 

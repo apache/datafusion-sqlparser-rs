@@ -5075,98 +5075,50 @@ fn parse_alter_role() {
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::AlterRole {
-            name: Ident {
-                value: "role_name".into(),
-                quote_style: None,
-                span: Span::empty(),
-            },
+            name: Ident::new("role_name"),
             operation: AlterRoleOperation::Set {
-                config_name: ObjectName::from(vec![Ident {
-                    value: "maintenance_work_mem".into(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]),
-                config_value: SetConfigValue::FromCurrent,
+                config: ConfigurationSet::Parameter(FunctionDefinitionSetParam {
+                    name: ObjectName::from(vec![Ident::new("maintenance_work_mem")]),
+                    value: FunctionSetValue::FromCurrent,
+                }),
                 in_database: None
             },
         }
     );
 
     let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem = 100000";
+    let expected = Statement::AlterRole {
+        name: Ident::new("role_name"),
+        operation: AlterRoleOperation::Set {
+            config: ConfigurationSet::Parameter(FunctionDefinitionSetParam {
+                name: ObjectName::from(vec![Ident::new("maintenance_work_mem")]),
+                value: FunctionSetValue::Values(vec![Expr::value(number("100000"))]),
+            }),
+            in_database: Some(ObjectName::from(vec![Ident::new("database_name")])),
+        },
+    };
+    assert_eq!(pg().verified_stmt(sql), expected);
     assert_eq!(
-        pg().parse_sql_statements(sql).unwrap(),
-        [Statement::AlterRole {
-            name: Ident {
-                value: "role_name".into(),
-                quote_style: None,
-                span: Span::empty(),
-            },
-            operation: AlterRoleOperation::Set {
-                config_name: ObjectName::from(vec![Ident {
-                    value: "maintenance_work_mem".into(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]),
-                config_value: SetConfigValue::Value(Expr::Value(
-                    (number("100000")).with_empty_span()
-                )),
-                in_database: Some(ObjectName::from(vec![Ident {
-                    value: "database_name".into(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]))
-            },
-        }]
+        pg().one_statement_parses_to(
+            "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO 100000",
+            sql
+        ),
+        expected
     );
 
-    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO 100000";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg().one_statement_parses_to(
+            "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO DEFAULT",
+            "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem = DEFAULT"
+        ),
         Statement::AlterRole {
-            name: Ident {
-                value: "role_name".into(),
-                quote_style: None,
-                span: Span::empty(),
-            },
+            name: Ident::new("role_name"),
             operation: AlterRoleOperation::Set {
-                config_name: ObjectName::from(vec![Ident {
-                    value: "maintenance_work_mem".into(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]),
-                config_value: SetConfigValue::Value(Expr::Value(
-                    (number("100000")).with_empty_span()
-                )),
-                in_database: Some(ObjectName::from(vec![Ident {
-                    value: "database_name".into(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]))
-            },
-        }
-    );
-
-    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO DEFAULT";
-    assert_eq!(
-        pg().verified_stmt(sql),
-        Statement::AlterRole {
-            name: Ident {
-                value: "role_name".into(),
-                quote_style: None,
-                span: Span::empty(),
-            },
-            operation: AlterRoleOperation::Set {
-                config_name: ObjectName::from(vec![Ident {
-                    value: "maintenance_work_mem".into(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]),
-                config_value: SetConfigValue::Default,
-                in_database: Some(ObjectName::from(vec![Ident {
-                    value: "database_name".into(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]))
+                config: ConfigurationSet::Parameter(FunctionDefinitionSetParam {
+                    name: ObjectName::from(vec![Ident::new("maintenance_work_mem")]),
+                    value: FunctionSetValue::Default,
+                }),
+                in_database: Some(ObjectName::from(vec![Ident::new("database_name")])),
             },
         }
     );
@@ -5249,13 +5201,15 @@ fn parse_alter_user() {
     assert_eq!(
         pg().one_statement_parses_to(
             "ALTER USER bob SET search_path TO public",
-            "ALTER ROLE bob SET search_path TO public"
+            "ALTER ROLE bob SET search_path = public"
         ),
         Statement::AlterRole {
             name: Ident::new("bob"),
             operation: AlterRoleOperation::Set {
-                config_name: ObjectName::from(vec![Ident::new("search_path")]),
-                config_value: SetConfigValue::Value(Expr::Identifier(Ident::new("public"))),
+                config: ConfigurationSet::Parameter(FunctionDefinitionSetParam {
+                    name: ObjectName::from(vec![Ident::new("search_path")]),
+                    value: FunctionSetValue::Values(vec![Expr::Identifier(Ident::new("public"))]),
+                }),
                 in_database: None,
             },
         }
@@ -13677,6 +13631,62 @@ fn parse_alter_database_set() {
     ] {
         assert_eq!(
             dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_alter_role_set() {
+    assert_eq!(
+        pg().verified_stmt("ALTER ROLE app SET search_path = api, public"),
+        Statement::AlterRole {
+            name: Ident::new("app"),
+            operation: AlterRoleOperation::Set {
+                config: ConfigurationSet::Parameter(FunctionDefinitionSetParam {
+                    name: ObjectName::from(vec![Ident::new("search_path")]),
+                    value: FunctionSetValue::Values(vec![
+                        Expr::Identifier(Ident::new("api")),
+                        Expr::Identifier(Ident::new("public")),
+                    ]),
+                }),
+                in_database: None,
+            },
+        }
+    );
+    assert_eq!(
+        pg().verified_stmt("ALTER ROLE app IN DATABASE d SET TIME ZONE 'Europe/Rome'"),
+        Statement::AlterRole {
+            name: Ident::new("app"),
+            operation: AlterRoleOperation::Set {
+                config: ConfigurationSet::TimeZone(Expr::Value(
+                    Value::SingleQuotedString("Europe/Rome".to_string()).with_empty_span()
+                )),
+                in_database: Some(ObjectName::from(vec![Ident::new("d")])),
+            },
+        }
+    );
+
+    pg().verified_stmt("ALTER ROLE app IN DATABASE d SET search_path = api, public");
+    pg().verified_stmt("ALTER ROLE app SET XML OPTION DOCUMENT");
+    pg().one_statement_parses_to(
+        r#"ALTER ROLE app SET search_path TO "$user", public"#,
+        r#"ALTER ROLE app SET search_path = "$user", public"#,
+    );
+
+    for (sql, error) in [
+        (
+            "ALTER ROLE app SET search_path",
+            "Expected: = or TO, found: EOF",
+        ),
+        (
+            "ALTER ROLE app SET search_path = api,",
+            "Expected: an expression, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError(error.to_string()),
             "{sql}"
         );

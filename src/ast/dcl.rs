@@ -30,8 +30,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::{display_comma_separated, Expr, Ident, Password, Spanned};
 use crate::ast::{
-    display_separated, CascadeOption, CurrentGrantsKind, GrantObjects, Grantee, GranteeName,
-    ObjectName, Privileges,
+    display_separated, CascadeOption, ConfigurationSet, CurrentGrantsKind, GrantObjects, Grantee,
+    GranteeName, ObjectName, Privileges,
 };
 use crate::tokenizer::Span;
 
@@ -131,21 +131,6 @@ impl fmt::Display for RoleOption {
     }
 }
 
-/// SET config value option:
-/// * SET `configuration_parameter` { TO | = } { `value` | DEFAULT }
-/// * SET `configuration_parameter` FROM CURRENT
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum SetConfigValue {
-    /// Use the default value.
-    Default,
-    /// Use the current value (`FROM CURRENT`).
-    FromCurrent,
-    /// Set to the provided expression value.
-    Value(Expr),
-}
-
 /// RESET config option:
 /// * RESET `configuration_parameter`
 /// * RESET ALL
@@ -190,13 +175,9 @@ pub enum AlterRoleOperation {
     },
     /// PostgreSQL
     /// <https://www.postgresql.org/docs/current/sql-alterrole.html>
-    ///
-    /// `SET configuration_parameter { TO | = } { value | DEFAULT }`
     Set {
-        /// Configuration name to set.
-        config_name: ObjectName,
-        /// Value to assign to the configuration.
-        config_value: SetConfigValue,
+        /// The configuration parameter default to store.
+        config: ConfigurationSet,
         /// Optional database scope for the setting.
         in_database: Option<ObjectName>,
     },
@@ -228,19 +209,13 @@ impl fmt::Display for AlterRoleOperation {
                 write!(f, "WITH {}", display_separated(options, " "))
             }
             AlterRoleOperation::Set {
-                config_name,
-                config_value,
+                config,
                 in_database,
             } => {
                 if let Some(database_name) = in_database {
                     write!(f, "IN DATABASE {database_name} ")?;
                 }
-
-                match config_value {
-                    SetConfigValue::Default => write!(f, "SET {config_name} TO DEFAULT"),
-                    SetConfigValue::FromCurrent => write!(f, "SET {config_name} FROM CURRENT"),
-                    SetConfigValue::Value(expr) => write!(f, "SET {config_name} TO {expr}"),
-                }
+                write!(f, "{config}")
             }
             AlterRoleOperation::Reset {
                 config_name,

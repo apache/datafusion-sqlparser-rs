@@ -22,8 +22,8 @@ use crate::{
         AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterTrigger,
         AlterTriggerOperation, AlterUser, AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation,
         AlterUserModifyMfaMethod, AlterUserPassword, AlterUserRemoveRoleDelegation,
-        AlterUserSetPolicy, Expr, MfaMethodKind, Password, ResetConfig, RoleOption, SetConfigValue,
-        Statement, UserPolicyKind,
+        AlterUserSetPolicy, Expr, MfaMethodKind, Password, ResetConfig, RoleOption, Statement,
+        UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -434,33 +434,9 @@ impl Parser<'_> {
             }
         // SET
         } else if self.parse_keyword(Keyword::SET) {
-            let config_name = self.parse_object_name(false)?;
-            // FROM CURRENT
-            if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
-                AlterRoleOperation::Set {
-                    config_name,
-                    config_value: SetConfigValue::FromCurrent,
-                    in_database,
-                }
-            // { TO | = } { value | DEFAULT }
-            } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
-                if self.parse_keyword(Keyword::DEFAULT) {
-                    AlterRoleOperation::Set {
-                        config_name,
-                        config_value: SetConfigValue::Default,
-                        in_database,
-                    }
-                } else if let Ok(expr) = self.parse_expr() {
-                    AlterRoleOperation::Set {
-                        config_name,
-                        config_value: SetConfigValue::Value(expr),
-                        in_database,
-                    }
-                } else {
-                    self.expected_ref("config value", self.peek_token_ref())?
-                }
-            } else {
-                self.expected_ref("'TO' or '=' or 'FROM CURRENT'", self.peek_token_ref())?
+            AlterRoleOperation::Set {
+                config: self.parse_configuration_set()?,
+                in_database,
             }
         // RESET
         } else if self.parse_keyword(Keyword::RESET) {

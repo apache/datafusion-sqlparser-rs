@@ -61,7 +61,7 @@ pub use self::dcl::{
     AlterDefaultPrivileges, AlterDefaultPrivilegesOperation, AlterRoleOperation, CreateRole,
     DefaultPrivilegesObjectType, DefaultPrivilegesOption, Grant, GrantRole, ResetConfig, Revoke,
     RevokeRole, RoleGrantOption, RoleGrantOptionValue, RoleKeyword, RoleOption, SecondaryRoles,
-    SetConfigValue, Use,
+    Use,
 };
 pub use self::ddl::{
     AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,

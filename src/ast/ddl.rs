@@ -5052,7 +5052,7 @@ impl Spanned for AlterDatabase {
 }
 
 /// A `SET` clause that stores a configuration parameter default, as in
-/// `ALTER DATABASE ... SET`.
+/// `ALTER DATABASE ... SET` and `ALTER ROLE ... SET`.
 ///
 /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-set.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

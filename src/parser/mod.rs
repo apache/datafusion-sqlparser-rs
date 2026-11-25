@@ -12519,7 +12519,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the clause after `SET` that stores a configuration parameter
-    /// default, as in `ALTER DATABASE ... SET`.
+    /// default, as in `ALTER DATABASE ... SET` and `ALTER ROLE ... SET`.
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-set.html)
     fn parse_configuration_set(&mut self) -> Result<ConfigurationSet, ParserError> {

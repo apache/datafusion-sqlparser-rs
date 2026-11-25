@@ -23670,3 +23670,18 @@ fn parse_grant_revoke_all_privileges_columns() {
 fn parse_pgq_keywords_as_identifiers() {
     all_dialects().verified_stmt("SELECT edge.label AS property FROM graph AS edge");
 }
+
+#[test]
+fn parse_describe_object() {
+    let dialects = all_dialects_where(|d| d.supports_describe_object());
+    dialects.verified_stmt("DESCRIBE VIEW v");
+    dialects.verified_stmt("DESC VIEW db.s.v");
+    dialects.verified_stmt("DESCRIBE DATABASE d");
+    dialects.verified_stmt("DESC SCHEMA db.s");
+
+    let dialects = all_dialects_where(|d| !d.supports_describe_object());
+    assert!(matches!(
+        dialects.verified_stmt("DESC schema"),
+        Statement::ExplainTable { .. }
+    ));
+}

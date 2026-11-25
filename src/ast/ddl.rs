@@ -1684,7 +1684,7 @@ impl fmt::Display for IndexOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Using(index_type) => write!(f, "USING {index_type}"),
-            Self::Comment(s) => write!(f, "COMMENT '{s}'"),
+            Self::Comment(s) => write!(f, "COMMENT '{}'", escape_single_quote_string(s)),
         }
     }
 }

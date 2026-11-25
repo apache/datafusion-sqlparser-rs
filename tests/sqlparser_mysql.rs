@@ -5279,3 +5279,45 @@ fn parse_create_trigger_single_statement_body() {
         ))
     );
 }
+
+#[test]
+fn test_index_option_comment_escape() {
+    match mysql_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT, INDEX idx (a) COMMENT 'foo''bar')")
+    {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Index(c)] => {
+                assert_eq!(
+                    c.index_options,
+                    vec![IndexOption::Comment("foo'bar".to_string())]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    match mysql_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT, UNIQUE KEY uk (a) COMMENT 'it''s an ''index''')")
+    {
+        Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[..] {
+            [TableConstraint::Unique(c)] => {
+                assert_eq!(
+                    c.index_options,
+                    vec![IndexOption::Comment("it's an 'index'".to_string())]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        mysql_and_generic()
+            .parse_sql_statements("CREATE TABLE t (a INT, INDEX idx (a) COMMENT 'unterminated)")
+            .unwrap_err(),
+        ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 46".to_string()
+        )
+    );
+}

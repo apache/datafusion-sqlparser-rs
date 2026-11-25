@@ -3652,4 +3652,24 @@ SETTINGS update_parallel_mode = 'auto'"#;
             assert_eq!(test.get_source(constraint.span()), expected, "{sql}");
         }
     }
+
+    #[test]
+    fn test_alter_column_set_data_type_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        for (sql, expected) in [
+            (
+                r#"ALTER COLUMN a TYPE TEXT COLLATE "C""#,
+                r#"a TYPE TEXT COLLATE "C""#,
+            ),
+            (
+                r#"ALTER COLUMN a TYPE TEXT COLLATE "C" USING b"#,
+                r#"a TYPE TEXT COLLATE "C" USING b"#,
+            ),
+            ("ALTER COLUMN a TYPE TEXT", "a"),
+        ] {
+            let mut test = SpanTest::new(dialect, sql);
+            let operation = test.0.parse_alter_table_operation().unwrap();
+            assert_eq!(test.get_source(operation.span()), expected, "{sql}");
+        }
+    }
 }

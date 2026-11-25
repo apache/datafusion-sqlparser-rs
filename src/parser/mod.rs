@@ -12329,7 +12329,7 @@ impl<'a> Parser<'a> {
         Ok(FunctionDefinitionSetParam { name, value })
     }
 
-    /// Parse what follows `RESET` in `ALTER ROLE`, `ALTER FUNCTION` and similar statements.
+    /// Parse what follows `RESET`, as a statement or in `ALTER ROLE` and `ALTER FUNCTION`.
     fn parse_reset_config(&mut self) -> Result<ResetConfig, ParserError> {
         Ok(if self.parse_keyword(Keyword::ALL) {
             ResetConfig::ALL
@@ -23171,19 +23171,8 @@ impl<'a> Parser<'a> {
 
     /// Parses a RESET statement
     fn parse_reset(&mut self) -> Result<ResetStatement, ParserError> {
-        if self.parse_keyword(Keyword::ALL) {
-            return Ok(ResetStatement { reset: Reset::ALL });
-        }
-
-        if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
-            return Ok(ResetStatement {
-                reset: Reset::SessionAuthorization,
-            });
-        }
-
-        let obj = self.parse_object_name(false)?;
         Ok(ResetStatement {
-            reset: Reset::ConfigurationParameter(obj),
+            reset: self.parse_reset_config()?,
         })
     }
 

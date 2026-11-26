@@ -18801,7 +18801,58 @@ impl<'a> Parser<'a> {
                 return Ok(Some(TableVersion::VersionAsOf(expr)));
             }
         }
+        if self.dialect.supports_flashback_query() {
+            return self.maybe_parse_flashback_query();
+        }
         Ok(None)
+    }
+
+    /// Parses Oracle's flashback query clause:
+    /// ```sql
+    /// AS OF { SCN | TIMESTAMP | PERIOD FOR <column> } <expr>
+    /// VERSIONS { BETWEEN { SCN | TIMESTAMP } | PERIOD FOR <column> BETWEEN } <low> AND <high>
+    /// ```
+    ///
+    /// <https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/SELECT.html>
+    fn maybe_parse_flashback_query(&mut self) -> Result<Option<TableVersion>, ParserError> {
+        let start = self.index;
+        if self.parse_keywords(&[Keyword::AS, Keyword::OF]) {
+            let kind = match self.parse_one_of_keywords(&[
+                Keyword::SCN,
+                Keyword::TIMESTAMP,
+                Keyword::PERIOD,
+            ]) {
+                Some(Keyword::SCN) => FlashbackQueryKind::Scn,
+                Some(Keyword::TIMESTAMP) => FlashbackQueryKind::Timestamp,
+                Some(_) => {
+                    self.expect_keyword_is(Keyword::FOR)?;
+                    FlashbackQueryKind::PeriodFor(self.parse_identifier()?)
+                }
+                // `AS OF` followed by anything else is not this clause.
+                None => {
+                    self.index = start;
+                    return Ok(None);
+                }
+            };
+            let point = self.parse_expr()?;
+            return Ok(Some(TableVersion::AsOf { kind, point }));
+        }
+        let kind = if self.parse_keywords(&[Keyword::VERSIONS, Keyword::BETWEEN]) {
+            match self.expect_one_of_keywords(&[Keyword::SCN, Keyword::TIMESTAMP])? {
+                Keyword::SCN => FlashbackQueryKind::Scn,
+                _ => FlashbackQueryKind::Timestamp,
+            }
+        } else if self.parse_keywords(&[Keyword::VERSIONS, Keyword::PERIOD, Keyword::FOR]) {
+            let column = self.parse_identifier()?;
+            self.expect_keyword_is(Keyword::BETWEEN)?;
+            FlashbackQueryKind::PeriodFor(column)
+        } else {
+            return Ok(None);
+        };
+        let low = self.parse_subexpr(self.dialect.between_low_bound_precedence())?;
+        self.expect_keyword_is(Keyword::AND)?;
+        let high = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
+        Ok(Some(TableVersion::VersionsBetween { kind, low, high }))
     }
 
     /// Parses the Snowflake `CHANGES` clause for change tracking queries.

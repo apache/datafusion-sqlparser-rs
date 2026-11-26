@@ -2293,6 +2293,9 @@ impl fmt::Display for TableFactor {
                 if !partitions.is_empty() {
                     write!(f, " PARTITION ({})", display_comma_separated(partitions))?;
                 }
+                if let Some(version) = version {
+                    write!(f, " {version}")?;
+                }
                 if let Some(args) = args {
                     write!(f, "(")?;
                     write!(f, "{}", display_comma_separated(&args.args))?;
@@ -2318,9 +2321,6 @@ impl fmt::Display for TableFactor {
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;
-                }
-                if let Some(version) = version {
-                    write!(f, " {version}")?;
                 }
                 if let Some(TableSampleKind::AfterTableAlias(sample)) = sample {
                     write!(f, " {sample}")?;
@@ -2710,6 +2710,26 @@ pub enum TableVersion {
         /// The optional `END(TIMESTAMP => ...)` function-call expression.
         end: Option<Expr>,
     },
+    /// Oracle flashback query `AS OF`.
+    /// For example: `SELECT * FROM tbl AS OF SCN 123`
+    /// <https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/SELECT.html>
+    AsOf {
+        /// What `point` is measured in.
+        kind: FlashbackQueryKind,
+        /// The point the table is read as of.
+        point: Expr,
+    },
+    /// Oracle flashback query `VERSIONS`. A bound may be `MINVALUE` or `MAXVALUE`.
+    /// For example: `SELECT * FROM tbl VERSIONS BETWEEN SCN MINVALUE AND MAXVALUE`
+    /// <https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/SELECT.html>
+    VersionsBetween {
+        /// What the bounds are measured in.
+        kind: FlashbackQueryKind,
+        /// The lower bound.
+        low: Expr,
+        /// The upper bound.
+        high: Expr,
+    },
 }
 
 impl Display for TableVersion {
@@ -2725,8 +2745,40 @@ impl Display for TableVersion {
                     write!(f, " {end}")?;
                 }
             }
+            TableVersion::AsOf { kind, point } => write!(f, "AS OF {kind} {point}")?,
+            TableVersion::VersionsBetween {
+                kind: FlashbackQueryKind::PeriodFor(column),
+                low,
+                high,
+            } => write!(f, "VERSIONS PERIOD FOR {column} BETWEEN {low} AND {high}")?,
+            TableVersion::VersionsBetween { kind, low, high } => {
+                write!(f, "VERSIONS BETWEEN {kind} {low} AND {high}")?
+            }
         }
         Ok(())
+    }
+}
+
+/// What an Oracle flashback query's points are measured in.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FlashbackQueryKind {
+    /// `SCN`: a system change number.
+    Scn,
+    /// `TIMESTAMP`
+    Timestamp,
+    /// `PERIOD FOR <column>`: a valid-time period.
+    PeriodFor(Ident),
+}
+
+impl Display for FlashbackQueryKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FlashbackQueryKind::Scn => write!(f, "SCN"),
+            FlashbackQueryKind::Timestamp => write!(f, "TIMESTAMP"),
+            FlashbackQueryKind::PeriodFor(column) => write!(f, "PERIOD FOR {column}"),
+        }
     }
 }
 

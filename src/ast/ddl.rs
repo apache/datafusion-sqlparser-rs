@@ -5400,6 +5400,11 @@ pub enum AlterDatabaseOperation {
     Reset(ResetConfig),
     /// `OWNER TO new_owner`
     OwnerTo(Owner),
+    /// `SET TABLESPACE new_tablespace`
+    SetTablespace {
+        /// Target tablespace name.
+        tablespace_name: Ident,
+    },
 }
 
 impl fmt::Display for AlterDatabaseOperation {
@@ -5412,6 +5417,9 @@ impl fmt::Display for AlterDatabaseOperation {
                 write!(f, "RESET {name}")
             }
             AlterDatabaseOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterDatabaseOperation::SetTablespace { tablespace_name } => {
+                write!(f, "SET TABLESPACE {tablespace_name}")
+            }
         }
     }
 }

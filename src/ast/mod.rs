@@ -4597,6 +4597,8 @@ pub enum Statement {
     CreateProcedure {
         /// `OR ALTER` flag.
         or_alter: bool,
+        /// `OR REPLACE` flag.
+        or_replace: bool,
         /// Procedure name.
         name: ObjectName,
         /// Parenthesized parameter list, `None` when absent.
@@ -5618,14 +5620,16 @@ impl fmt::Display for Statement {
             Statement::CreateProcedure {
                 name,
                 or_alter,
+                or_replace,
                 params,
                 language,
                 body,
             } => {
                 write!(
                     f,
-                    "CREATE {or_alter}PROCEDURE {name}",
+                    "CREATE {or_alter}{or_replace}PROCEDURE {name}",
                     or_alter = if *or_alter { "OR ALTER " } else { "" },
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     name = name
                 )?;
 

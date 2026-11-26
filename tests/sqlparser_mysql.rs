@@ -3830,6 +3830,16 @@ fn parse_div_infix_propagates_parse_error() {
 }
 
 #[test]
+fn parse_long_div_chain() {
+    // DIV must take its left operand rather than copy it: a copy makes a
+    // chain of n operators take time quadratic in n.
+    let sql = format!("SELECT a{}", " DIV b".repeat(5000));
+    mysql().parse_sql_statements(&sql).unwrap();
+    // The right operand is an ordinary expression, not ANY/ALL.
+    mysql().verified_expr("a DIV ANY(b)");
+}
+
+#[test]
 fn parse_div_precedence() {
     let div = |left: Expr, right: Expr| Expr::BinaryOp {
         left: Box::new(left),

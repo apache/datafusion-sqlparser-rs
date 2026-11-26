@@ -4188,6 +4188,26 @@ impl<'a> Parser<'a> {
             }
         } else if let Token::Word(w) = &tok.token {
             match w.keyword {
+                Keyword::DIV if dialect_is!(dialect is MySqlDialect | SparkSqlDialect) => {
+                    Ok(Expr::BinaryOp {
+                        left: Box::new(expr),
+                        op: BinaryOperator::MyIntegerDivide,
+                        right: Box::new(self.parse_subexpr(precedence)?),
+                    })
+                }
+                Keyword::REGEXP | Keyword::MATCH | Keyword::GLOB if dialect_is!(dialect is SQLiteDialect) =>
+                {
+                    let op = match w.keyword {
+                        Keyword::REGEXP => BinaryOperator::Regexp,
+                        Keyword::MATCH => BinaryOperator::Match,
+                        _ => BinaryOperator::Glob,
+                    };
+                    Ok(Expr::BinaryOp {
+                        left: Box::new(expr),
+                        op,
+                        right: Box::new(self.parse_subexpr(precedence)?),
+                    })
+                }
                 Keyword::IS => {
                     if self.parse_keyword(Keyword::NULL) {
                         Ok(Expr::IsNull(Box::new(expr)))

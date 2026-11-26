@@ -5398,6 +5398,8 @@ pub enum AlterDatabaseOperation {
     Set(ConfigurationSet),
     /// `RESET configuration_parameter` or `RESET ALL`
     Reset(ResetConfig),
+    /// `OWNER TO new_owner`
+    OwnerTo(Owner),
 }
 
 impl fmt::Display for AlterDatabaseOperation {
@@ -5409,6 +5411,7 @@ impl fmt::Display for AlterDatabaseOperation {
             AlterDatabaseOperation::Reset(ResetConfig::ConfigName(name)) => {
                 write!(f, "RESET {name}")
             }
+            AlterDatabaseOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
         }
     }
 }

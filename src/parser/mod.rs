@@ -371,6 +371,8 @@ pub struct Parser<'a> {
     /// every level, taking 2^N time. Maps the arm's start to where a parsed
     /// query lacked its `)`.
     failed_in_subquery_positions: BTreeMap<usize, Option<usize>>,
+    /// See [`Parser::with_infix_chain_depth`].
+    infix_chain_depth: bool,
 }
 
 /// Whether an alias names a select item or a table.
@@ -426,6 +428,7 @@ impl<'a> Parser<'a> {
             failed_derived_table_factor_positions: BTreeSet::new(),
             failed_position_syntax_positions: BTreeSet::new(),
             failed_in_subquery_positions: BTreeMap::new(),
+            infix_chain_depth: false,
         }
     }
 
@@ -457,6 +460,15 @@ impl<'a> Parser<'a> {
     /// See [`recursive::recursive`] for more information.
     pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
         self.recursion_counter = RecursionCounter::new(recursion_limit);
+        self
+    }
+
+    /// Also charge each operator of a chain such as `a + b + c` to the
+    /// recursion limit. The chain nests the resulting [`Expr`] one level per
+    /// operator, and dropping or serializing it recurses that deep. Defaults
+    /// to false.
+    pub fn with_infix_chain_depth(mut self, infix_chain_depth: bool) -> Self {
+        self.infix_chain_depth = infix_chain_depth;
         self
     }
 
@@ -1473,6 +1485,7 @@ impl<'a> Parser<'a> {
         }
 
         debug!("prefix: {expr:?}");
+        let mut _chain_guards = vec![];
         loop {
             let next_precedence = self.get_next_precedence()?;
             debug!("next precedence: {next_precedence:?}");
@@ -1487,6 +1500,9 @@ impl<'a> Parser<'a> {
                 break;
             }
 
+            if self.infix_chain_depth {
+                _chain_guards.push(self.recursion_counter.try_decrease()?);
+            }
             expr = self.parse_infix(expr, next_precedence)?;
         }
         Ok(expr)

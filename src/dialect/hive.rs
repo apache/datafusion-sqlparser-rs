@@ -29,6 +29,22 @@ impl Dialect for HiveDialect {
         (ch == '"') || (ch == '`')
     }
 
+    fn supports_create_table_comment_after_columns(&self) -> bool {
+        true
+    }
+
+    fn supports_create_table_plain_options(&self) -> bool {
+        false
+    }
+
+    fn supports_create_table_clustered_by(&self) -> bool {
+        true
+    }
+
+    fn supports_insert_columns_after_partition(&self) -> bool {
+        true
+    }
+
     fn supports_hash_comment(&self) -> bool {
         true
     }

@@ -14597,3 +14597,39 @@ fn parse_alter_column_set_storage() {
         );
     }
 }
+
+#[test]
+fn parse_alter_database_rename() {
+    let dialects = pg_and_generic();
+    assert_eq!(
+        dialects.verified_stmt("ALTER DATABASE d RENAME TO \"Weird\""),
+        Statement::AlterDatabase(AlterDatabase {
+            name: ObjectName::from(vec![Ident::new("d")]),
+            operation: AlterDatabaseOperation::RenameTo {
+                new_name: Ident::with_quote('"', "Weird"),
+            },
+        })
+    );
+    assert_eq!(
+        Parser::parse_sql(&PostgreSqlDialect {}, "ALTER DATABASE app.d RENAME TO e").unwrap()[0]
+            .span(),
+        Span::new(Location::new(1, 16), Location::new(1, 21))
+    );
+    for (sql, error) in [
+        ("ALTER DATABASE", "Expected: identifier, found: EOF"),
+        (
+            "ALTER DATABASE d RENAME TO",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER DATABASE d",
+            "Expected: RENAME TO after ALTER DATABASE, found: EOF",
+        ),
+    ] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(error.to_string()),
+            "{sql}"
+        );
+    }
+}

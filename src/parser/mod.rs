@@ -12135,6 +12135,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
+            Keyword::DATABASE => self.parse_alter_database().map(Into::into),
             Keyword::EXTENSION => self.parse_alter_extension().map(Into::into),
             Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
@@ -12199,7 +12200,7 @@ impl<'a> Parser<'a> {
             _ => {
                 self.index = index;
                 self.expected_ref(
-                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or EXTENSION",
+                    "one of VIEW or MATERIALIZED VIEW or TYPE or COLLATION or DATABASE or TABLE or INDEX or FUNCTION or AGGREGATE or ROLE or POLICY or TRIGGER or CONNECTOR or ICEBERG or FOREIGN TABLE or SCHEMA or USER or OPERATOR or EXTENSION",
                     self.peek_token_ref(),
                 )
             }
@@ -12614,6 +12615,22 @@ impl<'a> Parser<'a> {
         };
 
         Ok(AlterCollation { name, operation })
+    }
+
+    /// Parse a [Statement::AlterDatabase].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterdatabase.html)
+    pub fn parse_alter_database(&mut self) -> Result<AlterDatabase, ParserError> {
+        let name = self.parse_object_name(false)?;
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterDatabaseOperation::RenameTo {
+                new_name: self.parse_identifier()?,
+            }
+        } else {
+            return self.expected_ref("RENAME TO after ALTER DATABASE", self.peek_token_ref());
+        };
+
+        Ok(AlterDatabase { name, operation })
     }
 
     /// Parse a [Statement::AlterExtension]

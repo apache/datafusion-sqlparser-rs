@@ -1,0 +1,1 @@
+CREATE DOMAIN d int4;

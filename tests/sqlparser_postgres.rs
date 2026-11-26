@@ -7249,6 +7249,7 @@ fn parse_create_domain() {
     let sql1 = "CREATE DOMAIN my_domain AS INTEGER CHECK (VALUE > 0)";
     let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
+        as_keyword: true,
         data_type: DataType::Integer(None),
         collation: None,
         default: None,
@@ -7271,6 +7272,7 @@ fn parse_create_domain() {
     let sql2 = "CREATE DOMAIN my_domain AS INTEGER COLLATE \"en_US\" CHECK (VALUE > 0)";
     let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
+        as_keyword: true,
         data_type: DataType::Integer(None),
         collation: Some(Ident::with_quote('"', "en_US")),
         default: None,
@@ -7293,6 +7295,7 @@ fn parse_create_domain() {
     let sql3 = "CREATE DOMAIN my_domain AS INTEGER DEFAULT 1 CHECK (VALUE > 0)";
     let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
+        as_keyword: true,
         data_type: DataType::Integer(None),
         collation: None,
         default: Some(Expr::Value(test_utils::number("1").into())),
@@ -7315,6 +7318,7 @@ fn parse_create_domain() {
     let sql4 = "CREATE DOMAIN my_domain AS INTEGER COLLATE \"en_US\" DEFAULT 1 CHECK (VALUE > 0)";
     let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
+        as_keyword: true,
         data_type: DataType::Integer(None),
         collation: Some(Ident::with_quote('"', "en_US")),
         default: Some(Expr::Value(test_utils::number("1").into())),
@@ -7337,6 +7341,7 @@ fn parse_create_domain() {
     let sql5 = "CREATE DOMAIN my_domain AS INTEGER CONSTRAINT my_constraint CHECK (VALUE > 0)";
     let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
+        as_keyword: true,
         data_type: DataType::Integer(None),
         collation: None,
         default: None,
@@ -7355,6 +7360,26 @@ fn parse_create_domain() {
     });
 
     assert_eq!(pg().verified_stmt(sql5), expected);
+
+    let sql6 = "CREATE DOMAIN my_domain INTEGER";
+    let expected = Statement::CreateDomain(CreateDomain {
+        name: ObjectName::from(vec![Ident::new("my_domain")]),
+        as_keyword: false,
+        data_type: DataType::Integer(None),
+        collation: None,
+        default: None,
+        constraints: vec![],
+    });
+
+    assert_eq!(pg().verified_stmt(sql6), expected);
+
+    for sql in ["CREATE DOMAIN my_domain", "CREATE DOMAIN my_domain AS"] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: a data type name, found: EOF".to_string()),
+            "{sql}"
+        );
+    }
 }
 
 #[test]

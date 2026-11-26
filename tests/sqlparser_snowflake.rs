@@ -5042,3 +5042,45 @@ fn test_stage_name_delimiters() {
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
 }
+
+#[test]
+fn test_stage_params_and_pattern_single_quote_escape() {
+    match snowflake().verified_stmt(
+        "CREATE STAGE my_ext_stage URL='s3://bucket/o''reilly/' ENDPOINT='https://o''reilly.example.com'",
+    ) {
+        Statement::CreateStage { stage_params, .. } => {
+            assert_eq!(
+                stage_params.url.as_deref(),
+                Some("s3://bucket/o'reilly/")
+            );
+            assert_eq!(
+                stage_params.endpoint.as_deref(),
+                Some("https://o'reilly.example.com")
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake().verified_stmt("LIST @my_stage/dir/ PATTERN='.*o''reilly.*'") {
+        Statement::List(command) => {
+            assert_eq!(command.pattern.as_deref(), Some(".*o'reilly.*"));
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake().verified_stmt("REMOVE @my_stage/dir/ PATTERN='.*it''s_''quoted''.*'") {
+        Statement::Remove(command) => {
+            assert_eq!(command.pattern.as_deref(), Some(".*it's_'quoted'.*"));
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("LIST @my_stage PATTERN='.*unterminated")
+            .unwrap_err(),
+        ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 24".to_string()
+        )
+    );
+}

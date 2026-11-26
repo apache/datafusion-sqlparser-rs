@@ -5396,6 +5396,8 @@ pub enum AlterDatabaseOperation {
     },
     /// `SET ...`, stored as the database's default for a configuration parameter.
     Set(ConfigurationSet),
+    /// `RESET configuration_parameter` or `RESET ALL`
+    Reset(ResetConfig),
 }
 
 impl fmt::Display for AlterDatabaseOperation {
@@ -5403,6 +5405,10 @@ impl fmt::Display for AlterDatabaseOperation {
         match self {
             AlterDatabaseOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
             AlterDatabaseOperation::Set(set) => write!(f, "{set}"),
+            AlterDatabaseOperation::Reset(ResetConfig::ALL) => f.write_str("RESET ALL"),
+            AlterDatabaseOperation::Reset(ResetConfig::ConfigName(name)) => {
+                write!(f, "RESET {name}")
+            }
         }
     }
 }

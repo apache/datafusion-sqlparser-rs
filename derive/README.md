@@ -188,11 +188,11 @@ impl sqlparser::ast::VisitMut for ShowStatementIn {
         &mut self,
         visitor: &mut V,
     ) -> ::std::ops::ControlFlow<V::Break> {
-        sqlparser::ast::VisitMut::visit(&mut self.clause, visitor)?;
-        sqlparser::ast::VisitMut::visit(&mut self.parent_type, visitor)?;
+        sqlparser::ast::VisitMut::visit_mut(&mut self.clause, visitor)?;
+        sqlparser::ast::VisitMut::visit_mut(&mut self.parent_type, visitor)?;
         if let Some(value) = &mut self.parent_name {
             visitor.pre_visit_relation(value)?;
-            sqlparser::ast::VisitMut::visit(value, visitor)?;
+            sqlparser::ast::VisitMut::visit_mut(value, visitor)?;
             visitor.post_visit_relation(value)?;
         }
         ::std::ops::ControlFlow::Continue(())

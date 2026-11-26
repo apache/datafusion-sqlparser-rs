@@ -500,6 +500,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn single_line_comment_ends_at_carriage_return(&self) -> bool {
+        true
+    }
+
     fn supports_copy_from_stdin_data(&self) -> bool {
         true
     }

@@ -2356,8 +2356,8 @@ impl<'a> Tokenizer<'a> {
     // Consume characters until newline
     fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
         peeking_take_while(chars, |ch| match ch {
-            '\n' => false,                                           // Always stop at \n
-            '\r' if dialect_of!(self is PostgreSqlDialect) => false, // Stop at \r for Postgres
+            '\n' => false, // Always stop at \n
+            '\r' if self.dialect.single_line_comment_ends_at_carriage_return() => false,
             _ => true, // Keep consuming for other characters
         })
     }

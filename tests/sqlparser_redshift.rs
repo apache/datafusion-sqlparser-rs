@@ -518,3 +518,16 @@ fn parse_approximate_percentile_disc() {
         "SELECT APPROXIMATE AS PERCENTILE_DISC FROM t",
     );
 }
+
+#[test]
+fn parse_single_line_comment_ends_at_carriage_return() {
+    let sql = "SELECT 1 AS a --\r, 2";
+
+    let select = all_dialects_where(|d| d.single_line_comment_ends_at_carriage_return())
+        .verified_only_select_with_canonical(sql, "SELECT 1 AS a, 2");
+    assert_eq!(select.projection.len(), 2);
+
+    let select = all_dialects_where(|d| !d.single_line_comment_ends_at_carriage_return())
+        .verified_only_select_with_canonical(sql, "SELECT 1 AS a");
+    assert_eq!(select.projection.len(), 1);
+}

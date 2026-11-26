@@ -1458,6 +1458,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if a lone `\r` ends a `--` comment, as in PostgreSQL.
+    fn single_line_comment_ends_at_carriage_return(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `#` as the start of a single line comment,
     /// e.g. `SELECT 1 # comment`
     fn supports_hash_comment(&self) -> bool {

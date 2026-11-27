@@ -987,6 +987,11 @@ pub trait Dialect: Debug + Any {
                     {
                         Ok(p!(AtTz))
                     }
+                    (Token::Word(w), _)
+                        if w.keyword == Keyword::LOCAL && self.supports_at_local() =>
+                    {
+                        Ok(p!(AtTz))
+                    }
                     _ => Ok(self.prec_unknown()),
                 }
             }
@@ -1941,6 +1946,11 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports the `x NOTNULL`
     /// operator expression.
     fn supports_notnull_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `x AT LOCAL` expression.
+    fn supports_at_local(&self) -> bool {
         false
     }
 

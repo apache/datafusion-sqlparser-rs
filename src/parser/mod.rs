@@ -4254,11 +4254,15 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::AT => {
-                    self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                    Ok(Expr::AtTimeZone {
-                        timestamp: Box::new(expr),
-                        time_zone: Box::new(self.parse_subexpr(precedence)?),
-                    })
+                    if self.dialect.supports_at_local() && self.parse_keyword(Keyword::LOCAL) {
+                        Ok(Expr::AtLocal(Box::new(expr)))
+                    } else {
+                        self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                        Ok(Expr::AtTimeZone {
+                            timestamp: Box::new(expr),
+                            time_zone: Box::new(self.parse_subexpr(precedence)?),
+                        })
+                    }
                 }
                 Keyword::GLOBAL if self.dialect.supports_global_in() => {
                     let negated = self.parse_keyword(Keyword::NOT);

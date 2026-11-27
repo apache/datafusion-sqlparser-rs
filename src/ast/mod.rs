@@ -1184,6 +1184,10 @@ pub enum Expr {
         /// Time zone expression to apply.
         time_zone: Box<Expr>,
     },
+    /// Convert a timestamp to the session time zone, e.g. `ts AT LOCAL` in [PostgreSQL].
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT
+    AtLocal(Box<Expr>),
     /// Extract a field from a timestamp e.g. `EXTRACT(MONTH FROM foo)`
     /// Or `EXTRACT(MONTH, foo)`
     ///
@@ -2296,6 +2300,7 @@ impl fmt::Display for Expr {
             } => {
                 write!(f, "{timestamp} AT TIME ZONE {time_zone}")
             }
+            Expr::AtLocal(timestamp) => write!(f, "{timestamp} AT LOCAL"),
             Expr::Interval(interval) => {
                 write!(f, "{interval}")
             }

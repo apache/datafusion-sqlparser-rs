@@ -550,6 +550,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/current/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT>
+    fn supports_at_local(&self) -> bool {
+        true
+    }
+
     /// [Postgres] supports optional field and precision options for `INTERVAL` data type.
     ///
     /// [Postgres]: https://www.postgresql.org/docs/17/datatype-datetime.html

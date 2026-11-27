@@ -14597,3 +14597,49 @@ fn parse_alter_column_set_storage() {
         );
     }
 }
+
+#[test]
+fn parse_at_local() {
+    let ts = || Box::new(Expr::Identifier(Ident::new("ts")));
+
+    assert_eq!(
+        pg_and_generic().verified_expr("ts AT LOCAL"),
+        Expr::AtLocal(ts())
+    );
+    pg_and_generic().verified_stmt("SELECT CAST((CAST(NULL AS TIMESTAMPTZ) AT LOCAL) AS TEXT)");
+
+    // AT LOCAL binds tighter than `+` and associates left with AT TIME ZONE.
+    assert_eq!(
+        pg_and_generic().verified_expr("x + ts AT LOCAL"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("x"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::AtLocal(ts())),
+        }
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("ts AT TIME ZONE 'UTC' AT LOCAL"),
+        Expr::AtLocal(Box::new(Expr::AtTimeZone {
+            timestamp: ts(),
+            time_zone: Box::new(Expr::Value(
+                Value::SingleQuotedString("UTC".to_string()).with_empty_span()
+            )),
+        }))
+    );
+    assert_eq!(
+        pg_and_generic().verified_expr("ts AT LOCAL AT TIME ZONE 'UTC'"),
+        Expr::AtTimeZone {
+            timestamp: Box::new(Expr::AtLocal(ts())),
+            time_zone: Box::new(Expr::Value(
+                Value::SingleQuotedString("UTC".to_string()).with_empty_span()
+            )),
+        }
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_at_local()).parse_sql_statements("SELECT (ts AT LOCAL)"),
+        Err(ParserError::ParserError(
+            "Expected: ), found: AT".to_string()
+        ))
+    );
+}

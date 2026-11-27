@@ -1793,6 +1793,7 @@ impl Spanned for Expr {
                 timestamp,
                 time_zone,
             } => timestamp.span().union(&time_zone.span()),
+            Expr::AtLocal(timestamp) => timestamp.span(),
             Expr::Extract {
                 field: _,
                 syntax: _,
@@ -3692,5 +3693,14 @@ SETTINGS update_parallel_mode = 'auto'"#;
             let operation = test.0.parse_alter_table_operation().unwrap();
             assert_eq!(test.get_source(operation.span()), expected, "{sql}");
         }
+    }
+
+    #[test]
+    fn test_at_local_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let mut test = SpanTest::new(dialect, "t.ts AT LOCAL");
+        let expr = test.0.parse_expr().unwrap();
+        assert!(matches!(expr, Expr::AtLocal(_)));
+        assert_eq!(test.get_source(expr.span()), "t.ts");
     }
 }

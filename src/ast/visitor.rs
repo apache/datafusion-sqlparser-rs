@@ -687,6 +687,7 @@ where
 ///           name: ObjectName::from(vec![Ident::new("f")]),
 ///           uses_odbc_syntax: false,
 ///           args: FunctionArguments::List(FunctionArgumentList {
+///               closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
 ///               duplicate_treatment: None,
 ///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
 ///               clauses: vec![],

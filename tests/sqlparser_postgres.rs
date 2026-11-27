@@ -3529,6 +3529,8 @@ fn parse_create_indices_with_operator_classes() {
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
+                            closing_token:
+                                sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                             duplicate_treatment: None,
                             args: vec![
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
@@ -4497,6 +4499,7 @@ fn test_composite_value() {
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
+                    closing_token: sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
                         Array {
@@ -6672,6 +6675,8 @@ fn parse_create_table_with_partition_by() {
                     assert_eq!("RANGE", f.name.to_string());
                     assert_eq!(
                         FunctionArguments::List(FunctionArgumentList {
+                            closing_token:
+                                sqlparser::ast::helpers::attached_token::AttachedToken::empty(),
                             duplicate_treatment: None,
                             clauses: vec![],
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(

@@ -151,6 +151,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_cte_materialization(&self) -> bool {
+        true
+    }
+
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         true
     }

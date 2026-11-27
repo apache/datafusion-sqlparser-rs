@@ -1068,6 +1068,7 @@ define_keywords!(
     SUBMULTISET,
     SUBSCRIPT,
     SUBSCRIPTION,
+    SUBSET,
     SUBSTR,
     SUBSTRING,
     SUBSTRING_REGEX,

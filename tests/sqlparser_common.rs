@@ -12451,6 +12451,21 @@ fn parse_deeply_nested_unary_op_hits_recursion_limits() {
 }
 
 #[test]
+fn parse_infix_chain_with_chain_depth_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+    let sql = format!("SELECT {}", vec!["1"; 100].join(" + "));
+    let parse = |infix_chain_depth| {
+        Parser::new(&dialect)
+            .with_infix_chain_depth(infix_chain_depth)
+            .try_with_sql(&sql)
+            .expect("tokenize to work")
+            .parse_statements()
+    };
+    parse(false).expect("chain parses without the option");
+    assert_eq!(parse(true), Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
 fn parse_deeply_nested_expr_hits_recursion_limits() {
     let dialect = GenericDialect {};
 

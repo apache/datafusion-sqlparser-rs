@@ -23653,6 +23653,42 @@ fn parse_only_table_name() {
     }
 }
 
+/// Hang guard for nested schema-qualified calls whose name is a keyword with
+/// its own syntax. The call was first read as that keyword's expression and
+/// rejected, then read again as a function, at every level.
+#[test]
+fn parse_nested_qualified_keyword_calls_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    for level in [
+        "a.CEIL({})",
+        "pg_catalog.floor({})",
+        "pg_catalog.substring({}, 1, 2)",
+        "pg_catalog.trim({})",
+    ] {
+        let sql = format!(
+            "SELECT {}",
+            (0..30).fold("x".to_string(), |inner, _| level.replace("{}", &inner))
+        );
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let result = Parser::new(&PostgreSqlDialect {})
+                .with_recursion_limit(1000)
+                .try_with_sql(&sql)
+                .and_then(|mut parser| parser.parse_statements());
+            let _ = tx.send(result.is_ok());
+        });
+
+        let parsed = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("parser should handle this quickly, not loop exponentially");
+        assert!(parsed, "{level} nested 30 deep should parse");
+    }
+}
+
 #[test]
 fn parse_grant_revoke_all_privileges_columns() {
     match verified_stmt("GRANT ALL PRIVILEGES (id) ON t TO r") {

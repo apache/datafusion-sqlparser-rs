@@ -3694,4 +3694,13 @@ SETTINGS update_parallel_mode = 'auto'"#;
             assert_eq!(test.get_source(operation.span()), expected, "{sql}");
         }
     }
+
+    #[test]
+    fn test_at_local_span() {
+        let dialect = &crate::dialect::PostgreSqlDialect {};
+        let mut test = SpanTest::new(dialect, "t.ts AT LOCAL");
+        let expr = test.0.parse_expr().unwrap();
+        assert!(matches!(expr, Expr::AtLocal(_)));
+        assert_eq!(test.get_source(expr.span()), "t.ts");
+    }
 }

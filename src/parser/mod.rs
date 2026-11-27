@@ -871,18 +871,33 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a `WHILE` statement.
+    /// Parse a `WHILE` statement, whose body is one statement or a
+    /// `BEGIN ... END` block.
     ///
     /// See [Statement::While]
     fn parse_while(&mut self) -> Result<WhileStatement, ParserError> {
-        self.expect_keyword_is(Keyword::WHILE)?;
-        let while_block = self.parse_conditional_statement_block(&[Keyword::END])?;
+        let start_token = self.expect_keyword(Keyword::WHILE)?;
+        let condition = self.parse_expr()?;
+        let conditional_statements = if self.peek_keyword(Keyword::BEGIN) {
+            self.parse_conditional_statements(&[Keyword::END])?
+        } else {
+            ConditionalStatements::Sequence {
+                statements: vec![self.parse_statement()?],
+            }
+        };
 
-        Ok(WhileStatement { while_block })
+        Ok(WhileStatement {
+            while_block: ConditionalStatementBlock {
+                start_token: AttachedToken(start_token),
+                condition: Some(condition),
+                then_token: None,
+                conditional_statements,
+            },
+        })
     }
 
     /// Parses an expression and associated list of statements
-    /// belonging to a conditional statement like `IF` or `WHEN` or `WHILE`.
+    /// belonging to a conditional statement like `IF` or `WHEN`.
     ///
     /// Example:
     /// ```sql
@@ -897,10 +912,6 @@ impl<'a> Parser<'a> {
 
         let condition = match &start_token.token {
             Token::Word(w) if w.keyword == Keyword::ELSE => None,
-            Token::Word(w) if w.keyword == Keyword::WHILE => {
-                let expr = self.parse_expr()?;
-                Some(expr)
-            }
             _ => {
                 let expr = self.parse_expr()?;
                 then_token = Some(AttachedToken(self.expect_keyword(Keyword::THEN)?));

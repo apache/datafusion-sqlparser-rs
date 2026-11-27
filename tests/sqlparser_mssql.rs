@@ -2985,3 +2985,46 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().verified_stmt("SELECT * FROM t [PRINT]");
     ms().verified_stmt("SELECT * FROM t AS [PRINT]");
 }
+
+#[test]
+fn parse_tsql_statement_list_without_semicolons() {
+    tsql().one_statement_parses_to(
+        "BEGIN SELECT 1 SELECT 2 END",
+        "BEGIN SELECT 1; SELECT 2; END",
+    );
+    tsql().one_statement_parses_to(
+        "WHILE @i < 3 BEGIN SET @i = @i + 1 SELECT @i END",
+        "WHILE @i < 3 BEGIN SET @i = @i + 1; SELECT @i; END",
+    );
+    tsql().one_statement_parses_to(
+        "CREATE PROCEDURE p AS BEGIN SELECT 1 SELECT 2 END",
+        "CREATE PROCEDURE p AS BEGIN SELECT 1; SELECT 2; END",
+    );
+    tsql().one_statement_parses_to(
+        "CREATE FUNCTION f() RETURNS INT AS BEGIN DECLARE @x INT SET @x = 1 RETURN @x END",
+        "CREATE FUNCTION f() RETURNS INT AS BEGIN DECLARE @x INT; SET @x = 1; RETURN @x; END",
+    );
+    tsql().one_statement_parses_to(
+        "CREATE TRIGGER tr ON t AFTER INSERT AS BEGIN SELECT 1 SELECT 2 END",
+        "CREATE TRIGGER tr ON t AFTER INSERT AS BEGIN SELECT 1; SELECT 2; END",
+    );
+    tsql().verified_stmt("BEGIN SELECT 1; SELECT 2; END");
+    tsql().one_statement_parses_to(
+        "CREATE PROCEDURE p AS BEGIN ; SELECT 1;; END",
+        "CREATE PROCEDURE p AS BEGIN SELECT 1; END",
+    );
+
+    assert_eq!(
+        tsql().parse_sql_statements("BEGIN SELECT 1 SELECT 2"),
+        Err(ParserError::ParserError(
+            "Expected: END, found: EOF".to_owned()
+        ))
+    );
+
+    assert_eq!(
+        ms().parse_sql_statements("BEGIN SELECT 1 SELECT 2 END"),
+        Err(ParserError::ParserError(
+            "Expected: ;, found: SELECT".to_owned()
+        ))
+    );
+}

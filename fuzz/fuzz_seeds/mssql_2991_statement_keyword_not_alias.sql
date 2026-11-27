@@ -1,0 +1,2 @@
+SELECT 1
+SET @x = 1

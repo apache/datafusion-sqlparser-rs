@@ -2324,7 +2324,11 @@ impl Spanned for SymbolDefinition {
 
 impl Spanned for Measure {
     fn span(&self) -> Span {
-        let Measure { expr, alias } = self;
+        let Measure {
+            semantics: _,
+            expr,
+            alias,
+        } = self;
 
         expr.span().union(&alias.span)
     }

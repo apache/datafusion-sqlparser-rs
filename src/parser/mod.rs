@@ -2836,11 +2836,16 @@ impl<'a> Parser<'a> {
         } else {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
                 None
+            } else if matches!(self.peek_token_ref().token, Token::SingleQuotedString(_))
+                && matches!(
+                    &self.peek_nth_token_ref(1).token,
+                    Token::Word(word) if self.dialect.is_interval_qualifier(word.keyword)
+                )
+            {
+                // `'1' DAY` is an interval written without the `INTERVAL` keyword
+                Some(Box::new(self.parse_interval()?))
             } else {
-                Some(Box::new(match &self.peek_token_ref().token {
-                    Token::SingleQuotedString(_) => self.parse_interval()?,
-                    _ => self.parse_expr()?,
-                }))
+                Some(Box::new(self.parse_expr()?))
             };
             if self.parse_keyword(Keyword::PRECEDING) {
                 Ok(WindowFrameBound::Preceding(rows))

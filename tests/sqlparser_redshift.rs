@@ -518,3 +518,15 @@ fn parse_approximate_percentile_disc() {
         "SELECT APPROXIMATE AS PERCENTILE_DISC FROM t",
     );
 }
+
+#[test]
+fn parse_nested_block_comment() {
+    redshift().one_statement_parses_to(
+        "SELECT 1 /* /* */ , ' */ , pg_backend_pid() -- '",
+        "SELECT 1, pg_backend_pid()",
+    );
+    redshift().one_statement_parses_to(
+        "SELECT 1 /*/*/ , ' */ */ , pg_backend_pid() -- '",
+        "SELECT 1, pg_backend_pid()",
+    );
+}

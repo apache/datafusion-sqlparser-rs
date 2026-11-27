@@ -1793,6 +1793,7 @@ impl Spanned for Expr {
                 timestamp,
                 time_zone,
             } => timestamp.span().union(&time_zone.span()),
+            Expr::AtLocal(timestamp) => timestamp.span(),
             Expr::Extract {
                 field: _,
                 syntax: _,

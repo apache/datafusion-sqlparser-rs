@@ -384,4 +384,8 @@ impl Dialect for GenericDialect {
     fn supports_add_column_if_not_exists(&self) -> bool {
         true
     }
+
+    fn supports_at_local(&self) -> bool {
+        true
+    }
 }

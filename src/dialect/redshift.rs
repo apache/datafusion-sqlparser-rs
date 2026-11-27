@@ -191,6 +191,11 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    /// See <https://www.postgresql.org/docs/8.0/sql-syntax.html#SQL-SYNTAX-COMMENTS>
+    fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
     /// `INTERVAL` is listed as reserved in Redshift docs but the actual parser allows it as an
     /// identifier, consistent with pgsql.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {

@@ -286,6 +286,7 @@ pub fn all_dialects() -> TestedDialects {
         Box::new(HiveDialect {}),
         Box::new(RedshiftSqlDialect {}),
         Box::new(MySqlDialect {}),
+        Box::new(DorisDialect {}),
         Box::new(BigQueryDialect {}),
         Box::new(SQLiteDialect {}),
         Box::new(DuckDbDialect {}),

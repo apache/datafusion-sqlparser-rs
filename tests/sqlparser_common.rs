@@ -23720,3 +23720,48 @@ fn test_select_where_with_ilike_any_escape() {
         ParserError::ParserError("Expected: an expression, found: EOF".to_string())
     );
 }
+
+#[test]
+fn parse_try_cast_shortcut() {
+    let dialects = all_dialects();
+    for sql in [
+        "SELECT v?::INT + 1",
+        "SELECT 1 + '2'?::INT",
+        "SELECT v?::INT::BIGINT",
+        "SELECT v?::INT?::BIGINT",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    assert_eq!(
+        dialects.expr_parses_to("v ?:: INT", "v?::INT"),
+        Expr::Cast {
+            kind: CastKind::QuestionDoubleColon,
+            expr: Box::new(Expr::Identifier(Ident::new("v"))),
+            data_type: DataType::Int(None),
+            format: None,
+        }
+    );
+    for dialect in dialects.dialects {
+        let split_operator_error = if dialect.supports_geometric_types() {
+            "Expected: an expression, found: :: at Line: 1, Column: 11"
+        } else {
+            "Expected: end of statement, found: ? at Line: 1, Column: 9"
+        };
+        for (sql, expected) in [
+            ("SELECT v?::", "Expected: a data type name, found: EOF"),
+            ("SELECT v? ::INT", split_operator_error),
+        ] {
+            assert_eq!(
+                Parser::parse_sql(dialect.as_ref(), sql).unwrap_err(),
+                ParserError::ParserError(expected.to_string()),
+                "{dialect:?}: {sql}"
+            );
+        }
+    }
+    let dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(DatabricksDialect {}),
+    ]);
+    dialects.one_statement_parses_to("SELECT ? ::INT", "SELECT ?::INT");
+    dialects.verified_stmt("SELECT v:items[0].price?::DECIMAL(10,2)");
+}

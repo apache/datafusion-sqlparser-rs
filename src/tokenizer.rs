@@ -157,6 +157,8 @@ pub enum Token {
     Colon,
     /// DoubleColon `::` (used for casting in PostgreSQL)
     DoubleColon,
+    /// QuestionDoubleColon `?::` (shorthand for `TRY_CAST` in Databricks)
+    QuestionDoubleColon,
     /// Assignment `:=` (used for keyword argument in DuckDB macros and some functions, and for variable declarations in DuckDB and Snowflake)
     Assignment,
     /// SemiColon `;` used as separator for COPY and payload
@@ -345,6 +347,7 @@ impl fmt::Display for Token {
             Token::Period => f.write_str("."),
             Token::Colon => f.write_str(":"),
             Token::DoubleColon => f.write_str("::"),
+            Token::QuestionDoubleColon => f.write_str("?::"),
             Token::Assignment => f.write_str(":="),
             Token::SemiColon => f.write_str(";"),
             Token::Backslash => f.write_str("\\"),
@@ -2074,6 +2077,11 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => Ok(Some(Token::AtSign)),
                     }
+                }
+                '?' if chars.peekable.clone().take(3).eq("?::".chars()) => {
+                    chars.next();
+                    chars.next();
+                    self.consume_and_return(chars, Token::QuestionDoubleColon)
                 }
                 // Postgres uses ? for jsonb operators, not prepared statements
                 '?' if self.dialect.supports_geometric_types() => {

@@ -803,8 +803,10 @@ pub enum CastKind {
     ///
     /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting>.
     SafeCast,
-    /// `<expr> :: <datatype>`
+    /// `<expr>::<datatype>`, shorthand for `CAST(<expr> AS <datatype>)`.
     DoubleColon,
+    /// `<expr>?::<datatype>`, shorthand for `TRY_CAST(<expr> AS <datatype>)`.
+    QuestionDoubleColon,
 }
 
 /// `MATCH` type for constraint references
@@ -2086,6 +2088,9 @@ impl fmt::Display for Expr {
                 }
                 CastKind::DoubleColon => {
                     write!(f, "{expr}::{data_type}")
+                }
+                CastKind::QuestionDoubleColon => {
+                    write!(f, "{expr}?::{data_type}")
                 }
             },
             Expr::Extract {

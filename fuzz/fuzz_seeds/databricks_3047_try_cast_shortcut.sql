@@ -1,0 +1,1 @@
+SELECT v:price?::DOUBLE;

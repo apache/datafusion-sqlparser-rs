@@ -399,3 +399,22 @@ fn parse_string_literal_backslash_escape() {
         )
     );
 }
+
+#[test]
+fn parse_empty_struct_literal() {
+    let select = spark().verified_only_select("SELECT STRUCT()");
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::Struct {
+            values: vec![],
+            fields: vec![],
+        }
+    );
+    spark().one_statement_parses_to("SELECT struct()", "SELECT STRUCT()");
+
+    let not_supported =
+        all_dialects_where(|d| d.supports_struct_literal() && !d.supports_empty_struct_literal());
+    not_supported
+        .parse_sql_statements("SELECT STRUCT()")
+        .unwrap_err();
+}

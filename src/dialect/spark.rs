@@ -91,6 +91,11 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
+    /// See <https://spark.apache.org/docs/latest/api/sql/index.html#struct>
+    fn supports_empty_struct_literal(&self) -> bool {
+        true
+    }
+
     fn supports_nested_comments(&self) -> bool {
         true
     }

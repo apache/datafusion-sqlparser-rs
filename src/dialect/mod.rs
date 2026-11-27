@@ -815,6 +815,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports a STRUCT literal with no values
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT STRUCT()
+    /// ```
+    fn supports_empty_struct_literal(&self) -> bool {
+        false
+    }
+
     /// Return true if the dialect supports empty projections in SELECT statements
     ///
     /// Example

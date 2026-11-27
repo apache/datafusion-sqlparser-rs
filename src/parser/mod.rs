@@ -3648,6 +3648,15 @@ impl<'a> Parser<'a> {
 
         // Parse the struct values `(expr1 [, ... ])`
         self.expect_token(&Token::LParen)?;
+        if fields.is_empty()
+            && self.dialect.supports_empty_struct_literal()
+            && self.consume_token(&Token::RParen)
+        {
+            return Ok(Expr::Struct {
+                values: vec![],
+                fields,
+            });
+        }
         let values = self
             .parse_comma_separated(|parser| parser.parse_struct_field_expr(!fields.is_empty()))?;
         self.expect_token(&Token::RParen)?;

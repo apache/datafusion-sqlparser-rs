@@ -14597,3 +14597,101 @@ fn parse_alter_column_set_storage() {
         );
     }
 }
+
+#[test]
+fn parse_fetch_optional_direction_and_position() {
+    pg_and_generic().one_statement_parses_to("FETCH c", "FETCH NEXT FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH FROM c", "FETCH NEXT FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH IN c", "FETCH NEXT IN c");
+    pg_and_generic().one_statement_parses_to("FETCH NEXT c", "FETCH NEXT FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH PRIOR c", "FETCH PRIOR FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH FIRST c", "FETCH FIRST FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH LAST c", "FETCH LAST FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH ALL c", "FETCH ALL FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH 5 c", "FETCH 5 FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH FORWARD c", "FETCH FORWARD FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH FORWARD ALL c", "FETCH FORWARD ALL FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH BACKWARD c", "FETCH BACKWARD FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH BACKWARD 5 c", "FETCH BACKWARD 5 FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH BACKWARD ALL c", "FETCH BACKWARD ALL FROM c");
+    pg_and_generic().one_statement_parses_to(
+        "FETCH c INTO \"new_table\"",
+        "FETCH NEXT FROM c INTO \"new_table\"",
+    );
+    pg_and_generic().verified_stmt("FETCH FORWARD FROM c");
+    pg_and_generic().verified_stmt("FETCH BACKWARD IN c");
+    pg_and_generic().verified_stmt("FETCH $1 FROM c");
+
+    // Unreserved direction keywords are valid bare cursor names.
+    for kw in [
+        "NEXT", "PRIOR", "FIRST", "LAST", "ABSOLUTE", "RELATIVE", "FORWARD", "BACKWARD",
+    ] {
+        pg_and_generic()
+            .one_statement_parses_to(&format!("FETCH {kw}"), &format!("FETCH NEXT FROM {kw}"));
+        pg_and_generic()
+            .one_statement_parses_to(&format!("FETCH {kw};"), &format!("FETCH NEXT FROM {kw}"));
+    }
+    pg_and_generic().one_statement_parses_to("FETCH NEXT INTO t", "FETCH NEXT FROM NEXT INTO t");
+    pg_and_generic().one_statement_parses_to("FETCH NEXT NEXT", "FETCH NEXT FROM NEXT");
+    pg_and_generic().one_statement_parses_to("FETCH FORWARD NEXT", "FETCH FORWARD FROM NEXT");
+
+    match pg_and_generic().verified_stmt("FETCH NEXT FROM \"C\"") {
+        Statement::Fetch { name, .. } => assert_eq!(name, Ident::with_quote('"', "C")),
+        stmt => panic!("Expected Fetch, got: {stmt:?}"),
+    }
+
+    for sql in [
+        "FETCH",
+        "FETCH FROM",
+        "FETCH IN",
+        "FETCH ALL",
+        "FETCH FORWARD ALL",
+        "FETCH BACKWARD ALL",
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err().to_string(),
+            "sql parser error: Expected: identifier, found: EOF",
+            "{sql}"
+        );
+    }
+    assert_eq!(
+        pg().parse_sql_statements("FETCH ABSOLUTE c")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: a concrete value, found: c"
+    );
+}
+
+#[test]
+fn parse_fetch_signed_count() {
+    pg_and_generic().verified_stmt("FETCH -1 FROM c");
+    pg_and_generic().verified_stmt("FETCH ABSOLUTE -1 FROM c");
+    pg_and_generic().verified_stmt("FETCH RELATIVE -5 IN c");
+    pg_and_generic().verified_stmt("FETCH FORWARD -5 FROM c");
+    pg_and_generic().verified_stmt("FETCH BACKWARD -5 FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH +5 FROM c", "FETCH 5 FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH -1 c", "FETCH -1 FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH - 5 FROM c", "FETCH -5 FROM c");
+    pg_and_generic().one_statement_parses_to("FETCH + 5 c", "FETCH 5 FROM c");
+
+    match pg_and_generic().verified_stmt("FETCH RELATIVE -5 FROM c") {
+        Statement::Fetch {
+            direction: FetchDirection::Relative { limit },
+            ..
+        } => assert_eq!(limit.value, number("-5")),
+        stmt => panic!("Expected Fetch, got: {stmt:?}"),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("FETCH - FROM c")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: a concrete value, found: FROM"
+    );
+    assert_eq!(
+        pg().parse_sql_statements("FETCH -$1 FROM c")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: literal number, found: $1"
+    );
+}

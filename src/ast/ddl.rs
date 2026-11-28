@@ -1468,6 +1468,14 @@ pub enum AlterColumnOperation {
         /// The type of storage.
         storage: UserDefinedTypeStorage,
     },
+    /// `SET EXPRESSION AS ( <expr> )`, replacing the expression of a generated
+    /// column.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetExpression {
+        /// The new generation expression.
+        expr: Expr,
+    },
     /// `OPTIONS ( [ ADD | SET | DROP ] option ['value'] [, ...] )`, changing the
     /// options of a foreign table column.
     ///
@@ -1538,6 +1546,9 @@ impl fmt::Display for AlterColumnOperation {
             }
             AlterColumnOperation::SetStorage { storage } => {
                 write!(f, "SET STORAGE {storage}")
+            }
+            AlterColumnOperation::SetExpression { expr } => {
+                write!(f, "SET EXPRESSION AS ({expr})")
             }
             AlterColumnOperation::GenericOptions { options } => {
                 write!(f, "OPTIONS ({})", display_comma_separated(options))

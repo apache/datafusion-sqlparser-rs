@@ -11862,6 +11862,12 @@ impl<'a> Parser<'a> {
                 self.parse_set_data_type(true)?
             } else if self.parse_keyword(Keyword::TYPE) {
                 self.parse_set_data_type(false)?
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::EXPRESSION]) {
+                self.expect_keyword_is(Keyword::AS)?;
+                self.expect_token(&Token::LParen)?;
+                let expr = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                AlterColumnOperation::SetExpression { expr }
             } else if self.parse_keywords(&[Keyword::ADD, Keyword::GENERATED]) {
                 let generated_as = if self.parse_keyword(Keyword::ALWAYS) {
                     Some(GeneratedAs::Always)
@@ -11895,7 +11901,7 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 let message = if is_postgresql {
-                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, ADD GENERATED, or OPTIONS after ALTER COLUMN"
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, SET/DROP EXPRESSION, ADD GENERATED, or OPTIONS after ALTER COLUMN"
                 } else {
                     "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or OPTIONS after ALTER COLUMN"
                 };

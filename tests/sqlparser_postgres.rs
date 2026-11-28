@@ -14597,3 +14597,13 @@ fn parse_alter_column_set_storage() {
         );
     }
 }
+
+#[test]
+fn parse_explain_table_query() {
+    match pg().verified_stmt("EXPLAIN TABLE t") {
+        Statement::Explain { statement, .. } => {
+            assert_eq!(statement.to_string(), "TABLE t");
+        }
+        _ => panic!("Unexpected Statement, must be Explain"),
+    }
+}

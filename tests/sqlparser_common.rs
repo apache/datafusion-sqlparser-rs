@@ -23765,3 +23765,19 @@ fn parse_try_cast_shortcut() {
     dialects.one_statement_parses_to("SELECT ? ::INT", "SELECT ?::INT");
     dialects.verified_stmt("SELECT v:items[0].price?::DECIMAL(10,2)");
 }
+
+#[test]
+fn parse_table_statement() {
+    let query = all_dialects().verified_query("TABLE t");
+    assert_eq!(
+        *query.body,
+        SetExpr::Table(Box::new(Table {
+            table_name: Some(Ident::new("t")),
+            schema_name: None,
+        }))
+    );
+    all_dialects().verified_stmt("TABLE s.t");
+    all_dialects().verified_stmt("TABLE t ORDER BY a LIMIT 1");
+    all_dialects().verified_stmt("TABLE t UNION ALL TABLE u");
+    all_dialects().one_statement_parses_to("(TABLE t)", "(TABLE t)");
+}

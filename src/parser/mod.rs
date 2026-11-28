@@ -667,7 +667,11 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_raise_stmt().map(Into::into)
                 }
-                Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
+                Keyword::SELECT
+                | Keyword::WITH
+                | Keyword::VALUES
+                | Keyword::FROM
+                | Keyword::TABLE => {
                     self.prev_token();
                     self.parse_query().map(Into::into)
                 }
@@ -15848,7 +15852,16 @@ impl<'a> Parser<'a> {
             }
         }
 
-        match self.maybe_parse(|parser| parser.parse_statement())? {
+        // In dialects where `DESCRIBE TABLE t` describes a table, `TABLE` here
+        // starts the table name, not a `TABLE t` query.
+        let statement = if self.dialect.describe_requires_table_keyword()
+            && self.peek_keyword(Keyword::TABLE)
+        {
+            None
+        } else {
+            self.maybe_parse(|parser| parser.parse_statement())?
+        };
+        match statement {
             Some(Statement::Explain { .. }) | Some(Statement::ExplainTable { .. }) => Err(
                 ParserError::ParserError("Explain must be root of the plan".to_string()),
             ),

@@ -647,6 +647,7 @@ dependencies = [
  "serde_json",
  "simple_logger",
  "sqlparser_derive",
+ "sqlparser_v2",
 ]
 
 [[package]]
@@ -665,6 +666,10 @@ dependencies = [
  "quote",
  "syn 3.0.4",
 ]
+
+[[package]]
+name = "sqlparser_v2"
+version = "2.0.0"
 
 [[package]]
 name = "stacker"

@@ -23,11 +23,15 @@ authors = ["Dandandan <danielheres@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-sqlparser = { path = "../" }
+sqlparser = { path = "../", features = ["v2"] }
 
 [dev-dependencies]
 criterion = "0.8"
 
 [[bench]]
 name = "sqlparser_bench"
+harness = false
+
+[[bench]]
+name = "v2_bridge"
 harness = false

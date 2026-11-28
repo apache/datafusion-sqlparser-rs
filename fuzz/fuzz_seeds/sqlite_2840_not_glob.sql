@@ -1,0 +1,1 @@
+SELECT a NOT GLOB 'x*', b NOT MATCH 'y'

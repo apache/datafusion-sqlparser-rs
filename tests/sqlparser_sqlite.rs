@@ -2192,3 +2192,43 @@ fn parse_create_virtual_table_module_arguments_unbalanced_err() {
         );
     }
 }
+
+#[test]
+fn parse_negated_glob_and_match() {
+    for (operator, expected) in [
+        ("NOT GLOB", BinaryOperator::NotGlob),
+        ("NOT MATCH", BinaryOperator::NotMatch),
+    ] {
+        let where_operator = |sql: &str| match sqlite().verified_only_select(sql).selection {
+            Some(Expr::BinaryOp { op, .. }) => op,
+            selection => panic!("{selection:?}"),
+        };
+        assert_eq!(
+            where_operator(&format!("SELECT 1 FROM t WHERE a {operator} 'p' AND b = 1")),
+            BinaryOperator::And
+        );
+        assert_eq!(
+            where_operator(&format!("SELECT 1 FROM t WHERE a {operator} 'p' || 'q'")),
+            expected
+        );
+
+        assert_eq!(
+            sqlite().verified_expr(&format!("col {operator} 'pattern'")),
+            Expr::BinaryOp {
+                op: expected,
+                left: Box::new(Expr::Identifier(Ident::new("col"))),
+                right: Box::new(Expr::Value(
+                    (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+                ))
+            }
+        );
+
+        assert_eq!(
+            sqlite().parse_sql_statements(&format!("SELECT 1 {operator}")),
+            Err(ParserError::ParserError(
+                "Expected: an expression, found: EOF".to_string()
+            ))
+        );
+    }
+    sqlite().verified_stmt("CREATE INDEX i ON t(id) WHERE id NOT GLOB 'h-*'");
+}

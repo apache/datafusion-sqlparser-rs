@@ -92,12 +92,14 @@ impl Dialect for SQLiteDialect {
     ) -> Option<Result<crate::ast::Expr, ParserError>> {
         // Parse MATCH, REGEXP and GLOB as operators
         // See <https://www.sqlite.org/lang_expr.html#the_like_glob_regexp_match_and_extract_operators>
-        for (keyword, op) in [
-            (Keyword::REGEXP, BinaryOperator::Regexp),
-            (Keyword::MATCH, BinaryOperator::Match),
-            (Keyword::GLOB, BinaryOperator::Glob),
+        for (keywords, op) in [
+            (&[Keyword::REGEXP][..], BinaryOperator::Regexp),
+            (&[Keyword::MATCH], BinaryOperator::Match),
+            (&[Keyword::NOT, Keyword::MATCH], BinaryOperator::NotMatch),
+            (&[Keyword::GLOB], BinaryOperator::Glob),
+            (&[Keyword::NOT, Keyword::GLOB], BinaryOperator::NotGlob),
         ] {
-            if parser.parse_keyword(keyword) {
+            if parser.parse_keywords(keywords) {
                 let left = Box::new(expr.clone());
                 let right = Box::new(match parser.parse_subexpr(precedence) {
                     Ok(expr) => expr,

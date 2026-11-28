@@ -2263,3 +2263,74 @@ fn parse_like_glob_match_regexp_group_with_equality() {
         assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
     }
 }
+
+#[test]
+fn parse_is_groups_with_equality() {
+    let id = |name: &str| Expr::Identifier(Ident::new(name));
+    let binary = |left: Expr, op: BinaryOperator, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    };
+    let distinct = |left: Expr, right: Expr| Expr::IsDistinctFrom(Box::new(left), Box::new(right));
+    let not_distinct =
+        |left: Expr, right: Expr| Expr::IsNotDistinctFrom(Box::new(left), Box::new(right));
+    use BinaryOperator::{Eq, Lt, NotEq};
+
+    for (sql, expected) in [
+        (
+            "a IS DISTINCT FROM b = c",
+            binary(distinct(id("a"), id("b")), Eq, id("c")),
+        ),
+        (
+            "a = b IS DISTINCT FROM c",
+            distinct(binary(id("a"), Eq, id("b")), id("c")),
+        ),
+        (
+            "a IS NOT DISTINCT FROM b <> c",
+            binary(not_distinct(id("a"), id("b")), NotEq, id("c")),
+        ),
+        (
+            "a <> b IS NOT DISTINCT FROM c",
+            not_distinct(binary(id("a"), NotEq, id("b")), id("c")),
+        ),
+        (
+            "a IS DISTINCT FROM b BETWEEN c AND d",
+            Expr::Between {
+                expr: Box::new(distinct(id("a"), id("b"))),
+                negated: false,
+                low: Box::new(id("c")),
+                high: Box::new(id("d")),
+            },
+        ),
+        (
+            "a IS DISTINCT FROM b IN (c)",
+            Expr::In {
+                expr: Box::new(distinct(id("a"), id("b"))),
+                target: InTarget::List(vec![id("c")]),
+                negated: false,
+                global: false,
+            },
+        ),
+        (
+            "a IS DISTINCT FROM b < c",
+            distinct(id("a"), binary(id("b"), Lt, id("c"))),
+        ),
+        (
+            "a LIKE b IS NULL",
+            Expr::IsNull(Box::new(Expr::Like {
+                negated: false,
+                any: false,
+                expr: Box::new(id("a")),
+                pattern: Box::new(id("b")),
+                escape_char: None,
+            })),
+        ),
+        (
+            "a IS NULL = b",
+            binary(Expr::IsNull(Box::new(id("a"))), Eq, id("b")),
+        ),
+    ] {
+        assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
+}

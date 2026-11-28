@@ -2161,6 +2161,7 @@ fn parse_is_distinct_from_precedence() {
         verified_expr("a IS DISTINCT FROM b + 1")
     );
 
+    // SQLite puts `IS` on the level of `=`, see `parse_is_groups_with_equality`.
     assert_eq!(
         IsDistinctFrom(
             Box::new(Identifier(Ident::new("a"))),
@@ -2170,7 +2171,7 @@ fn parse_is_distinct_from_precedence() {
                 right: Box::new(Identifier(Ident::new("c"))),
             }),
         ),
-        verified_expr("a IS DISTINCT FROM b = c")
+        all_dialects_except(|d| d.is::<SQLiteDialect>()).verified_expr("a IS DISTINCT FROM b = c")
     );
 
     // `NOT` binds more loosely than `IS`, so it applies to the whole comparison.

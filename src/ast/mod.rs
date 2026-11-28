@@ -11242,7 +11242,7 @@ impl Display for ShowStatementOptions {
         };
         write!(
             f,
-            "{like_in_infix}{show_in}{starts_with}{limit}{from}{like_in_suffix}",
+            "{like_in_infix}{show_in}{like_in_suffix}{starts_with}{limit}{from}",
             show_in = match &self.show_in {
                 Some(i) => format!(" {i}"),
                 None => String::new(),

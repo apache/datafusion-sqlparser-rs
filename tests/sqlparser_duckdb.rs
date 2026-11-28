@@ -24,7 +24,7 @@ use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{DuckDbDialect, GenericDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 
 fn duckdb() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DuckDbDialect {})])
@@ -976,4 +976,23 @@ fn display_create_macro_propagates_argument_list_errors() {
             assert_eq!(write!(writer, "{statement}"), Err(fmt::Error));
         }
     }
+}
+
+#[test]
+fn test_duckdb_nested_named_arguments_parse_in_linear_time() {
+    // Each level used to parse the inner call twice when the input failed,
+    // so 40 unclosed levels took hours. See issue #3002.
+    let depth = 40;
+    let parse = |sql: &str| {
+        Parser::new(&DuckDbDialect {})
+            .with_recursion_limit(1000)
+            .try_with_sql(sql)?
+            .parse_statements()
+    };
+
+    let unclosed = format!("SELECT {}1", "u.u(k=".repeat(depth));
+    assert!(matches!(parse(&unclosed), Err(ParserError::ParserError(_))));
+
+    let closed = format!("SELECT {}1{}", "u.u(k := ".repeat(depth), ")".repeat(depth));
+    assert_eq!(parse(&closed).unwrap().len(), 1);
 }

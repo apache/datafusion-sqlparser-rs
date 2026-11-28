@@ -134,8 +134,8 @@ impl Dialect for SQLiteDialect {
             Precedence::Ampersand => 24,
             Precedence::Caret => 23,
             Precedence::Pipe | Precedence::Colon | Precedence::PgOther => 22,
-            Precedence::Between | Precedence::Eq => 20,
-            Precedence::Like => 19,
+            // `parse.y` puts LIKE, GLOB, MATCH and REGEXP on the level of `=`
+            Precedence::Between | Precedence::Eq | Precedence::Like => 20,
             Precedence::Is => 17,
             Precedence::UnaryNot => 15,
             Precedence::And => 10,

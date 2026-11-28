@@ -2192,3 +2192,74 @@ fn parse_create_virtual_table_module_arguments_unbalanced_err() {
         );
     }
 }
+
+#[test]
+fn parse_like_glob_match_regexp_group_with_equality() {
+    let id = |name: &str| Expr::Identifier(Ident::new(name));
+    let binary = |left: Expr, op: BinaryOperator, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    };
+    let like = |negated: bool, expr: Expr, pattern: Expr, escape_char: Option<Expr>| Expr::Like {
+        negated,
+        any: false,
+        expr: Box::new(expr),
+        pattern: Box::new(pattern),
+        escape_char: escape_char.map(Box::new),
+    };
+    use BinaryOperator::{Eq, Glob, Lt, Match, NotEq, Regexp};
+
+    for (sql, expected) in [
+        (
+            "a LIKE b = c",
+            binary(like(false, id("a"), id("b"), None), Eq, id("c")),
+        ),
+        (
+            "a = b LIKE c",
+            like(false, binary(id("a"), Eq, id("b")), id("c"), None),
+        ),
+        (
+            "a NOT LIKE b <> c",
+            binary(like(true, id("a"), id("b"), None), NotEq, id("c")),
+        ),
+        (
+            "a <> b NOT LIKE c",
+            like(true, binary(id("a"), NotEq, id("b")), id("c"), None),
+        ),
+        (
+            "a LIKE b ESCAPE c = d",
+            binary(like(false, id("a"), id("b"), Some(id("c"))), Eq, id("d")),
+        ),
+        (
+            "a GLOB b = c",
+            binary(binary(id("a"), Glob, id("b")), Eq, id("c")),
+        ),
+        (
+            "a = b GLOB c",
+            binary(binary(id("a"), Eq, id("b")), Glob, id("c")),
+        ),
+        (
+            "a MATCH b <> c",
+            binary(binary(id("a"), Match, id("b")), NotEq, id("c")),
+        ),
+        (
+            "a <> b MATCH c",
+            binary(binary(id("a"), NotEq, id("b")), Match, id("c")),
+        ),
+        (
+            "a REGEXP b = c",
+            binary(binary(id("a"), Regexp, id("b")), Eq, id("c")),
+        ),
+        (
+            "a = b REGEXP c",
+            binary(binary(id("a"), Eq, id("b")), Regexp, id("c")),
+        ),
+        (
+            "a GLOB b < c",
+            binary(id("a"), Glob, binary(id("b"), Lt, id("c"))),
+        ),
+    ] {
+        assert_eq!(sqlite().verified_expr(sql), expected, "{sql}");
+    }
+}

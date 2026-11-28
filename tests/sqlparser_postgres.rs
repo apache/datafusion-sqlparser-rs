@@ -14597,3 +14597,118 @@ fn parse_alter_column_set_storage() {
         );
     }
 }
+
+#[test]
+fn parse_create_statistics() {
+    let statement = pg_and_generic().verified_stmt(
+        "CREATE STATISTICS IF NOT EXISTS public.s (mcv, dependencies) ON a, (b + 1) FROM public.t",
+    );
+    assert_eq!(statement.span(), Span::empty());
+    assert_display_propagates_write_errors(
+        &statement,
+        &["CREATE STATISTICS", " IF NOT EXISTS", "s", " (", " ON "],
+    );
+    let Statement::CreateStatistics(statistics) = statement else {
+        panic!("expected CREATE STATISTICS");
+    };
+    assert!(statistics.if_not_exists);
+    assert_eq!(
+        statistics.name.expect("statistics name").to_string(),
+        "public.s"
+    );
+    assert_eq!(statistics.from[0].relation.to_string(), "public.t");
+    assert_eq!(
+        statistics.kinds,
+        vec![Ident::new("mcv"), Ident::new("dependencies")]
+    );
+    assert!(matches!(
+        statistics.expressions.as_slice(),
+        [Expr::Identifier(_), Expr::Nested(_)]
+    ));
+
+    for sql in [
+        "CREATE STATISTICS s ON a, b FROM t",
+        r#"CREATE STATISTICS IF NOT EXISTS "on" ON a FROM t"#,
+        "CREATE STATISTICS ON (a + b) FROM t",
+        "CREATE STATISTICS ON lower(a) FROM t",
+        "CREATE STATISTICS (ndistinct) ON a, b FROM t",
+        "CREATE STATISTICS s ON CAST(a AS INT), EXTRACT(YEAR FROM b), SUBSTRING(c FROM 1 FOR 2), TRIM(d), POSITION('x' IN e), OVERLAY(f PLACING 'x' FROM 1), CEIL(g), FLOOR(h) FROM t",
+        "CREATE STATISTICS s ON a, b FROM t alias",
+        "CREATE STATISTICS s ON a, b FROM t AS alias",
+        "CREATE STATISTICS s ON a, b FROM t1, t2",
+        "CREATE STATISTICS s ON a, b FROM t1 JOIN t2 ON t1.id = t2.id",
+        "CREATE STATISTICS s ON a, b FROM (SELECT 1) AS sub",
+        "CREATE STATISTICS s ON a, b FROM generate_series(1, 10) AS s",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+
+    for sql in [
+        "CREATE STATISTICS s ON a, b FROM ONLY t",
+        "CREATE STATISTICS s ON a, b FROM t *",
+    ] {
+        pg().verified_stmt(sql);
+    }
+
+    for (invalid_sql, expected_error) in [
+        ("CREATE STATISTICS s ON a, b", "Expected: FROM, found: EOF"),
+        (
+            "CREATE STATISTICS s ON a + 1 FROM t",
+            "Expected a column, function call, or parenthesized expression",
+        ),
+        (
+            "CREATE STATISTICS s ON a::INT FROM t",
+            "Expected a column, function call, or parenthesized expression",
+        ),
+        (
+            "CREATE STATISTICS s ON row_number() OVER () FROM t",
+            "Expected a column, function call, or parenthesized expression",
+        ),
+        (
+            "CREATE STATISTICS IF NOT EXISTS ON a FROM t",
+            "Expected: identifier, found: ON",
+        ),
+        (
+            "CREATE STATISTICS IF NOT EXISTS (ndistinct) ON a FROM t",
+            "Expected: identifier, found: (",
+        ),
+        (
+            "CREATE STATISTICS 123 ON a FROM t",
+            "Expected: identifier, found: 123",
+        ),
+        (
+            "CREATE STATISTICS s () ON a FROM t",
+            "Expected: identifier, found: )",
+        ),
+        ("CREATE STATISTICS s a FROM t", "Expected: ON, found: a"),
+        (
+            "CREATE STATISTICS s ON ) FROM t",
+            "Expected: an expression, found: )",
+        ),
+        (
+            "CREATE STATISTICS s ON a FROM",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "CREATE TEMP STATISTICS s ON a FROM t",
+            "CREATE STATISTICS does not accept this modifier",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic()
+                .parse_sql_statements(invalid_sql)
+                .unwrap_err(),
+            ParserError::ParserError(expected_error.to_string()),
+            "{invalid_sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_create_statistics())
+            .parse_sql_statements("CREATE STATISTICS s ON a FROM t")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: an object type after CREATE, found: STATISTICS".to_string()
+        )
+    );
+}

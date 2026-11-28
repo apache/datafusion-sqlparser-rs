@@ -5581,6 +5581,16 @@ impl<'a> Parser<'a> {
             self.parse_create_external_table(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_alter, or_replace, temporary)
+        } else if self.dialect.supports_create_statistics()
+            && self.parse_keyword(Keyword::STATISTICS)
+        {
+            if has_modifier {
+                return parser_err!(
+                    "CREATE STATISTICS does not accept this modifier",
+                    modifier_loc
+                );
+            }
+            self.parse_create_statistics()
         } else if self.parse_keyword(Keyword::DOMAIN) {
             self.parse_create_domain().map(Into::into)
         } else if self.parse_keyword(Keyword::TRIGGER) {
@@ -7569,6 +7579,60 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(owner)
+    }
+
+    fn parse_create_statistics(&mut self) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = if self.peek_keyword(Keyword::ON) || self.peek_token_ref().token == Token::LParen
+        {
+            if if_not_exists {
+                return self.expected_ref("identifier", self.peek_token_ref());
+            }
+            None
+        } else {
+            Some(self.parse_object_name(false)?)
+        };
+        let kinds = if self.peek_token_ref().token == Token::LParen {
+            self.parse_parenthesized(|parser| {
+                parser.parse_comma_separated(|parser| parser.parse_identifier())
+            })?
+        } else {
+            Vec::new()
+        };
+        self.expect_keyword_is(Keyword::ON)?;
+        let expressions = self.parse_comma_separated(|parser| {
+            let location = parser.peek_token_ref().span.start;
+            let expr = parser.parse_expr()?;
+            match expr {
+                Expr::Identifier(_)
+                | Expr::Nested(_)
+                | Expr::Cast {
+                    kind: CastKind::Cast,
+                    ..
+                }
+                | Expr::Extract { .. }
+                | Expr::Substring { .. }
+                | Expr::Trim { .. }
+                | Expr::Position { .. }
+                | Expr::Overlay { .. }
+                | Expr::Ceil { .. }
+                | Expr::Floor { .. } => Ok(expr),
+                Expr::Function(ref fun) if fun.over.is_none() => Ok(expr),
+                _ => parser_err!(
+                    "Expected a column, function call, or parenthesized expression",
+                    location
+                ),
+            }
+        })?;
+        self.expect_keyword_is(Keyword::FROM)?;
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+        Ok(Statement::CreateStatistics(CreateStatistics {
+            name,
+            if_not_exists,
+            kinds,
+            expressions,
+            from,
+        }))
     }
 
     /// Parses a [Statement::CreateDomain] statement.

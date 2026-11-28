@@ -4200,7 +4200,55 @@ impl<'a> Parser<'a> {
         } else if let Token::Word(w) = &tok.token {
             match w.keyword {
                 Keyword::IS => {
-                    if self.parse_keyword(Keyword::NULL) {
+                    if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
+                        // The right operand binds no more loosely than `IS`
+                        // itself, so that e.g. `a IS DISTINCT FROM b AND c`
+                        // parses as `(a IS DISTINCT FROM b) AND c`.
+                        let expr2 = self.parse_subexpr(precedence)?;
+                        Ok(Expr::IsDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::DISTINCT, Keyword::FROM])
+                    {
+                        let expr2 = self.parse_subexpr(precedence)?;
+                        Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.dialect.supports_is_operator() {
+                        let op = if self.parse_keyword(Keyword::NOT) {
+                            BinaryOperator::IsNot
+                        } else {
+                            BinaryOperator::Is
+                        };
+                        // SQLite gives `IS` the same precedence as `=` (https://www.sqlite.org/lang_expr.html).
+                        let right = self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?;
+                        let expr = Box::new(expr);
+                        let literal = match &right {
+                            Expr::Value(ValueWithSpan { value, .. }) => Some(value),
+                            _ => None,
+                        };
+                        Ok(match (&op, literal) {
+                            (BinaryOperator::Is, Some(Value::Null)) => Expr::IsNull {
+                                expr,
+                                syntax: IsNullSyntax::IsNull,
+                            },
+                            (BinaryOperator::IsNot, Some(Value::Null)) => Expr::IsNotNull {
+                                expr,
+                                syntax: IsNotNullSyntax::IsNotNull,
+                            },
+                            (BinaryOperator::Is, Some(Value::Boolean(true))) => Expr::IsTrue(expr),
+                            (BinaryOperator::IsNot, Some(Value::Boolean(true))) => {
+                                Expr::IsNotTrue(expr)
+                            }
+                            (BinaryOperator::Is, Some(Value::Boolean(false))) => {
+                                Expr::IsFalse(expr)
+                            }
+                            (BinaryOperator::IsNot, Some(Value::Boolean(false))) => {
+                                Expr::IsNotFalse(expr)
+                            }
+                            _ => Expr::BinaryOp {
+                                left: expr,
+                                op,
+                                right: Box::new(right),
+                            },
+                        })
+                    } else if self.parse_keyword(Keyword::NULL) {
                         Ok(Expr::IsNull {
                             expr: Box::new(expr),
                             syntax: IsNullSyntax::IsNull,
@@ -4218,30 +4266,6 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsFalse(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::FALSE]) {
                         Ok(Expr::IsNotFalse(Box::new(expr)))
-                    } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
-                        // The right operand binds no more loosely than `IS`
-                        // itself, so that e.g. `a IS DISTINCT FROM b AND c`
-                        // parses as `(a IS DISTINCT FROM b) AND c`.
-                        let expr2 = self.parse_subexpr(precedence)?;
-                        Ok(Expr::IsDistinctFrom(Box::new(expr), Box::new(expr2)))
-                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::DISTINCT, Keyword::FROM])
-                    {
-                        let expr2 = self.parse_subexpr(precedence)?;
-                        Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
-                    } else if self.dialect.supports_is_operator() {
-                        let op = if self.parse_keyword(Keyword::NOT) {
-                            BinaryOperator::IsNot
-                        } else {
-                            BinaryOperator::Is
-                        };
-                        // SQLite gives `IS` the same precedence as `=` (https://www.sqlite.org/lang_expr.html).
-                        Ok(Expr::BinaryOp {
-                            left: Box::new(expr),
-                            op,
-                            right: Box::new(
-                                self.parse_subexpr(self.dialect.prec_value(Precedence::Eq))?,
-                            ),
-                        })
                     } else if self.parse_keywords(&[Keyword::UNKNOWN]) {
                         Ok(Expr::IsUnknown(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {

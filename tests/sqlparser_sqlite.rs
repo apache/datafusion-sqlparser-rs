@@ -2192,3 +2192,39 @@ fn parse_create_virtual_table_module_arguments_unbalanced_err() {
         );
     }
 }
+
+#[test]
+fn parse_is_null_test_precedence() {
+    fn top_operator(dialects: &TestedDialects, sql: &str) -> BinaryOperator {
+        match dialects.verified_expr(sql) {
+            Expr::BinaryOp { op, .. } => op,
+            other => panic!("{sql} parsed as {other:?}"),
+        }
+    }
+    use BinaryOperator::{Is, IsNot, Plus};
+
+    // `IS [NOT]` binds looser than `+`, while the postfix tests apply to what precedes them.
+    for (sql, expected) in [
+        ("a IS NULL + 1", Is),
+        ("a IS NOT NULL + 1", IsNot),
+        ("a IS true + 1", Is),
+        ("a IS NOT false + 1", IsNot),
+        ("a IS (NULL)", Is),
+        ("a NOT NULL + 1", Plus),
+        ("a NOTNULL + 1", Plus),
+        ("a ISNULL + 1", Plus),
+    ] {
+        assert_eq!(top_operator(&sqlite(), sql), expected, "{sql}");
+    }
+    assert!(matches!(
+        sqlite().verified_expr("a IS NULL"),
+        Expr::IsNull { .. }
+    ));
+    assert!(matches!(
+        sqlite().verified_expr("a IS NOT TRUE"),
+        Expr::IsNotTrue(_)
+    ));
+
+    let without_is_operator = all_dialects_where(|d| !d.supports_is_operator());
+    assert_eq!(top_operator(&without_is_operator, "a IS NULL + 1"), Plus);
+}

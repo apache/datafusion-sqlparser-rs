@@ -23765,3 +23765,10 @@ fn parse_try_cast_shortcut() {
     dialects.one_statement_parses_to("SELECT ? ::INT", "SELECT ?::INT");
     dialects.verified_stmt("SELECT v:items[0].price?::DECIMAL(10,2)");
 }
+
+#[test]
+fn parse_show_tables_like_before_limit() {
+    let dialects = all_dialects_where(|d| !d.supports_show_like_before_in());
+    dialects.verified_stmt("SHOW TABLES LIKE 'p%' LIMIT 5");
+    dialects.verified_stmt("SHOW TABLES IN db LIKE 'p%' LIMIT 5");
+}

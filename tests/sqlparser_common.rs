@@ -23765,3 +23765,19 @@ fn parse_try_cast_shortcut() {
     dialects.one_statement_parses_to("SELECT ? ::INT", "SELECT ?::INT");
     dialects.verified_stmt("SELECT v:items[0].price?::DECIMAL(10,2)");
 }
+
+#[test]
+fn parse_negative_literal_cast_keeps_unary_precedence() {
+    assert_eq!(
+        all_dialects().verified_expr("-128::TINYINT"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::value(number("128"))),
+                data_type: DataType::TinyInt(None),
+                format: None,
+            }),
+        }
+    );
+}

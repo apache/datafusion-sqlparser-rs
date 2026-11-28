@@ -2008,6 +2008,17 @@ impl<'a> Parser<'a> {
             // array `[1, 2, 3]`
             Token::LBracket => self.parse_array_expr(false),
             tok @ Token::Minus | tok @ Token::Plus => {
+                if *tok == Token::Minus && dialect.supports_negative_numeric_literals() {
+                    if let Token::Number(n, long) = &self.peek_token_ref().token {
+                        let value = Value::Number(
+                            Self::parse_number_literal(format!("-{n}"), span.start)?,
+                            *long,
+                        );
+                        self.advance_token();
+                        let span = span.union(&self.get_current_token().span);
+                        return Ok(Expr::Value(value.with_span(span)));
+                    }
+                }
                 let op = if *tok == Token::Plus {
                     UnaryOperator::Plus
                 } else {

@@ -615,6 +615,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Whether a leading minus belongs to the numeric literal instead of a unary expression.
+    fn supports_negative_numeric_literals(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports integer literals in hexadecimal,
     /// octal and binary, e.g. `0x1F`, `0o17` and `0b101`, which then parse as
     /// numbers instead of `0x` hexadecimal strings.

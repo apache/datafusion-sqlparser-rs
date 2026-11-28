@@ -20,6 +20,8 @@
 
 use sqlparser::ast::*;
 use sqlparser::dialect::SparkSqlDialect;
+use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[macro_use]
@@ -398,4 +400,127 @@ fn parse_string_literal_backslash_escape() {
             Value::SingleQuotedString("a\tb\nc'd\\e\\%f\\_g".to_string()).with_empty_span()
         )
     );
+}
+
+#[test]
+fn parse_negative_numeric_literal_cast() {
+    for (literal, data_type) in [
+        ("-128", DataType::TinyInt(None)),
+        ("-32768", DataType::SmallInt(None)),
+        ("-2147483648", DataType::Int(None)),
+        ("-9223372036854775808", DataType::BigInt(None)),
+    ] {
+        let select = spark().verified_only_select(&format!("SELECT {literal}::{data_type}"));
+        assert_eq!(
+            expr_from_projection(only(&select.projection)),
+            &Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::value(number(literal))),
+                data_type,
+                format: None,
+            }
+        );
+    }
+}
+
+#[test]
+fn parse_negative_numeric_literals() {
+    for (sql, literal, long) in [
+        ("-0", "-0", false),
+        ("-1.25", "-1.25", false),
+        ("-.5", "-.5", false),
+        ("-1e-3", "-1e-3", false),
+        ("-1L", "-1", true),
+        ("- /* sign */ 128", "-128", false),
+    ] {
+        let expr = spark().run_parser_method(sql, |p| p.parse_expr()).unwrap();
+        assert_eq!(
+            expr,
+            Expr::value(Value::Number(literal.parse().unwrap(), long))
+        );
+        let Expr::Value(value) = &expr else {
+            unreachable!()
+        };
+        assert_eq!(
+            value.span,
+            Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
+        );
+        assert_eq!(
+            expr,
+            spark()
+                .run_parser_method(&expr.to_string(), |p| p.parse_expr())
+                .unwrap()
+        );
+    }
+}
+
+#[test]
+fn parse_negative_literal_preserves_operators() {
+    for (sql, op, inner) in [
+        (
+            "-a::INT",
+            UnaryOperator::Minus,
+            Expr::Identifier(Ident::new("a")),
+        ),
+        (
+            "-(1)::INT",
+            UnaryOperator::Minus,
+            Expr::Nested(Box::new(Expr::value(number("1")))),
+        ),
+        ("+1::INT", UnaryOperator::Plus, Expr::value(number("1"))),
+        ("- -1::INT", UnaryOperator::Minus, Expr::value(number("-1"))),
+    ] {
+        assert_eq!(
+            spark().verified_expr(sql),
+            Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(inner),
+                    data_type: DataType::Int(None),
+                    format: None,
+                }),
+            }
+        );
+    }
+    assert_eq!(
+        spark().verified_expr("1 - 2::INT"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::value(number("1"))),
+            op: BinaryOperator::Minus,
+            right: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::value(number("2"))),
+                data_type: DataType::Int(None),
+                format: None,
+            }),
+        }
+    );
+    for sql in [
+        "SELECT -1::INT::BIGINT",
+        "SELECT -1.25::DECIMAL(3,2)",
+        "SELECT - -1, 1 - -2, -1 * 2 + 3, CAST(-128 AS TINYINT)",
+    ] {
+        let statements = Parser::parse_sql(&SparkSqlDialect {}, sql).unwrap();
+        assert_eq!(
+            statements,
+            Parser::parse_sql(&SparkSqlDialect {}, &statements[0].to_string()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn parse_negative_numeric_literal_errors() {
+    for (sql, expected) in [
+        (
+            "SELECT -::INT",
+            "Expected: an expression, found: :: at Line: 1, Column: 9",
+        ),
+        ("SELECT -1::", "Expected: a data type name, found: EOF"),
+    ] {
+        assert_eq!(
+            Parser::parse_sql(&SparkSqlDialect {}, sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string())
+        );
+    }
 }

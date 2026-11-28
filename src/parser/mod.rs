@@ -4138,10 +4138,11 @@ impl<'a> Parser<'a> {
             {
                 self.expect_token(&Token::LParen)?;
                 let right = if self.peek_sub_query() {
-                    // We have a subquery ahead (SELECT\WITH ...) need to rewind and
-                    // use the parenthesis for parsing the subquery as an expression.
-                    self.prev_token(); // LParen
-                    self.parse_subexpr(precedence)?
+                    // The right side is the parenthesized subquery only; any
+                    // operator after its `)` applies to the whole comparison.
+                    let query = self.parse_query()?;
+                    self.expect_token(&Token::RParen)?;
+                    Expr::Subquery(query)
                 } else {
                     // Non-subquery expression
                     let right = self.parse_subexpr(precedence)?;

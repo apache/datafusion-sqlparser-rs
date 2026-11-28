@@ -14597,3 +14597,30 @@ fn parse_alter_column_set_storage() {
         );
     }
 }
+
+#[test]
+fn parse_any_all_subquery_followed_by_operator() {
+    let select = pg().verified_only_select("SELECT a = ANY(SELECT 1) - 1");
+    match expr_from_projection(only(&select.projection)) {
+        Expr::BinaryOp { left, op, .. } => {
+            assert_eq!(*op, BinaryOperator::Minus);
+            assert!(matches!(left.as_ref(), Expr::AnyOp { .. }));
+        }
+        e => panic!("expected a binary operation, got {e:?}"),
+    }
+
+    let select = pg().verified_only_select("SELECT a = ALL(SELECT 1) + 1");
+    match expr_from_projection(only(&select.projection)) {
+        Expr::BinaryOp { left, op, .. } => {
+            assert_eq!(*op, BinaryOperator::Plus);
+            assert!(matches!(left.as_ref(), Expr::AllOp { .. }));
+        }
+        e => panic!("expected a binary operation, got {e:?}"),
+    }
+
+    let select = pg().verified_only_select("SELECT 1 = ANY(SELECT 1)::TEXT");
+    match expr_from_projection(only(&select.projection)) {
+        Expr::Cast { expr, .. } => assert!(matches!(expr.as_ref(), Expr::AnyOp { .. })),
+        e => panic!("expected a cast, got {e:?}"),
+    }
+}

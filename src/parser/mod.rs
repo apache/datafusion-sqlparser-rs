@@ -20535,18 +20535,22 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        let arg = self.maybe_parse(|p| {
+        // Only `name <operator>` is parsed speculatively. Parsing the value
+        // inside `maybe_parse` too would re-parse it on the unnamed path
+        // whenever it fails, which is O(2^depth) on nested calls like
+        // `u.u(k=u.u(k=...`.
+        let named = self.maybe_parse(|p| {
             let name = p.parse_identifier()?;
             let operator = p.parse_function_named_arg_operator()?;
-            let arg = p.parse_wildcard_expr()?.into();
-            Ok(FunctionArg::Named {
+            Ok((name, operator))
+        })?;
+        if let Some((name, operator)) = named {
+            let arg = self.parse_wildcard_expr()?.into();
+            return Ok(FunctionArg::Named {
                 name,
                 arg,
                 operator,
-            })
-        })?;
-        if let Some(arg) = arg {
-            return Ok(arg);
+            });
         }
         let wildcard_expr = self.parse_wildcard_expr()?;
         let arg_expr = self.function_arg_expr_from_wildcard(wildcard_expr)?;

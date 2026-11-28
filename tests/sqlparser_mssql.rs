@@ -2985,3 +2985,31 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().verified_stmt("SELECT * FROM t [PRINT]");
     ms().verified_stmt("SELECT * FROM t AS [PRINT]");
 }
+
+#[test]
+fn parse_create_rejects_unsupported_modifiers() {
+    for (sql, target) in [
+        (
+            "CREATE TRANSIENT FUNCTION f() RETURNS INT AS BEGIN RETURN 1; END",
+            "CREATE FUNCTION",
+        ),
+        (
+            "CREATE TEMP PROCEDURE p AS BEGIN SELECT 1; END",
+            "CREATE PROCEDURE",
+        ),
+        (
+            "CREATE OR REPLACE PROCEDURE p AS BEGIN SELECT 1; END",
+            "CREATE PROCEDURE",
+        ),
+        (
+            "CREATE TEMP PROC p AS BEGIN SELECT 1; END",
+            "CREATE PROCEDURE",
+        ),
+    ] {
+        assert_eq!(
+            ms().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("{target} does not accept this modifier")),
+            "{sql}"
+        );
+    }
+}

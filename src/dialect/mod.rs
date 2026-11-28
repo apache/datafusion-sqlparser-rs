@@ -1586,6 +1586,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports `OR ALTER` on `CREATE FUNCTION`.
+    fn supports_create_or_alter_function(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect accepts a comma-separated list of table-level
     /// options placed between the table name and the column-list parenthesis, e.g.
     ///

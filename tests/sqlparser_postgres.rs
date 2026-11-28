@@ -6734,7 +6734,7 @@ fn parse_create_unlogged_table() {
 
     let res = pg().parse_sql_statements("CREATE UNLOGGED VIEW v AS SELECT 1");
     assert_eq!(
-        ParserError::ParserError("Expected: an object type after CREATE, found: UNLOGGED".into()),
+        ParserError::ParserError("CREATE VIEW does not accept this modifier".into()),
         res.unwrap_err()
     );
 }
@@ -10606,6 +10606,7 @@ fn parse_create_foreign_table_rejects_modifiers() {
     // None of these has a field on CreateForeignTable, so accepting one would
     // drop it silently on the way back out through Display.
     for sql in [
+        "CREATE OR REPLACE FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE TEMPORARY FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE GLOBAL FOREIGN TABLE ft (a INT) SERVER s",
         "CREATE LOCAL FOREIGN TABLE ft (a INT) SERVER s",
@@ -10623,13 +10624,6 @@ fn parse_create_foreign_table_rejects_modifiers() {
             "unexpected error for {sql}: {err}"
         );
     }
-
-    // OR REPLACE is caught by an earlier arm, so it never reaches the guard.
-    assert!(matches!(
-        pg_and_generic()
-            .parse_sql_statements("CREATE OR REPLACE FOREIGN TABLE ft (a INT) SERVER s"),
-        Err(ParserError::ParserError(_))
-    ));
 }
 
 #[test]
@@ -11356,6 +11350,7 @@ fn parse_create_foreign_data_wrapper() {
     );
 
     for sql in [
+        "CREATE OR REPLACE FOREIGN DATA WRAPPER myfdw",
         "CREATE TEMPORARY FOREIGN DATA WRAPPER myfdw",
         "CREATE OR ALTER FOREIGN DATA WRAPPER myfdw",
         "CREATE GLOBAL TEMPORARY FOREIGN DATA WRAPPER myfdw",
@@ -14596,4 +14591,117 @@ fn parse_alter_column_set_storage() {
             "{sql}"
         );
     }
+}
+
+#[test]
+fn parse_create_rejects_unsupported_modifiers() {
+    pg_and_generic().verified_stmt("CREATE POLICY p ON t USING (true)");
+
+    for (sql, target) in [
+        ("CREATE TEMP POLICY p ON t USING (true)", "CREATE POLICY"),
+        (
+            "CREATE OR REPLACE POLICY p ON t USING (true)",
+            "CREATE POLICY",
+        ),
+        (
+            "CREATE ALGORITHM = MERGE POLICY p ON t USING (true)",
+            "CREATE POLICY",
+        ),
+        ("CREATE TEMP DOMAIN d AS INT", "CREATE DOMAIN"),
+        ("CREATE OR REPLACE DOMAIN d AS INT", "CREATE DOMAIN"),
+        ("CREATE TEMP INDEX idx ON t (a)", "CREATE INDEX"),
+        (
+            "CREATE TEMP UNIQUE INDEX idx ON t (a)",
+            "CREATE UNIQUE INDEX",
+        ),
+        ("CREATE TEMP EXTENSION ext", "CREATE EXTENSION"),
+        ("CREATE TEMP COLLATION c (locale = 'C')", "CREATE COLLATION"),
+        ("CREATE TEMP TYPE t AS ENUM ('a')", "CREATE TYPE"),
+        (
+            "CREATE TEMP TEXT SEARCH DICTIONARY d (TEMPLATE = simple)",
+            "CREATE TEXT SEARCH",
+        ),
+        (
+            "CREATE TEMP OPERATOR + (LEFTARG = INT, RIGHTARG = INT, FUNCTION = int4pl)",
+            "CREATE OPERATOR",
+        ),
+        (
+            "CREATE TEMP OPERATOR FAMILY of USING btree",
+            "CREATE OPERATOR FAMILY",
+        ),
+        (
+            "CREATE TEMP OPERATOR CLASS oc FOR TYPE INT USING btree AS STORAGE INT",
+            "CREATE OPERATOR CLASS",
+        ),
+        (
+            "CREATE TEMP SERVER s FOREIGN DATA WRAPPER fdw",
+            "CREATE SERVER",
+        ),
+        (
+            "CREATE TEMP RULE r AS ON DELETE TO t DO NOTHING",
+            "CREATE RULE",
+        ),
+        (
+            "CREATE TEMP AGGREGATE a (INT) (SFUNC = s, STYPE = INT)",
+            "CREATE AGGREGATE",
+        ),
+        ("CREATE OR REPLACE SEQUENCE s", "CREATE SEQUENCE"),
+        ("CREATE GLOBAL SEQUENCE s", "CREATE SEQUENCE"),
+        (
+            "CREATE OR REPLACE PROCEDURE p() AS $$ SELECT 1 $$",
+            "CREATE PROCEDURE",
+        ),
+        (
+            "CREATE TEMP PROCEDURE p() AS $$ SELECT 1 $$",
+            "CREATE PROCEDURE",
+        ),
+        (
+            "CREATE OR ALTER FUNCTION f() RETURNS INT AS $$ SELECT 1 $$ LANGUAGE sql",
+            "CREATE FUNCTION",
+        ),
+        ("CREATE TEMP ROLE r", "CREATE ROLE"),
+        ("CREATE TEMP DATABASE db", "CREATE DATABASE"),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("{target} does not accept this modifier")),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEMP GROUP g")
+            .unwrap_err(),
+        ParserError::ParserError("CREATE GROUP does not accept this modifier".to_string())
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .parse_sql_statements("CREATE LOCAL GLOBAL TABLE t (a INT)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: an object type after CREATE, found: GLOBAL".to_string()
+        )
+    );
+
+    assert_eq!(
+        Parser::parse_sql(
+            &PostgreSqlDialect {},
+            "CREATE TEMP POLICY p ON t USING (true)"
+        )
+        .unwrap_err(),
+        ParserError::ParserError(
+            "CREATE POLICY does not accept this modifier at Line: 1, Column: 8".to_string()
+        )
+    );
+    assert_eq!(
+        Parser::parse_sql(
+            &PostgreSqlDialect {},
+            "CREATE OR REPLACE TRANSIENT VIEW v AS SELECT 1"
+        )
+        .unwrap_err(),
+        ParserError::ParserError(
+            "CREATE VIEW does not accept this modifier at Line: 1, Column: 19".to_string()
+        )
+    );
 }

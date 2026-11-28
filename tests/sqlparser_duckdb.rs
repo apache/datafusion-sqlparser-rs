@@ -977,3 +977,25 @@ fn display_create_macro_propagates_argument_list_errors() {
         }
     }
 }
+
+#[test]
+fn parse_create_rejects_unsupported_modifiers() {
+    duckdb().verified_stmt("CREATE PERSISTENT SECRET s ( TYPE t )");
+    duckdb().verified_stmt("CREATE TEMPORARY SECRET s ( TYPE t )");
+
+    for (sql, target) in [
+        ("CREATE PERSISTENT TABLE t (a INT)", "CREATE TABLE"),
+        ("CREATE PERSISTENT POLICY p ON t", "CREATE POLICY"),
+        ("CREATE TRANSIENT MACRO m() AS 1", "CREATE MACRO"),
+        ("CREATE OR ALTER MACRO m() AS 1", "CREATE MACRO"),
+        ("CREATE OR ALTER FUNCTION f() AS 1", "CREATE FUNCTION"),
+        ("CREATE TRANSIENT SECRET s (TYPE t)", "CREATE SECRET"),
+        ("CREATE OR ALTER SECRET s (TYPE t)", "CREATE SECRET"),
+    ] {
+        assert_eq!(
+            duckdb().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("{target} does not accept this modifier")),
+            "{sql}"
+        );
+    }
+}

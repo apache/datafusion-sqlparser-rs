@@ -1,0 +1,1 @@
+CREATE TEMP POLICY p ON t USING (true);

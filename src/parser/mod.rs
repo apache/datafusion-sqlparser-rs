@@ -224,6 +224,90 @@ struct ReferenceClauses {
 /// See [Parser::parse_data_type] for details
 struct MatchedTrailingBracket(bool);
 
+/// Prefix modifiers parsed after `CREATE` before dispatching on the target object.
+///
+/// Consumed by value via [`CreateModifiers::ensure_empty`] so every target branch
+/// must explicitly opt into the modifiers it supports.
+#[derive(Default)]
+struct CreateModifiers {
+    or_replace: Option<Location>,
+    or_alter: Option<Location>,
+    multiset: Option<(bool, Location)>,
+    global: Option<(bool, Location)>,
+    transient: Option<Location>,
+    temporary: Option<Location>,
+    volatile: Option<Location>,
+    unlogged: Option<Location>,
+    persistent: Option<Location>,
+    create_view_params: Option<(CreateViewParams, Location)>,
+}
+
+impl CreateModifiers {
+    fn take_or_replace(&mut self) -> bool {
+        self.or_replace.take().is_some()
+    }
+
+    fn take_or_alter(&mut self) -> bool {
+        self.or_alter.take().is_some()
+    }
+
+    fn take_multiset(&mut self) -> Option<bool> {
+        self.multiset.take().map(|(v, _)| v)
+    }
+
+    fn take_global(&mut self) -> Option<bool> {
+        self.global.take().map(|(v, _)| v)
+    }
+
+    fn take_transient(&mut self) -> bool {
+        self.transient.take().is_some()
+    }
+
+    fn take_temporary(&mut self) -> bool {
+        self.temporary.take().is_some()
+    }
+
+    fn take_volatile(&mut self) -> bool {
+        self.volatile.take().is_some()
+    }
+
+    fn take_unlogged(&mut self) -> bool {
+        self.unlogged.take().is_some()
+    }
+
+    fn take_persistent(&mut self) -> bool {
+        self.persistent.take().is_some()
+    }
+
+    fn take_create_view_params(&mut self) -> Option<CreateViewParams> {
+        self.create_view_params.take().map(|(v, _)| v)
+    }
+
+    /// Rejects the first unconsumed modifier in parse order.
+    fn ensure_empty(self, target: &str) -> Result<(), ParserError> {
+        let first_loc = [
+            self.or_replace,
+            self.or_alter,
+            self.multiset.map(|(_, loc)| loc),
+            self.global.map(|(_, loc)| loc),
+            self.transient,
+            self.temporary,
+            self.volatile,
+            self.unlogged,
+            self.persistent,
+            self.create_view_params.map(|(_, loc)| loc),
+        ]
+        .into_iter()
+        .flatten()
+        .next();
+
+        if let Some(loc) = first_loc {
+            return parser_err!(format!("{target} does not accept this modifier"), loc);
+        }
+        Ok(())
+    }
+}
+
 impl From<bool> for MatchedTrailingBracket {
     fn from(value: bool) -> Self {
         Self(value)
@@ -5505,48 +5589,72 @@ impl<'a> Parser<'a> {
         Ok(Some(Distinct::On(col_names)))
     }
 
-    /// Parse a SQL CREATE statement
-    pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
-        let modifier_loc = self.peek_token_ref().span.start;
-        let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
-        let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
-        let multiset = self.maybe_parse_multiset();
-        let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
-        let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
-        let transient = self.parse_one_of_keywords(&[Keyword::TRANSIENT]).is_some();
-        let global: Option<bool> = if global {
-            Some(true)
-        } else if local {
-            Some(false)
-        } else {
-            None
+    fn parse_create_modifiers(&mut self) -> Result<CreateModifiers, ParserError> {
+        let mut loc = self.peek_token_ref().span.start;
+        let or_replace = self
+            .parse_keywords(&[Keyword::OR, Keyword::REPLACE])
+            .then_some(loc);
+        loc = self.peek_token_ref().span.start;
+        let or_alter = self
+            .parse_keywords(&[Keyword::OR, Keyword::ALTER])
+            .then_some(loc);
+        loc = self.peek_token_ref().span.start;
+        let multiset = self.maybe_parse_multiset().map(|v| (v, loc));
+        loc = self.peek_token_ref().span.start;
+        let global = match self.parse_one_of_keywords(&[Keyword::LOCAL, Keyword::GLOBAL]) {
+            Some(Keyword::GLOBAL) => Some((true, loc)),
+            Some(Keyword::LOCAL) => Some((false, loc)),
+            _ => None,
         };
+        loc = self.peek_token_ref().span.start;
+        let transient = self.parse_keyword(Keyword::TRANSIENT).then_some(loc);
+        loc = self.peek_token_ref().span.start;
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
-            .is_some();
-        let volatile = self.parse_keyword(Keyword::VOLATILE);
-        let unlogged = self.peek_keywords(&[Keyword::UNLOGGED, Keyword::TABLE]);
-        if unlogged {
-            self.expect_keyword(Keyword::UNLOGGED)?;
-        }
-        let persistent = dialect_of!(self is DuckDbDialect)
-            && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
-        let create_view_params = self.parse_create_view_params()?;
-        // `or_replace` is caught by an earlier arm. It stays so that reordering cannot bypass it.
-        let has_modifier = or_replace
-            || or_alter
-            || temporary
-            || global.is_some()
-            || transient
-            || volatile
-            || multiset.is_some()
-            || persistent
-            || create_view_params.is_some();
+            .is_some()
+            .then_some(loc);
+        loc = self.peek_token_ref().span.start;
+        let volatile = self.parse_keyword(Keyword::VOLATILE).then_some(loc);
+        loc = self.peek_token_ref().span.start;
+        let unlogged = self.parse_keyword(Keyword::UNLOGGED).then_some(loc);
+        loc = self.peek_token_ref().span.start;
+        let persistent = (dialect_of!(self is DuckDbDialect)
+            && self.parse_keyword(Keyword::PERSISTENT))
+        .then_some(loc);
+        loc = self.peek_token_ref().span.start;
+        let create_view_params = self.parse_create_view_params()?.map(|v| (v, loc));
+        Ok(CreateModifiers {
+            or_replace,
+            or_alter,
+            multiset,
+            global,
+            transient,
+            temporary,
+            volatile,
+            unlogged,
+            persistent,
+            create_view_params,
+        })
+    }
+
+    /// Parse a SQL CREATE statement
+    pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        let mut modifiers = self.parse_create_modifiers()?;
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
+            modifiers.ensure_empty("CREATE SNAPSHOT TABLE")?;
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
+            modifiers.ensure_empty("CREATE TEXT SEARCH")?;
             self.parse_create_text_search().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
+            let or_replace = modifiers.take_or_replace();
+            let temporary = modifiers.take_temporary();
+            let unlogged = modifiers.take_unlogged();
+            let global = modifiers.take_global();
+            let transient = modifiers.take_transient();
+            let volatile = modifiers.take_volatile();
+            let multiset = modifiers.take_multiset();
+            modifiers.ensure_empty("CREATE TABLE")?;
             self.parse_create_table(
                 or_replace, temporary, unlogged, global, transient, volatile, multiset,
             )
@@ -5556,27 +5664,59 @@ impl<'a> Parser<'a> {
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
             || self.peek_keywords(&[Keyword::SECURE, Keyword::VIEW])
         {
+            let or_alter = modifiers.take_or_alter();
+            let or_replace = modifiers.take_or_replace();
+            let temporary = modifiers.take_temporary();
+            let create_view_params = modifiers.take_create_view_params();
+            modifiers.ensure_empty("CREATE VIEW")?;
             self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
                 .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
+            modifiers.ensure_empty("CREATE POLICY")?;
             self.parse_create_policy().map(Into::into)
         } else if self.parse_keyword(Keyword::RULE) {
+            let or_replace = modifiers.take_or_replace();
+            modifiers.ensure_empty("CREATE RULE")?;
             self.parse_create_rule(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
+            let or_replace = modifiers.take_or_replace();
+            modifiers.ensure_empty("CREATE EXTERNAL TABLE")?;
             self.parse_create_external_table(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::FUNCTION) {
+            let or_alter =
+                self.dialect.supports_create_or_alter_function() && modifiers.take_or_alter();
+            let or_replace = modifiers.take_or_replace();
+            let temporary = modifiers.take_temporary();
+            modifiers.ensure_empty("CREATE FUNCTION")?;
             self.parse_create_function(or_alter, or_replace, temporary)
         } else if self.parse_keyword(Keyword::DOMAIN) {
+            modifiers.ensure_empty("CREATE DOMAIN")?;
             self.parse_create_domain().map(Into::into)
-        } else if self.parse_keyword(Keyword::TRIGGER) {
-            self.parse_create_trigger(temporary, or_alter, or_replace, false)
-                .map(Into::into)
-        } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
-            self.parse_create_trigger(temporary, or_alter, or_replace, true)
+        } else if self.peek_keyword(Keyword::TRIGGER)
+            || self.peek_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER])
+        {
+            let is_constraint = self.parse_keyword(Keyword::CONSTRAINT);
+            self.expect_keyword_is(Keyword::TRIGGER)?;
+            let temporary = modifiers.take_temporary();
+            let or_alter = modifiers.take_or_alter();
+            let or_replace = modifiers.take_or_replace();
+            modifiers.ensure_empty(if is_constraint {
+                "CREATE CONSTRAINT TRIGGER"
+            } else {
+                "CREATE TRIGGER"
+            })?;
+            self.parse_create_trigger(temporary, or_alter, or_replace, is_constraint)
                 .map(Into::into)
         } else if self.parse_keyword(Keyword::MACRO) {
+            let or_replace = modifiers.take_or_replace();
+            let temporary = modifiers.take_temporary();
+            modifiers.ensure_empty("CREATE MACRO")?;
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
+            let or_replace = modifiers.take_or_replace();
+            let temporary = modifiers.take_temporary();
+            let persistent = modifiers.take_persistent();
+            modifiers.ensure_empty("CREATE SECRET")?;
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.peek_keywords(&[Keyword::USER, Keyword::MAPPING, Keyword::FOR])
             || self.peek_keywords(&[
@@ -5587,80 +5727,86 @@ impl<'a> Parser<'a> {
                 Keyword::EXISTS,
             ])
         {
-            if has_modifier {
-                return parser_err!(
-                    "CREATE USER MAPPING does not accept this modifier",
-                    modifier_loc
-                );
-            }
+            modifiers.ensure_empty("CREATE USER MAPPING")?;
             self.advance_token(); // USER
             self.advance_token(); // MAPPING
             self.parse_create_user_mapping().map(Into::into)
         } else if self.parse_keyword(Keyword::USER) {
+            let or_replace = modifiers.take_or_replace();
+            modifiers.ensure_empty("CREATE USER")?;
             self.parse_create_user(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::AGGREGATE) {
+            let or_replace = modifiers.take_or_replace();
+            modifiers.ensure_empty("CREATE AGGREGATE")?;
             self.parse_create_aggregate(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::SCHEMA) {
+            let or_replace = modifiers.take_or_replace();
+            modifiers.ensure_empty("CREATE SCHEMA")?;
             self.parse_create_schema(or_replace)
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
+            let or_replace = modifiers.take_or_replace();
+            modifiers.ensure_empty("CREATE WAREHOUSE")?;
             self.parse_create_warehouse(or_replace).map(Into::into)
-        } else if or_replace {
-            self.expected_ref(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE or SCHEMA or WAREHOUSE after CREATE OR REPLACE",
-                self.peek_token_ref(),
-            )
         } else if self.parse_keyword(Keyword::EXTENSION) {
+            modifiers.ensure_empty("CREATE EXTENSION")?;
             self.parse_create_extension().map(Into::into)
         } else if self.parse_keyword(Keyword::INDEX) {
+            modifiers.ensure_empty("CREATE INDEX")?;
             self.parse_create_index(false).map(Into::into)
         } else if self.parse_keywords(&[Keyword::UNIQUE, Keyword::INDEX]) {
+            modifiers.ensure_empty("CREATE UNIQUE INDEX")?;
             self.parse_create_index(true).map(Into::into)
         } else if self.parse_keyword(Keyword::VIRTUAL) {
+            modifiers.ensure_empty("CREATE VIRTUAL TABLE")?;
             self.parse_create_virtual_table()
         } else if self.parse_keyword(Keyword::DATABASE) {
+            modifiers.ensure_empty("CREATE DATABASE")?;
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
+            modifiers.ensure_empty("CREATE ROLE")?;
             self.parse_create_role(RoleKeyword::Role).map(Into::into)
         } else if self.dialect.supports_create_group() && self.parse_keyword(Keyword::GROUP) {
+            modifiers.ensure_empty("CREATE GROUP")?;
             self.parse_create_role(RoleKeyword::Group).map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
+            let temporary = modifiers.take_temporary();
+            modifiers.ensure_empty("CREATE SEQUENCE")?;
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::COLLATION) {
+            modifiers.ensure_empty("CREATE COLLATION")?;
             self.parse_create_collation().map(Into::into)
         } else if self.parse_keyword(Keyword::TYPE) {
+            modifiers.ensure_empty("CREATE TYPE")?;
             self.parse_create_type()
         } else if self.parse_keyword(Keyword::PROCEDURE)
             || self.dialect.supports_create_proc_syntax() && self.parse_keyword(Keyword::PROC)
         {
+            let or_alter = modifiers.take_or_alter();
+            modifiers.ensure_empty("CREATE PROCEDURE")?;
             self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
+            modifiers.ensure_empty("CREATE CONNECTOR")?;
             self.parse_create_connector().map(Into::into)
         } else if self.parse_keyword(Keyword::OPERATOR) {
             // Check if this is CREATE OPERATOR FAMILY or CREATE OPERATOR CLASS
             if self.parse_keyword(Keyword::FAMILY) {
+                modifiers.ensure_empty("CREATE OPERATOR FAMILY")?;
                 self.parse_create_operator_family().map(Into::into)
             } else if self.parse_keyword(Keyword::CLASS) {
+                modifiers.ensure_empty("CREATE OPERATOR CLASS")?;
                 self.parse_create_operator_class().map(Into::into)
             } else {
+                modifiers.ensure_empty("CREATE OPERATOR")?;
                 self.parse_create_operator().map(Into::into)
             }
         } else if self.parse_keyword(Keyword::SERVER) {
+            modifiers.ensure_empty("CREATE SERVER")?;
             self.parse_pg_create_server()
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
-            if has_modifier {
-                return parser_err!(
-                    "CREATE FOREIGN TABLE does not accept this modifier",
-                    modifier_loc
-                );
-            }
+            modifiers.ensure_empty("CREATE FOREIGN TABLE")?;
             self.parse_create_foreign_table().map(Into::into)
         } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
-            if has_modifier {
-                return parser_err!(
-                    "CREATE FOREIGN DATA WRAPPER does not accept this modifier",
-                    modifier_loc
-                );
-            }
+            modifiers.ensure_empty("CREATE FOREIGN DATA WRAPPER")?;
             self.parse_create_foreign_data_wrapper().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())

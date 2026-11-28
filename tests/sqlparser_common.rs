@@ -23708,3 +23708,87 @@ fn test_select_where_with_ilike_any_escape() {
         ParserError::ParserError("Expected: an expression, found: EOF".to_string())
     );
 }
+
+#[test]
+fn parse_create_rejects_unsupported_modifiers() {
+    for (sql, target) in [
+        ("CREATE OR ALTER TABLE t (a INT)", "CREATE TABLE"),
+        ("CREATE ALGORITHM = MERGE TABLE t (a INT)", "CREATE TABLE"),
+        ("CREATE DEFINER = u TABLE t (a INT)", "CREATE TABLE"),
+        (
+            "CREATE SQL SECURITY DEFINER TABLE t (a INT)",
+            "CREATE TABLE",
+        ),
+        ("CREATE MULTISET VIEW v AS SELECT 1", "CREATE VIEW"),
+        ("CREATE SET VIEW v AS SELECT 1", "CREATE VIEW"),
+        (
+            "CREATE TEMP SNAPSHOT TABLE s CLONE src",
+            "CREATE SNAPSHOT TABLE",
+        ),
+        (
+            "CREATE OR REPLACE SNAPSHOT TABLE s CLONE src",
+            "CREATE SNAPSHOT TABLE",
+        ),
+        (
+            "CREATE TEMP EXTERNAL TABLE t (a INT)",
+            "CREATE EXTERNAL TABLE",
+        ),
+        ("CREATE TEMP SCHEMA s", "CREATE SCHEMA"),
+        ("CREATE TEMP USER u", "CREATE USER"),
+        ("CREATE TEMP WAREHOUSE w", "CREATE WAREHOUSE"),
+        (
+            "CREATE TEMP VIRTUAL TABLE vt USING fts5(a)",
+            "CREATE VIRTUAL TABLE",
+        ),
+        (
+            "CREATE OR REPLACE VIRTUAL TABLE vt USING fts5(a)",
+            "CREATE VIRTUAL TABLE",
+        ),
+        ("CREATE TEMP CONNECTOR c", "CREATE CONNECTOR"),
+        ("CREATE OR REPLACE CONNECTOR c", "CREATE CONNECTOR"),
+    ] {
+        assert_eq!(
+            all_dialects().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("{target} does not accept this modifier")),
+            "{sql}"
+        );
+    }
+
+    // SnowflakeDialect::parse_statement intercepts CREATE before Parser::parse_create
+    // and only rewinds OR REPLACE / TEMP when falling back.
+    let non_snowflake = all_dialects_except(|d| d.is::<SnowflakeDialect>());
+    for (sql, target) in [
+        ("CREATE TRANSIENT VIEW v AS SELECT 1", "CREATE VIEW"),
+        ("CREATE VOLATILE VIEW v AS SELECT 1", "CREATE VIEW"),
+        ("CREATE GLOBAL VIEW v AS SELECT 1", "CREATE VIEW"),
+        ("CREATE LOCAL VIEW v AS SELECT 1", "CREATE VIEW"),
+        (
+            "CREATE TRANSIENT EXTERNAL TABLE t (a INT)",
+            "CREATE EXTERNAL TABLE",
+        ),
+        ("CREATE TRANSIENT SCHEMA s", "CREATE SCHEMA"),
+        (
+            "CREATE TRANSIENT TRIGGER tr BEFORE INSERT ON t FOR EACH ROW EXECUTE FUNCTION f()",
+            "CREATE TRIGGER",
+        ),
+        (
+            "CREATE TRANSIENT CONSTRAINT TRIGGER tr AFTER INSERT ON t FOR EACH ROW EXECUTE FUNCTION f()",
+            "CREATE CONSTRAINT TRIGGER",
+        ),
+    ] {
+        assert_eq!(
+            non_snowflake.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(format!("{target} does not accept this modifier")),
+            "{sql}"
+        );
+    }
+
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE OR REPLACE UNKNOWN_OBJECT foo")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: an object type after CREATE, found: UNKNOWN_OBJECT".to_string()
+        )
+    );
+}

@@ -75,6 +75,10 @@ impl Dialect for MsSqlDialect {
         true
     }
 
+    fn supports_create_or_alter_function(&self) -> bool {
+        true
+    }
+
     fn supports_connect_by(&self) -> bool {
         true
     }

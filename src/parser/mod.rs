@@ -4435,13 +4435,15 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::Colon)?;
         }
 
-        // we are now at either `]`, `<upper>(rest)]`
+        // we are now at either `]`, `:stride]` or `<upper>(rest)]`
         let upper_bound = if self.consume_token(&Token::RBracket) {
             return Ok(Subscript::Slice {
                 lower_bound,
                 upper_bound: None,
                 stride: None,
             });
+        } else if self.peek_token_ref().token == Token::Colon {
+            None
         } else {
             // parse expr until we hit a colon (or any token with lower precedence)
             Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)

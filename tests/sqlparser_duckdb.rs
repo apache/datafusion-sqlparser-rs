@@ -977,3 +977,21 @@ fn display_create_macro_propagates_argument_list_errors() {
         }
     }
 }
+
+#[test]
+fn parse_slice_with_stride_and_no_upper_bound() {
+    let select = duckdb().verified_only_select("SELECT ([1, 2, 3, 4, 5, 6, 7, 8, 9])[1: :4]");
+    let Expr::CompoundFieldAccess { access_chain, .. } =
+        expr_from_projection(&select.projection[0])
+    else {
+        panic!("expected a compound field access");
+    };
+    assert_eq!(
+        access_chain,
+        &[AccessExpr::Subscript(Subscript::Slice {
+            lower_bound: Some(Expr::value(number("1"))),
+            upper_bound: None,
+            stride: Some(Expr::value(number("4"))),
+        })]
+    );
+}

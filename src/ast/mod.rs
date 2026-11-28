@@ -1514,8 +1514,11 @@ impl fmt::Display for Subscript {
                     write!(f, "{upper}")?;
                 }
                 if let Some(stride) = stride {
-                    write!(f, ":")?;
-                    write!(f, "{stride}")?;
+                    // Two adjacent colons would tokenize as `::`.
+                    if upper_bound.is_none() {
+                        write!(f, " ")?;
+                    }
+                    write!(f, ":{stride}")?;
                 }
                 Ok(())
             }

@@ -21234,6 +21234,10 @@ fn parse_array_subscript() {
 
     dialects.verified_stmt("SELECT arr[1][2]");
     dialects.verified_stmt("SELECT arr[:][:]");
+
+    dialects.verified_stmt("SELECT arr[1: :4]");
+    dialects.verified_stmt("SELECT arr[: :4]");
+    dialects.verified_stmt("SELECT arr[:2:4]");
 }
 
 #[test]

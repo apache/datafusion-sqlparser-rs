@@ -1,0 +1,1 @@
+SELECT a = ANY(SELECT 1) - 1;

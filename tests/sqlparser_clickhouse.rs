@@ -1728,24 +1728,20 @@ fn parse_table_sample() {
 fn test_parse_not_null_in_column_options() {
     // In addition to DEFAULT and CHECK ClickHouse also supports MATERIALIZED, all of which
     // can contain `IS NOT NULL` and thus `NOT NULL` as an alias.
-    let canonical = concat!(
+    clickhouse().verified_stmt(concat!(
         "CREATE TABLE foo (",
         "abc INT DEFAULT (42 IS NOT NULL) NOT NULL,",
         " not_null BOOL MATERIALIZED (abc IS NOT NULL),",
         " CHECK (abc IS NOT NULL)",
         ")",
-    );
-    clickhouse().verified_stmt(canonical);
-    clickhouse().one_statement_parses_to(
-        concat!(
-            "CREATE TABLE foo (",
-            "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
-            " not_null BOOL MATERIALIZED (abc NOT NULL),",
-            " CHECK (abc NOT NULL)",
-            ")",
-        ),
-        canonical,
-    );
+    ));
+    clickhouse().verified_stmt(concat!(
+        "CREATE TABLE foo (",
+        "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
+        " not_null BOOL MATERIALIZED (abc NOT NULL),",
+        " CHECK (abc NOT NULL)",
+        ")",
+    ));
 }
 
 #[test]

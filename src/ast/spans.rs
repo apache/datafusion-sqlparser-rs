@@ -1667,8 +1667,8 @@ impl Spanned for Expr {
             Expr::IsNotFalse(expr) => expr.span(),
             Expr::IsTrue(expr) => expr.span(),
             Expr::IsNotTrue(expr) => expr.span(),
-            Expr::IsNull(expr) => expr.span(),
-            Expr::IsNotNull(expr) => expr.span(),
+            Expr::IsNull { expr, syntax: _ } => expr.span(),
+            Expr::IsNotNull { expr, syntax: _ } => expr.span(),
             Expr::IsUnknown(expr) => expr.span(),
             Expr::IsNotUnknown(expr) => expr.span(),
             Expr::IsJson {
